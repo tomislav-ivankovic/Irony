@@ -51,6 +51,7 @@
         //    // actually used.
         //    .lazy = false,
         //},
+        .zigwin32 = .{ .url = "https://github.com/marlersoft/zigwin32/archive/refs/heads/25.0.28-preview.tar.gz", .hash = "12200c87006a41a3d51b8bf892ebe7aeb13444bf22add39640d1061df01d2caeb7ed" },
     },
 
     // Specifies the set of files and directories that are included in this package.

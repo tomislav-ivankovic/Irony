@@ -1,7 +1,9 @@
 const std = @import("std");
+const MessageBox = @import("win32").ui.windows_and_messaging.MessageBoxW;
+const W = std.unicode.utf8ToUtf16LeStringLiteral;
 
 pub fn main() !void {
-    std.debug.print("Hello world.\n", .{});
+    _ = MessageBox(null, W("Hello world."), W("caption"), .{});
 }
 
 test "hello test" {

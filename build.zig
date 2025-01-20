@@ -23,6 +23,9 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
+    // Dependencies:
+    const win32 = b.dependency("zigwin32", .{}).module("zigwin32");
+
     const dll = b.addSharedLibrary(.{
         .name = "irony",
         // In this case the main source file is merely a path, however, in more
@@ -31,6 +34,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    dll.root_module.addImport("win32", win32);
 
     // This declares intent for the dll to be installed into the standard
     // location when the user invokes the "install" step (the default step when
@@ -43,6 +47,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    injector.root_module.addImport("win32", win32);
 
     // This declares intent for the injector to be installed into the
     // standard location when the user invokes the "install" step (the default
@@ -82,6 +87,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    dll_tests.root_module.addImport("win32", win32);
 
     const run_dll_tests = b.addRunArtifact(dll_tests);
 
@@ -90,6 +96,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    injector_tests.root_module.addImport("win32", win32);
 
     const run_injector_tests = b.addRunArtifact(injector_tests);
 
