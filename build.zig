@@ -82,28 +82,21 @@ pub fn build(b: *std.Build) void {
 
     // Creates a step for testing. This only builds the test executable
     // but does not run it.
-    const dll_tests = b.addTest(.{
-        .root_source_file = b.path("src/dll.zig"),
+    const tests = b.addTest(.{
+        .root_source_file = b.path("src/tests.zig"),
         .target = target,
         .optimize = optimize,
     });
-    dll_tests.root_module.addImport("win32", win32);
+    tests.root_module.addImport("win32", win32);
 
-    const run_dll_tests = b.addRunArtifact(dll_tests);
-
-    const injector_tests = b.addTest(.{
-        .root_source_file = b.path("src/injector.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    injector_tests.root_module.addImport("win32", win32);
-
-    const run_injector_tests = b.addRunArtifact(injector_tests);
+    // This *creates* a Test step in the build graph, to be executed when another
+    // step is evaluated that depends on it. The next line below will establish
+    // such a dependency.
+    const test_command = b.addRunArtifact(tests);
 
     // Similar to creating the run step earlier, this exposes a `test` step to
     // the `zig build --help` menu, providing a way for the user to request
     // running the tests.
     const test_step = b.step("test", "Run tests");
-    test_step.dependOn(&run_dll_tests.step);
-    test_step.dependOn(&run_injector_tests.step);
+    test_step.dependOn(&test_command.step);
 }
