@@ -4,6 +4,9 @@ const std = @import("std");
 // declaratively construct a build graph that will be executed by an external
 // runner.
 pub fn build(b: *std.Build) void {
+    // Use system Wine installation to run cross compiled Windows build artifacts.
+    b.enable_wine = true;
+
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we restrict the standard options to only
     // allow building for 64-bit Windows, and make that the default target.
@@ -54,9 +57,6 @@ pub fn build(b: *std.Build) void {
     // step when running `zig build`).
     b.installArtifact(injector);
 
-    // Use system Wine installation to run cross compiled Windows build artifacts.
-    b.enable_wine = true;
-
     // This *creates* a Run step in the build graph, to be executed when another
     // step is evaluated that depends on it. The next line below will establish
     // such a dependency.
@@ -93,6 +93,9 @@ pub fn build(b: *std.Build) void {
     // step is evaluated that depends on it. The next line below will establish
     // such a dependency.
     const test_command = b.addRunArtifact(tests);
+
+    // Stop Wine from spamming debug messages in the console when running tests.
+    test_command.setEnvironmentVariable("WINEDEBUG", "-all");
 
     // Similar to creating the run step earlier, this exposes a `test` step to
     // the `zig build --help` menu, providing a way for the user to request
