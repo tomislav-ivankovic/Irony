@@ -71,7 +71,7 @@ const value_1_offset = 0;
 const value_2_offset = @sizeOf(i32);
 
 test "toConstPointer should return a pointer when the multilevel pointer is valid" {
-    const TestCase = struct {
+    const testCase = struct {
         fn call(comptime offsets_len: comptime_int, offsets: [offsets_len]usize, expected_pointer: *const i32) !void {
             const multilevel_pointer = MultilevelPointer(i32, offsets.len){
                 .offsets = offsets,
@@ -79,8 +79,7 @@ test "toConstPointer should return a pointer when the multilevel pointer is vali
             const actual_pointer = multilevel_pointer.toConstPointer();
             try testing.expectEqual(expected_pointer, actual_pointer);
         }
-    };
-    const testCase = TestCase.call;
+    }.call;
     const str = Struct{};
     const str_address = @intFromPtr(&str);
     const str_address_address = @intFromPtr(&str_address);
@@ -91,7 +90,7 @@ test "toConstPointer should return a pointer when the multilevel pointer is vali
 }
 
 test "toConstPointer should return null when the multilevel pointer is invalid" {
-    const TestCase = struct {
+    const testCase = struct {
         fn call(comptime offsets_len: comptime_int, offsets: [offsets_len]usize) !void {
             const multilevel_pointer = MultilevelPointer(i32, offsets.len){
                 .offsets = offsets,
@@ -99,8 +98,7 @@ test "toConstPointer should return null when the multilevel pointer is invalid" 
             const actual_pointer = multilevel_pointer.toConstPointer();
             try testing.expectEqual(null, actual_pointer);
         }
-    };
-    const testCase = TestCase.call;
+    }.call;
     const str = Struct{};
     const str_address = @intFromPtr(&str);
     const str_address_address = @intFromPtr(&str_address);
@@ -111,7 +109,7 @@ test "toConstPointer should return null when the multilevel pointer is invalid" 
 }
 
 test "toMutablePointer should return a pointer when the multilevel pointer is valid" {
-    const TestCase = struct {
+    const testCase = struct {
         fn call(comptime offsets_len: comptime_int, offsets: [offsets_len]usize, expected_pointer: *i32) !void {
             const multilevel_pointer = MultilevelPointer(i32, offsets.len){
                 .offsets = offsets,
@@ -119,8 +117,7 @@ test "toMutablePointer should return a pointer when the multilevel pointer is va
             const actual_pointer = multilevel_pointer.toMutablePointer();
             try testing.expectEqual(expected_pointer, actual_pointer);
         }
-    };
-    const testCase = TestCase.call;
+    }.call;
     var str = Struct{};
     const str_address = @intFromPtr(&str);
     const str_address_address = @intFromPtr(&str_address);
@@ -131,7 +128,7 @@ test "toMutablePointer should return a pointer when the multilevel pointer is va
 }
 
 test "toMutablePointer should return null when the multilevel pointer is invalid" {
-    const TestCase = struct {
+    const testCase = struct {
         fn call(comptime offsets_len: comptime_int, offsets: [offsets_len]usize) !void {
             const multilevel_pointer = MultilevelPointer(i32, offsets.len){
                 .offsets = offsets,
@@ -139,8 +136,7 @@ test "toMutablePointer should return null when the multilevel pointer is invalid
             const actual_pointer = multilevel_pointer.toMutablePointer();
             try testing.expectEqual(null, actual_pointer);
         }
-    };
-    const testCase = TestCase.call;
+    }.call;
     var str = Struct{};
     const str_address = @intFromPtr(&str);
     const str_address_address = @intFromPtr(&str_address);
@@ -151,7 +147,7 @@ test "toMutablePointer should return null when the multilevel pointer is invalid
 }
 
 test "findMemoryAddress should return a value when the multilevel pointer is valid" {
-    const TestCase = struct {
+    const testCase = struct {
         fn call(comptime offsets_len: comptime_int, offsets: [offsets_len]usize, expected_address: usize) !void {
             const multilevel_pointer = MultilevelPointer(i32, offsets.len){
                 .offsets = offsets,
@@ -159,8 +155,7 @@ test "findMemoryAddress should return a value when the multilevel pointer is val
             const actual_address = multilevel_pointer.findMemoryAddress();
             try testing.expectEqual(expected_address, actual_address);
         }
-    };
-    const testCase = TestCase.call;
+    }.call;
     const str = Struct{};
     const str_address = @intFromPtr(&str);
     const str_address_address = @intFromPtr(&str_address);
@@ -171,7 +166,7 @@ test "findMemoryAddress should return a value when the multilevel pointer is val
 }
 
 test "findMemoryAddress should return null when the multilevel pointer is invalid" {
-    const TestCase = struct {
+    const testCase = struct {
         fn call(comptime offsets_len: comptime_int, offsets: [offsets_len]usize) !void {
             const multilevel_pointer = MultilevelPointer(i32, offsets.len){
                 .offsets = offsets,
@@ -179,8 +174,7 @@ test "findMemoryAddress should return null when the multilevel pointer is invali
             const actual_address = multilevel_pointer.findMemoryAddress();
             try testing.expectEqual(null, actual_address);
         }
-    };
-    const testCase = TestCase.call;
+    }.call;
     const str = Struct{};
     const str_address = @intFromPtr(&str);
     const str_address_address = @intFromPtr(&str_address);
