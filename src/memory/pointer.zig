@@ -2,7 +2,7 @@ const std = @import("std");
 const memory = @import("../os/memory.zig");
 
 pub fn Pointer(comptime Type: type) type {
-    return struct {
+    return packed struct {
         address: usize,
 
         const Self = @This();

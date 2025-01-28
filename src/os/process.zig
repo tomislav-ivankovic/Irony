@@ -58,7 +58,7 @@ pub const Process = struct {
         return exit_code == w32.STILL_ACTIVE;
     }
 
-    pub fn getImageFilePath(self: *const Self, comptime path_buffer_len: usize, path_buffer: *[path_buffer_len]u8) !usize {
+    pub fn getImageFilePath(self: *const Self, comptime path_buffer_len: comptime_int, path_buffer: *[path_buffer_len]u8) !usize {
         var buffer: [path_buffer_len:0]u16 = undefined;
         const size = w32.K32GetProcessImageFileNameW(self.handle, &buffer, buffer.len);
         if (size == 0) {
