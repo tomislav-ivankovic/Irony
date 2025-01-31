@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const w32 = @import("win32").everything;
 const ProcessId = @import("process_id.zig").ProcessId;
 
@@ -7,8 +8,7 @@ pub const ProcessAccessRights = w32.PROCESS_ACCESS_RIGHTS;
 pub const Process = struct {
     id: ProcessId,
     handle: w32.HANDLE,
-    is_pseudo_handle: bool,
-    is_open: bool,
+    test_allocation: if (builtin.is_test) ?*u8 else void,
 
     const Self = @This();
 
@@ -16,8 +16,7 @@ pub const Process = struct {
         return .{
             .id = ProcessId.getCurrent(),
             .handle = w32.GetCurrentProcess() orelse unreachable,
-            .is_pseudo_handle = true,
-            .is_open = false,
+            .test_allocation = if (builtin.is_test) null else .{},
         };
     }
 
@@ -30,23 +29,23 @@ pub const Process = struct {
         return .{
             .id = id,
             .handle = handle,
-            .is_pseudo_handle = false,
-            .is_open = true,
+            .test_allocation = if (builtin.is_test) try std.testing.allocator.create(u8) else .{},
         };
     }
 
-    pub fn close(self: *Self) !void {
-        if (self.is_pseudo_handle) {
-            return error.PseudoHandle;
-        }
-        if (!self.is_open) {
-            return error.AlreadyClosed;
-        }
+    pub fn close(self: *const Self) !void {
         const success = w32.CloseHandle(self.handle);
         if (success == 0) {
             return error.OsError;
         }
-        self.is_open = false;
+        if (builtin.is_test) {
+            if (self.test_allocation) |allocation| {
+                std.testing.allocator.destroy(allocation);
+            } else {
+                @panic("Close was called on a process constructed with getCurrent. " ++
+                    "Close should be called only on processes constructed with the open function.");
+            }
+        }
     }
 
     pub fn isStillRunning(self: *const Self) !bool {
@@ -74,8 +73,6 @@ test "getCurrent should return the current process object" {
     const process = Process.getCurrent();
     try testing.expectEqual(std.os.windows.GetCurrentProcessId(), process.id.raw);
     try testing.expectEqual(std.os.windows.GetCurrentProcess(), process.handle);
-    try testing.expectEqual(true, process.is_pseudo_handle);
-    try testing.expectEqual(false, process.is_open);
 }
 
 test "open should succeed when valid process id" {
@@ -86,8 +83,6 @@ test "open should succeed when valid process id" {
     var process = try Process.open(process_id, access_rights);
     defer process.close() catch unreachable;
     try testing.expectEqual(process_id.raw, process.id.raw);
-    try testing.expectEqual(false, process.is_pseudo_handle);
-    try testing.expectEqual(true, process.is_open);
 }
 
 test "open should error when invalid process id" {
@@ -96,32 +91,6 @@ test "open should error when invalid process id" {
         .QUERY_INFORMATION = 1,
     };
     try testing.expectError(error.OsError, Process.open(process_id, access_rights));
-}
-
-test "close should succeed when process is opened and does not have pseudo handle" {
-    const process_id = ProcessId.getCurrent();
-    const access_rights = ProcessAccessRights{
-        .QUERY_INFORMATION = 1,
-    };
-    var process = try Process.open(process_id, access_rights);
-    try testing.expectEqual(process.id.raw, w32.GetProcessId(process.handle));
-    try process.close();
-    try testing.expectEqual(0, w32.GetProcessId(process.handle));
-}
-
-test "close should error when process is already closed" {
-    const process_id = ProcessId.getCurrent();
-    const access_rights = ProcessAccessRights{
-        .QUERY_INFORMATION = 1,
-    };
-    var process = try Process.open(process_id, access_rights);
-    try process.close();
-    try testing.expectError(error.AlreadyClosed, process.close());
-}
-
-test "close should error when process has pseudo handle" {
-    var process = Process.getCurrent();
-    try testing.expectError(error.PseudoHandle, process.close());
 }
 
 test "is still running should return true when process is running" {

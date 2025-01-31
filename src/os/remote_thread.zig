@@ -1,10 +1,11 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const w32 = @import("win32").everything;
 const Process = @import("process.zig").Process;
 
 pub const RemoteThread = struct {
     handle: w32.HANDLE,
-    is_handle_open: bool,
+    test_allocation: if (builtin.is_test) *u8 else void,
 
     const Self = @This();
 
@@ -14,18 +15,18 @@ pub const RemoteThread = struct {
         parameter: usize,
     ) !Self {
         const handle = w32.CreateRemoteThread(process.handle, null, 0, @ptrCast(start_routine), @ptrFromInt(parameter), 0, null) orelse return error.OsError;
-        return Self{ .handle = handle, .is_handle_open = true };
+        const test_allocation = if (builtin.is_test) try std.testing.allocator.create(u8) else .{};
+        return Self{ .handle = handle, .test_allocation = test_allocation };
     }
 
-    pub fn clean(self: *Self) !void {
-        if (!self.is_handle_open) {
-            return error.AlreadyCleaned;
-        }
+    pub fn clean(self: *const Self) !void {
         const success = w32.CloseHandle(self.handle);
         if (success == 0) {
             return error.OsError;
         }
-        self.is_handle_open = false;
+        if (builtin.is_test) {
+            std.testing.allocator.destroy(self.test_allocation);
+        }
     }
 
     pub fn join(self: *const Self) !u32 {
