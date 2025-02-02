@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 const w32 = @import("win32").everything;
 const Process = @import("process.zig").Process;
 
-pub fn RemoteSlice(comptime Element: type) type {
+pub fn RemoteSlice(comptime Element: type, comptime sentinel: ?Element) type {
     return struct {
         process_handle: w32.HANDLE,
         address: usize,
@@ -14,10 +14,11 @@ pub fn RemoteSlice(comptime Element: type) type {
 
         pub fn create(
             process: *const Process,
-            data: []const Element,
+            data: if (sentinel) |s| [:s]const Element else []const Element,
         ) !Self {
             const process_handle = process.handle;
-            const size_in_bytes = data.len * @sizeOf(Element);
+            const full_length = if (sentinel != null) data.len + 1 else data.len;
+            const size_in_bytes = full_length * @sizeOf(Element);
             const address = w32.VirtualAllocEx(process_handle, null, size_in_bytes, .{
                 .COMMIT = 1,
                 .RESERVE = 1,
@@ -46,7 +47,8 @@ pub fn RemoteSlice(comptime Element: type) type {
         }
 
         pub fn getSizeInBytes(self: *const Self) usize {
-            return self.len * @sizeOf(Element);
+            const full_length = if (sentinel != null) self.len + 1 else self.len;
+            return full_length * @sizeOf(Element);
         }
     };
 }
@@ -54,26 +56,42 @@ pub fn RemoteSlice(comptime Element: type) type {
 const testing = std.testing;
 const isMemoryWriteable = @import("memory.zig").isMemoryWriteable;
 
-test "create should allocate memory and copy it's value" {
+test "create should allocate memory and copy the data to it" {
     const data = [_]u32{ 1, 2, 3, 4, 5 };
-    const remote_slice = try RemoteSlice(u32).create(&Process.getCurrent(), &data);
+    const remote_slice = try RemoteSlice(u32, null).create(&Process.getCurrent(), &data);
     defer remote_slice.destroy() catch unreachable;
     try testing.expectEqual(true, isMemoryWriteable(remote_slice.address, remote_slice.getSizeInBytes()));
     const pointer: *[data.len]u32 = @ptrFromInt(remote_slice.address);
     try testing.expectEqualSlices(u32, &data, pointer);
 }
 
+test "create should copy sentinel value when sentinel value is provided" {
+    const data = [_:6]u32{ 1, 2, 3, 4, 5 };
+    const remote_slice = try RemoteSlice(u32, 6).create(&Process.getCurrent(), &data);
+    defer remote_slice.destroy() catch unreachable;
+    try testing.expectEqual(true, isMemoryWriteable(remote_slice.address, remote_slice.getSizeInBytes()));
+    const pointer: *[data.len + 1]u32 = @ptrFromInt(remote_slice.address);
+    try testing.expectEqualSlices(u32, &[_:0]u32{ 1, 2, 3, 4, 5, 6 }, pointer);
+}
+
 test "destroy should free the allocated memory" {
     const data = [_]u32{ 1, 2, 3, 4, 5 };
-    const remote_slice = try RemoteSlice(u32).create(&Process.getCurrent(), &data);
+    const remote_slice = try RemoteSlice(u32, null).create(&Process.getCurrent(), &data);
     try testing.expectEqual(true, isMemoryWriteable(remote_slice.address, remote_slice.getSizeInBytes()));
     try remote_slice.destroy();
     try testing.expectEqual(false, isMemoryWriteable(remote_slice.address, remote_slice.getSizeInBytes()));
 }
 
-test "getSizeInBytes should should return the correct value" {
+test "getSizeInBytes should should return the correct value when no sentinel value is provided" {
     const data = [_]u32{ 1, 2, 3, 4, 5 };
-    const remote_slice = try RemoteSlice(u32).create(&Process.getCurrent(), &data);
+    const remote_slice = try RemoteSlice(u32, null).create(&Process.getCurrent(), &data);
+    defer remote_slice.destroy() catch unreachable;
+    try testing.expectEqual(@sizeOf(@TypeOf(data)), remote_slice.getSizeInBytes());
+}
+
+test "getSizeInBytes should should return the correct value when sentinel value is provided" {
+    const data = [_:6]u32{ 1, 2, 3, 4, 5 };
+    const remote_slice = try RemoteSlice(u32, 6).create(&Process.getCurrent(), &data);
     defer remote_slice.destroy() catch unreachable;
     try testing.expectEqual(@sizeOf(@TypeOf(data)), remote_slice.getSizeInBytes());
 }
