@@ -21,6 +21,10 @@ pub const MemoryRange = struct {
     pub fn isWriteable(self: *const Self) bool {
         return memory.isMemoryWriteable(self.base_address, self.size_in_bytes);
     }
+
+    pub fn isValid(self: *const Self) bool {
+        return memory.isRangeValid(self.base_address, self.size_in_bytes);
+    }
 };
 
 const testing = std.testing;
@@ -86,4 +90,20 @@ test "isWriteable should return false when base address is null" {
         .size_in_bytes = 5,
     };
     try testing.expectEqual(false, memory_range.isWriteable());
+}
+
+test "isValid should return true when range does not overflow" {
+    const memory_range = MemoryRange{
+        .base_address = 123,
+        .size_in_bytes = 456,
+    };
+    try testing.expectEqual(true, memory_range.isValid());
+}
+
+test "isValid should return true when range overflows" {
+    const memory_range = MemoryRange{
+        .base_address = std.math.maxInt(usize) - 5,
+        .size_in_bytes = 10,
+    };
+    try testing.expectEqual(false, memory_range.isValid());
 }
