@@ -11,6 +11,7 @@ pub const Process = struct {
     test_allocation: if (builtin.is_test) ?*u8 else void,
 
     const Self = @This();
+    pub const max_file_path = 260;
 
     pub fn getCurrent() Self {
         return .{
@@ -57,8 +58,8 @@ pub const Process = struct {
         return exit_code == w32.STILL_ACTIVE;
     }
 
-    pub fn getImageFilePath(self: *const Self, comptime path_buffer_len: comptime_int, path_buffer: *[path_buffer_len]u8) !usize {
-        var buffer: [path_buffer_len:0]u16 = undefined;
+    pub fn getFilePath(self: *const Self, path_buffer: *[max_file_path]u8) !usize {
+        var buffer: [max_file_path:0]u16 = undefined;
         const size = w32.K32GetProcessImageFileNameW(self.handle, &buffer, buffer.len);
         if (size == 0) {
             return error.OsError;
@@ -104,15 +105,15 @@ test "is still running should return true when process is running" {
     try testing.expectEqual(true, is_still_running);
 }
 
-test "get_image_file_path_should_return_correct_value" {
+test "getFilePath should return correct value" {
     const process_id = ProcessId.getCurrent();
     const access_rights = ProcessAccessRights{
         .QUERY_INFORMATION = 1,
     };
     var process = try Process.open(process_id, access_rights);
     defer process.close() catch unreachable;
-    var buffer: [260:0]u8 = undefined;
-    const size = try process.getImageFilePath(buffer.len, &buffer);
+    var buffer: [Process.max_file_path]u8 = undefined;
+    const size = try process.getFilePath(&buffer);
     const path = buffer[0..size];
     try testing.expectStringEndsWith(path, "test.exe");
 }

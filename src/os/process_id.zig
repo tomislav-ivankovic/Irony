@@ -7,14 +7,14 @@ pub const ProcessId = struct {
     raw: u32,
 
     const Self = @This();
-    const buffer_size = 4096;
+    const max_processes = 4096;
 
     pub fn getCurrent() Self {
         return .{ .raw = w32.GetCurrentProcessId() };
     }
 
     pub fn findAll() !Iterator {
-        var buffer: [buffer_size]u32 = undefined;
+        var buffer: [max_processes]u32 = undefined;
         var number_of_bytes: u32 = undefined;
         const success = w32.K32EnumProcesses(
             &buffer[0],
@@ -32,12 +32,12 @@ pub const ProcessId = struct {
     }
 
     pub const Iterator = struct {
-        buffer: [buffer_size]u32,
+        buffer: [max_processes]u32,
         number_of_elements: u32,
         index: u32 = 0,
 
         fn next(self: *Iterator) ?ProcessId {
-            if (self.index >= self.number_of_elements or self.index >= buffer_size) {
+            if (self.index >= self.number_of_elements or self.index >= max_processes) {
                 return null;
             }
             const raw = self.buffer[self.index];
@@ -51,8 +51,8 @@ pub const ProcessId = struct {
         while (iterator.next()) |process_id| {
             var process = Process.open(process_id, .{ .QUERY_LIMITED_INFORMATION = 1 }) catch continue;
             defer process.close() catch unreachable;
-            var buffer: [260]u8 = undefined;
-            const size = try process.getImageFilePath(buffer.len, &buffer);
+            var buffer: [Process.max_file_path]u8 = undefined;
+            const size = try process.getFilePath(&buffer);
             const path = buffer[0..size];
             const name = pathToFileName(path);
             if (std.mem.eql(u8, name, file_name)) {
