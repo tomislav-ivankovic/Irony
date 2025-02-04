@@ -2,6 +2,8 @@ test {
     _ = @import("dll.zig");
     _ = @import("injector.zig");
 
+    _ = @import("injector/injected_module.zig");
+
     _ = @import("memory/converted_value.zig");
     _ = @import("memory/memory_pattern.zig");
     _ = @import("memory/memory_range.zig");
