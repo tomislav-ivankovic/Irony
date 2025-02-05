@@ -1,4 +1,5 @@
 const std = @import("std");
+const errorContext = @import("../error_context.zig").errorContext;
 const memory = @import("root.zig");
 
 pub fn MemoryPattern(comptime number_of_bytes: usize) type {
@@ -90,6 +91,7 @@ pub fn MemoryPattern(comptime number_of_bytes: usize) type {
 
         pub fn findAddress(self: *const Self, range: memory.MemoryRange) !usize {
             if (!range.isReadable()) {
+                errorContext().new(error.NotReadable, "Provided memory range is not readable.");
                 return error.NotReadable;
             }
             const pattern = self.bytes;
@@ -108,6 +110,7 @@ pub fn MemoryPattern(comptime number_of_bytes: usize) type {
                     return address;
                 }
             }
+            errorContext().new(error.NotReadable, "Memory pattern not found.");
             return error.NotFound;
         }
     };
