@@ -1,11 +1,18 @@
 const std = @import("std");
-const w32 = @import("win32").everything;
-const w = std.unicode.utf8ToUtf16LeStringLiteral;
+const os = @import("os/root.zig");
+const injector = @import("injector/root.zig");
+
+const process_name = "TEKKEN8.exe";
+const interval_ns = 1_000_000_000;
 
 pub fn main() !void {
-    _ = w32.MessageBoxW(null, w("Hello world."), w("caption"), .{});
+    injector.runProcessLoop(process_name, interval_ns, onProcessOpen, onProcessClose);
 }
 
-test "hello test" {
-    try std.testing.expectEqual(123, 123);
+pub fn onProcessOpen(process: *const os.Process) void {
+    _ = process;
+}
+
+pub fn onProcessClose(process: *const os.Process) void {
+    _ = process;
 }
