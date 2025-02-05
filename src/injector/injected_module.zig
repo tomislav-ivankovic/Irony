@@ -46,19 +46,19 @@ pub const InjectedModule = struct {
 const testing = @import("std").testing;
 
 test "inject should load module into address space" {
-    const module_path = try std.fs.path.resolve(testing.allocator, &.{ "test_assets", "test_1.dll" });
+    const module_path = try std.fs.path.resolve(testing.allocator, &.{ "test_assets", "test.dll" });
     defer testing.allocator.free(module_path);
     const injected_module = try InjectedModule.inject(os.Process.getCurrent(), module_path);
     defer injected_module.eject() catch undefined;
-    _ = try os.Module.getLocal("test_1.dll");
+    _ = try os.Module.getLocal("test.dll");
 }
 
 test "eject should unload module from address space" {
-    const module_path = try std.fs.path.resolve(testing.allocator, &.{ "test_assets", "test_2.dll" });
+    const module_path = try std.fs.path.resolve(testing.allocator, &.{ "test_assets", "test.dll" });
     defer testing.allocator.free(module_path);
     const injected_module = try InjectedModule.inject(os.Process.getCurrent(), module_path);
     try injected_module.eject();
-    try testing.expectError(error.OsError, os.Module.getLocal("test_2.dll"));
+    try testing.expectError(error.OsError, os.Module.getLocal("test.dll"));
 }
 
 test "inject should error when invalid module path" {
