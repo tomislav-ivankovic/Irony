@@ -1,5 +1,6 @@
 const std = @import("std");
 const w32 = @import("win32").everything;
+const errorContext = @import("../error_context.zig").errorContext;
 const os = @import("root.zig");
 
 pub const ProcessId = struct {
@@ -21,6 +22,8 @@ pub const ProcessId = struct {
             &number_of_bytes,
         );
         if (success == 0) {
+            errorContext().newFmt(null, "{}", os.OsError.getLast());
+            errorContext().append(error.OsError, "K32EnumProcesses returned 0.");
             return error.OsError;
         }
         const number_of_elements = number_of_bytes / @sizeOf(u32);
@@ -46,18 +49,28 @@ pub const ProcessId = struct {
     };
 
     pub fn findByFileName(file_name: []const u8) !Self {
-        var iterator = try Self.findAll();
+        var iterator = Self.findAll() catch |err| {
+            errorContext().append(err, "Failed to find all process ID-s.");
+            return err;
+        };
         while (iterator.next()) |process_id| {
             var process = os.Process.open(process_id, .{ .QUERY_LIMITED_INFORMATION = 1 }) catch continue;
-            defer process.close() catch unreachable;
+            defer process.close() catch |err| {
+                errorContext().appendFmt(err, "Failed to close process with ID: {}", .{process_id.raw});
+                errorContext().logError();
+            };
             var buffer: [os.Process.max_file_path]u8 = undefined;
-            const size = try process.getFilePath(&buffer);
+            const size = process.getFilePath(&buffer) catch |err| {
+                errorContext().appendFmt(err, "Failed to get file path for process with ID: {}", .{process_id.raw});
+                return err;
+            };
             const path = buffer[0..size];
             const name = os.pathToFileName(path);
             if (std.mem.eql(u8, name, file_name)) {
                 return process_id;
             }
         }
+        errorContext().append(error.NotFound, "Process not found.");
         return error.NotFound;
     }
 };

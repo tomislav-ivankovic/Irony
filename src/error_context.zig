@@ -85,9 +85,9 @@ pub const ErrorContext = struct {
                 .constant => |msg| msg,
                 .formatted => |msg| msg,
             };
-            try std.log.err("{s}\nCausation chain:\n{}", .{ message, self });
+            std.log.err("{s}\nCausation chain:\n{}", .{ message, self });
         } else {
-            try std.log.err("No items inside the error context.");
+            std.log.err("No items inside the error context.", .{});
         }
     }
 
