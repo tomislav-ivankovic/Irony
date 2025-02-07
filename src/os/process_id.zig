@@ -56,12 +56,12 @@ pub const ProcessId = struct {
         while (iterator.next()) |process_id| {
             var process = os.Process.open(process_id, .{ .QUERY_LIMITED_INFORMATION = 1 }) catch continue;
             defer process.close() catch |err| {
-                misc.errorContext().appendFmt(err, "Failed to close process with ID: {}", .{process_id.raw});
+                misc.errorContext().appendFmt(err, "Failed to close process with ID: {}", .{process_id});
                 misc.errorContext().logError();
             };
             var buffer: [os.Process.max_file_path]u8 = undefined;
             const size = process.getFilePath(&buffer) catch |err| {
-                misc.errorContext().appendFmt(err, "Failed to get file path for process with ID: {}", .{process_id.raw});
+                misc.errorContext().appendFmt(err, "Failed to get file path for process with ID: {}", .{process_id});
                 return err;
             };
             const path = buffer[0..size];
@@ -72,6 +72,16 @@ pub const ProcessId = struct {
         }
         misc.errorContext().new(error.NotFound, "Process not found.");
         return error.NotFound;
+    }
+
+    pub fn format(
+        self: Self,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = options;
+        try writer.print("{" ++ fmt ++ "}", .{self.raw});
     }
 };
 
@@ -103,4 +113,11 @@ test "findByFileName should return process id when process exists" {
 
 test "findByFileName should error when process does not exist" {
     try testing.expectError(error.NotFound, ProcessId.findByFileName("invalid process name"));
+}
+
+test "should format just like the raw value" {
+    const process_id = ProcessId{ .raw = 123 };
+    const string = try std.fmt.allocPrint(testing.allocator, "test {} {x} {X}", .{ process_id, process_id, process_id });
+    defer testing.allocator.free(string);
+    try testing.expectEqualStrings("test 123 7b 7B", string);
 }

@@ -26,7 +26,7 @@ fn runLoopLogic(
 ) void {
     if (opened_process.*) |process| {
         const still_running = process.isStillRunning() catch |err| c: {
-            misc.errorContext().appendFmt(err, "Failed to figure out if process (PID={}) is still running.", .{process.id.raw});
+            misc.errorContext().appendFmt(err, "Failed to figure out if process (PID={}) is still running.", .{process.id});
             misc.errorContext().logError();
             break :c false;
         };
@@ -35,7 +35,7 @@ fn runLoopLogic(
         }
         onProcessClose(&process);
         process.close() catch |err| {
-            misc.errorContext().appendFmt(err, "Failed close process with PID: {}", .{process.id.raw});
+            misc.errorContext().appendFmt(err, "Failed close process with PID: {}", .{process.id});
             misc.errorContext().logError();
         };
         opened_process.* = null;
@@ -52,10 +52,10 @@ fn runLoopLogic(
                 return;
             },
         };
-        std.log.info("Process ID found: {}", .{process_id.raw});
-        std.log.info("Opening process with PID {}...", .{process_id.raw});
+        std.log.info("Process ID found: {}", .{process_id});
+        std.log.info("Opening process with PID {}...", .{process_id});
         const process = os.Process.open(process_id, access_rights) catch |err| {
-            misc.errorContext().appendFmt(err, "Failed to find process with PID: {}", .{process_id.raw});
+            misc.errorContext().appendFmt(err, "Failed to find process with PID: {}", .{process_id});
             misc.errorContext().logError();
             return;
         };
