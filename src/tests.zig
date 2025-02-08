@@ -3,6 +3,7 @@ test {
     _ = @import("injector.zig");
 
     _ = @import("injector/injected_module.zig");
+    _ = @import("injector/process_loop.zig");
 
     _ = @import("memory/converted_value.zig");
     _ = @import("memory/memory_pattern.zig");
