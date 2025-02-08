@@ -9,8 +9,6 @@ pub const Module = struct {
     handle: w32.HINSTANCE,
 
     const Self = @This();
-    pub const max_file_path = 260;
-    pub const max_modules = 8192;
 
     pub fn getMain() !Self {
         const handle = w32.GetModuleHandleW(null) orelse {
@@ -22,7 +20,7 @@ pub const Module = struct {
     }
 
     pub fn getLocal(name: []const u8) !Self {
-        var buffer = [_:0]u16{0} ** max_file_path;
+        var buffer = [_:0]u16{0} ** os.max_file_path_length;
         const size = std.unicode.utf8ToUtf16Le(&buffer, name) catch |err| {
             misc.errorContext().newFmt(err, "Failed to convert \"{s}\" to UTF-16LE.", .{name});
             return err;
@@ -37,7 +35,7 @@ pub const Module = struct {
     }
 
     pub fn getRemote(process: os.Process, file_name: []const u8) !Self {
-        var buffer: [max_modules]?w32.HINSTANCE = undefined;
+        var buffer: [os.max_number_of_modules]?w32.HINSTANCE = undefined;
         var number_of_bytes: u32 = undefined;
         const success = w32.K32EnumProcessModules(
             process.handle,
@@ -55,7 +53,7 @@ pub const Module = struct {
         for (handles) |optional_handle| {
             const handle = optional_handle orelse continue;
             const module = Self{ .process = process, .handle = handle };
-            var path_buffer: [max_file_path]u8 = undefined;
+            var path_buffer: [os.max_file_path_length]u8 = undefined;
             const path_size = module.getFilePath(&path_buffer) catch continue;
             const path = path_buffer[0..path_size];
             const name = os.pathToFileName(path);
@@ -67,8 +65,8 @@ pub const Module = struct {
         return error.NotFound;
     }
 
-    pub fn getFilePath(self: *const Self, path_buffer: *[max_file_path]u8) !usize {
-        var buffer: [max_file_path:0]u16 = undefined;
+    pub fn getFilePath(self: *const Self, path_buffer: *[os.max_file_path_length]u8) !usize {
+        var buffer: [os.max_file_path_length:0]u16 = undefined;
         const size = w32.K32GetModuleFileNameExW(self.process.handle, self.handle, &buffer, buffer.len);
         if (size == 0) {
             misc.errorContext().newFmt(null, "{}", os.OsError.getLast());
@@ -139,7 +137,7 @@ test "getRemote should error when module name is invalid" {
 
 test "getFilePath should return correct value" {
     const module = try Module.getLocal("kernel32.dll");
-    var buffer: [Module.max_file_path]u8 = undefined;
+    var buffer: [os.max_file_path_length]u8 = undefined;
     const size = try module.getFilePath(&buffer);
     const path = buffer[0..size];
     try testing.expectStringEndsWith(path, "kernel32.dll");

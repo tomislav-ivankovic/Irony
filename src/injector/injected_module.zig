@@ -9,7 +9,7 @@ pub const InjectedModule = struct {
     const Self = @This();
 
     pub fn inject(process: os.Process, module_path: []const u8) !Self {
-        var buffer = [_:0]u16{0} ** os.Module.max_file_path;
+        var buffer = [_:0]u16{0} ** os.max_file_path_length;
         const size = try std.unicode.utf8ToUtf16Le(&buffer, module_path);
         const utf16_module_path = buffer[0..size :0];
         const kernel_module = try os.Module.getLocal("kernel32.dll");

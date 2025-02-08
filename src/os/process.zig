@@ -11,7 +11,6 @@ pub const Process = struct {
 
     const Self = @This();
     pub const AccessRights = w32.PROCESS_ACCESS_RIGHTS;
-    pub const max_file_path = 260;
 
     pub fn getCurrent() Self {
         return .{
@@ -66,8 +65,8 @@ pub const Process = struct {
         return exit_code == w32.STILL_ACTIVE;
     }
 
-    pub fn getFilePath(self: *const Self, path_buffer: *[max_file_path]u8) !usize {
-        var buffer: [max_file_path:0]u16 = undefined;
+    pub fn getFilePath(self: *const Self, path_buffer: *[os.max_file_path_length]u8) !usize {
+        var buffer: [os.max_file_path_length:0]u16 = undefined;
         const size = w32.K32GetProcessImageFileNameW(self.handle, &buffer, buffer.len);
         if (size == 0) {
             misc.errorContext().newFmt(null, "{}", os.OsError.getLast());
@@ -125,7 +124,7 @@ test "getFilePath should return correct value" {
     };
     var process = try Process.open(process_id, access_rights);
     defer process.close() catch unreachable;
-    var buffer: [Process.max_file_path]u8 = undefined;
+    var buffer: [os.max_file_path_length]u8 = undefined;
     const size = try process.getFilePath(&buffer);
     const path = buffer[0..size];
     try testing.expectStringEndsWith(path, "test.exe");

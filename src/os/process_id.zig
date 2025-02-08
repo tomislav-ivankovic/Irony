@@ -7,14 +7,13 @@ pub const ProcessId = struct {
     raw: u32,
 
     const Self = @This();
-    const max_processes = 4096;
 
     pub fn getCurrent() Self {
         return .{ .raw = w32.GetCurrentProcessId() };
     }
 
     pub fn findAll() !Iterator {
-        var buffer: [max_processes]u32 = undefined;
+        var buffer: [os.max_number_of_processes]u32 = undefined;
         var number_of_bytes: u32 = undefined;
         const success = w32.K32EnumProcesses(
             &buffer[0],
@@ -34,12 +33,12 @@ pub const ProcessId = struct {
     }
 
     pub const Iterator = struct {
-        buffer: [max_processes]u32,
+        buffer: [os.max_number_of_processes]u32,
         number_of_elements: u32,
         index: u32 = 0,
 
         fn next(self: *Iterator) ?ProcessId {
-            if (self.index >= self.number_of_elements or self.index >= max_processes) {
+            if (self.index >= self.number_of_elements or self.index >= os.max_number_of_processes) {
                 return null;
             }
             const raw = self.buffer[self.index];
@@ -59,7 +58,7 @@ pub const ProcessId = struct {
                 misc.errorContext().appendFmt(err, "Failed to close process with ID: {}", .{process_id});
                 misc.errorContext().logError();
             };
-            var buffer: [os.Process.max_file_path]u8 = undefined;
+            var buffer: [os.max_file_path_length]u8 = undefined;
             const size = process.getFilePath(&buffer) catch |err| {
                 misc.errorContext().appendFmt(err, "Failed to get file path for process with ID: {}", .{process_id});
                 return err;
