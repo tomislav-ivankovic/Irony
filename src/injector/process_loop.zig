@@ -100,15 +100,20 @@ test "should do nothing when process is not found" {
             times_called += 1;
         }
     };
-    for (0..3) |_| {
-        runLoopLogic(&opened_process, .{ .QUERY_INFORMATION = 1 }, "not_found.exe", OnProcessOpen.call, OnProcessClose.call);
-    }
+
+    runLoopLogic(&opened_process, .{ .QUERY_INFORMATION = 1 }, "not_found.exe", OnProcessOpen.call, OnProcessClose.call);
+
     try testing.expectEqual(null, opened_process);
     try testing.expectEqual(0, OnProcessOpen.times_called);
     try testing.expectEqual(0, OnProcessClose.times_called);
 }
 
-test "should open process when process exists and onProcessOpen succeeds" {
+test "should open process when process exists and onProcessOpen returns true" {
+    var wait_process = std.process.Child.init(&.{"./test_assets/wait.exe"}, testing.allocator);
+    try wait_process.spawn();
+    defer _ = wait_process.kill() catch undefined;
+    const pid = w32.GetProcessId(wait_process.id);
+
     var opened_process: ?os.Process = null;
     const OnProcessOpen = struct {
         var times_called: usize = 0;
@@ -127,18 +132,79 @@ test "should open process when process exists and onProcessOpen succeeds" {
     };
 
     for (0..3) |_| {
-        runLoopLogic(&opened_process, .{ .QUERY_INFORMATION = 1 }, "test.exe", OnProcessOpen.call, OnProcessClose.call);
+        runLoopLogic(&opened_process, .{ .QUERY_INFORMATION = 1 }, "wait.exe", OnProcessOpen.call, OnProcessClose.call);
     }
     defer opened_process.?.close() catch unreachable;
 
-    try testing.expectEqual(os.ProcessId.getCurrent(), opened_process.?.id);
+    try testing.expectEqual(pid, opened_process.?.id.raw);
     try testing.expectEqual(1, OnProcessOpen.times_called);
-    try testing.expectEqual(os.ProcessId.getCurrent(), OnProcessOpen.process_id);
+    try testing.expectEqual(pid, OnProcessOpen.process_id.?.raw);
     try testing.expectEqual(0, OnProcessClose.times_called);
 }
 
-// TODO figure out why spawning a process crashes the test
-// test "should close process when process stops running" {
-//     var process = std.process.Child.init(&.{ "echo", "test" }, testing.allocator);
-//     _ = try process.spawnAndWait();
-// }
+test "should open and close process when process exists and onProcessOpen returns false" {
+    var wait_process = std.process.Child.init(&.{"./test_assets/wait.exe"}, testing.allocator);
+    try wait_process.spawn();
+    defer _ = wait_process.kill() catch undefined;
+    const pid = w32.GetProcessId(wait_process.id);
+
+    var opened_process: ?os.Process = null;
+    const OnProcessOpen = struct {
+        var times_called: usize = 0;
+        var process_id: ?os.ProcessId = null;
+        fn call(process: *const os.Process) bool {
+            times_called += 1;
+            process_id = process.id;
+            return false;
+        }
+    };
+    const OnProcessClose = struct {
+        var times_called: usize = 0;
+        fn call() void {
+            times_called += 1;
+        }
+    };
+
+    runLoopLogic(&opened_process, .{ .QUERY_INFORMATION = 1 }, "wait.exe", OnProcessOpen.call, OnProcessClose.call);
+
+    try testing.expectEqual(null, opened_process);
+    try testing.expectEqual(1, OnProcessOpen.times_called);
+    try testing.expectEqual(pid, OnProcessOpen.process_id.?.raw);
+    try testing.expectEqual(0, OnProcessClose.times_called);
+}
+
+test "should close process when process stops running" {
+    var wait_process = std.process.Child.init(&.{"./test_assets/wait.exe"}, testing.allocator);
+    try wait_process.spawn();
+    const pid = w32.GetProcessId(wait_process.id);
+
+    var opened_process: ?os.Process = null;
+    const OnProcessOpen = struct {
+        var times_called: usize = 0;
+        var process_id: ?os.ProcessId = null;
+        fn call(process: *const os.Process) bool {
+            times_called += 1;
+            process_id = process.id;
+            return true;
+        }
+    };
+    const OnProcessClose = struct {
+        var times_called: usize = 0;
+        fn call() void {
+            times_called += 1;
+        }
+    };
+
+    for (0..3) |_| {
+        runLoopLogic(&opened_process, .{ .QUERY_INFORMATION = 1 }, "wait.exe", OnProcessOpen.call, OnProcessClose.call);
+    }
+    _ = try wait_process.kill();
+    for (0..3) |_| {
+        runLoopLogic(&opened_process, .{ .QUERY_INFORMATION = 1 }, "wait.exe", OnProcessOpen.call, OnProcessClose.call);
+    }
+
+    try testing.expectEqual(null, opened_process);
+    try testing.expectEqual(1, OnProcessOpen.times_called);
+    try testing.expectEqual(pid, OnProcessOpen.process_id.?.raw);
+    try testing.expectEqual(1, OnProcessClose.times_called);
+}
