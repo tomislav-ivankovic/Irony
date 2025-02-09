@@ -29,29 +29,6 @@ pub fn main() !void {
 
 var injected_module: ?injector.InjectedModule = null;
 
-pub fn onConsoleClose() void {
-    std.log.info("Detected close event.", .{});
-    if (injected_module == null) {
-        std.log.info("Nothing to eject. Shutting down...", .{});
-        return;
-    }
-    const module = injected_module orelse unreachable;
-    std.log.info("Ejecting module \"{s}\"... ", .{module_name});
-    if (module.eject()) {
-        std.log.info("Module ejected successfully.", .{});
-    } else |err| {
-        misc.errorContext().appendFmt(err, "Failed to eject module: {s}", .{module_name});
-        misc.errorContext().logError();
-    }
-    std.log.info("Closing process (PID = {})...", .{module.module.process.id});
-    if (module.module.process.close()) {
-        std.log.info("Process closed successfully.", .{});
-    } else |err| {
-        misc.errorContext().appendFmt(err, "Failed to close process with PID: {}", .{module.module.process.id});
-    }
-    std.log.info("Shutting down...", .{});
-}
-
 pub fn onProcessOpen(process: *const os.Process) bool {
     const relative_path = "./" ++ module_name;
     std.log.debug("Getting full path of \"{s}\"...", .{relative_path});
@@ -79,6 +56,21 @@ pub fn onProcessClose() void {
         return;
     }
     const module = injected_module orelse unreachable;
+    std.log.info("Attempting to eject module \"{s}\"... ", .{module_name});
+    if (module.eject()) {
+        std.log.info("Module ejected successfully.", .{});
+    } else |_| {
+        std.log.info("Module ejected failed. But this is expected.", .{});
+    }
+}
+
+pub fn onConsoleClose() void {
+    std.log.info("Detected close event.", .{});
+    if (injected_module == null) {
+        std.log.info("Nothing to eject. Shutting down...", .{});
+        return;
+    }
+    const module = injected_module orelse unreachable;
     std.log.info("Ejecting module \"{s}\"... ", .{module_name});
     if (module.eject()) {
         std.log.info("Module ejected successfully.", .{});
@@ -86,4 +78,11 @@ pub fn onProcessClose() void {
         misc.errorContext().appendFmt(err, "Failed to eject module: {s}", .{module_name});
         misc.errorContext().logError();
     }
+    std.log.info("Closing process (PID = {})...", .{module.module.process.id});
+    if (module.module.process.close()) {
+        std.log.info("Process closed successfully.", .{});
+    } else |err| {
+        misc.errorContext().appendFmt(err, "Failed to close process with PID: {}", .{module.module.process.id});
+    }
+    std.log.info("Shutting down...", .{});
 }
