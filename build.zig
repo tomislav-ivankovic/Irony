@@ -36,6 +36,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/dll.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
     dll.root_module.addImport("win32", win32);
 
@@ -49,6 +50,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/injector.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
     injector.root_module.addImport("win32", win32);
 
@@ -89,6 +91,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/tests.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
     tests.root_module.addImport("win32", win32);
 

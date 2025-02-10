@@ -13,6 +13,7 @@ test {
     _ = @import("memory/self_sortable_array.zig");
 
     _ = @import("misc/error_context.zig");
+    _ = @import("misc/timestamp.zig");
 
     _ = @import("os/error.zig");
     _ = @import("os/memory.zig");
