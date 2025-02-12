@@ -55,12 +55,18 @@ pub const Timestamp = struct {
     ) !void {
         _ = options;
         if (fmt.len != 0) {
-            @compileError(std.fmt.comptimePrint("Invalid Timestamp format {{{s}}}. The only allowed format for Timestamp is {{}}.", .{fmt}));
+            @compileError(std.fmt.comptimePrint(
+                "Invalid Timestamp format {{{s}}}. The only allowed format for Timestamp is {{}}.",
+                .{fmt},
+            ));
         }
         if (self.year < 0) {
             try writer.writeByte('-');
         }
-        try writer.print("{:0>4}-{:0>2}-{:0>2}T{:0>2}:{:0>2}:{:0>2}.{:0>9}", .{ @abs(self.year), self.month, self.day, self.hour, self.minute, self.second, self.nano });
+        try writer.print(
+            "{:0>4}-{:0>2}-{:0>2}T{:0>2}:{:0>2}:{:0>2}.{:0>9}",
+            .{ @abs(self.year), self.month, self.day, self.hour, self.minute, self.second, self.nano },
+        );
     }
 };
 

@@ -16,7 +16,11 @@ pub const InjectedModule = struct {
         const load_library_address = try kernel_module.getProcedureAddress("LoadLibraryW");
         const remote_string = try os.RemoteSlice(u16, 0).create(process, utf16_module_path);
         defer remote_string.destroy() catch undefined;
-        const remote_thread = try os.RemoteThread.spawn(&process, @ptrFromInt(load_library_address), remote_string.address);
+        const remote_thread = try os.RemoteThread.spawn(
+            &process,
+            @ptrFromInt(load_library_address),
+            remote_string.address,
+        );
         defer remote_thread.clean() catch undefined;
         const module_handle_part = try remote_thread.join();
         if (module_handle_part == 0) {
@@ -31,7 +35,11 @@ pub const InjectedModule = struct {
     pub fn eject(self: *const Self) !void {
         const kernel_module = try os.Module.getLocal("kernel32.dll");
         const free_library_address = try kernel_module.getProcedureAddress("FreeLibrary");
-        const remote_thread = try os.RemoteThread.spawn(&self.module.process, @ptrFromInt(free_library_address), @intFromPtr(self.module.handle));
+        const remote_thread = try os.RemoteThread.spawn(
+            &self.module.process,
+            @ptrFromInt(free_library_address),
+            @intFromPtr(self.module.handle),
+        );
         defer remote_thread.clean() catch undefined;
         const return_code = try remote_thread.join();
         if (return_code == 0) {
@@ -62,5 +70,8 @@ test "eject should unload module from address space" {
 }
 
 test "inject should error when invalid module path" {
-    try testing.expectError(error.RemoteLoadLibraryWFailed, InjectedModule.inject(os.Process.getCurrent(), "invalid module path"));
+    try testing.expectError(
+        error.RemoteLoadLibraryWFailed,
+        InjectedModule.inject(os.Process.getCurrent(), "invalid module path"),
+    );
 }

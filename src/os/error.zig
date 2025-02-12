@@ -18,7 +18,10 @@ pub const OsError = struct {
     ) !void {
         _ = options;
         if (fmt.len != 0) {
-            @compileError(std.fmt.comptimePrint("Invalid OsError format {{{s}}}. The only allowed format for OsError is {{}}.", .{fmt}));
+            @compileError(std.fmt.comptimePrint(
+                "Invalid OsError format {{{s}}}. The only allowed format for OsError is {{}}.",
+                .{fmt},
+            ));
         }
 
         const language_id = 1024 * w32.SUBLANG_ENGLISH_US | w32.LANG_ENGLISH;
@@ -61,12 +64,18 @@ test "should format correctly when error has message" {
     const err = OsError{ .error_code = w32.ERROR_FILE_NOT_FOUND };
     const message = try std.fmt.allocPrint(testing.allocator, "Message: {}", .{err});
     defer testing.allocator.free(message);
-    try testing.expectEqualStrings("Message: File not found.\r\n (error code 0x2 win32.foundation.WIN32_ERROR.ERROR_FILE_NOT_FOUND)", message);
+    try testing.expectEqualStrings(
+        "Message: File not found.\r\n (error code 0x2 win32.foundation.WIN32_ERROR.ERROR_FILE_NOT_FOUND)",
+        message,
+    );
 }
 
 test "should format correctly when error has no message" {
     const err = OsError{ .error_code = w32.WAIT_FAILED };
     const message = try std.fmt.allocPrint(testing.allocator, "Message: {}", .{err});
     defer testing.allocator.free(message);
-    try testing.expectEqualStrings("Message: error code 0xFFFFFFFF win32.foundation.WIN32_ERROR.WAIT_FAILED", message);
+    try testing.expectEqualStrings(
+        "Message: error code 0xFFFFFFFF win32.foundation.WIN32_ERROR.WAIT_FAILED",
+        message,
+    );
 }

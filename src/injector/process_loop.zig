@@ -26,7 +26,11 @@ fn runLoopLogic(
     if (opened_process.*) |process| {
         std.log.debug("Checking if the process (PID = {}) is still running...", .{process.id});
         const still_running = process.isStillRunning() catch |err| c: {
-            misc.errorContext().appendFmt(err, "Failed to figure out if process (PID={}) is still running.", .{process.id});
+            misc.errorContext().appendFmt(
+                err,
+                "Failed to figure out if process (PID={}) is still running.",
+                .{process.id},
+            );
             misc.errorContext().logError();
             break :c false;
         };

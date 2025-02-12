@@ -19,25 +19,39 @@ pub fn MemoryPattern(comptime number_of_bytes: usize) type {
                     } else if (char == '?') {
                         if (previous_char == '?') {
                             if (bytes_index >= bytes.len) {
-                                @compileError(std.fmt.comptimePrint("Memory pattern \"{s}\" is longer then the expected {}.", .{ pattern, bytes.len }));
+                                @compileError(std.fmt.comptimePrint(
+                                    "Memory pattern \"{s}\" is longer then the expected {}.",
+                                    .{ pattern, bytes.len },
+                                ));
                             }
                             bytes[bytes_index] = null;
                             bytes_index += 1;
                             previous_char = null;
                         } else if (previous_char) |p_char| {
-                            @compileError(std.fmt.comptimePrint("Memory pattern \"{s}\" contains a mix of question mark and hex digit: {c}?", .{ pattern, p_char }));
+                            @compileError(std.fmt.comptimePrint(
+                                "Memory pattern \"{s}\" contains a mix of question mark and hex digit: {c}?",
+                                .{ pattern, p_char },
+                            ));
                         } else {
                             previous_char = char;
                         }
                     } else if (std.ascii.isHex(char)) {
                         if (previous_char == '?') {
-                            @compileError(std.fmt.comptimePrint("Memory pattern \"{s}\" contains a mix of question mark and hex digit: ?{c}", .{ pattern, char }));
+                            @compileError(std.fmt.comptimePrint(
+                                "Memory pattern \"{s}\" contains a mix of question mark and hex digit: ?{c}",
+                                .{ pattern, char },
+                            ));
                         } else if (previous_char) |p_char| {
                             if (bytes_index >= bytes.len) {
-                                @compileError(std.fmt.comptimePrint("Memory pattern \"{s}\" is longer then the expected {}.", .{ pattern, bytes.len }));
+                                @compileError(std.fmt.comptimePrint(
+                                    "Memory pattern \"{s}\" is longer then the expected {}.",
+                                    .{ pattern, bytes.len },
+                                ));
                             }
-                            const p_digit = if (std.ascii.isDigit(p_char)) p_char - '0' else std.ascii.toUpper(p_char) - 'A' + 10;
-                            const digit = if (std.ascii.isDigit(char)) char - '0' else std.ascii.toUpper(char) - 'A' + 10;
+                            const p_digit =
+                                if (std.ascii.isDigit(p_char)) p_char - '0' else std.ascii.toUpper(p_char) - 'A' + 10;
+                            const digit =
+                                if (std.ascii.isDigit(char)) char - '0' else std.ascii.toUpper(char) - 'A' + 10;
                             bytes[bytes_index] = 16 * p_digit + digit;
                             bytes_index += 1;
                             previous_char = null;
@@ -45,14 +59,23 @@ pub fn MemoryPattern(comptime number_of_bytes: usize) type {
                             previous_char = char;
                         }
                     } else {
-                        @compileError(std.fmt.comptimePrint("Memory pattern \"{s}\" contains a invalid character: {c}", .{ pattern, char }));
+                        @compileError(std.fmt.comptimePrint(
+                            "Memory pattern \"{s}\" contains a invalid character: {c}",
+                            .{ pattern, char },
+                        ));
                     }
                 }
                 if (previous_char) |p_char| {
-                    @compileError(std.fmt.comptimePrint("Memory pattern \"{s}\" ends with a incomplete byte: {c}", .{ pattern, p_char }));
+                    @compileError(std.fmt.comptimePrint(
+                        "Memory pattern \"{s}\" ends with a incomplete byte: {c}",
+                        .{ pattern, p_char },
+                    ));
                 }
                 if (bytes_index < bytes.len) {
-                    @compileError(std.fmt.comptimePrint("Memory pattern \"{s}\" is shorter then the expected {}.", .{ pattern, bytes.len }));
+                    @compileError(std.fmt.comptimePrint(
+                        "Memory pattern \"{s}\" is shorter then the expected {}.",
+                        .{ pattern, bytes.len },
+                    ));
                 }
                 return Self{ .bytes = bytes };
             }
@@ -66,7 +89,10 @@ pub fn MemoryPattern(comptime number_of_bytes: usize) type {
         ) !void {
             _ = options;
             if (fmt.len != 0) {
-                @compileError(std.fmt.comptimePrint("Invalid MemoryPattern format {{{s}}}. The only allowed format for MemoryPattern is {{}}.", .{fmt}));
+                @compileError(std.fmt.comptimePrint(
+                    "Invalid MemoryPattern format {{{s}}}. The only allowed format for MemoryPattern is {{}}.",
+                    .{fmt},
+                ));
             }
             var is_first = true;
             for (self.bytes) |byte| {

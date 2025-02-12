@@ -116,7 +116,11 @@ test "findByFileName should error when process does not exist" {
 
 test "should format just like the raw value" {
     const process_id = ProcessId{ .raw = 123 };
-    const string = try std.fmt.allocPrint(testing.allocator, "test {} {x} {X}", .{ process_id, process_id, process_id });
+    const string = try std.fmt.allocPrint(
+        testing.allocator,
+        "test {} {x} {X}",
+        .{ process_id, process_id, process_id },
+    );
     defer testing.allocator.free(string);
     try testing.expectEqualStrings("test 123 7b 7B", string);
 }

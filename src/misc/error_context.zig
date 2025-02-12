@@ -99,7 +99,10 @@ pub const ErrorContext = struct {
     ) !void {
         _ = options;
         if (fmt.len != 0) {
-            @compileError(std.fmt.comptimePrint("Invalid ErrorContext format {{{s}}}. The only allowed format for ErrorContext is {{}}.", .{fmt}));
+            @compileError(std.fmt.comptimePrint(
+                "Invalid ErrorContext format {{{s}}}. The only allowed format for ErrorContext is {{}}.",
+                .{fmt},
+            ));
         }
         if (self.trace.items.len == 0) {
             try writer.writeAll("No items inside the error context.");
@@ -141,16 +144,19 @@ test "should correctly format error message" {
     context.appendFmt(error.Error3, "Error 3 with context: {}", .{123});
     const message_1 = try std.fmt.allocPrint(testing.allocator, "{}", .{context});
     defer testing.allocator.free(message_1);
-    try testing.expectEqualStrings("1) Error 3 with context: 123 [error.Error3]\n2) Error 2. [error.Error2]\n3) Error 1.\n", message_1);
+    const expected_1 = "1) Error 3 with context: 123 [error.Error3]\n2) Error 2. [error.Error2]\n3) Error 1.\n";
+    try testing.expectEqualStrings(expected_1, message_1);
 
     context.newFmt(error.Error4, "Error 4 with context: {}", .{456});
     context.append(null, "Error 5.");
     const message_2 = try std.fmt.allocPrint(testing.allocator, "{}", .{context});
     defer testing.allocator.free(message_2);
-    try testing.expectEqualStrings("1) Error 5.\n2) Error 4 with context: 456 [error.Error4]\n", message_2);
+    const expected_2 = "1) Error 5.\n2) Error 4 with context: 456 [error.Error4]\n";
+    try testing.expectEqualStrings(expected_2, message_2);
 
     context.clear();
     const message_3 = try std.fmt.allocPrint(testing.allocator, "{}", .{context});
     defer testing.allocator.free(message_3);
-    try testing.expectEqualStrings("No items inside the error context.", message_3);
+    const expected_3 = "No items inside the error context.";
+    try testing.expectEqualStrings(expected_3, message_3);
 }

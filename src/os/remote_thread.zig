@@ -15,7 +15,15 @@ pub const RemoteThread = struct {
         start_routine: *const fn (parameter: usize) u32,
         parameter: usize,
     ) !Self {
-        const handle = w32.CreateRemoteThread(process.handle, null, 0, @ptrCast(start_routine), @ptrFromInt(parameter), 0, null) orelse {
+        const handle = w32.CreateRemoteThread(
+            process.handle,
+            null,
+            0,
+            @ptrCast(start_routine),
+            @ptrFromInt(parameter),
+            0,
+            null,
+        ) orelse {
             misc.errorContext().newFmt(null, "{}", os.OsError.getLast());
             misc.errorContext().append(error.OsError, "CreateRemoteThread returned null.");
             return error.OsError;

@@ -32,7 +32,10 @@ pub fn RemoteSlice(comptime Element: type, comptime sentinel: ?Element) type {
                 if (success == 0) {
                     misc.errorContext().newFmt(null, "{}", os.OsError.getLast());
                     misc.errorContext().append(error.OsError, "VirtualFreeEx returned 0.");
-                    misc.errorContext().append(error.OsError, "Failed to free remote slice memory while recovering from error.");
+                    misc.errorContext().append(
+                        error.OsError,
+                        "Failed to free remote slice memory while recovering from error.",
+                    );
                     misc.errorContext().logError();
                 }
             }

@@ -12,7 +12,8 @@ pub const ConsoleLoggerConfig = struct {
 
 pub fn ConsoleLogger(comptime config: ConsoleLoggerConfig) type {
     return struct {
-        var testing_buffer: if (config.use_testing_buffer) std.ArrayList(u8) else void = if (config.use_testing_buffer) std.ArrayList(u8).init(std.testing.allocator) else {};
+        var testing_buffer: if (config.use_testing_buffer) std.ArrayList(u8) else void =
+            if (config.use_testing_buffer) std.ArrayList(u8).init(std.testing.allocator) else {};
         pub fn logFn(
             comptime level: std.log.Level,
             comptime scope: @Type(.EnumLiteral),
