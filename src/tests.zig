@@ -2,6 +2,8 @@ test {
     _ = @import("dll.zig");
     _ = @import("injector.zig");
 
+    _ = @import("log/console.zig");
+
     _ = @import("injector/injected_module.zig");
     _ = @import("injector/process_loop.zig");
 

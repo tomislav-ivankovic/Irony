@@ -1,7 +1,13 @@
 const std = @import("std");
+const log = @import("log/root.zig");
 const misc = @import("misc/root.zig");
 const os = @import("os/root.zig");
 const injector = @import("injector/root.zig");
+
+pub const std_options = .{
+    .log_level = .debug,
+    .logFn = log.ConsoleLogger(.{}).logFn,
+};
 
 const process_name = "Polaris-Win64-Shipping.exe";
 const access_rights = os.Process.AccessRights{
