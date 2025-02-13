@@ -21,6 +21,28 @@ pub fn pathToFileName(path: []const u8) []const u8 {
     }
 }
 
+pub fn filePathToDirectoryPath(path: []const u8) []const u8 {
+    var last_separator_index: ?usize = null;
+    var i: usize = path.len;
+    while (i > 0) {
+        i -= 1;
+        const character = path[i];
+        if (character == '\\' or character == '/') {
+            last_separator_index = i;
+            break;
+        }
+    }
+    if (last_separator_index) |index| {
+        if (index == 0) {
+            return path[0..1];
+        } else {
+            return path[0..index];
+        }
+    } else {
+        return ".";
+    }
+}
+
 pub fn getFullPath(full_path_buffer: *[os.max_file_path_length]u8, short_path: []const u8) !usize {
     var short_path_buffer_utf16 = [_:0]u16{0} ** os.max_file_path_length;
     const short_path_size = std.unicode.utf8ToUtf16Le(&short_path_buffer_utf16, short_path) catch |err| {
@@ -75,7 +97,20 @@ test "pathToFileName should return correct value" {
     try testing.expectEqualStrings("", pathToFileName("\\"));
 }
 
-test "getFullPath should produce correct full" {
+test "filePathToDirectoryPath should return correct value" {
+    try testing.expectEqualStrings("test1\\test2", filePathToDirectoryPath("test1\\test2\\test3.exe"));
+    try testing.expectEqualStrings("test1\\test2", filePathToDirectoryPath("test1\\test2\\test3"));
+    try testing.expectEqualStrings(".\\test1\\test2", filePathToDirectoryPath(".\\test1\\test2\\test3"));
+    try testing.expectEqualStrings("\\test1\\test2", filePathToDirectoryPath("\\test1\\test2\\test3"));
+    try testing.expectEqualStrings("test1/test2", filePathToDirectoryPath("test1/test2/test3"));
+    try testing.expectEqualStrings(".", filePathToDirectoryPath("test"));
+    try testing.expectEqualStrings("test", filePathToDirectoryPath("test\\"));
+    try testing.expectEqualStrings("\\", filePathToDirectoryPath("\\test"));
+    try testing.expectEqualStrings(".", filePathToDirectoryPath(""));
+    try testing.expectEqualStrings("\\", filePathToDirectoryPath("\\"));
+}
+
+test "getFullPath should produce correct full path" {
     var buffer: [os.max_file_path_length]u8 = undefined;
     const size = try getFullPath(&buffer, "./test_1/test_2/test_3.txt");
     const full_path = buffer[0..size];
