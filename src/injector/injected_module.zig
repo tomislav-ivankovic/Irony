@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const os = @import("../os/root.zig");
+const misc = @import("../misc/root.zig");
 
 pub const InjectedModule = struct {
     module: os.Module,
@@ -24,6 +25,7 @@ pub const InjectedModule = struct {
         defer remote_thread.clean() catch undefined;
         const module_handle_part = try remote_thread.join();
         if (module_handle_part == 0) {
+            misc.errorContext().new(error.RemoteLoadLibraryWFailed, "Remote LoadLibraryW returned 0.");
             return error.RemoteLoadLibraryWFailed;
         }
         const file_name = os.pathToFileName(module_path);
@@ -43,6 +45,7 @@ pub const InjectedModule = struct {
         defer remote_thread.clean() catch undefined;
         const return_code = try remote_thread.join();
         if (return_code == 0) {
+            misc.errorContext().new(error.RemoteFreeLibraryFailed, "Remote FreeLibrary returned 0.");
             return error.RemoteFreeLibraryFailed;
         }
         if (builtin.is_test) {

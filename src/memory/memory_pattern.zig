@@ -136,7 +136,7 @@ pub fn MemoryPattern(comptime number_of_bytes: usize) type {
                     return address;
                 }
             }
-            misc.errorContext().new(error.NotReadable, "Memory pattern not found.");
+            misc.errorContext().new(error.NotFound, "Memory pattern not found.");
             return error.NotFound;
         }
     };
