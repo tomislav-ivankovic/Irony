@@ -1,17 +1,17 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const w32 = @import("win32").everything;
 const log = @import("log/root.zig");
 const os = @import("os/root.zig");
 
-pub const module_name = "irony.dll";
-pub const log_file_name = "irony.log";
+pub const module_name = if (builtin.is_test) "test.exe" else "irony.dll";
 
-pub const logger = log.CompositeLogger(.{
-    .file = .{ .file_path = .{ .lazy = getLogFilePath } },
-});
+pub const log_file_name = "irony.log";
+// TODO start and stop fileLogger
+pub const file_logger = log.FileLogger(.{});
 pub const std_options = .{
     .log_level = .debug,
-    .logFn = logger.logFn,
+    .logFn = file_logger.logFn,
 };
 
 pub fn DllMain(
@@ -34,15 +34,15 @@ pub fn DllMain(
     }
 }
 
-fn getLogFilePath(buffer: *[os.max_file_path_length]u8) ?usize {
+fn findLogFilePath(buffer: *[os.max_file_path_length]u8) !usize {
     const module = os.Module.getLocal(module_name) catch |err| {
         std.debug.print("Failed to get local module: {s} Cause: {}\n", .{ module_name, err });
-        return null;
+        return err;
     };
-    var file_path_buffer: *[os.max_file_path_length]u8 = undefined;
-    const size = module.getFilePath(file_path_buffer) catch |err| {
+    var file_path_buffer: [os.max_file_path_length]u8 = undefined;
+    const size = module.getFilePath(&file_path_buffer) catch |err| {
         std.debug.print("Failed to get file path of module: {s} Cause: {}\n", .{ module_name, err });
-        return null;
+        return err;
     };
     const file_path = file_path_buffer[0..size];
     const directory_path = os.filePathToDirectoryPath(file_path);
@@ -51,7 +51,16 @@ fn getLogFilePath(buffer: *[os.max_file_path_length]u8) ?usize {
             "Failed to put log file path into the buffer: {s}\\{s} Cause: {}\n",
             .{ directory_path, log_file_name, err },
         );
-        return null;
+        return err;
     };
     return log_file_path.len;
+}
+
+const testing = std.testing;
+
+test "findLogFilePath should return correct path" {
+    var buffer: [os.max_file_path_length]u8 = undefined;
+    const size = try findLogFilePath(&buffer);
+    const path = buffer[0..size];
+    try testing.expectStringEndsWith(path, "\\" ++ log_file_name);
 }

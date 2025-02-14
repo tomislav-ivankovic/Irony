@@ -2,6 +2,7 @@ test {
     _ = @import("dll.zig");
     _ = @import("injector.zig");
 
+    _ = @import("log/composite.zig");
     _ = @import("log/console.zig");
     _ = @import("log/file.zig");
 
