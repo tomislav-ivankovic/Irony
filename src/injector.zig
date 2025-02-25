@@ -22,7 +22,7 @@ const console_logger = log.ConsoleLogger(.{});
 const file_logger = log.FileLogger(.{});
 const composite_logger = log.CompositeLogger(&.{ console_logger.logFn, file_logger.logFn });
 pub const std_options = .{
-    .log_level = .debug,
+    .log_level = .info,
     .logFn = composite_logger.logFn,
 };
 
