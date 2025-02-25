@@ -57,6 +57,14 @@ fn init() void {
         misc.errorContext().logError();
     }
 
+    std.log.debug("Finding present function...", .{});
+    const present = os.findPresentFunction() catch |err| {
+        misc.errorContext().append(err, "Failed to find present function.");
+        misc.errorContext().logError();
+        return;
+    };
+    std.log.debug("Present function found: 0x{X}", .{@intFromPtr(present)});
+
     std.log.info("Initialization completed.", .{});
 }
 
@@ -65,6 +73,7 @@ fn deinit() void {
 
     std.log.info("Stopping file logging...", .{});
     file_logger.stop();
+    std.log.info("Stopping file logging stopped.", .{});
 
     std.log.info("De-initialization completed.", .{});
 }
