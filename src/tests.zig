@@ -10,6 +10,7 @@ test {
     _ = @import("injector/process_loop.zig");
 
     _ = @import("memory/converted_value.zig");
+    _ = @import("memory/hooking.zig");
     _ = @import("memory/memory_pattern.zig");
     _ = @import("memory/memory_range.zig");
     _ = @import("memory/multilevel_pointer.zig");

@@ -26,8 +26,27 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    // Dependencies:
+    // ZIG Dependencies:
     const win32 = b.dependency("zigwin32", .{}).module("zigwin32");
+
+    // C dependency: minhook
+    const minhook = b.dependency("minhook", .{});
+    const minhook_include_path = minhook.path("include");
+    const minhook_source_files = std.Build.Module.AddCSourceFilesOptions{
+        .root = .{
+            .dependency = .{
+                .dependency = minhook,
+                .sub_path = "src",
+            },
+        },
+        .files = &[_][]const u8{
+            "buffer.c",
+            "hook.c",
+            "trampoline.c",
+            "hde/hde32.c",
+            "hde/hde64.c",
+        },
+    };
 
     const dll = b.addSharedLibrary(.{
         .name = "irony",
@@ -39,6 +58,8 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     dll.root_module.addImport("win32", win32);
+    dll.addIncludePath(minhook_include_path);
+    dll.addCSourceFiles(minhook_source_files);
 
     // This declares intent for the dll to be installed into the standard
     // location when the user invokes the "install" step (the default step when
@@ -97,6 +118,8 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     tests.root_module.addImport("win32", win32);
+    tests.addIncludePath(minhook_include_path);
+    tests.addCSourceFiles(minhook_source_files);
 
     // This *creates* a Test step in the build graph, to be executed when another
     // step is evaluated that depends on it. The next line below will establish
