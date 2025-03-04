@@ -7,6 +7,9 @@ test {
     _ = @import("dx12/misc.zig");
     _ = @import("dx12/testing_context.zig");
 
+    _ = @import("hooking/hook.zig");
+    _ = @import("hooking/main_hooks.zig");
+
     _ = @import("injector/injected_module.zig");
     _ = @import("injector/process_loop.zig");
 
@@ -15,13 +18,11 @@ test {
     _ = @import("log/file.zig");
 
     _ = @import("memory/converted_value.zig");
-    _ = @import("memory/hooking.zig");
     _ = @import("memory/memory_pattern.zig");
     _ = @import("memory/memory_range.zig");
     _ = @import("memory/multilevel_pointer.zig");
     _ = @import("memory/pointer.zig");
     _ = @import("memory/self_sortable_array.zig");
-
     _ = @import("misc/error_context.zig");
     _ = @import("misc/timestamp.zig");
 

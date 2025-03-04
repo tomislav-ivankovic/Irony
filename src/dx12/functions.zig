@@ -9,6 +9,7 @@ pub const Functions = struct {
     executeCommandLists: *const ExecuteCommandLists,
     present: *const Present,
 
+    const Self = @This();
     pub const ExecuteCommandLists = @typeInfo(std.meta.FieldType(
         w32.ID3D12CommandQueue.VTable,
         .ExecuteCommandLists,
@@ -17,8 +18,6 @@ pub const Functions = struct {
         w32.IDXGISwapChain.VTable,
         .Present,
     )).Pointer.child;
-
-    const Self = @This();
 
     pub fn find() !Self {
         const module = os.Module.getMain() catch |err| {

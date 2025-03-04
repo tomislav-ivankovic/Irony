@@ -5,7 +5,7 @@ const misc = @import("misc/root.zig");
 const log = @import("log/root.zig");
 const os = @import("os/root.zig");
 const dx12 = @import("dx12/root.zig");
-const memory = @import("memory/hooking.zig");
+const hooking = @import("hooking/root.zig");
 const EventBuss = @import("event_buss.zig").EventBuss;
 
 pub const module_name = "irony.dll";
@@ -17,6 +17,9 @@ pub const std_options = .{
     .log_level = .debug,
     .logFn = file_logger.logFn,
 };
+const main_hooks = hooking.MainHooks(onFirstPresent, onNormalPresent, onLastPresent);
+
+var event_buss: ?EventBuss = null;
 
 pub fn DllMain(
     module_handle: w32.HINSTANCE,
@@ -60,56 +63,21 @@ fn init() void {
         misc.errorContext().logError();
     }
 
-    std.log.debug("Finding DX12 functions...", .{});
-    const dx12Functions = dx12.Functions.find() catch |err| {
-        misc.errorContext().append(err, "Failed to find DX12 functions.");
-        misc.errorContext().logError();
-        return;
-    };
-    std.log.info("DX12 functions found.", .{});
-
     std.log.debug("Initializing hooking...", .{});
-    if (memory.Hooking.init()) {
-        std.log.info("Hooking initialized.", .{});
-    } else |err| {
+    hooking.init() catch |err| {
         misc.errorContext().append(err, "Failed to initialize hooking.");
         misc.errorContext().logError();
-    }
+        return;
+    };
+    std.log.info("Hooking initialized.", .{});
 
-    std.log.debug("Creating the execute command lists hook...", .{});
-    state.execute_command_lists_hook = memory.Hook(dx12.Functions.ExecuteCommandLists).create(
-        dx12Functions.executeCommandLists,
-        onExecuteCommandLists,
-    ) catch |err| {
-        misc.errorContext().append(err, "Failed to create execute command lists hook.");
+    std.log.debug("Initializing main hooks...", .{});
+    main_hooks.init() catch |err| {
+        misc.errorContext().append(err, "Failed to initialize main hooks.");
         misc.errorContext().logError();
         return;
     };
-    std.log.info("Execute command lists hook created.", .{});
-
-    std.log.debug("Creating the present hook...", .{});
-    state.present_hook = memory.Hook(dx12.Functions.Present).create(dx12Functions.present, onPresent) catch |err| {
-        misc.errorContext().append(err, "Failed to create present hook.");
-        misc.errorContext().logError();
-        return;
-    };
-    std.log.info("Present hook created.", .{});
-
-    std.log.debug("Enabling execute command lists hook...", .{});
-    state.execute_command_lists_hook.?.enable() catch |err| {
-        misc.errorContext().append(err, "Failed to enable execute command lists hook.");
-        misc.errorContext().logError();
-        return;
-    };
-    std.log.info("Execute command lists hook enabled.", .{});
-
-    std.log.debug("Enabling present hook...", .{});
-    state.present_hook.?.enable() catch |err| {
-        misc.errorContext().append(err, "Failed to enable present hook.");
-        misc.errorContext().logError();
-        return;
-    };
-    std.log.info("Present hook enabled.", .{});
+    std.log.info("Main hooks initialized.", .{});
 
     std.log.info("Initialization completed.", .{});
 }
@@ -117,71 +85,12 @@ fn init() void {
 fn deinit() void {
     std.log.info("Running de-initialization...", .{});
 
-    std.log.debug("Destroying the present hook...", .{});
-    const presentFunction = if (state.present_hook) |hook| block: {
-        if (hook.destroy()) {
-            state.present_hook = null;
-            std.log.info("Present hook destroyed.", .{});
-            break :block hook.target;
-        } else |err| {
-            misc.errorContext().append(err, "Failed destroy present hook.");
-            misc.errorContext().logError();
-            break :block null;
-        }
-    } else block: {
-        std.log.debug("Nothing to destroy.", .{});
-        break :block null;
-    };
-
-    std.log.debug("Destroying the execute command lists hook...", .{});
-    if (state.execute_command_lists_hook) |hook| {
-        if (hook.destroy()) {
-            state.execute_command_lists_hook = null;
-            std.log.info("Execute command lists hook destroyed.", .{});
-        } else |err| {
-            misc.errorContext().append(err, "Failed destroy execute command lists hook.");
-            misc.errorContext().logError();
-        }
-    } else {
-        std.log.debug("Nothing to destroy.", .{});
-    }
-
-    if (presentFunction) |present| present_cleanup: {
-        std.log.debug("Creating the present cleanup hook...", .{});
-        state.present_hook = memory.Hook(dx12.Functions.Present).create(present, onPresentCleanup) catch |err| {
-            misc.errorContext().append(err, "Failed to create present cleanup hook.");
-            misc.errorContext().logError();
-            break :present_cleanup;
-        };
-        std.log.info("Present cleanup hook created.", .{});
-        defer {
-            std.log.debug("Destroying the present cleanup hook...", .{});
-            if (state.present_hook.?.destroy()) {
-                state.present_hook = null;
-                std.log.info("Present cleanup hook destroyed.", .{});
-            } else |err| {
-                misc.errorContext().append(err, "Failed destroy present cleanup hook.");
-                misc.errorContext().logError();
-            }
-        }
-
-        std.log.debug("Enabling present cleanup hook...", .{});
-        state.present_hook.?.enable() catch |err| {
-            misc.errorContext().append(err, "Failed to enable present cleanup hook.");
-            misc.errorContext().logError();
-            break :present_cleanup;
-        };
-        std.log.info("Present cleanup hook enabled.", .{});
-
-        std.log.debug("Waiting for present cleanup...", .{});
-        while (!state.is_present_cleanup_complete.load(.seq_cst)) {
-            std.time.sleep(100 * std.time.ns_per_ms);
-        }
-        std.log.debug("Waiting completed.", .{});
-    }
+    std.log.debug("De-initializing main hooks...", .{});
+    main_hooks.deinit();
+    std.log.info("Main hooks de-initialized.", .{});
 
     std.log.debug("De-initializing hooking...", .{});
-    if (memory.Hooking.deinit()) {
+    if (hooking.deinit()) {
         std.log.info("Hooking de-initialized.", .{});
     } else |err| {
         misc.errorContext().append(err, "Failed to de-initialize hooking.");
@@ -212,68 +121,25 @@ fn startFileLogging() !void {
     };
 }
 
-const state = struct {
-    var execute_command_lists_hook: ?memory.Hook(dx12.Functions.ExecuteCommandLists) = null;
-    var present_hook: ?memory.Hook(dx12.Functions.Present) = null;
-    var command_queue: ?*const w32.ID3D12CommandQueue = null;
-    var event_buss: ?EventBuss = null;
-    var is_present_cleanup_complete = std.atomic.Value(bool).init(false);
-};
-
-fn onExecuteCommandLists(
-    command_queue: *const w32.ID3D12CommandQueue,
-    num_command_lists: u32,
-    pp_command_lists: [*]?*w32.ID3D12CommandList,
-) callconv(@import("std").os.windows.WINAPI) void {
-    if (state.command_queue == null) {
-        std.log.info("DX12 command queue found.", .{});
-    }
-    state.command_queue = command_queue;
-    return state.execute_command_lists_hook.?.original(command_queue, num_command_lists, pp_command_lists);
+fn onFirstPresent(device: *const w32.ID3D12Device, command_queue: *const w32.ID3D12CommandQueue) void {
+    std.log.info("Initializing event buss...", .{});
+    event_buss = EventBuss.init(device, command_queue);
+    std.log.info("Event buss initialized.", .{});
 }
 
-fn onPresent(
-    swap_chain: *const w32.IDXGISwapChain,
-    sync_interval: u32,
-    flags: u32,
-) callconv(@import("std").os.windows.WINAPI) w32.HRESULT {
-    const command_queue = state.command_queue orelse {
-        std.log.debug("Present function was called before command queue was found. Skipping this frame.", .{});
-        return state.present_hook.?.original(swap_chain, sync_interval, flags);
-    };
-    const device = dx12.getDeviceFromSwapChain(swap_chain) catch |err| {
-        misc.errorContext().append(err, "Failed to get DX12 device from swap chain.");
-        misc.errorContext().logError();
-        return state.present_hook.?.original(swap_chain, sync_interval, flags);
-    };
-    if (state.event_buss == null) {
-        std.log.info("Initializing event buss...", .{});
-        state.event_buss = EventBuss.init(device, command_queue);
-        std.log.info("Event buss initialized.", .{});
+fn onNormalPresent(device: *const w32.ID3D12Device, command_queue: *const w32.ID3D12CommandQueue) void {
+    if (event_buss) |*buss| {
+        buss.update(device, command_queue);
     }
-    state.event_buss.?.update(device, command_queue);
-    return state.present_hook.?.original(swap_chain, sync_interval, flags);
 }
 
-fn onPresentCleanup(
-    swap_chain: *const w32.IDXGISwapChain,
-    sync_interval: u32,
-    flags: u32,
-) callconv(@import("std").os.windows.WINAPI) w32.HRESULT {
-    if (state.event_buss == null) {
-        state.is_present_cleanup_complete.store(true, .seq_cst);
-        return state.present_hook.?.original(swap_chain, sync_interval, flags);
-    }
-    const device = dx12.getDeviceFromSwapChain(swap_chain) catch |err| {
-        misc.errorContext().append(err, "Failed to get DX12 device from swap chain.");
-        misc.errorContext().logError();
-        return state.present_hook.?.original(swap_chain, sync_interval, flags);
-    };
+fn onLastPresent(device: *const w32.ID3D12Device, command_queue: *const w32.ID3D12CommandQueue) void {
     std.log.info("De-initializing event buss...", .{});
-    state.event_buss.?.deinit(device, state.command_queue.?);
-    state.event_buss = null;
-    state.command_queue = null;
-    std.log.info("Event buss de-initialized.", .{});
-    state.is_present_cleanup_complete.store(true, .seq_cst);
-    return state.present_hook.?.original(swap_chain, sync_interval, flags);
+    if (event_buss) |*buss| {
+        buss.deinit(device, command_queue);
+        event_buss = null;
+        std.log.info("Event buss de-initialized.", .{});
+    } else {
+        std.log.info("Nothing to de-initialize.", .{});
+    }
 }
