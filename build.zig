@@ -29,6 +29,16 @@ pub fn build(b: *std.Build) void {
     // ZIG Dependencies:
     const win32 = b.dependency("zigwin32", .{}).module("zigwin32");
 
+    // C dependency: lib_c_time ("time.h" from C)
+    const lib_c_time = b.addTranslateC(.{
+        .root_source_file = b.addWriteFile(
+            "time.h",
+            "#define _POSIX_C_SOURCE 200809L\n#include <time.h>",
+        ).getDirectory().path(b, "time.h"),
+        .target = target,
+        .optimize = optimize,
+    }).createModule();
+
     // C dependency: minhook
     const minhook_dep = b.dependency("minhook", .{});
     const minhook = b.addTranslateC(.{
@@ -63,6 +73,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     dll.root_module.addImport("win32", win32);
+    dll.root_module.addImport("lib_c_time", lib_c_time);
     dll.root_module.addImport("minhook", minhook);
 
     // This declares intent for the dll to be installed into the standard
@@ -77,6 +88,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    injector.root_module.addImport("lib_c_time", lib_c_time);
     injector.root_module.addImport("win32", win32);
 
     // This declares intent for the injector to be installed into the
@@ -121,6 +133,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
     });
+    tests.root_module.addImport("lib_c_time", lib_c_time);
     tests.root_module.addImport("win32", win32);
     tests.root_module.addImport("minhook", minhook);
 

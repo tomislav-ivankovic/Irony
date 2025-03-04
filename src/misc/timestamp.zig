@@ -1,8 +1,5 @@
 const std = @import("std");
-const c = @cImport({
-    @cDefine("_POSIX_C_SOURCE", "200809L");
-    @cInclude("time.h");
-});
+const lib_c_time = @import("lib_c_time");
 const misc = @import("root.zig");
 
 pub const TimeZone = enum {
@@ -22,20 +19,20 @@ pub const Timestamp = struct {
     const Self = @This();
 
     pub fn fromNano(nano_timestamp: i128, time_zone: TimeZone) !Self {
-        const cFunction: *const @TypeOf(c.gmtime) = switch (time_zone) {
-            .utc => c.gmtime,
-            .local => c.localtime,
+        const cFunction: *const @TypeOf(lib_c_time.gmtime) = switch (time_zone) {
+            .utc => lib_c_time.gmtime,
+            .local => lib_c_time.localtime,
         };
         const c_function_name = switch (time_zone) {
             .utc => "gmtime",
             .local => "localtime",
         };
-        const sec_timestamp: c.time_t = @intCast(@divFloor(nano_timestamp, std.time.ns_per_s));
+        const sec_timestamp: lib_c_time.time_t = @intCast(@divFloor(nano_timestamp, std.time.ns_per_s));
         const time_struct_pointer = cFunction(&sec_timestamp) orelse {
             misc.errorContext().newFmt(error.CError, "C function {s} returned null.", .{c_function_name});
             return error.CError;
         };
-        const time_struct: c.struct_tm = time_struct_pointer.*;
+        const time_struct: lib_c_time.struct_tm = time_struct_pointer.*;
         return Self{
             .year = time_struct.tm_year + 1900,
             .month = @intCast(time_struct.tm_mon + 1),
