@@ -5,13 +5,13 @@ const misc = @import("../misc/root.zig");
 const dx12 = @import("root.zig");
 
 pub const DescriptorHeap = struct {
-    raw: *const w32.ID3D12DescriptorHeap,
+    raw: *w32.ID3D12DescriptorHeap,
     test_allocation: if (builtin.is_test) *u8 else void,
 
     const Self = @This();
 
     pub fn create(device: *const w32.ID3D12Device) !Self {
-        var descriptor_heap: *const w32.ID3D12DescriptorHeap = undefined;
+        var descriptor_heap: *w32.ID3D12DescriptorHeap = undefined;
         const return_code = device.ID3D12Device_CreateDescriptorHeap(&.{
             .Type = .CBV_SRV_UAV,
             .NumDescriptors = 2,
