@@ -5,7 +5,7 @@ const misc = @import("misc/root.zig");
 
 pub const EventBuss = struct {
     gpa: std.heap.GeneralPurposeAllocator(.{}),
-    descriptor_heap: ?dx12.DescriptorHeap,
+    dx12_leftovers: ?dx12.Leftovers,
 
     const Self = @This();
 
@@ -21,19 +21,19 @@ pub const EventBuss = struct {
 
         const gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
-        std.log.debug("Creating a DX12 descriptor heap...", .{});
-        const descriptor_heap = if (dx12.DescriptorHeap.create(device)) |heap| block: {
-            std.log.info("DX12 descriptor heap created.", .{});
-            break :block heap;
+        std.log.debug("Initializing DX12 leftovers...", .{});
+        const dx12_leftovers = if (dx12.Leftovers.init(device)) |leftovers| block: {
+            std.log.info("DX12 leftovers initialized.", .{});
+            break :block leftovers;
         } else |err| block: {
-            misc.errorContext().append(err, "Failed to create DX12 descriptor heap.");
+            misc.errorContext().append(err, "Failed to initialize DX12 leftovers.");
             misc.errorContext().logError();
             break :block null;
         };
 
         return .{
             .gpa = gpa,
-            .descriptor_heap = descriptor_heap,
+            .dx12_leftovers = dx12_leftovers,
         };
     }
 
@@ -49,17 +49,12 @@ pub const EventBuss = struct {
         _ = command_queue;
         _ = swap_chain;
 
-        std.log.debug("Destroying the DX12 descriptor heap...", .{});
-        if (self.descriptor_heap) |heap| {
-            if (heap.destroy()) {
-                std.log.info("DX12 descriptor heap destroyed.", .{});
-                self.descriptor_heap = null;
-            } else |err| {
-                misc.errorContext().append(err, "Failed to destroy DX12 descriptor heap.");
-                misc.errorContext().logError();
-            }
+        std.log.debug("De-initializing DX12 leftovers...", .{});
+        if (self.dx12_leftovers) |leftovers| {
+            leftovers.deinit();
+            std.log.info("DX12 leftovers de-initialized.", .{});
         } else {
-            std.log.debug("Nothing to destroy.", .{});
+            std.log.debug("Nothing to de-initialize.", .{});
         }
 
         switch (self.gpa.deinit()) {
