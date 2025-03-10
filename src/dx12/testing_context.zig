@@ -117,7 +117,7 @@ pub const TestingContext = struct {
             },
             .SampleDesc = .{ .Count = 1, .Quality = 0 },
             .BufferUsage = w32.DXGI_USAGE_RENDER_TARGET_OUTPUT,
-            .BufferCount = 2,
+            .BufferCount = 3,
             .OutputWindow = window,
             .Windowed = 1,
             .SwapEffect = .DISCARD,
