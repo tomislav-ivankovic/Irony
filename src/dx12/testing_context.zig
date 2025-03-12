@@ -49,7 +49,7 @@ pub const TestingContext = struct {
         const window = w32.CreateWindowExW(
             .{},
             window_class.lpszClassName,
-            w("TestWindowClass"),
+            w("TestingWindowClass"),
             w32.WS_OVERLAPPEDWINDOW,
             0,
             0,
