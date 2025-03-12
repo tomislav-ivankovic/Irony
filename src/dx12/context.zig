@@ -30,21 +30,7 @@ pub fn Context(comptime buffer_count: usize) type {
                 misc.errorContext().append(error.Dx12Error, "Failed to create RTV descriptor heap.");
                 return error.Dx12Error;
             }
-            errdefer {
-                const return_code = rtv_descriptor_heap.IUnknown_Release();
-                if (return_code != w32.S_OK) {
-                    misc.errorContext().newFmt(
-                        error.Dx12Error,
-                        "ID3D12DescriptorHeap.Release returned: {}",
-                        .{return_code},
-                    );
-                    misc.errorContext().append(
-                        error.Dx12Error,
-                        "Failed release RTV descriptor heap while recovering from error.",
-                    );
-                    misc.errorContext().logError();
-                }
-            }
+            errdefer _ = rtv_descriptor_heap.IUnknown_Release();
 
             var srv_descriptor_heap: *w32.ID3D12DescriptorHeap = undefined;
             const heap_return_code = device.ID3D12Device_CreateDescriptorHeap(&.{
@@ -62,21 +48,7 @@ pub fn Context(comptime buffer_count: usize) type {
                 misc.errorContext().append(error.Dx12Error, "Failed to create SRV descriptor heap.");
                 return error.Dx12Error;
             }
-            errdefer {
-                const return_code = srv_descriptor_heap.IUnknown_Release();
-                if (return_code != w32.S_OK) {
-                    misc.errorContext().newFmt(
-                        error.Dx12Error,
-                        "ID3D12DescriptorHeap.Release returned: {}",
-                        .{return_code},
-                    );
-                    misc.errorContext().append(
-                        error.Dx12Error,
-                        "Failed release SRV descriptor heap while recovering from error.",
-                    );
-                    misc.errorContext().logError();
-                }
-            }
+            errdefer _ = srv_descriptor_heap.IUnknown_Release();
 
             const rtv_heap_start = dx12.getCpuDescriptorHandleForHeapStart(rtv_descriptor_heap);
             const rtv_increment_size = device.ID3D12Device_GetDescriptorHandleIncrementSize(.RTV);
@@ -108,33 +80,8 @@ pub fn Context(comptime buffer_count: usize) type {
                 context.deinit();
             }
 
-            const svr_return_code = self.srv_descriptor_heap.IUnknown_Release();
-            if (svr_return_code != w32.S_OK) {
-                misc.errorContext().newFmt(
-                    error.Dx12Error,
-                    "ID3D12DescriptorHeap.Release returned: {}",
-                    .{svr_return_code},
-                );
-                misc.errorContext().append(
-                    error.Dx12Error,
-                    "Failed release SRV descriptor heap while de-initializing DX12 context.",
-                );
-                misc.errorContext().logError();
-            }
-
-            const rtv_return_code = self.rtv_descriptor_heap.IUnknown_Release();
-            if (rtv_return_code != w32.S_OK) {
-                misc.errorContext().newFmt(
-                    error.Dx12Error,
-                    "ID3D12DescriptorHeap.Release returned: {}",
-                    .{rtv_return_code},
-                );
-                misc.errorContext().append(
-                    error.Dx12Error,
-                    "Failed release RTV descriptor heap while de-initializing DX12 context.",
-                );
-                misc.errorContext().logError();
-            }
+            _ = self.srv_descriptor_heap.IUnknown_Release();
+            _ = self.rtv_descriptor_heap.IUnknown_Release();
 
             if (builtin.is_test) {
                 std.testing.allocator.destroy(self.test_allocation);
@@ -167,21 +114,7 @@ pub const FrameContext = struct {
             misc.errorContext().append(error.Dx12Error, "Failed to create command allocator.");
             return error.Dx12Error;
         }
-        errdefer {
-            const return_code = command_allocator.IUnknown_Release();
-            if (return_code != w32.S_OK) {
-                misc.errorContext().newFmt(
-                    error.Dx12Error,
-                    "ID3D12CommandAllocator.Release returned: {}",
-                    .{return_code},
-                );
-                misc.errorContext().append(
-                    error.Dx12Error,
-                    "Failed release command allocator while recovering from error.",
-                );
-                misc.errorContext().logError();
-            }
-        }
+        errdefer _ = command_allocator.IUnknown_Release();
 
         var command_list: *w32.ID3D12GraphicsCommandList = undefined;
         const list_return_code = device.ID3D12Device_CreateCommandList(
@@ -201,21 +134,7 @@ pub const FrameContext = struct {
             misc.errorContext().append(error.Dx12Error, "Failed to create command list.");
             return error.Dx12Error;
         }
-        errdefer {
-            const return_code = command_list.IUnknown_Release();
-            if (return_code != w32.S_OK) {
-                misc.errorContext().newFmt(
-                    error.Dx12Error,
-                    "ID3D12GraphicsCommandList.Release returned: {}",
-                    .{return_code},
-                );
-                misc.errorContext().append(
-                    error.Dx12Error,
-                    "Failed release command list while recovering from error.",
-                );
-                misc.errorContext().logError();
-            }
-        }
+        errdefer _ = command_list.IUnknown_Release();
 
         const test_allocation = if (builtin.is_test) try std.testing.allocator.create(u8) else {};
 
@@ -228,33 +147,8 @@ pub const FrameContext = struct {
     }
 
     pub fn deinit(self: *const Self) void {
-        const list_return_code = self.command_list.IUnknown_Release();
-        if (list_return_code != w32.S_OK) {
-            misc.errorContext().newFmt(
-                error.Dx12Error,
-                "ID3D12GraphicsCommandList.Release returned: {}",
-                .{list_return_code},
-            );
-            misc.errorContext().append(
-                error.Dx12Error,
-                "Failed release command list while de-initializing DX12 context.",
-            );
-            misc.errorContext().logError();
-        }
-
-        const allocator_return_code = self.command_allocator.IUnknown_Release();
-        if (allocator_return_code != w32.S_OK) {
-            misc.errorContext().newFmt(
-                error.Dx12Error,
-                "ID3D12CommandAllocator.Release returned: {}",
-                .{allocator_return_code},
-            );
-            misc.errorContext().append(
-                error.Dx12Error,
-                "Failed release command allocator while de-initializing DX12 context.",
-            );
-            misc.errorContext().logError();
-        }
+        _ = self.command_list.IUnknown_Release();
+        _ = self.command_allocator.IUnknown_Release();
 
         if (builtin.is_test) {
             std.testing.allocator.destroy(self.test_allocation);
