@@ -21,7 +21,7 @@ pub const Functions = struct {
 
     pub fn find() !Self {
         const module = os.Module.getMain() catch |err| {
-            misc.errorContext().new(err, "Failed to get the main process module.");
+            misc.errorContext().append(err, "Failed to get the main process module.");
             return err;
         };
 
@@ -54,6 +54,7 @@ pub const Functions = struct {
             if (success == 0) {
                 misc.errorContext().newFmt(null, "{}", os.OsError.getLast());
                 misc.errorContext().append(error.OsError, "UnregisterClassW returned 0.");
+                misc.errorContext().append(error.OsError, "Failed to clean up after finding DX12 functions.");
                 misc.errorContext().logError();
             }
         }
@@ -81,17 +82,18 @@ pub const Functions = struct {
             if (success == 0) {
                 misc.errorContext().newFmt(null, "{}", os.OsError.getLast());
                 misc.errorContext().append(error.OsError, "DestroyWindow returned 0.");
+                misc.errorContext().append(error.OsError, "Failed to clean up after finding DX12 functions.");
                 misc.errorContext().logError();
             }
         }
 
         const dxgi_module = os.Module.getLocal("dxgi.dll") catch |err| {
-            misc.errorContext().new(err, "Failed to get local module: dxgi.dll");
+            misc.errorContext().append(err, "Failed to get local module: dxgi.dll");
             return err;
         };
 
         const create_dxgi_factory_address = dxgi_module.getProcedureAddress("CreateDXGIFactory") catch |err| {
-            misc.errorContext().new(err, "Failed to get procedure address of: CreateDXGIFactory");
+            misc.errorContext().append(err, "Failed to get procedure address of: CreateDXGIFactory");
             return err;
         };
         const CreateDXGIFactory: *const @TypeOf(w32.CreateDXGIFactory) = @ptrFromInt(create_dxgi_factory_address);
@@ -116,12 +118,12 @@ pub const Functions = struct {
         defer _ = adapter.IUnknown_Release();
 
         const d3d12_module = os.Module.getLocal("d3d12.dll") catch |err| {
-            misc.errorContext().new(err, "Failed to get local module: d3d12.dll");
+            misc.errorContext().append(err, "Failed to get local module: d3d12.dll");
             return err;
         };
 
         const create_device_address = d3d12_module.getProcedureAddress("D3D12CreateDevice") catch |err| {
-            misc.errorContext().new(err, "Failed to get procedure address of: D3D12CreateDevice");
+            misc.errorContext().append(err, "Failed to get procedure address of: D3D12CreateDevice");
             return err;
         };
         const D3D12CreateDevice: *const @TypeOf(w32.D3D12CreateDevice) = @ptrFromInt(create_device_address);
