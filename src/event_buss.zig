@@ -1,6 +1,6 @@
 const std = @import("std");
 const w32 = @import("win32").everything;
-const gui = @import("zgui");
+// const gui = @import("zgui");
 const dx12 = @import("dx12/root.zig");
 const misc = @import("misc/root.zig");
 
@@ -20,7 +20,7 @@ pub const EventBuss = struct {
     ) Self {
         _ = swap_chain;
 
-        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        const gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
         std.log.debug("Initializing DX12 context...", .{});
         const dx12_context = if (dx12.Context(buffer_count).init(device)) |leftovers| block: {
@@ -34,21 +34,24 @@ pub const EventBuss = struct {
 
         const is_gui_initialized = if (dx12_context) |context| block: {
             std.log.debug("Initializing GUI...", .{});
-            gui.init(gpa.allocator());
-            gui.backend.init(window, .{
-                .device = device,
-                .command_queue = command_queue,
-                .num_frames_in_flight = buffer_count,
-                .rtv_format = @intFromEnum(w32.DXGI_FORMAT_R8G8B8A8_UNORM),
-                .dsv_format = @intFromEnum(w32.DXGI_FORMAT_UNKNOWN),
-                .cbv_srv_heap = context.srv_descriptor_heap,
-                .font_srv_cpu_desc_handle = @bitCast(
-                    dx12.getCpuDescriptorHandleForHeapStart(context.srv_descriptor_heap),
-                ),
-                .font_srv_gpu_desc_handle = @bitCast(
-                    dx12.getGpuDescriptorHandleForHeapStart(context.srv_descriptor_heap),
-                ),
-            });
+            _ = context;
+            _ = window;
+            _ = command_queue;
+            // gui.init(gpa.allocator());
+            // gui.backend.init(window, .{
+            //     .device = device,
+            //     .command_queue = command_queue,
+            //     .num_frames_in_flight = buffer_count,
+            //     .rtv_format = @intFromEnum(w32.DXGI_FORMAT_R8G8B8A8_UNORM),
+            //     .dsv_format = @intFromEnum(w32.DXGI_FORMAT_UNKNOWN),
+            //     .cbv_srv_heap = context.srv_descriptor_heap,
+            //     .font_srv_cpu_desc_handle = @bitCast(
+            //         dx12.getCpuDescriptorHandleForHeapStart(context.srv_descriptor_heap),
+            //     ),
+            //     .font_srv_gpu_desc_handle = @bitCast(
+            //         dx12.getGpuDescriptorHandleForHeapStart(context.srv_descriptor_heap),
+            //     ),
+            // });
             std.log.info("GUI initialized.", .{});
             break :block true;
         } else false;
@@ -74,8 +77,8 @@ pub const EventBuss = struct {
 
         std.log.debug("De-initializing GUI...", .{});
         if (self.is_gui_initialized) {
-            gui.backend.deinit();
-            gui.deinit();
+            // gui.backend.deinit();
+            // gui.deinit();
             self.is_gui_initialized = false;
             std.log.info("GUI de-initialized.", .{});
         } else {
@@ -107,10 +110,8 @@ pub const EventBuss = struct {
         _ = window;
         _ = device;
 
-        std.log.info("1", .{});
         const dx12_context = self.dx12_context orelse return;
 
-        std.log.info("2", .{});
         const swap_chain_3: *const w32.IDXGISwapChain3 = @ptrCast(swap_chain);
         var frame_buffer_width: u32 = undefined;
         var frame_buffer_height: u32 = undefined;
@@ -125,13 +126,10 @@ pub const EventBuss = struct {
             misc.errorContext().logError();
         }
 
-        std.log.info("3", .{});
-        gui.backend.newFrame(frame_buffer_width, frame_buffer_height);
+        //gui.backend.newFrame(frame_buffer_width, frame_buffer_height);
 
-        std.log.info("4", .{});
-        gui.text("Hello World!", .{});
+        //gui.text("Hello World!", .{});
 
-        std.log.info("5", .{});
         const frame_index = swap_chain_3.IDXGISwapChain3_GetCurrentBackBufferIndex();
         if (frame_index >= buffer_count) {
             std.log.err("IDXGISwapChain3.GetCurrentBackBufferIndex returned: {}", .{frame_index});
@@ -139,7 +137,6 @@ pub const EventBuss = struct {
         }
         const frame_context = dx12_context.frame_contexts[frame_index];
 
-        std.log.info("6", .{});
         var return_code = w32.S_OK;
         var buffer: *w32.ID3D12Resource = undefined;
         return_code = swap_chain.IDXGISwapChain_GetBuffer(frame_index, w32.IID_ID3D12Resource, @ptrCast(&buffer));
@@ -147,7 +144,6 @@ pub const EventBuss = struct {
             std.log.err("IDXGISwapChain_GetBuffer returned: {}", .{return_code});
         }
 
-        std.log.info("7", .{});
         return_code = frame_context.command_allocator.ID3D12CommandAllocator_Reset();
         if (return_code != w32.S_OK) {
             std.log.err("ID3D12CommandAllocator_Reset returned: {}", .{return_code});
@@ -175,10 +171,8 @@ pub const EventBuss = struct {
         var heaps = [1](?*w32.ID3D12DescriptorHeap){dx12_context.rtv_descriptor_heap};
         frame_context.command_list.ID3D12GraphicsCommandList_SetDescriptorHeaps(1, &heaps);
 
-        std.log.info("8", .{});
-        gui.backend.draw(frame_context.command_list);
+        // gui.backend.draw(frame_context.command_list);
 
-        std.log.info("9", .{});
         frame_context.command_list.ID3D12GraphicsCommandList_ResourceBarrier(1, &.{.{
             .Type = .TRANSITION,
             .Flags = .{},
@@ -194,7 +188,6 @@ pub const EventBuss = struct {
             std.log.err("ID3D12GraphicsCommandList_Close returned: {}", .{return_code});
         }
 
-        std.log.info("10", .{});
         var lists = [1](?*w32.ID3D12CommandList){@ptrCast(frame_context.command_list)};
         command_queue.ID3D12CommandQueue_ExecuteCommandLists(1, &lists);
     }
@@ -207,17 +200,21 @@ pub const EventBuss = struct {
         l_param: w32.LPARAM,
     ) ?w32.LRESULT {
         if (self.is_gui_initialized) {
-            _ = ImGui_ImplWin32_WndProcHandler.?(window, u_msg, w_param, l_param);
+            _ = window;
+            _ = u_msg;
+            _ = w_param;
+            _ = l_param;
+            // _ = ImGui_ImplWin32_WndProcHandler.?(window, u_msg, w_param, l_param);
         }
         return null;
     }
 };
 
 // Bypass for issue: https://github.com/zig-gamedev/zgui/issues/23
-const ImGui_ImplWin32_WndProcHandler = @extern(
-    *const fn (hwnd: *const anyopaque, u_msg: u32, w_param: usize, l_param: isize) callconv(.C) isize,
-    .{
-        .name = "_Z30ImGui_ImplWin32_WndProcHandlerP6HWND__jyx",
-        .linkage = .weak,
-    },
-);
+// const ImGui_ImplWin32_WndProcHandler = @extern(
+//     *const fn (hwnd: *const anyopaque, u_msg: u32, w_param: usize, l_param: isize) callconv(.C) isize,
+//     .{
+//         .name = "_Z30ImGui_ImplWin32_WndProcHandlerP6HWND__jyx",
+//         .linkage = .weak,
+//     },
+// );
