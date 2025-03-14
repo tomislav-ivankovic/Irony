@@ -1,6 +1,6 @@
 const std = @import("std");
 const w32 = @import("win32").everything;
-// const gui = @import("zgui");
+// const imgui = @import("imgui");
 const dx12 = @import("dx12/root.zig");
 const misc = @import("misc/root.zig");
 

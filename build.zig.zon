@@ -59,9 +59,13 @@
             .url = "https://github.com/TsudaKageyu/minhook/archive/refs/tags/v1.3.3.tar.gz",
             .hash = "12203e1ced1b68cf57a5c081970380eb2b23730ab34953669e25cfe0cdfb1e145d3d",
         },
-        .zgui = .{
-            .url = "https://codeload.github.com/zig-gamedev/zgui/zip/5f0e01e8cd7f423a27ad56a712e9770a81d5d272",
-            .hash = "12209ee39f11d6100f84b848858b4048f208f70e06091ccf603879caf0e86fbd058a",
+        .imgui = .{
+            .url = "https://github.com/ocornut/imgui/archive/refs/tags/v1.91.8.tar.gz",
+            .hash = "122008fc93d2a565a333ec120399fa8904d42a3b2e4307d54af50dade393207f8f06",
+        },
+        .cimgui = .{
+            .url = "https://github.com/cimgui/cimgui/archive/refs/tags/1.91.8.tar.gz",
+            .hash = "1220904bc0a7883fb07c9a87a6093d84d39b5055f26394c0ea6527d5272296090c11",
         },
     },
 

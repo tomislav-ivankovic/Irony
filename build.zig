@@ -63,16 +63,27 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    // ZIG dependency: zgui
-    const zgui_dep = b.dependency("zgui", .{
-        .backend = .win32_dx12,
-        .shared = false,
-        .with_implot = true,
-        .with_te = true,
+    // C++ dependency: imgui (cimgui)
+    const imgui_files = b.addWriteFiles();
+    _ = imgui_files.addCopyDirectory(b.dependency("cimgui", .{}).path("."), ".", .{});
+    _ = imgui_files.addCopyDirectory(b.dependency("imgui", .{}).path("."), "./imgui", .{});
+    const imgui_dir = imgui_files.getDirectory();
+    const imgui_lib = b.addStaticLibrary(.{
+        .name = "imgui",
         .target = target,
         .optimize = optimize,
     });
-    const zgui = zgui_dep.module("root");
+    imgui_lib.addIncludePath(imgui_dir);
+    imgui_lib.addCSourceFile(.{ .file = imgui_dir.path(b, "cimgui.cpp") });
+    imgui_lib.linkLibC();
+    imgui_lib.linkLibCpp();
+    const imgui_c = b.addTranslateC(.{
+        .root_source_file = imgui_dir.path(b, "cimgui.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    imgui_c.defineCMacroRaw("CIMGUI_DEFINE_ENUMS_AND_STRUCTS");
+    const imgui = imgui_c.createModule();
 
     const dll = b.addSharedLibrary(.{
         .name = "irony",
@@ -86,8 +97,8 @@ pub fn build(b: *std.Build) void {
     dll.root_module.addImport("win32", win32);
     dll.root_module.addImport("lib_c_time", lib_c_time);
     dll.root_module.addImport("minhook", minhook);
-    dll.root_module.addImport("zgui", zgui);
-    dll.linkLibrary(zgui_dep.artifact("imgui"));
+    dll.linkLibrary(imgui_lib);
+    dll.root_module.addImport("imgui", imgui);
 
     // This declares intent for the dll to be installed into the standard
     // location when the user invokes the "install" step (the default step when
@@ -149,8 +160,8 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addImport("lib_c_time", lib_c_time);
     tests.root_module.addImport("win32", win32);
     tests.root_module.addImport("minhook", minhook);
-    tests.root_module.addImport("zgui", zgui);
-    tests.linkLibrary(zgui_dep.artifact("imgui"));
+    tests.linkLibrary(imgui_lib);
+    tests.root_module.addImport("imgui", imgui);
 
     // This *creates* a Test step in the build graph, to be executed when another
     // step is evaluated that depends on it. The next line below will establish
