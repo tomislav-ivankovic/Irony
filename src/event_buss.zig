@@ -1,6 +1,6 @@
 const std = @import("std");
 const w32 = @import("win32").everything;
-// const imgui = @import("imgui");
+const gui = @import("gui/root.zig");
 const dx12 = @import("dx12/root.zig");
 const misc = @import("misc/root.zig");
 
@@ -34,24 +34,18 @@ pub const EventBuss = struct {
 
         const is_gui_initialized = if (dx12_context) |context| block: {
             std.log.debug("Initializing GUI...", .{});
-            _ = context;
+            _ = gui.imgui.igCreateContext(null);
             _ = window;
-            _ = command_queue;
-            // gui.init(gpa.allocator());
-            // gui.backend.init(window, .{
-            //     .device = device,
-            //     .command_queue = command_queue,
-            //     .num_frames_in_flight = buffer_count,
-            //     .rtv_format = @intFromEnum(w32.DXGI_FORMAT_R8G8B8A8_UNORM),
-            //     .dsv_format = @intFromEnum(w32.DXGI_FORMAT_UNKNOWN),
-            //     .cbv_srv_heap = context.srv_descriptor_heap,
-            //     .font_srv_cpu_desc_handle = @bitCast(
-            //         dx12.getCpuDescriptorHandleForHeapStart(context.srv_descriptor_heap),
-            //     ),
-            //     .font_srv_gpu_desc_handle = @bitCast(
-            //         dx12.getGpuDescriptorHandleForHeapStart(context.srv_descriptor_heap),
-            //     ),
-            // });
+            _ = gui.dx12.ImGui_ImplDX12_Init(&.{
+                .device = device,
+                .command_queue = command_queue,
+                .num_frames_in_flight = buffer_count,
+                .rtv_format = w32.DXGI_FORMAT_R8G8B8A8_UNORM,
+                .dsv_format = w32.DXGI_FORMAT_UNKNOWN,
+                .cbv_srv_heap = context.srv_descriptor_heap,
+                .font_srv_cpu_desc_handle = dx12.getCpuDescriptorHandleForHeapStart(context.srv_descriptor_heap),
+                .font_srv_gpu_desc_handle = dx12.getGpuDescriptorHandleForHeapStart(context.srv_descriptor_heap),
+            });
             std.log.info("GUI initialized.", .{});
             break :block true;
         } else false;
@@ -77,8 +71,8 @@ pub const EventBuss = struct {
 
         std.log.debug("De-initializing GUI...", .{});
         if (self.is_gui_initialized) {
-            // gui.backend.deinit();
-            // gui.deinit();
+            gui.dx12.ImGui_ImplDX12_Shutdown();
+            gui.imgui.igDestroyContext(null);
             self.is_gui_initialized = false;
             std.log.info("GUI de-initialized.", .{});
         } else {
@@ -126,9 +120,10 @@ pub const EventBuss = struct {
             misc.errorContext().logError();
         }
 
-        //gui.backend.newFrame(frame_buffer_width, frame_buffer_height);
-
-        //gui.text("Hello World!", .{});
+        gui.dx12.ImGui_ImplDX12_NewFrame();
+        gui.imgui.igNewFrame();
+        gui.imgui.igText("Hello World!", .{});
+        gui.imgui.igEndFrame();
 
         const frame_index = swap_chain_3.IDXGISwapChain3_GetCurrentBackBufferIndex();
         if (frame_index >= buffer_count) {
@@ -171,7 +166,8 @@ pub const EventBuss = struct {
         var heaps = [1](?*w32.ID3D12DescriptorHeap){dx12_context.rtv_descriptor_heap};
         frame_context.command_list.ID3D12GraphicsCommandList_SetDescriptorHeaps(1, &heaps);
 
-        // gui.backend.draw(frame_context.command_list);
+        gui.imgui.igRender();
+        gui.dx12.ImGui_ImplDX12_RenderDrawData(gui.imgui.igGetDrawData(), frame_context.command_list);
 
         frame_context.command_list.ID3D12GraphicsCommandList_ResourceBarrier(1, &.{.{
             .Type = .TRANSITION,

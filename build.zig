@@ -74,7 +74,22 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     imgui_lib.addIncludePath(imgui_dir);
-    imgui_lib.addCSourceFile(.{ .file = imgui_dir.path(b, "cimgui.cpp") });
+    imgui_lib.addIncludePath(imgui_dir.path(b, "./imgui"));
+    imgui_lib.addCSourceFiles(.{
+        .root = imgui_dir,
+        .files = &.{
+            "./cimgui.cpp",
+            "./imgui/imgui.cpp",
+            "./imgui/imgui_demo.cpp",
+            "./imgui/imgui_draw.cpp",
+            "./imgui/imgui_tables.cpp",
+            "./imgui/imgui_widgets.cpp",
+            "./imgui/backends/imgui_impl_dx12.cpp",
+        },
+    });
+    imgui_lib.linkSystemLibrary("d3dcompiler_47");
+    imgui_lib.defineCMacro("IMGUI_IMPL_API", "extern \"C\"");
+    imgui_lib.defineCMacro("IMGUI_DISABLE_OBSOLETE_FUNCTIONS", "1");
     imgui_lib.linkLibC();
     imgui_lib.linkLibCpp();
     const imgui_c = b.addTranslateC(.{
