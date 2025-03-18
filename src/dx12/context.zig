@@ -144,6 +144,17 @@ pub const FrameContext = struct {
         }
         errdefer _ = command_list.IUnknown_Release();
 
+        const close_return_code = command_list.ID3D12GraphicsCommandList_Close();
+        if (close_return_code != w32.S_OK) {
+            misc.errorContext().newFmt(
+                error.Dx12Error,
+                "ID3D12GraphicsCommandList.Close returned: {}",
+                .{close_return_code},
+            );
+            misc.errorContext().append(error.Dx12Error, "Failed to close command list.");
+            return error.Dx12Error;
+        }
+
         var buffer: *w32.ID3D12Resource = undefined;
         const buffer_return_code = swap_chain.IDXGISwapChain_GetBuffer(
             index,
