@@ -135,8 +135,7 @@ pub const EventBuss = struct {
         _ = window;
         _ = device;
 
-        const dx12_context = self.dx12_context orelse return;
-        const swap_chain_3: *const w32.IDXGISwapChain3 = @ptrCast(swap_chain);
+        const dx12_context = if (self.dx12_context) |*context| context else return;
 
         imgui_backend.ImGui_ImplDX12_NewFrame();
         imgui_backend.ImGui_ImplWin32_NewFrame();
@@ -147,65 +146,20 @@ pub const EventBuss = struct {
 
         imgui.igEndFrame();
 
-        const buffer_index = swap_chain_3.IDXGISwapChain3_GetCurrentBackBufferIndex();
-        if (buffer_index >= buffer_count) {
-            std.log.err("IDXGISwapChain3.GetCurrentBackBufferIndex returned: {}", .{buffer_index});
+        const buffer_context = dx12.beforeRender(buffer_count, srv_heap_size, dx12_context, swap_chain) catch |err| {
+            misc.errorContext().append(err, "Failed to execute DX12 before render code.");
+            misc.errorContext().logError();
             return;
-        }
-        const buffer_context = &dx12_context.buffer_contexts[buffer_index];
-
-        var return_code = w32.S_OK;
-
-        return_code = buffer_context.command_allocator.ID3D12CommandAllocator_Reset();
-        if (return_code != w32.S_OK) {
-            std.log.err("ID3D12CommandAllocator_Reset returned: {}", .{return_code});
-        }
-        return_code = buffer_context.command_list.ID3D12GraphicsCommandList_Reset(
-            buffer_context.command_allocator,
-            null,
-        );
-        if (return_code != w32.S_OK) {
-            std.log.err("ID3D12GraphicsCommandList_Reset returned: {}", .{return_code});
-        }
-        buffer_context.command_list.ID3D12GraphicsCommandList_ResourceBarrier(1, &.{.{
-            .Type = .TRANSITION,
-            .Flags = .{},
-            .Anonymous = .{ .Transition = .{
-                .pResource = buffer_context.resource,
-                .Subresource = w32.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-                .StateBefore = w32.D3D12_RESOURCE_STATE_PRESENT,
-                .StateAfter = w32.D3D12_RESOURCE_STATE_RENDER_TARGET,
-            } },
-        }});
-        buffer_context.command_list.ID3D12GraphicsCommandList_OMSetRenderTargets(
-            1,
-            &buffer_context.rtv_descriptor_handle,
-            0,
-            null,
-        );
-        var heaps = [1](?*w32.ID3D12DescriptorHeap){dx12_context.srv_descriptor_heap};
-        buffer_context.command_list.ID3D12GraphicsCommandList_SetDescriptorHeaps(1, &heaps);
+        };
 
         imgui.igRender();
         imgui_backend.ImGui_ImplDX12_RenderDrawData(imgui.igGetDrawData(), buffer_context.command_list);
 
-        buffer_context.command_list.ID3D12GraphicsCommandList_ResourceBarrier(1, &.{.{
-            .Type = .TRANSITION,
-            .Flags = .{},
-            .Anonymous = .{ .Transition = .{
-                .pResource = buffer_context.resource,
-                .Subresource = w32.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-                .StateBefore = w32.D3D12_RESOURCE_STATE_RENDER_TARGET,
-                .StateAfter = w32.D3D12_RESOURCE_STATE_PRESENT,
-            } },
-        }});
-        return_code = buffer_context.command_list.ID3D12GraphicsCommandList_Close();
-        if (return_code != w32.S_OK) {
-            std.log.err("ID3D12GraphicsCommandList_Close returned: {}", .{return_code});
-        }
-
-        var lists = [1](?*w32.ID3D12CommandList){@ptrCast(buffer_context.command_list)};
-        command_queue.ID3D12CommandQueue_ExecuteCommandLists(1, &lists);
+        dx12.afterRender(buffer_context, command_queue) catch |err| {
+            misc.errorContext().append(err, "Failed to execute DX12 after render code.");
+            misc.errorContext().logError();
+            return;
+        };
     }
 
     pub fn processWindowMessage(

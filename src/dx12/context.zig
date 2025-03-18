@@ -206,6 +206,105 @@ pub const BufferContext = struct {
     }
 };
 
+pub fn beforeRender(
+    comptime buffer_count: usize,
+    comptime srv_heap_size: usize,
+    context: *const Context(buffer_count, srv_heap_size),
+    swap_chain: *const w32.IDXGISwapChain,
+) !*const BufferContext {
+    const swap_chain_3: *const w32.IDXGISwapChain3 = @ptrCast(swap_chain);
+    const buffer_index = swap_chain_3.IDXGISwapChain3_GetCurrentBackBufferIndex();
+    if (buffer_index >= buffer_count) {
+        misc.errorContext().newFmt(
+            error.IndexOutOfBounds,
+            "IDXGISwapChain3.GetCurrentBackBufferIndex returned: {}",
+            .{buffer_index},
+        );
+        misc.errorContext().appendFmt(
+            error.IndexOutOfBounds,
+            "Buffer index {} out of bounds. Buffer count is: {}",
+            .{ buffer_index, buffer_count },
+        );
+        return error.IndexOutOfBounds;
+    }
+    const buffer_context = &context.buffer_contexts[buffer_index];
+
+    const allocator_return_code = buffer_context.command_allocator.ID3D12CommandAllocator_Reset();
+    if (allocator_return_code != w32.S_OK) {
+        misc.errorContext().newFmt(
+            error.Dx12Error,
+            "ID3D12CommandAllocator.Reset returned: {}",
+            .{allocator_return_code},
+        );
+        return error.Dx12Error;
+    }
+
+    const list_return_code = buffer_context.command_list.ID3D12GraphicsCommandList_Reset(
+        buffer_context.command_allocator,
+        null,
+    );
+    if (list_return_code != w32.S_OK) {
+        misc.errorContext().newFmt(
+            error.Dx12Error,
+            "ID3D12GraphicsCommandList.Reset returned: {}",
+            .{list_return_code},
+        );
+        return error.Dx12Error;
+    }
+
+    buffer_context.command_list.ID3D12GraphicsCommandList_ResourceBarrier(1, &.{.{
+        .Type = .TRANSITION,
+        .Flags = .{},
+        .Anonymous = .{ .Transition = .{
+            .pResource = buffer_context.resource,
+            .Subresource = w32.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = w32.D3D12_RESOURCE_STATE_PRESENT,
+            .StateAfter = w32.D3D12_RESOURCE_STATE_RENDER_TARGET,
+        } },
+    }});
+
+    buffer_context.command_list.ID3D12GraphicsCommandList_OMSetRenderTargets(
+        1,
+        &buffer_context.rtv_descriptor_handle,
+        0,
+        null,
+    );
+
+    var heaps = [1](?*w32.ID3D12DescriptorHeap){context.srv_descriptor_heap};
+    buffer_context.command_list.ID3D12GraphicsCommandList_SetDescriptorHeaps(1, &heaps);
+
+    return buffer_context;
+}
+
+pub fn afterRender(
+    buffer_context: *const BufferContext,
+    command_queue: *const w32.ID3D12CommandQueue,
+) !void {
+    buffer_context.command_list.ID3D12GraphicsCommandList_ResourceBarrier(1, &.{.{
+        .Type = .TRANSITION,
+        .Flags = .{},
+        .Anonymous = .{ .Transition = .{
+            .pResource = buffer_context.resource,
+            .Subresource = w32.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = w32.D3D12_RESOURCE_STATE_RENDER_TARGET,
+            .StateAfter = w32.D3D12_RESOURCE_STATE_PRESENT,
+        } },
+    }});
+
+    const list_return_code = buffer_context.command_list.ID3D12GraphicsCommandList_Close();
+    if (list_return_code != w32.S_OK) {
+        misc.errorContext().newFmt(
+            error.Dx12Error,
+            "ID3D12GraphicsCommandList.Close returned: {}",
+            .{list_return_code},
+        );
+        std.log.err("ID3D12GraphicsCommandList_Close returned: {}", .{list_return_code});
+    }
+
+    var lists = [1](?*w32.ID3D12CommandList){@ptrCast(buffer_context.command_list)};
+    command_queue.ID3D12CommandQueue_ExecuteCommandLists(1, &lists);
+}
+
 const testing = std.testing;
 
 test "init and deinit should succeed" {
@@ -213,4 +312,13 @@ test "init and deinit should succeed" {
     defer testing_context.deinit();
     const context = try Context(3, 64).init(testing_context.device, testing_context.swap_chain);
     defer context.deinit();
+}
+
+test "beforeRender and afterRender should succeed" {
+    const testing_context = try dx12.TestingContext.init();
+    defer testing_context.deinit();
+    const context = try Context(3, 64).init(testing_context.device, testing_context.swap_chain);
+    defer context.deinit();
+    const buffer_context = try beforeRender(3, 64, &context, testing_context.swap_chain);
+    try afterRender(buffer_context, testing_context.command_queue);
 }

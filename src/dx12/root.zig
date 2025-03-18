@@ -1,5 +1,7 @@
 pub const Context = @import("context.zig").Context;
 pub const BufferContext = @import("context.zig").BufferContext;
+pub const beforeRender = @import("context.zig").beforeRender;
+pub const afterRender = @import("context.zig").afterRender;
 pub const DescriptorHeapAllocator = @import("descriptor_heap_allocator.zig").DescriptorHeapAllocator;
 pub const Functions = @import("functions.zig").Functions;
 pub const FrameContext = @import("context.zig").FrameContext;
