@@ -175,7 +175,7 @@ pub const EventBuss = struct {
             } },
         }});
         frame_context.command_list.ID3D12GraphicsCommandList_OMSetRenderTargets(1, &frame_context.rtv_descriptor_handle, 0, null);
-        var heaps = [1](?*w32.ID3D12DescriptorHeap){dx12_context.rtv_descriptor_heap};
+        var heaps = [1](?*w32.ID3D12DescriptorHeap){dx12_context.srv_descriptor_heap};
         frame_context.command_list.ID3D12GraphicsCommandList_SetDescriptorHeaps(1, &heaps);
 
         imgui.igRender();
