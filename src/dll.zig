@@ -10,7 +10,6 @@ const EventBuss = @import("event_buss.zig").EventBuss;
 pub const module_name = "irony.dll";
 
 pub const log_file_name = "irony.log";
-// TODO start and stop fileLogger
 pub const file_logger = log.FileLogger(.{});
 pub const std_options = std.Options{
     .log_level = .debug,

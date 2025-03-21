@@ -17,7 +17,6 @@ pub const ErrorContext = struct {
     pub const TraceItem = struct {
         message: Message,
         err: ?anyerror,
-        return_address: usize,
     };
     pub const Message = union(enum) {
         constant: []const u8,
@@ -48,7 +47,10 @@ pub const ErrorContext = struct {
     }
 
     pub fn append(self: *Self, err: ?anyerror, message: []const u8) void {
-        const item = TraceItem{ .message = .{ .constant = message }, .err = err, .return_address = @returnAddress() };
+        const item = TraceItem{
+            .message = .{ .constant = message },
+            .err = err,
+        };
         self.trace.append(item) catch |append_err| {
             std.log.err("Failed to append message \"{s}\" to error context. [{}]", .{ message, append_err });
         };
@@ -59,7 +61,6 @@ pub const ErrorContext = struct {
         const item = TraceItem{
             .message = if (message) |msg| .{ .formatted = msg } else .{ .constant = fmt },
             .err = err,
-            .return_address = @returnAddress(),
         };
         self.trace.append(item) catch |append_err| {
             std.log.err("Failed to append message \"{s}\" to error context. [{}]", .{ message orelse fmt, append_err });
@@ -118,21 +119,9 @@ pub const ErrorContext = struct {
             if (item.err) |err| {
                 try writer.print(" [{}]", .{err});
             }
-            // TODO make the line number thing work.
-            // if (getSymbolInfoAtAddress(self.allocator, item.return_address)) |symbol_info| {
-            //     defer symbol_info.deinit(self.allocator);
-            //     try writer.print(" {}", .{symbol_info});
-            // }
             try writer.writeAll("\n");
         }
     }
-
-    // TODO make the line number thing work.
-    // fn getSymbolInfoAtAddress(allocator: std.mem.Allocator, address: usize) ?std.debug.SymbolInfo {
-    //     const debug_info = std.debug.getSelfDebugInfo() catch return null;
-    //     const module = debug_info.getModuleForAddress(address) catch return null;
-    //     return module.getSymbolAtAddress(allocator, address) catch return null;
-    // }
 };
 
 const testing = std.testing;
