@@ -175,7 +175,7 @@ pub const Functions = struct {
             .BufferCount = 2,
             .OutputWindow = window,
             .Windowed = 1,
-            .SwapEffect = .DISCARD,
+            .SwapEffect = .FLIP_DISCARD,
             .Flags = @intFromEnum(w32.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH),
         };
         var swap_chain: *w32.IDXGISwapChain = undefined;
