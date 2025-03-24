@@ -5,9 +5,10 @@ const misc = @import("../misc/root.zig");
 
 pub fn getWindowFromSwapChain(swap_chain: *const w32.IDXGISwapChain) !w32.HWND {
     var desc: w32.DXGI_SWAP_CHAIN_DESC = undefined;
-    const return_code = swap_chain.GetDesc(&desc);
-    if (return_code != w32.S_OK) {
-        misc.errorContext().newFmt(error.Dx12Error, "IDXGISwapChain.GetDesc returned: {}", .{return_code});
+    const result = swap_chain.GetDesc(&desc);
+    if (dx12.Error.from(result)) |err| {
+        misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
+        misc.errorContext().append(error.Dx12Error, "IDXGISwapChain.GetDesc returned a failure value.");
         return error.Dx12Error;
     }
     return desc.OutputWindow orelse error.NotFound;
@@ -15,9 +16,10 @@ pub fn getWindowFromSwapChain(swap_chain: *const w32.IDXGISwapChain) !w32.HWND {
 
 pub fn getDeviceFromSwapChain(swap_chain: *const w32.IDXGISwapChain) !(*const w32.ID3D12Device) {
     var device: *const w32.ID3D12Device = undefined;
-    const return_code = swap_chain.IDXGIDeviceSubObject.GetDevice(w32.IID_ID3D12Device, @ptrCast(&device));
-    if (return_code != w32.S_OK) {
-        misc.errorContext().newFmt(error.Dx12Error, "IDXGISwapChain.GetDevice returned: {}", .{return_code});
+    const result = swap_chain.IDXGIDeviceSubObject.GetDevice(w32.IID_ID3D12Device, @ptrCast(&device));
+    if (dx12.Error.from(result)) |err| {
+        misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
+        misc.errorContext().append(error.Dx12Error, "IDXGISwapChain.GetDevice returned a failure value.");
         return error.Dx12Error;
     }
     return device;
@@ -68,13 +70,13 @@ test "getCpuDescriptorHandleForHeapStart should return non 0 value" {
     defer context.deinit();
 
     var heap: *w32.ID3D12DescriptorHeap = undefined;
-    const return_code = context.device.CreateDescriptorHeap(&.{
+    const result = context.device.CreateDescriptorHeap(&.{
         .Type = .CBV_SRV_UAV,
         .NumDescriptors = 3,
         .Flags = .{ .SHADER_VISIBLE = 1 },
         .NodeMask = 0,
     }, w32.IID_ID3D12DescriptorHeap, @ptrCast(&heap));
-    if (return_code != w32.S_OK) {
+    if (dx12.Error.from(result) != null) {
         @panic("Failed to create descriptor heap.");
     }
     errdefer _ = heap.IUnknown.Release();
@@ -88,13 +90,13 @@ test "getGpuDescriptorHandleForHeapStart should return non 0 value" {
     defer context.deinit();
 
     var heap: *w32.ID3D12DescriptorHeap = undefined;
-    const return_code = context.device.CreateDescriptorHeap(&.{
+    const result = context.device.CreateDescriptorHeap(&.{
         .Type = .CBV_SRV_UAV,
         .NumDescriptors = 3,
         .Flags = .{ .SHADER_VISIBLE = 1 },
         .NodeMask = 0,
     }, w32.IID_ID3D12DescriptorHeap, @ptrCast(&heap));
-    if (return_code != w32.S_OK) {
+    if (dx12.Error.from(result) != null) {
         @panic("Failed to create descriptor heap.");
     }
     errdefer _ = heap.IUnknown.Release();

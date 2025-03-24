@@ -98,21 +98,19 @@ pub const Functions = struct {
         };
         const CreateDXGIFactory: *const @TypeOf(w32.CreateDXGIFactory) = @ptrFromInt(create_dxgi_factory_address);
         var factory: *w32.IDXGIFactory4 = undefined;
-        const factory_return_code = CreateDXGIFactory(w32.IID_IDXGIFactory4, @ptrCast(&factory));
-        if (factory_return_code != w32.S_OK) {
-            misc.errorContext().newFmt(error.Dx12Error, "CreateDXGIFactory returned: {}", .{factory_return_code});
+        const factory_result = CreateDXGIFactory(w32.IID_IDXGIFactory4, @ptrCast(&factory));
+        if (dx12.Error.from(factory_result)) |err| {
+            misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
+            misc.errorContext().append(error.Dx12Error, "CreateDXGIFactory returned a failure value.");
             return error.Dx12Error;
         }
         defer _ = factory.IUnknown.Release();
 
         var adapter: *w32.IDXGIAdapter = undefined;
-        const adapter_return_code = factory.EnumWarpAdapter(w32.IID_IDXGIAdapter, @ptrCast(&adapter));
-        if (adapter_return_code != w32.S_OK) {
-            misc.errorContext().newFmt(
-                error.Dx12Error,
-                "IDXGIFactory4.EnumWarpAdapter returned: {}",
-                .{adapter_return_code},
-            );
+        const adapter_result = factory.EnumWarpAdapter(w32.IID_IDXGIAdapter, @ptrCast(&adapter));
+        if (dx12.Error.from(adapter_result)) |err| {
+            misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
+            misc.errorContext().append(error.Dx12Error, "IDXGIFactory4.EnumWarpAdapter returned a failure value.");
             return error.Dx12Error;
         }
         defer _ = adapter.IUnknown.Release();
@@ -128,20 +126,21 @@ pub const Functions = struct {
         };
         const D3D12CreateDevice: *const @TypeOf(w32.D3D12CreateDevice) = @ptrFromInt(create_device_address);
         var device: *w32.ID3D12Device = undefined;
-        const device_return_code = D3D12CreateDevice(
+        const device_result = D3D12CreateDevice(
             @ptrCast(adapter),
             w32.D3D_FEATURE_LEVEL_11_0,
             w32.IID_ID3D12Device,
             @ptrCast(&device),
         );
-        if (device_return_code != w32.S_OK) {
-            misc.errorContext().newFmt(error.Dx12Error, "D3D12CreateDevice returned: {}", .{device_return_code});
+        if (dx12.Error.from(device_result)) |err| {
+            misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
+            misc.errorContext().append(error.Dx12Error, "D3D12CreateDevice returned a failure value.");
             return error.Dx12Error;
         }
         defer _ = device.IUnknown.Release();
 
         var command_queue: *w32.ID3D12CommandQueue = undefined;
-        const command_queue_return_code = device.CreateCommandQueue(
+        const command_queue_result = device.CreateCommandQueue(
             &w32.D3D12_COMMAND_QUEUE_DESC{
                 .Type = w32.D3D12_COMMAND_LIST_TYPE_DIRECT,
                 .Priority = 0,
@@ -151,12 +150,9 @@ pub const Functions = struct {
             w32.IID_ID3D12CommandQueue,
             @ptrCast(&command_queue),
         );
-        if (command_queue_return_code != w32.S_OK) {
-            misc.errorContext().newFmt(
-                error.Dx12Error,
-                "ID3D12Device.CreateCommandQueue returned: {}",
-                .{command_queue_return_code},
-            );
+        if (dx12.Error.from(command_queue_result)) |err| {
+            misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
+            misc.errorContext().append(error.Dx12Error, "ID3D12Device.CreateCommandQueue returned a failure value.");
             return error.Dx12Error;
         }
         defer _ = command_queue.IUnknown.Release();
@@ -179,17 +175,14 @@ pub const Functions = struct {
             .Flags = @intFromEnum(w32.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH),
         };
         var swap_chain: *w32.IDXGISwapChain = undefined;
-        const swap_chain_return_code = factory.IDXGIFactory.CreateSwapChain(
+        const swap_chain_result = factory.IDXGIFactory.CreateSwapChain(
             @ptrCast(command_queue),
             &swap_chain_desc,
             @ptrCast(&swap_chain),
         );
-        if (swap_chain_return_code != w32.S_OK) {
-            misc.errorContext().newFmt(
-                error.Dx12Error,
-                "IDXGIFactory.CreateSwapChain returned: {}",
-                .{swap_chain_return_code},
-            );
+        if (dx12.Error.from(swap_chain_result)) |err| {
+            misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
+            misc.errorContext().append(error.Dx12Error, "IDXGIFactory.CreateSwapChain returned a failure value.");
             return error.Dx12Error;
         }
         defer _ = swap_chain.IUnknown.Release();

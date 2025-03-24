@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const w32 = @import("win32").everything;
 const os = @import("../os/root.zig");
+const dx12 = @import("root.zig");
 const w = std.unicode.utf8ToUtf16LeStringLiteral;
 
 pub const TestingContext = struct {
@@ -65,33 +66,33 @@ pub const TestingContext = struct {
         errdefer _ = w32.DestroyWindow(window);
 
         var factory: *w32.IDXGIFactory4 = undefined;
-        const factory_return_code = w32.CreateDXGIFactory(w32.IID_IDXGIFactory4, @ptrCast(&factory));
-        if (factory_return_code != w32.S_OK) {
+        const factory_result = w32.CreateDXGIFactory(w32.IID_IDXGIFactory4, @ptrCast(&factory));
+        if (dx12.Error.from(factory_result) != null) {
             return error.Dx12Error;
         }
         errdefer _ = factory.IUnknown.Release();
 
         var adapter: *w32.IDXGIAdapter = undefined;
-        const adapter_return_code = factory.EnumWarpAdapter(w32.IID_IDXGIAdapter, @ptrCast(&adapter));
-        if (adapter_return_code != w32.S_OK) {
+        const adapter_result = factory.EnumWarpAdapter(w32.IID_IDXGIAdapter, @ptrCast(&adapter));
+        if (dx12.Error.from(adapter_result) != null) {
             return error.Dx12Error;
         }
         errdefer _ = adapter.IUnknown.Release();
 
         var device: *w32.ID3D12Device = undefined;
-        const device_return_code = w32.D3D12CreateDevice(
+        const device_result = w32.D3D12CreateDevice(
             @ptrCast(adapter),
             w32.D3D_FEATURE_LEVEL_11_0,
             w32.IID_ID3D12Device,
             @ptrCast(&device),
         );
-        if (device_return_code != w32.S_OK) {
+        if (dx12.Error.from(device_result) != null) {
             return error.Dx12Error;
         }
         errdefer _ = device.IUnknown.Release();
 
         var command_queue: *w32.ID3D12CommandQueue = undefined;
-        const command_queue_return_code = device.CreateCommandQueue(
+        const command_queue_result = device.CreateCommandQueue(
             &w32.D3D12_COMMAND_QUEUE_DESC{
                 .Type = w32.D3D12_COMMAND_LIST_TYPE_DIRECT,
                 .Priority = 0,
@@ -101,7 +102,7 @@ pub const TestingContext = struct {
             w32.IID_ID3D12CommandQueue,
             @ptrCast(&command_queue),
         );
-        if (command_queue_return_code != w32.S_OK) {
+        if (dx12.Error.from(command_queue_result) != null) {
             return error.Dx12Error;
         }
         errdefer _ = command_queue.IUnknown.Release();
@@ -124,12 +125,12 @@ pub const TestingContext = struct {
             .Flags = @intFromEnum(w32.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH),
         };
         var swap_chain: *w32.IDXGISwapChain = undefined;
-        const swap_chain_return_code = factory.IDXGIFactory.CreateSwapChain(
+        const swap_chain_result = factory.IDXGIFactory.CreateSwapChain(
             @ptrCast(command_queue),
             &swap_chain_desc,
             @ptrCast(&swap_chain),
         );
-        if (swap_chain_return_code != w32.S_OK) {
+        if (dx12.Error.from(swap_chain_result) != null) {
             return error.Dx12Error;
         }
         errdefer _ = swap_chain.IUnknown.Release();
