@@ -41,7 +41,15 @@ pub const EventBuss = struct {
 
         const ui_context = if (dx12_context) |*dxc| block: {
             std.log.debug("Initializing UI context...", .{});
-            if (ui.Context.init(buffer_count, srv_heap_size, window, device, command_queue, dxc)) |context| {
+            if (ui.Context.init(
+                buffer_count,
+                srv_heap_size,
+                window,
+                device,
+                command_queue,
+                dxc.srv_descriptor_heap,
+                dxc.srv_allocator,
+            )) |context| {
                 std.log.info("UI context initialized.", .{});
                 break :block context;
             } else |err| {

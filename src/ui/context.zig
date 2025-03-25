@@ -18,7 +18,8 @@ pub const Context = struct {
         window: w32.HWND,
         device: *const w32.ID3D12Device,
         command_queue: *const w32.ID3D12CommandQueue,
-        dx12_context: *const dx12.Context(buffer_count, srv_heap_size),
+        srv_descriptor_heap: *const w32.ID3D12DescriptorHeap,
+        srv_heap_allocator: *dx12.DescriptorHeapAllocator(srv_heap_size),
     ) !Self {
         const imgui_context = imgui.igCreateContext(null) orelse {
             misc.errorContext().new(error.ImguiError, "igCreateContext returned null.");
@@ -41,8 +42,8 @@ pub const Context = struct {
             .num_frames_in_flight = buffer_count,
             .rtv_format = w32.DXGI_FORMAT_R8G8B8A8_UNORM,
             .dsv_format = w32.DXGI_FORMAT_UNKNOWN,
-            .cbv_srv_heap = dx12_context.srv_descriptor_heap,
-            .user_data = dx12_context.srv_allocator,
+            .cbv_srv_heap = srv_descriptor_heap,
+            .user_data = srv_heap_allocator,
             .srv_desc_alloc_fn = struct {
                 fn call(
                     info: *ui.backend.ImGui_ImplDX12_InitInfo,
@@ -69,8 +70,8 @@ pub const Context = struct {
                     };
                 }
             }.call,
-            .font_srv_cpu_desc_handle = dx12.getCpuDescriptorHandleForHeapStart(dx12_context.srv_descriptor_heap),
-            .font_srv_gpu_desc_handle = dx12.getGpuDescriptorHandleForHeapStart(dx12_context.srv_descriptor_heap),
+            .font_srv_cpu_desc_handle = dx12.getCpuDescriptorHandleForHeapStart(srv_descriptor_heap),
+            .font_srv_gpu_desc_handle = dx12.getGpuDescriptorHandleForHeapStart(srv_descriptor_heap),
         });
         if (!dx12_success) {
             misc.errorContext().new(error.ImguiError, "ImGui_ImplDX12_Init returned false.");
@@ -147,7 +148,8 @@ test "should render hello world successfully" {
         testing_context.window,
         testing_context.device,
         testing_context.command_queue,
-        &dx12_context,
+        dx12_context.srv_descriptor_heap,
+        dx12_context.srv_allocator,
     );
     defer ui_context.deinit();
 
