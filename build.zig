@@ -64,6 +64,8 @@ pub fn build(b: *std.Build) void {
             "hde/hde32.c",
             "hde/hde64.c",
         },
+        // Fixes undefined behaviour in hde64.c line 318.
+        .flags = &.{"-fno-sanitize=undefined"},
     });
 
     // C++ dependency: imgui (cimgui)
