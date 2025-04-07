@@ -15,7 +15,7 @@ pub const std_options = std.Options{
     .log_level = .debug,
     .logFn = file_logger.logFn,
 };
-const main_hooks = hooking.MainHooks(onFirstPresent, onNormalPresent, onLastPresent);
+const main_hooks = hooking.MainHooks(onHooksInit, onHooksDeinit, onHooksUpdate, beforeHooksResize, afterHooksResize);
 
 var base_dir = misc.BaseDir.working_dir;
 var window_procedure: ?os.WindowProcedure = null;
@@ -140,7 +140,7 @@ fn startFileLogging() !void {
     };
 }
 
-fn onFirstPresent(
+fn onHooksInit(
     window: w32.HWND,
     device: *const w32.ID3D12Device,
     command_queue: *const w32.ID3D12CommandQueue,
@@ -160,18 +160,7 @@ fn onFirstPresent(
     }
 }
 
-fn onNormalPresent(
-    window: w32.HWND,
-    device: *const w32.ID3D12Device,
-    command_queue: *const w32.ID3D12CommandQueue,
-    swap_chain: *const w32.IDXGISwapChain,
-) void {
-    if (event_buss) |*buss| {
-        buss.update(&base_dir, window, device, command_queue, swap_chain);
-    }
-}
-
-fn onLastPresent(
+fn onHooksDeinit(
     window: w32.HWND,
     device: *const w32.ID3D12Device,
     command_queue: *const w32.ID3D12CommandQueue,
@@ -198,6 +187,43 @@ fn onLastPresent(
     } else {
         std.log.info("Nothing to de-initialize.", .{});
     }
+}
+
+fn onHooksUpdate(
+    window: w32.HWND,
+    device: *const w32.ID3D12Device,
+    command_queue: *const w32.ID3D12CommandQueue,
+    swap_chain: *const w32.IDXGISwapChain,
+) void {
+    if (event_buss) |*buss| {
+        buss.update(&base_dir, window, device, command_queue, swap_chain);
+    }
+}
+
+fn beforeHooksResize(
+    window: w32.HWND,
+    device: *const w32.ID3D12Device,
+    command_queue: *const w32.ID3D12CommandQueue,
+    swap_chain: *const w32.IDXGISwapChain,
+) void {
+    _ = window;
+    _ = device;
+    _ = command_queue;
+    _ = swap_chain;
+    std.log.info("BEFORE RESIZE EVENT", .{});
+}
+
+fn afterHooksResize(
+    window: w32.HWND,
+    device: *const w32.ID3D12Device,
+    command_queue: *const w32.ID3D12CommandQueue,
+    swap_chain: *const w32.IDXGISwapChain,
+) void {
+    _ = window;
+    _ = device;
+    _ = command_queue;
+    _ = swap_chain;
+    std.log.info("AFTER RESIZE EVENT", .{});
 }
 
 fn windowProcedure(

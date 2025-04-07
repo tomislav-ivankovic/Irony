@@ -5,7 +5,7 @@ const misc = @import("../misc/root.zig");
 const hooking = @import("root.zig");
 const dx12 = @import("../dx12/root.zig");
 
-pub const OnPresent = fn (
+pub const OnEvent = fn (
     window: w32.HWND,
     device: *const w32.ID3D12Device,
     command_queue: *const w32.ID3D12CommandQueue,
@@ -13,21 +13,24 @@ pub const OnPresent = fn (
 ) void;
 
 pub fn MainHooks(
-    onFirstPresent: *const OnPresent,
-    onNormalPresent: *const OnPresent,
-    onLastPresent: *const OnPresent,
+    onInit: *const OnEvent,
+    onDeinit: *const OnEvent,
+    onUpdate: *const OnEvent,
+    beforeResize: *const OnEvent,
+    afterResize: *const OnEvent,
 ) type {
     return struct {
         var execute_command_lists_hook: ?hooking.Hook(dx12.Functions.ExecuteCommandLists) = null;
+        var resize_buffers_hook: ?hooking.Hook(dx12.Functions.ResizeBuffers) = null;
         var present_hook: ?hooking.Hook(dx12.Functions.Present) = null;
         var g_command_queue: ?*const w32.ID3D12CommandQueue = null;
-        var is_first_present_called = false;
-        var is_last_present_called = std.atomic.Value(bool).init(false);
+        var is_init_called = false;
+        var is_deinit_called = std.atomic.Value(bool).init(false);
 
         pub fn init() !void {
             g_command_queue = null;
-            is_first_present_called = false;
-            is_last_present_called.store(false, .seq_cst);
+            is_init_called = false;
+            is_deinit_called.store(false, .seq_cst);
 
             std.log.debug("Finding DX12 functions...", .{});
             const dx12_functions = dx12.Functions.find() catch |err| {
@@ -51,6 +54,23 @@ pub fn MainHooks(
                     misc.errorContext().logError();
                 };
                 execute_command_lists_hook = null;
+            }
+
+            std.log.debug("Creating the resize buffers hook...", .{});
+            resize_buffers_hook = hooking.Hook(dx12.Functions.ResizeBuffers).create(
+                dx12_functions.resizeBuffers,
+                onResizeBuffers,
+            ) catch |err| {
+                misc.errorContext().append(err, "Failed to create resize buffers hook.");
+                return err;
+            };
+            std.log.info("Resize buffers hook created.", .{});
+            errdefer {
+                resize_buffers_hook.?.destroy() catch |err| {
+                    misc.errorContext().append(err, "Failed to destroy resize buffers hook.");
+                    misc.errorContext().logError();
+                };
+                resize_buffers_hook = null;
             }
 
             std.log.debug("Creating the present hook...", .{});
@@ -77,6 +97,13 @@ pub fn MainHooks(
             };
             std.log.info("Execute command lists hook enabled.", .{});
 
+            std.log.debug("Enabling resize buffers hook...", .{});
+            resize_buffers_hook.?.enable() catch |err| {
+                misc.errorContext().append(err, "Failed to enable resize buffers hook.");
+                return err;
+            };
+            std.log.info("Resize buffers hook enabled.", .{});
+
             std.log.debug("Enabling present hook...", .{});
             present_hook.?.enable() catch |err| {
                 misc.errorContext().append(err, "Failed to enable present hook.");
@@ -101,6 +128,19 @@ pub fn MainHooks(
                 std.log.debug("Nothing to destroy.", .{});
                 break :block null;
             };
+
+            std.log.debug("Destroying the resize buffers hook...", .{});
+            if (resize_buffers_hook) |hook| {
+                if (hook.destroy()) {
+                    resize_buffers_hook = null;
+                    std.log.info("Resize buffers hook destroyed.", .{});
+                } else |err| {
+                    misc.errorContext().append(err, "Failed destroy resize buffers hook.");
+                    misc.errorContext().logError();
+                }
+            } else {
+                std.log.debug("Nothing to destroy.", .{});
+            }
 
             std.log.debug("Destroying the execute command lists hook...", .{});
             if (execute_command_lists_hook) |hook| {
@@ -143,7 +183,7 @@ pub fn MainHooks(
                 std.log.info("Last present hook enabled.", .{});
 
                 std.log.debug("Waiting for the last present call...", .{});
-                while (!is_last_present_called.load(.seq_cst)) {
+                while (!is_deinit_called.load(.seq_cst)) {
                     if (!builtin.is_test) {
                         std.time.sleep(100 * std.time.ns_per_ms);
                     }
@@ -151,8 +191,8 @@ pub fn MainHooks(
                 std.log.debug("Waiting completed.", .{});
 
                 g_command_queue = null;
-                is_first_present_called = false;
-                is_last_present_called.store(false, .seq_cst);
+                is_init_called = false;
+                is_deinit_called.store(false, .seq_cst);
             }
         }
 
@@ -187,14 +227,81 @@ pub fn MainHooks(
                 misc.errorContext().logError();
                 return present_hook.?.original(swap_chain, sync_interval, flags);
             };
-            if (!is_first_present_called) {
+            if (!is_init_called) {
                 std.log.info("First present function called.", .{});
-                onFirstPresent(window, device, command_queue, swap_chain);
-                is_first_present_called = true;
+                onInit(window, device, command_queue, swap_chain);
+                is_init_called = true;
             } else {
-                onNormalPresent(window, device, command_queue, swap_chain);
+                onUpdate(window, device, command_queue, swap_chain);
             }
             return present_hook.?.original(swap_chain, sync_interval, flags);
+        }
+
+        fn onResizeBuffers(
+            swap_chain: *const w32.IDXGISwapChain,
+            buffer_count: u32,
+            width: u32,
+            height: u32,
+            new_format: w32.DXGI_FORMAT,
+            swap_chain_flags: u32,
+        ) callconv(.winapi) w32.HRESULT {
+            const command_queue = g_command_queue orelse {
+                std.log.debug("Resize buffers was called before command queue was found. Skipping this call.", .{});
+                return resize_buffers_hook.?.original(
+                    swap_chain,
+                    buffer_count,
+                    width,
+                    height,
+                    new_format,
+                    swap_chain_flags,
+                );
+            };
+            if (!is_init_called) {
+                std.log.debug("Resize buffers was called before initialization. Skipping this call.", .{});
+                return resize_buffers_hook.?.original(
+                    swap_chain,
+                    buffer_count,
+                    width,
+                    height,
+                    new_format,
+                    swap_chain_flags,
+                );
+            }
+            const window = dx12.getWindowFromSwapChain(swap_chain) catch |err| {
+                misc.errorContext().append(err, "Failed to get the window from DX12 swap chain.");
+                misc.errorContext().logError();
+                return resize_buffers_hook.?.original(
+                    swap_chain,
+                    buffer_count,
+                    width,
+                    height,
+                    new_format,
+                    swap_chain_flags,
+                );
+            };
+            const device = dx12.getDeviceFromSwapChain(swap_chain) catch |err| {
+                misc.errorContext().append(err, "Failed to get DX12 device from swap chain.");
+                misc.errorContext().logError();
+                return resize_buffers_hook.?.original(
+                    swap_chain,
+                    buffer_count,
+                    width,
+                    height,
+                    new_format,
+                    swap_chain_flags,
+                );
+            };
+            beforeResize(window, device, command_queue, swap_chain);
+            const return_value = resize_buffers_hook.?.original(
+                swap_chain,
+                buffer_count,
+                width,
+                height,
+                new_format,
+                swap_chain_flags,
+            );
+            afterResize(window, device, command_queue, swap_chain);
+            return return_value;
         }
 
         fn onPresentCleanup(
@@ -202,11 +309,11 @@ pub fn MainHooks(
             sync_interval: u32,
             flags: u32,
         ) callconv(.winapi) w32.HRESULT {
-            if (!is_first_present_called) {
-                is_last_present_called.store(true, .seq_cst);
+            if (!is_init_called) {
+                is_deinit_called.store(true, .seq_cst);
                 return present_hook.?.original(swap_chain, sync_interval, flags);
             }
-            if (is_last_present_called.load(.seq_cst)) {
+            if (is_deinit_called.load(.seq_cst)) {
                 return present_hook.?.original(swap_chain, sync_interval, flags);
             }
             const window = dx12.getWindowFromSwapChain(swap_chain) catch |err| {
@@ -220,8 +327,8 @@ pub fn MainHooks(
                 return present_hook.?.original(swap_chain, sync_interval, flags);
             };
             std.log.info("Last present function called.", .{});
-            onLastPresent(window, device, g_command_queue.?, swap_chain);
-            is_last_present_called.store(true, .seq_cst);
+            onDeinit(window, device, g_command_queue.?, swap_chain);
+            is_deinit_called.store(true, .seq_cst);
             return present_hook.?.original(swap_chain, sync_interval, flags);
         }
     };
@@ -236,7 +343,7 @@ test "should call correct callbacks at correct times" {
     try hooking.init();
     defer hooking.deinit() catch @panic("Failed to de-initialize hooking.");
 
-    const OnFirstPresent = struct {
+    const OnInit = struct {
         var times_called: usize = 0;
         var last_window: ?w32.HWND = null;
         var last_device: ?*const w32.ID3D12Device = null;
@@ -255,7 +362,7 @@ test "should call correct callbacks at correct times" {
             last_swap_chain = swap_chain;
         }
     };
-    const OnNormalPresent = struct {
+    const OnDeinit = struct {
         var times_called: usize = 0;
         var last_window: ?w32.HWND = null;
         var last_device: ?*const w32.ID3D12Device = null;
@@ -274,7 +381,45 @@ test "should call correct callbacks at correct times" {
             last_swap_chain = swap_chain;
         }
     };
-    const OnLastPresent = struct {
+    const OnUpdate = struct {
+        var times_called: usize = 0;
+        var last_window: ?w32.HWND = null;
+        var last_device: ?*const w32.ID3D12Device = null;
+        var last_command_queue: ?*const w32.ID3D12CommandQueue = null;
+        var last_swap_chain: ?*const w32.IDXGISwapChain = null;
+        fn call(
+            window: w32.HWND,
+            device: *const w32.ID3D12Device,
+            command_queue: *const w32.ID3D12CommandQueue,
+            swap_chain: *const w32.IDXGISwapChain,
+        ) void {
+            times_called += 1;
+            last_window = window;
+            last_device = device;
+            last_command_queue = command_queue;
+            last_swap_chain = swap_chain;
+        }
+    };
+    const BeforeResize = struct {
+        var times_called: usize = 0;
+        var last_window: ?w32.HWND = null;
+        var last_device: ?*const w32.ID3D12Device = null;
+        var last_command_queue: ?*const w32.ID3D12CommandQueue = null;
+        var last_swap_chain: ?*const w32.IDXGISwapChain = null;
+        fn call(
+            window: w32.HWND,
+            device: *const w32.ID3D12Device,
+            command_queue: *const w32.ID3D12CommandQueue,
+            swap_chain: *const w32.IDXGISwapChain,
+        ) void {
+            times_called += 1;
+            last_window = window;
+            last_device = device;
+            last_command_queue = command_queue;
+            last_swap_chain = swap_chain;
+        }
+    };
+    const AfterResize = struct {
         var times_called: usize = 0;
         var last_window: ?w32.HWND = null;
         var last_device: ?*const w32.ID3D12Device = null;
@@ -294,47 +439,77 @@ test "should call correct callbacks at correct times" {
         }
     };
 
-    const hooks = MainHooks(OnFirstPresent.call, OnNormalPresent.call, OnLastPresent.call);
+    const hooks = MainHooks(OnInit.call, OnDeinit.call, OnUpdate.call, BeforeResize.call, AfterResize.call);
     try hooks.init();
 
-    try testing.expectEqual(0, OnFirstPresent.times_called);
-    try testing.expectEqual(0, OnNormalPresent.times_called);
-    try testing.expectEqual(0, OnLastPresent.times_called);
+    try testing.expectEqual(0, OnInit.times_called);
+    try testing.expectEqual(0, OnDeinit.times_called);
+    try testing.expectEqual(0, OnUpdate.times_called);
+    try testing.expectEqual(0, BeforeResize.times_called);
+    try testing.expectEqual(0, AfterResize.times_called);
 
     for (0..3) |_| {
-        const present_return_code = dx12_context.swap_chain.Present(0, w32.DXGI_PRESENT_TEST);
-        try testing.expectEqual(w32.S_OK, present_return_code);
+        const present_result = dx12_context.swap_chain.Present(0, w32.DXGI_PRESENT_TEST);
+        try testing.expectEqual(w32.S_OK, present_result);
     }
 
-    try testing.expectEqual(0, OnFirstPresent.times_called);
-    try testing.expectEqual(0, OnNormalPresent.times_called);
-    try testing.expectEqual(0, OnLastPresent.times_called);
+    try testing.expectEqual(0, OnInit.times_called);
+    try testing.expectEqual(0, OnDeinit.times_called);
+    try testing.expectEqual(0, OnUpdate.times_called);
+    try testing.expectEqual(0, BeforeResize.times_called);
+    try testing.expectEqual(0, AfterResize.times_called);
 
     const command_lists = [0](?*w32.ID3D12CommandList){};
     dx12_context.command_queue.ExecuteCommandLists(command_lists.len, &command_lists);
 
-    try testing.expectEqual(0, OnFirstPresent.times_called);
-    try testing.expectEqual(0, OnNormalPresent.times_called);
-    try testing.expectEqual(0, OnLastPresent.times_called);
+    try testing.expectEqual(0, OnInit.times_called);
+    try testing.expectEqual(0, OnDeinit.times_called);
+    try testing.expectEqual(0, OnUpdate.times_called);
+    try testing.expectEqual(0, BeforeResize.times_called);
+    try testing.expectEqual(0, AfterResize.times_called);
 
     for (0..5) |_| {
-        const present_return_code = dx12_context.swap_chain.Present(0, w32.DXGI_PRESENT_TEST);
-        try testing.expectEqual(w32.S_OK, present_return_code);
+        const present_result = dx12_context.swap_chain.Present(0, w32.DXGI_PRESENT_TEST);
+        try testing.expectEqual(w32.S_OK, present_result);
     }
 
-    try testing.expectEqual(1, OnFirstPresent.times_called);
-    try testing.expectEqual(4, OnNormalPresent.times_called);
-    try testing.expectEqual(0, OnLastPresent.times_called);
+    try testing.expectEqual(1, OnInit.times_called);
+    try testing.expectEqual(0, OnDeinit.times_called);
+    try testing.expectEqual(4, OnUpdate.times_called);
+    try testing.expectEqual(0, BeforeResize.times_called);
+    try testing.expectEqual(0, AfterResize.times_called);
 
-    try testing.expectEqual(dx12_context.window, OnFirstPresent.last_window);
-    try testing.expectEqual(dx12_context.device, OnFirstPresent.last_device);
-    try testing.expectEqual(dx12_context.command_queue, OnFirstPresent.last_command_queue);
-    try testing.expectEqual(dx12_context.swap_chain, OnFirstPresent.last_swap_chain);
+    try testing.expectEqual(dx12_context.window, OnInit.last_window);
+    try testing.expectEqual(dx12_context.device, OnInit.last_device);
+    try testing.expectEqual(dx12_context.command_queue, OnInit.last_command_queue);
+    try testing.expectEqual(dx12_context.swap_chain, OnInit.last_swap_chain);
 
-    try testing.expectEqual(dx12_context.window, OnNormalPresent.last_window);
-    try testing.expectEqual(dx12_context.device, OnNormalPresent.last_device);
-    try testing.expectEqual(dx12_context.command_queue, OnNormalPresent.last_command_queue);
-    try testing.expectEqual(dx12_context.swap_chain, OnNormalPresent.last_swap_chain);
+    try testing.expectEqual(dx12_context.window, OnUpdate.last_window);
+    try testing.expectEqual(dx12_context.device, OnUpdate.last_device);
+    try testing.expectEqual(dx12_context.command_queue, OnUpdate.last_command_queue);
+    try testing.expectEqual(dx12_context.swap_chain, OnUpdate.last_swap_chain);
+
+    const resize_result = dx12_context.swap_chain.ResizeBuffers(
+        3,
+        200,
+        200,
+        w32.DXGI_FORMAT_R8G8B8A8_UNORM,
+        @intFromEnum(w32.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH),
+    );
+    try testing.expectEqual(w32.S_OK, resize_result);
+
+    try testing.expectEqual(1, BeforeResize.times_called);
+    try testing.expectEqual(1, AfterResize.times_called);
+
+    try testing.expectEqual(dx12_context.window, BeforeResize.last_window);
+    try testing.expectEqual(dx12_context.device, BeforeResize.last_device);
+    try testing.expectEqual(dx12_context.command_queue, BeforeResize.last_command_queue);
+    try testing.expectEqual(dx12_context.swap_chain, BeforeResize.last_swap_chain);
+
+    try testing.expectEqual(dx12_context.window, AfterResize.last_window);
+    try testing.expectEqual(dx12_context.device, AfterResize.last_device);
+    try testing.expectEqual(dx12_context.command_queue, AfterResize.last_command_queue);
+    try testing.expectEqual(dx12_context.swap_chain, AfterResize.last_swap_chain);
 
     const Deinit = struct {
         var is_complete = std.atomic.Value(bool).init(false);
@@ -348,23 +523,23 @@ test "should call correct callbacks at correct times" {
 
     while (!Deinit.is_complete.load(.seq_cst)) {
         try std.Thread.yield();
-        const present_return_code = dx12_context.swap_chain.Present(0, w32.DXGI_PRESENT_TEST);
-        try testing.expectEqual(w32.S_OK, present_return_code);
+        const present_result = dx12_context.swap_chain.Present(0, w32.DXGI_PRESENT_TEST);
+        try testing.expectEqual(w32.S_OK, present_result);
     }
 
-    try testing.expectEqual(1, OnLastPresent.times_called);
+    try testing.expectEqual(1, OnDeinit.times_called);
 
-    try testing.expectEqual(dx12_context.window, OnLastPresent.last_window);
-    try testing.expectEqual(dx12_context.device, OnLastPresent.last_device);
-    try testing.expectEqual(dx12_context.command_queue, OnLastPresent.last_command_queue);
-    try testing.expectEqual(dx12_context.swap_chain, OnLastPresent.last_swap_chain);
+    try testing.expectEqual(dx12_context.window, OnDeinit.last_window);
+    try testing.expectEqual(dx12_context.device, OnDeinit.last_device);
+    try testing.expectEqual(dx12_context.command_queue, OnDeinit.last_command_queue);
+    try testing.expectEqual(dx12_context.swap_chain, OnDeinit.last_swap_chain);
 }
 
 test "init should error when hooking is not initialized" {
     const dx12Context = try dx12.TestingContext.init();
     defer dx12Context.deinit();
 
-    const onPresent = struct {
+    const onEvent = struct {
         fn call(
             window: w32.HWND,
             device: *const w32.ID3D12Device,
@@ -378,6 +553,6 @@ test "init should error when hooking is not initialized" {
         }
     }.call;
 
-    const hooks = MainHooks(onPresent, onPresent, onPresent);
+    const hooks = MainHooks(onEvent, onEvent, onEvent, onEvent, onEvent);
     try testing.expectError(error.HookingNotInitialized, hooks.init());
 }
