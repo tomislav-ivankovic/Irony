@@ -18,6 +18,7 @@ pub const std_options = std.Options{
 const main_hooks = hooking.MainHooks(onHooksInit, onHooksDeinit, onHooksUpdate, beforeHooksResize, afterHooksResize);
 
 var base_dir = misc.BaseDir.working_dir;
+var module_handle_shared_value: ?os.SharedValue(w32.HINSTANCE) = null;
 var window_procedure: ?os.WindowProcedure = null;
 var event_buss: ?EventBuss = null;
 
@@ -26,11 +27,20 @@ pub fn DllMain(
     forward_reason: u32,
     reserved: *anyopaque,
 ) callconv(.winapi) w32.BOOL {
-    _ = module_handle;
     _ = reserved;
     switch (forward_reason) {
         w32.DLL_PROCESS_ATTACH => {
             std.log.info("DLL attached event detected.", .{});
+
+            std.log.debug("Creating module handle shared value...", .{});
+            if (createModuleHandleSharedValue(module_handle)) |shared_value| {
+                std.log.info("Module handle shared value created.", .{});
+                module_handle_shared_value = shared_value;
+            } else |err| {
+                misc.errorContext().append(err, "Failed to create module handle shared value.");
+                misc.errorContext().logError();
+            }
+
             std.log.debug("Spawning the initialization thread...", .{});
             const thread = std.Thread.spawn(.{}, init, .{}) catch |err| {
                 misc.errorContext().new(err, "Failed to spawn initialization thread.");
@@ -39,17 +49,51 @@ pub fn DllMain(
             };
             thread.detach();
             std.log.debug("Initialization thread spawned.", .{});
+
             std.log.info("DLL attached successfully.", .{});
             return 1;
         },
         w32.DLL_PROCESS_DETACH => {
             std.log.info("DLL detach event detected.", .{});
+
             deinit();
+
+            std.log.debug("Destroying module handle shared value...", .{});
+            if (module_handle_shared_value) |*shared_value| {
+                if (shared_value.destroy()) {
+                    std.log.info("Module handle shared value destroyed.", .{});
+                    module_handle_shared_value = null;
+                } else |err| {
+                    misc.errorContext().append(err, "Failed to destroy module handle shared value.");
+                    misc.errorContext().logError();
+                }
+            } else {
+                std.log.debug("Nothing to destroy.", .{});
+            }
+
             std.log.info("Detaching from the process now...", .{});
             return 1;
         },
         else => return 0,
     }
+}
+
+fn createModuleHandleSharedValue(module_handle: w32.HINSTANCE) !os.SharedValue(w32.HINSTANCE) {
+    const shared_value = os.SharedValue(w32.HINSTANCE).create(module_name) catch |err| {
+        misc.errorContext().appendFmt(err, "Failed to create shared value named: {s}", .{module_name});
+        return err;
+    };
+    errdefer {
+        shared_value.destroy() catch |err| {
+            misc.errorContext().append(err, "Failed to destroy shared value.");
+            misc.errorContext().logError();
+        };
+    }
+    shared_value.write(module_handle) catch |err| {
+        misc.errorContext().append(err, "Failed to write the module handle to shared value.");
+        return err;
+    };
+    return shared_value;
 }
 
 fn init() void {

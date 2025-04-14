@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const w32 = @import("win32").everything;
 const misc = @import("../misc/root.zig");
 const os = @import("root.zig");
@@ -35,6 +36,38 @@ pub const Module = struct {
     }
 
     pub fn getRemote(process: os.Process, name: []const u8) !Self {
+        return getRemoteFromSharedMemory(process, name) catch |err1| {
+            if (!builtin.is_test) {
+                misc.errorContext().append(err1, "Failed to get the remote module from shared memory.");
+                misc.errorContext().logWarning();
+            }
+            return getRemoteBySearching(process, name) catch |err2| {
+                misc.errorContext().append(err2, "Failed to get the remote module by searching.");
+                return err2;
+            };
+        };
+    }
+
+    fn getRemoteFromSharedMemory(process: os.Process, name: []const u8) !Self {
+        const shared_value = os.SharedValue(w32.HINSTANCE).open(process.id, name, .{ .READ = 1 }) catch |err| {
+            misc.errorContext().append(err, "Failed to open shared value.");
+            return err;
+        };
+        defer shared_value.close() catch |err| {
+            misc.errorContext().append(err, "Failed to close shared value.");
+            misc.errorContext().logError();
+        };
+        const handle = shared_value.read() catch |err| {
+            misc.errorContext().append(err, "Failed to read shared value.");
+            return err;
+        };
+        return .{
+            .process = process,
+            .handle = handle,
+        };
+    }
+
+    fn getRemoteBySearching(process: os.Process, name: []const u8) !Self {
         var buffer = [_:0]u16{0} ** os.max_file_path_length;
         const size = std.unicode.utf8ToUtf16Le(&buffer, name) catch |err| {
             misc.errorContext().newFmt(err, "Failed to convert \"{s}\" to UTF-16LE.", .{name});

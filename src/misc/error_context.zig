@@ -92,6 +92,18 @@ pub const ErrorContext = struct {
         }
     }
 
+    pub fn logWarning(self: *const Self) void {
+        if (self.trace.getLastOrNull()) |last_item| {
+            const message = switch (last_item.message) {
+                .constant => |msg| msg,
+                .formatted => |msg| msg,
+            };
+            std.log.warn("{s}\nCausation chain:\n{}", .{ message, self });
+        } else {
+            std.log.warn("No items inside the error context.", .{});
+        }
+    }
+
     pub fn format(
         self: Self,
         comptime fmt: []const u8,
