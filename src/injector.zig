@@ -26,8 +26,18 @@ pub const std_options = std.Options{
     .logFn = composite_logger.logFn,
 };
 
+var only_inject_mode = false;
+
 pub fn main() !void {
     std.log.info("Application started up.", .{});
+
+    std.log.debug("Checking for only inject mode...", .{});
+    only_inject_mode = getOnlyInjectMode();
+    if (only_inject_mode) {
+        std.log.info("Only inject mode activated.", .{});
+    } else {
+        std.log.debug("Not using only inject mode.", .{});
+    }
 
     std.log.debug("Finding base directory...", .{});
     const base_dir = findBaseDir();
@@ -57,6 +67,17 @@ pub fn main() !void {
         onProcessOpen,
         onProcessClose,
     );
+}
+
+fn getOnlyInjectMode() bool {
+    const allocator = std.heap.page_allocator;
+    const args = std.process.argsAlloc(allocator) catch |err| {
+        misc.errorContext().new(err, "Failed to get process command line arguments.");
+        misc.errorContext().logError();
+        return false;
+    };
+    defer allocator.free(args);
+    return args.len >= 2;
 }
 
 fn findBaseDir() misc.BaseDir {
@@ -108,6 +129,9 @@ pub fn onProcessOpen(base_dir: *const misc.BaseDir, process: *const os.Process) 
         return false;
     };
     std.log.info("Module injected successfully.", .{});
+    if (only_inject_mode) {
+        std.process.exit(0);
+    }
     return true;
 }
 

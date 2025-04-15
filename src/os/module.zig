@@ -36,14 +36,10 @@ pub const Module = struct {
     }
 
     pub fn getRemote(process: os.Process, name: []const u8) !Self {
-        return getRemoteFromSharedMemory(process, name) catch |err1| {
-            if (!builtin.is_test) {
-                misc.errorContext().append(err1, "Failed to get the remote module from shared memory.");
-                misc.errorContext().logWarning();
-            }
-            return getRemoteBySearching(process, name) catch |err2| {
-                misc.errorContext().append(err2, "Failed to get the remote module by searching.");
-                return err2;
+        return getRemoteFromSharedMemory(process, name) catch {
+            return getRemoteBySearching(process, name) catch |err| {
+                misc.errorContext().append(err, "Failed to get the remote module by searching.");
+                return err;
             };
         };
     }
