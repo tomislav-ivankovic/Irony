@@ -10,6 +10,32 @@ pub const InjectedModule = struct {
     const Self = @This();
 
     pub fn inject(process: os.Process, module_path: []const u8) !Self {
+        const file_name = os.pathToFileName(module_path);
+        if (os.Module.getRemote(process, file_name) catch null) |module| {
+            ejectModule(module) catch |err| {
+                misc.errorContext().appendFmt(err, "Failed eject already loaded module: {s}", .{file_name});
+                return err;
+            };
+        }
+        try injectModule(process, module_path);
+        const module = os.Module.getRemote(process, file_name) catch |err| {
+            misc.errorContext().appendFmt(err, "Failed get remote module: {s}", .{file_name});
+            return err;
+        };
+        return .{
+            .module = module,
+            .test_allocation = if (builtin.is_test) try std.testing.allocator.create(u8) else {},
+        };
+    }
+
+    pub fn eject(self: *const Self) !void {
+        try ejectModule(self.module);
+        if (builtin.is_test) {
+            std.testing.allocator.destroy(self.test_allocation);
+        }
+    }
+
+    fn injectModule(process: os.Process, module_path: []const u8) !void {
         var buffer = [_:0]u16{0} ** os.max_file_path_length;
         const size = std.unicode.utf8ToUtf16Le(&buffer, module_path) catch |err| {
             misc.errorContext().newFmt(err, "Failed to convert UTF8 string \"{s}\" to UTF16-LE.", .{module_path});
@@ -52,16 +78,9 @@ pub const InjectedModule = struct {
             misc.errorContext().new(error.RemoteLoadLibraryWFailed, "Remote LoadLibraryW returned 0.");
             return error.RemoteLoadLibraryWFailed;
         }
-        const file_name = os.pathToFileName(module_path);
-        const module = os.Module.getRemote(process, file_name) catch |err| {
-            misc.errorContext().appendFmt(err, "Failed get remote module: {s}", .{file_name});
-            return err;
-        };
-        const test_allocation = if (builtin.is_test) try std.testing.allocator.create(u8) else {};
-        return .{ .module = module, .test_allocation = test_allocation };
     }
 
-    pub fn eject(self: *const Self) !void {
+    fn ejectModule(module: os.Module) !void {
         const kernel_module = os.Module.getLocal("kernel32.dll") catch |err| {
             misc.errorContext().append(err, "Failed to get local kernel module: kernel32.dll");
             return err;
@@ -71,9 +90,9 @@ pub const InjectedModule = struct {
             return err;
         };
         const remote_thread = os.RemoteThread.spawn(
-            &self.module.process,
+            &module.process,
             @ptrFromInt(free_library_address),
-            @intFromPtr(self.module.handle),
+            @intFromPtr(module.handle),
         ) catch |err| {
             misc.errorContext().append(err, "Failed to spawn remote thread: FreeLibrary");
             return err;
@@ -89,9 +108,6 @@ pub const InjectedModule = struct {
         if (return_code == 0) {
             misc.errorContext().new(error.RemoteFreeLibraryFailed, "Remote FreeLibrary returned 0.");
             return error.RemoteFreeLibraryFailed;
-        }
-        if (builtin.is_test) {
-            std.testing.allocator.destroy(self.test_allocation);
         }
     }
 };
