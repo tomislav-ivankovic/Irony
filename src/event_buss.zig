@@ -1,14 +1,16 @@
 const std = @import("std");
 const w32 = @import("win32").everything;
+const imgui = @import("imgui");
 const misc = @import("misc/root.zig");
 const dx12 = @import("dx12/root.zig");
 const ui = @import("ui/root.zig");
-const imgui = @import("imgui");
+const game = @import("game/root.zig");
 
 pub const EventBuss = struct {
     gpa: std.heap.GeneralPurposeAllocator(.{}),
     dx12_context: ?dx12.Context(buffer_count, srv_heap_size),
     ui_context: ?ui.Context,
+    game_memory: game.Memory,
 
     const Self = @This();
     const buffer_count = 3;
@@ -59,10 +61,13 @@ pub const EventBuss = struct {
             }
         } else null;
 
+        const game_memory = game.Memory.find();
+
         return .{
             .gpa = gpa,
             .dx12_context = dx12_context,
             .ui_context = ui_context,
+            .game_memory = game_memory,
         };
     }
 
@@ -123,7 +128,17 @@ pub const EventBuss = struct {
         imgui.igGetIO().*.MouseDrawCursor = true;
         // imgui.igShowDemoWindow(null);
         if (imgui.igBegin("Hello world.", null, imgui.ImGuiWindowFlags_NoCollapse)) {
-            imgui.igText("Hello world.", .{});
+            imgui.igText("Hello world.");
+            if (self.game_memory.player_1.toConstPointer()) |player_1| {
+                imgui.igText("Player 1 health: %d", player_1.health);
+            } else {
+                imgui.igText("Player 1 not found.");
+            }
+            if (self.game_memory.player_2.toConstPointer()) |player_2| {
+                imgui.igText("Player 2 health: %d", player_2.health);
+            } else {
+                imgui.igText("Player 2 not found.");
+            }
             imgui.igEnd();
         }
         ui_context.endFrame();
