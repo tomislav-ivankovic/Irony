@@ -3,4 +3,5 @@ pub const MultilevelPointer = @import("multilevel_pointer.zig").MultilevelPointe
 pub const Pattern = @import("pattern.zig").Pattern;
 pub const Pointer = @import("pointer.zig").Pointer;
 pub const Range = @import("range.zig").Range;
+pub const resolveRelativeOffset = @import("relative_offset.zig").resolveRelativeOffset;
 pub const SelfSortableArray = @import("self_sortable_array.zig").SelfSortableArray;

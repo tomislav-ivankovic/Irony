@@ -25,6 +25,7 @@ test {
     _ = @import("memory/pattern.zig");
     _ = @import("memory/pointer.zig");
     _ = @import("memory/range.zig");
+    _ = @import("memory/relative_offset.zig");
     _ = @import("memory/self_sortable_array.zig");
 
     _ = @import("misc/base_dir.zig");
