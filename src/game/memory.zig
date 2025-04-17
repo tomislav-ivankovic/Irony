@@ -5,20 +5,20 @@ const memory = @import("../memory/root.zig");
 const game = @import("root.zig");
 
 pub const Memory = struct {
-    player_1: memory.MultilevelPointer(game.Player, 4),
-    player_2: memory.MultilevelPointer(game.Player, 4),
+    player_1: memory.MultilevelPointer(game.Player),
+    player_2: memory.MultilevelPointer(game.Player),
 
     const Self = @This();
 
     pub fn init() Self {
         return .{
-            .player_1 = multilevelPointer("player_1", game.Player, 4, .{
+            .player_1 = multilevelPointer("player_1", game.Player, .{
                 relativeOffset(u32, add(pattern("4C 89 35 ?? ?? ?? ?? 41 88 5E 28"), 3)),
                 0x0,
                 0x30,
                 0x0,
             }),
-            .player_2 = multilevelPointer("player_2", game.Player, 4, .{
+            .player_2 = multilevelPointer("player_2", game.Player, .{
                 relativeOffset(u32, add(pattern("4C 89 35 ?? ?? ?? ?? 41 88 5E 28"), 3)),
                 0x0,
                 0x38,
@@ -30,11 +30,14 @@ pub const Memory = struct {
     fn multilevelPointer(
         name: []const u8,
         comptime Type: type,
-        comptime offsets_size: usize,
-        offsets: [offsets_size]anyerror!usize,
-    ) memory.MultilevelPointer(Type, offsets_size) {
+        offsets: anytype,
+    ) memory.MultilevelPointer(Type) {
+        if (@typeInfo(@TypeOf(offsets)) != .array) {
+            const coerced: [offsets.len]anyerror!usize = offsets;
+            return multilevelPointer(name, Type, coerced);
+        }
         var last_error: ?anyerror = null;
-        var mapped_offsets: [offsets_size]?usize = undefined;
+        var mapped_offsets: [offsets.len]?usize = undefined;
         for (offsets, 0..) |offset, i| {
             if (offset) |o| {
                 mapped_offsets[i] = o;
@@ -47,9 +50,7 @@ pub const Memory = struct {
             misc.errorContext().appendFmt(err, "Failed to resolve multilevel pointer: {s}", .{name});
             misc.errorContext().logError();
         }
-        return memory.MultilevelPointer(Type, offsets_size){
-            .offsets = mapped_offsets,
-        };
+        return memory.MultilevelPointer(Type).fromArray(mapped_offsets);
     }
 
     fn pattern(comptime pattern_string: []const u8) !usize {
