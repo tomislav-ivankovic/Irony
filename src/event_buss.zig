@@ -61,7 +61,9 @@ pub const EventBuss = struct {
             }
         } else null;
 
-        const game_memory = game.Memory.find();
+        std.log.debug("Initializing game memory...", .{});
+        const game_memory = game.Memory.init();
+        std.log.info("Game memory initialized.", .{});
 
         return .{
             .gpa = gpa,
