@@ -40,7 +40,7 @@ pub const Memory = struct {
     fn pointer(
         comptime Type: type,
         comptime offsets_size: usize,
-        offsets: [offsets_size]usize,
+        offsets: [offsets_size]?usize,
     ) memory.MultilevelPointer(Type, offsets_size) {
         return memory.MultilevelPointer(Type, offsets_size){
             .offsets = offsets,
