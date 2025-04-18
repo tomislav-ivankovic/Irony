@@ -26,8 +26,8 @@ pub const Process = struct {
             0,
             id.raw,
         ) orelse {
-            misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-            misc.errorContext().append(error.OsError, "OpenProcess returned null.");
+            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+            misc.errorContext().append("OpenProcess returned null.");
             return error.OsError;
         };
         return .{
@@ -40,8 +40,8 @@ pub const Process = struct {
     pub fn close(self: *const Self) !void {
         const success = w32.CloseHandle(self.handle);
         if (success == 0) {
-            misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-            misc.errorContext().append(error.OsError, "CloseHandle returned 0.");
+            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+            misc.errorContext().append("CloseHandle returned 0.");
             return error.OsError;
         }
         if (builtin.is_test) {
@@ -58,8 +58,8 @@ pub const Process = struct {
         var exit_code: u32 = undefined;
         const success = w32.GetExitCodeProcess(self.handle, &exit_code);
         if (success == 0) {
-            misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-            misc.errorContext().append(error.OsError, "GetExitCodeProcess returned 0.");
+            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+            misc.errorContext().append("GetExitCodeProcess returned 0.");
             return error.OsError;
         }
         return exit_code == w32.STILL_ACTIVE;
@@ -69,12 +69,12 @@ pub const Process = struct {
         var buffer: [os.max_file_path_length:0]u16 = undefined;
         const size = w32.K32GetProcessImageFileNameW(self.handle, &buffer, buffer.len);
         if (size == 0) {
-            misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-            misc.errorContext().append(error.OsError, "K32GetProcessImageFileNameW returned 0.");
+            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+            misc.errorContext().append("K32GetProcessImageFileNameW returned 0.");
             return error.OsError;
         }
         return std.unicode.utf16LeToUtf8(path_buffer, buffer[0..size]) catch |err| {
-            misc.errorContext().new(err, "Failed to convert UTF-16LE string to UTF8.");
+            misc.errorContext().new("Failed to convert UTF-16LE string to UTF8.");
             return err;
         };
     }

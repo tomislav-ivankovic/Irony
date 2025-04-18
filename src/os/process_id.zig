@@ -21,8 +21,8 @@ pub const ProcessId = struct {
             &number_of_bytes,
         );
         if (success == 0) {
-            misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-            misc.errorContext().append(error.OsError, "K32EnumProcesses returned 0.");
+            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+            misc.errorContext().append("K32EnumProcesses returned 0.");
             return error.OsError;
         }
         const number_of_elements = number_of_bytes / @sizeOf(u32);
@@ -49,18 +49,18 @@ pub const ProcessId = struct {
 
     pub fn findByFileName(file_name: []const u8) !Self {
         var iterator = Self.findAll() catch |err| {
-            misc.errorContext().append(err, "Failed to find all process ID-s.");
+            misc.errorContext().append("Failed to find all process ID-s.");
             return err;
         };
         while (iterator.next()) |process_id| {
             var process = os.Process.open(process_id, .{ .QUERY_LIMITED_INFORMATION = 1 }) catch continue;
             defer process.close() catch |err| {
-                misc.errorContext().appendFmt(err, "Failed to close process with ID: {}", .{process_id});
-                misc.errorContext().logError();
+                misc.errorContext().appendFmt("Failed to close process with ID: {}", .{process_id});
+                misc.errorContext().logError(err);
             };
             var buffer: [os.max_file_path_length]u8 = undefined;
             const size = process.getFilePath(&buffer) catch |err| {
-                misc.errorContext().appendFmt(err, "Failed to get file path for process with ID: {}", .{process_id});
+                misc.errorContext().appendFmt("Failed to get file path for process with ID: {}", .{process_id});
                 return err;
             };
             const path = buffer[0..size];
@@ -69,7 +69,7 @@ pub const ProcessId = struct {
                 return process_id;
             }
         }
-        misc.errorContext().new(error.NotFound, "Process not found.");
+        misc.errorContext().new("Process not found.");
         return error.NotFound;
     }
 

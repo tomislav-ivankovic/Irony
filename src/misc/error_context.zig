@@ -16,7 +16,6 @@ pub const ErrorContext = struct {
 
     pub const TraceItem = struct {
         message: Message,
-        err: ?anyerror,
     };
     pub const Message = union(enum) {
         constant: []const u8,
@@ -36,34 +35,32 @@ pub const ErrorContext = struct {
         self.trace.deinit();
     }
 
-    pub fn new(self: *Self, err: ?anyerror, message: []const u8) void {
+    pub fn new(self: *Self, message: []const u8) void {
         self.clear();
-        @call(.always_inline, append, .{ self, err, message });
+        @call(.always_inline, append, .{ self, message });
     }
 
-    pub fn newFmt(self: *Self, err: ?anyerror, comptime fmt: []const u8, args: anytype) void {
+    pub fn newFmt(self: *Self, comptime fmt: []const u8, args: anytype) void {
         self.clear();
-        @call(.always_inline, appendFmt, .{ self, err, fmt, args });
+        @call(.always_inline, appendFmt, .{ self, fmt, args });
     }
 
-    pub fn append(self: *Self, err: ?anyerror, message: []const u8) void {
+    pub fn append(self: *Self, message: []const u8) void {
         const item = TraceItem{
             .message = .{ .constant = message },
-            .err = err,
         };
-        self.trace.append(item) catch |append_err| {
-            std.log.err("Failed to append message \"{s}\" to error context. [{}]", .{ message, append_err });
+        self.trace.append(item) catch |err| {
+            std.log.err("Failed to append message \"{s}\" to error context. [{}]", .{ message, err });
         };
     }
 
-    pub fn appendFmt(self: *Self, err: ?anyerror, comptime fmt: []const u8, args: anytype) void {
+    pub fn appendFmt(self: *Self, comptime fmt: []const u8, args: anytype) void {
         const message = std.fmt.allocPrint(self.allocator, fmt, args) catch null;
         const item = TraceItem{
             .message = if (message) |msg| .{ .formatted = msg } else .{ .constant = fmt },
-            .err = err,
         };
-        self.trace.append(item) catch |append_err| {
-            std.log.err("Failed to append message \"{s}\" to error context. [{}]", .{ message orelse fmt, append_err });
+        self.trace.append(item) catch |err| {
+            std.log.err("Failed to append message \"{s}\" to error context. [{}]", .{ message orelse fmt, err });
             if (message) |msg| {
                 self.allocator.free(msg);
             }
@@ -80,27 +77,15 @@ pub const ErrorContext = struct {
         self.trace.clearRetainingCapacity();
     }
 
-    pub fn logError(self: *const Self) void {
+    pub fn logError(self: *const Self, err: anyerror) void {
         if (self.trace.getLastOrNull()) |last_item| {
             const message = switch (last_item.message) {
                 .constant => |msg| msg,
                 .formatted => |msg| msg,
             };
-            std.log.err("{s}\nCausation chain:\n{}", .{ message, self });
+            std.log.err("{s} [{}]\nCausation chain:\n{}", .{ message, err, self });
         } else {
-            std.log.err("No items inside the error context.", .{});
-        }
-    }
-
-    pub fn logWarning(self: *const Self) void {
-        if (self.trace.getLastOrNull()) |last_item| {
-            const message = switch (last_item.message) {
-                .constant => |msg| msg,
-                .formatted => |msg| msg,
-            };
-            std.log.warn("{s}\nCausation chain:\n{}", .{ message, self });
-        } else {
-            std.log.warn("No items inside the error context.", .{});
+            std.log.err("No items inside the error context. [{}]", .{err});
         }
     }
 
@@ -127,11 +112,7 @@ pub const ErrorContext = struct {
                 .constant => |msg| msg,
                 .formatted => |msg| msg,
             };
-            try writer.print("{}) {s}", .{ ordinal_number, message });
-            if (item.err) |err| {
-                try writer.print(" [{}]", .{err});
-            }
-            try writer.writeAll("\n");
+            try writer.print("{}) {s}\n", .{ ordinal_number, message });
         }
     }
 };
@@ -142,19 +123,18 @@ test "should correctly format error message" {
     var context = ErrorContext.init(testing.allocator);
     defer context.deinit();
 
-    context.new(null, "Error 1.");
-    context.append(error.Error2, "Error 2.");
-    context.appendFmt(error.Error3, "Error 3 with context: {}", .{123});
+    context.new("Error 1.");
+    context.appendFmt("Error 2 with context: {}", .{123});
     const message_1 = try std.fmt.allocPrint(testing.allocator, "{}", .{context});
     defer testing.allocator.free(message_1);
-    const expected_1 = "1) Error 3 with context: 123 [error.Error3]\n2) Error 2. [error.Error2]\n3) Error 1.\n";
+    const expected_1 = "1) Error 2 with context: 123\n2) Error 1.\n";
     try testing.expectEqualStrings(expected_1, message_1);
 
-    context.newFmt(error.Error4, "Error 4 with context: {}", .{456});
-    context.append(null, "Error 5.");
+    context.newFmt("Error 3 with context: {}", .{456});
+    context.append("Error 4.");
     const message_2 = try std.fmt.allocPrint(testing.allocator, "{}", .{context});
     defer testing.allocator.free(message_2);
-    const expected_2 = "1) Error 5.\n2) Error 4 with context: 456 [error.Error4]\n";
+    const expected_2 = "1) Error 4.\n2) Error 3 with context: 456\n";
     try testing.expectEqualStrings(expected_2, message_2);
 
     context.clear();

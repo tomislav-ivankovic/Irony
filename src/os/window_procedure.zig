@@ -17,8 +17,8 @@ pub const WindowProcedure = struct {
         if (i_original == 0) {
             const os_error = os.Error.getLast();
             if (os_error.error_code != .NO_ERROR) {
-                misc.errorContext().newFmt(null, "{}", os_error);
-                misc.errorContext().append(error.OsError, "SetWindowLongPtrW returned 0.");
+                misc.errorContext().newFmt("{}", .{os_error});
+                misc.errorContext().append("SetWindowLongPtrW returned 0.");
                 return error.OsError;
             }
         }
@@ -41,8 +41,8 @@ pub const WindowProcedure = struct {
         if (return_value == 0) {
             const os_error = os.Error.getLast();
             if (os_error.error_code != .NO_ERROR) {
-                misc.errorContext().newFmt(null, "{}", os_error);
-                misc.errorContext().append(error.OsError, "SetWindowLongPtrW returned 0.");
+                misc.errorContext().newFmt("{}", .{os_error});
+                misc.errorContext().append("SetWindowLongPtrW returned 0.");
                 return error.OsError;
             }
         }

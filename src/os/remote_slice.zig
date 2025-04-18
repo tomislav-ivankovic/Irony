@@ -19,30 +19,30 @@ pub fn RemoteSlice(comptime Element: type, comptime sentinel: ?Element) type {
         ) !Self {
             const full_length = if (sentinel != null) data.len + 1 else data.len;
             const size_in_bytes = full_length * @sizeOf(Element);
-            const address = w32.VirtualAllocEx(process.handle, null, size_in_bytes, .{
-                .COMMIT = 1,
-                .RESERVE = 1,
-            }, .{ .PAGE_READWRITE = 1 }) orelse {
-                misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-                misc.errorContext().append(error.OsError, "VirtualAllocEx returned null.");
+            const address = w32.VirtualAllocEx(
+                process.handle,
+                null,
+                size_in_bytes,
+                .{ .COMMIT = 1, .RESERVE = 1 },
+                .{ .PAGE_READWRITE = 1 },
+            ) orelse {
+                misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+                misc.errorContext().append("VirtualAllocEx returned null.");
                 return error.OsError;
             };
             errdefer {
                 const success = w32.VirtualFreeEx(process.handle, address, 0, .RELEASE);
                 if (success == 0) {
-                    misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-                    misc.errorContext().append(error.OsError, "VirtualFreeEx returned 0.");
-                    misc.errorContext().append(
-                        error.OsError,
-                        "Failed to free remote slice memory while recovering from error.",
-                    );
-                    misc.errorContext().logError();
+                    misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+                    misc.errorContext().append("VirtualFreeEx returned 0.");
+                    misc.errorContext().append("Failed to free remote slice memory while recovering from error.");
+                    misc.errorContext().logError(error.OsError);
                 }
             }
             const success = w32.WriteProcessMemory(process.handle, address, @ptrCast(data), size_in_bytes, null);
             if (success == 0) {
-                misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-                misc.errorContext().append(error.OsError, "WriteProcessMemory returned 0.");
+                misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+                misc.errorContext().append("WriteProcessMemory returned 0.");
                 return error.OsError;
             }
             return Self{
@@ -56,8 +56,8 @@ pub fn RemoteSlice(comptime Element: type, comptime sentinel: ?Element) type {
         pub fn destroy(self: *const Self) !void {
             const success = w32.VirtualFreeEx(self.process.handle, @ptrFromInt(self.address), 0, .RELEASE);
             if (success == 0) {
-                misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-                misc.errorContext().append(error.OsError, "VirtualFreeEx returned 0.");
+                misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+                misc.errorContext().append("VirtualFreeEx returned 0.");
                 return error.OsError;
             }
             if (builtin.is_test) {

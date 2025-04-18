@@ -25,14 +25,14 @@ pub const Context = struct {
         srv_heap_allocator: *dx12.DescriptorHeapAllocator(srv_heap_size),
     ) !Self {
         const imgui_context = imgui.igCreateContext(null) orelse {
-            misc.errorContext().new(error.ImguiError, "igCreateContext returned null.");
+            misc.errorContext().new("igCreateContext returned null.");
             return error.ImguiError;
         };
         errdefer imgui.igDestroyContext(imgui_context);
 
         const ini_file_path = if (base_dir) |dir| (dir.allocPath(allocator, "imgui.ini") catch |err| b: {
-            misc.errorContext().append(err, "Failed to allocate imgui.ini file path.");
-            misc.errorContext().logError();
+            misc.errorContext().append("Failed to allocate imgui.ini file path.");
+            misc.errorContext().logError(err);
             break :b null;
         }) else null;
         errdefer if (ini_file_path) |path| {
@@ -46,7 +46,7 @@ pub const Context = struct {
 
         const win32_success = ui.backend.ImGui_ImplWin32_Init(window);
         if (!win32_success) {
-            misc.errorContext().new(error.ImguiError, "ImGui_ImplWin32_Init returned false.");
+            misc.errorContext().new("ImGui_ImplWin32_Init returned false.");
             return error.ImguiError;
         }
         errdefer ui.backend.ImGui_ImplWin32_Shutdown();
@@ -67,8 +67,8 @@ pub const Context = struct {
                 ) callconv(.C) void {
                     const a: *dx12.DescriptorHeapAllocator(srv_heap_size) = @alignCast(@ptrCast(info.user_data));
                     a.alloc(cpu_handle, gpu_handle) catch |err| {
-                        misc.errorContext().append(err, "Failed to allocate memory on SRV heap.");
-                        misc.errorContext().logError();
+                        misc.errorContext().append("Failed to allocate memory on SRV heap.");
+                        misc.errorContext().logError(err);
                     };
                 }
             }.call,
@@ -80,8 +80,8 @@ pub const Context = struct {
                 ) callconv(.C) void {
                     const a: *dx12.DescriptorHeapAllocator(srv_heap_size) = @alignCast(@ptrCast(info.user_data));
                     a.free(cpu_handle, gpu_handle) catch |err| {
-                        misc.errorContext().append(err, "Failed to free memory on SRV heap.");
-                        misc.errorContext().logError();
+                        misc.errorContext().append("Failed to free memory on SRV heap.");
+                        misc.errorContext().logError(err);
                     };
                 }
             }.call,
@@ -89,7 +89,7 @@ pub const Context = struct {
             .font_srv_gpu_desc_handle = dx12.getGpuDescriptorHandleForHeapStart(srv_descriptor_heap),
         });
         if (!dx12_success) {
-            misc.errorContext().new(error.ImguiError, "ImGui_ImplDX12_Init returned false.");
+            misc.errorContext().new("ImGui_ImplDX12_Init returned false.");
             return error.ImguiError;
         }
         errdefer ui.backend.ImGui_ImplDX12_Shutdown();

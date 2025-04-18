@@ -13,8 +13,8 @@ pub const Memory = struct {
 
     pub fn init() Self {
         const r = findMainModuleMemoryRange() catch |err| block: {
-            misc.errorContext().append(err, "Failed to get main module memory range.");
-            misc.errorContext().logError();
+            misc.errorContext().append("Failed to get main module memory range.");
+            misc.errorContext().logError(err);
             break :block null;
         };
         return .{
@@ -35,7 +35,7 @@ pub const Memory = struct {
 
     fn findMainModuleMemoryRange() !memory.Range {
         const main_module = os.Module.getMain() catch |err| {
-            misc.errorContext().append(err, "Failed to get main module.");
+            misc.errorContext().append("Failed to get main module.");
             return err;
         };
         return main_module.getMemoryRange();
@@ -63,8 +63,8 @@ fn multilevelPointer(
     }
     if (last_error) |err| {
         if (!builtin.is_test) {
-            misc.errorContext().appendFmt(err, "Failed to resolve multilevel pointer: {s}", .{name});
-            misc.errorContext().logError();
+            misc.errorContext().appendFmt("Failed to resolve multilevel pointer: {s}", .{name});
+            misc.errorContext().logError(err);
         }
     }
     return memory.MultilevelPointer(Type).fromArray(mapped_offsets);
@@ -72,12 +72,12 @@ fn multilevelPointer(
 
 fn pattern(memory_range: ?memory.Range, comptime pattern_string: []const u8) !usize {
     const range = memory_range orelse {
-        misc.errorContext().new(error.NoMemoryRange, "No memory range to find the memory pattern in.");
+        misc.errorContext().new("No memory range to find the memory pattern in.");
         return error.NoMemoryRange;
     };
     const memory_pattern = memory.Pattern.fromComptime(pattern_string);
     const address = memory_pattern.findAddress(range) catch |err| {
-        misc.errorContext().appendFmt(err, "Failed to find address of memory pattern: {}", .{memory_pattern});
+        misc.errorContext().appendFmt("Failed to find address of memory pattern: {}", .{memory_pattern});
         return err;
     };
     return address;
@@ -87,7 +87,6 @@ fn relativeOffset(comptime Offset: type, address: anyerror!usize) !usize {
     const addr = try address;
     const offset_address = memory.resolveRelativeOffset(Offset, addr) catch |err| {
         misc.errorContext().appendFmt(
-            err,
             "Failed to resolve {s} relative memory offset at address: 0x{X}",
             .{ @typeName(Offset), addr },
         );
@@ -100,11 +99,7 @@ fn add(addition: usize, address: anyerror!usize) !usize {
     const addr = try address;
     const result = @addWithOverflow(addr, addition);
     if (result[1] == 1) {
-        misc.errorContext().newFmt(
-            error.Overflow,
-            "Adding 0x{X} to address 0x{X} resulted in a overflow.",
-            .{ addr, addition },
-        );
+        misc.errorContext().newFmt("Adding 0x{X} to address 0x{X} resulted in a overflow.", .{ addr, addition });
         return error.Overflow;
     }
     return result[0];
@@ -118,7 +113,7 @@ test "multilevelPointer should construct a multilevel pointer from array" {
 }
 
 test "multilevelPointer should map errors to null values" {
-    misc.errorContext().new(error.Test, "Test error.");
+    misc.errorContext().new("Test error.");
     const pointer = multilevelPointer("pointer", u8, .{ 1, error.Test, 2, error.Test, 3, error.Test });
     try testing.expectEqualSlices(?usize, &.{ 1, null, 2, null, 3, null }, pointer.getOffsets());
 }

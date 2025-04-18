@@ -28,12 +28,8 @@ fn runLoopLogic(
     if (opened_process.*) |process| {
         std.log.debug("Checking if the process (PID = {}) is still running...", .{process.id});
         const still_running = process.isStillRunning() catch |err| c: {
-            misc.errorContext().appendFmt(
-                err,
-                "Failed to figure out if process (PID={}) is still running.",
-                .{process.id},
-            );
-            misc.errorContext().logError();
+            misc.errorContext().appendFmt("Failed to figure out if process (PID={}) is still running.", .{process.id});
+            misc.errorContext().logError(err);
             break :c false;
         };
         if (still_running) {
@@ -46,8 +42,8 @@ fn runLoopLogic(
         if (process.close()) {
             std.log.info("Process closed successfully.", .{});
         } else |err| {
-            misc.errorContext().appendFmt(err, "Failed close process with PID: {}", .{process.id});
-            misc.errorContext().logError();
+            misc.errorContext().appendFmt("Failed close process with PID: {}", .{process.id});
+            misc.errorContext().logError(err);
         }
         opened_process.* = null;
     } else {
@@ -58,16 +54,16 @@ fn runLoopLogic(
                 return;
             },
             else => {
-                misc.errorContext().appendFmt(err, "Failed to find process: {s}", .{process_name});
-                misc.errorContext().logError();
+                misc.errorContext().appendFmt("Failed to find process: {s}", .{process_name});
+                misc.errorContext().logError(err);
                 return;
             },
         };
         std.log.info("Process ID found: {}", .{process_id});
         std.log.info("Opening process (PID = {})...", .{process_id});
         const process = os.Process.open(process_id, access_rights) catch |err| {
-            misc.errorContext().appendFmt(err, "Failed to open process with PID: {}", .{process_id});
-            misc.errorContext().logError();
+            misc.errorContext().appendFmt("Failed to open process with PID: {}", .{process_id});
+            misc.errorContext().logError(err);
             return;
         };
         std.log.info("Process opened successfully.", .{});
@@ -79,8 +75,8 @@ fn runLoopLogic(
             if (process.close()) {
                 std.log.info("Process closed successfully.", .{});
             } else |err| {
-                misc.errorContext().appendFmt(err, "Failed close process with PID: {}", .{process.id});
-                misc.errorContext().logError();
+                misc.errorContext().appendFmt("Failed close process with PID: {}", .{process.id});
+                misc.errorContext().logError(err);
             }
         }
     }

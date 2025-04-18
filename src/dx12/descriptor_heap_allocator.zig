@@ -26,7 +26,7 @@ pub fn DescriptorHeapAllocator(comptime heap_size: usize) type {
                 gpu_handle.ptr = self.gpu_start.ptr + (index * self.increment);
                 return;
             }
-            misc.errorContext().new(error.HeapFull, "DescriptorHeap is full.");
+            misc.errorContext().new("DescriptorHeap is full.");
             return error.HeapFull;
         }
 
@@ -38,23 +38,20 @@ pub fn DescriptorHeapAllocator(comptime heap_size: usize) type {
             const cpu_diff = @subWithOverflow(cpu_handle.ptr, self.cpu_start.ptr);
             const gpu_diff = @subWithOverflow(gpu_handle.ptr, self.gpu_start.ptr);
             if (cpu_diff[0] != gpu_diff[0] or cpu_diff[1] != gpu_diff[1]) {
-                misc.errorContext().new(
-                    error.OffsetsMismatch,
-                    "Provided CPU and GPU handle have different offsets from heap starts.",
-                );
+                misc.errorContext().new("Provided CPU and GPU handle have different offsets from heap starts.");
                 return error.OffsetsMismatch;
             }
             if (cpu_diff[1] == 1) {
-                misc.errorContext().new(error.HandleOutsideHeap, "Provided handles are outside of heap bounds.");
+                misc.errorContext().new("Provided handles are outside of heap bounds.");
                 return error.HandleOutsideHeap;
             }
             const index = cpu_diff[0] / self.increment;
             if (index >= heap_size) {
-                misc.errorContext().new(error.HandleOutsideHeap, "Provided handles are outside of heap bounds.");
+                misc.errorContext().new("Provided handles are outside of heap bounds.");
                 return error.HandleOutsideHeap;
             }
             if (!self.is_index_used[index]) {
-                misc.errorContext().new(error.AlreadyFree, "Provided handles are already free.");
+                misc.errorContext().new("Provided handles are already free.");
                 return error.AlreadyFree;
             }
             self.is_index_used[index] = false;

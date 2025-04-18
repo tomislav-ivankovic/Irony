@@ -24,8 +24,8 @@ pub const RemoteThread = struct {
             0,
             null,
         ) orelse {
-            misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-            misc.errorContext().append(error.OsError, "CreateRemoteThread returned null.");
+            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+            misc.errorContext().append("CreateRemoteThread returned null.");
             return error.OsError;
         };
         const test_allocation = if (builtin.is_test) try std.testing.allocator.create(u8) else {};
@@ -35,8 +35,8 @@ pub const RemoteThread = struct {
     pub fn clean(self: *const Self) !void {
         const success = w32.CloseHandle(self.handle);
         if (success == 0) {
-            misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-            misc.errorContext().append(error.OsError, "CloseHandle returned 0.");
+            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+            misc.errorContext().append("CloseHandle returned 0.");
             return error.OsError;
         }
         if (builtin.is_test) {
@@ -47,15 +47,15 @@ pub const RemoteThread = struct {
     pub fn join(self: *const Self) !u32 {
         const return_code = w32.WaitForSingleObject(self.handle, w32.INFINITE);
         if (return_code == @intFromEnum(w32.WAIT_FAILED)) {
-            misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-            misc.errorContext().appendFmt(error.OsError, "WaitForSingleObject returned: {}", .{return_code});
+            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+            misc.errorContext().appendFmt("WaitForSingleObject returned: {}", .{return_code});
             return error.OsError;
         }
         var exit_code: u32 = undefined;
         const success = w32.GetExitCodeThread(self.handle, &exit_code);
         if (success == 0) {
-            misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-            misc.errorContext().append(error.OsError, "GetExitCodeThread returned 0.");
+            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+            misc.errorContext().append("GetExitCodeThread returned 0.");
             return error.OsError;
         }
         return exit_code;

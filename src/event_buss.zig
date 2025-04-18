@@ -34,8 +34,8 @@ pub const EventBuss = struct {
             std.log.info("DX12 context initialized.", .{});
             break :block context;
         } else |err| block: {
-            misc.errorContext().append(err, "Failed to initialize DX12 context.");
-            misc.errorContext().logError();
+            misc.errorContext().append("Failed to initialize DX12 context.");
+            misc.errorContext().logError(err);
             break :block null;
         };
 
@@ -55,8 +55,8 @@ pub const EventBuss = struct {
                 std.log.info("UI context initialized.", .{});
                 break :block context;
             } else |err| {
-                misc.errorContext().append(err, "Failed to initialize UI context.");
-                misc.errorContext().logError();
+                misc.errorContext().append("Failed to initialize UI context.");
+                misc.errorContext().logError(err);
                 break :block null;
             }
         } else null;
@@ -146,14 +146,14 @@ pub const EventBuss = struct {
         ui_context.endFrame();
 
         const buffer_context = dx12.beforeRender(buffer_count, srv_heap_size, dx12_context, swap_chain) catch |err| {
-            misc.errorContext().append(err, "Failed to execute DX12 before render code.");
-            misc.errorContext().logError();
+            misc.errorContext().append("Failed to execute DX12 before render code.");
+            misc.errorContext().logError(err);
             return;
         };
         ui_context.render(buffer_context.command_list);
         dx12.afterRender(buffer_context, command_queue) catch |err| {
-            misc.errorContext().append(err, "Failed to execute DX12 after render code.");
-            misc.errorContext().logError();
+            misc.errorContext().append("Failed to execute DX12 after render code.");
+            misc.errorContext().logError(err);
             return;
         };
     }
@@ -196,8 +196,8 @@ pub const EventBuss = struct {
             if (context.reinitBufferContexts(device, swap_chain)) {
                 std.log.info("DX12 buffer contexts re-initialized.", .{});
             } else |err| {
-                misc.errorContext().append(err, "Failed to re-initialize DX12 buffer contexts.");
-                misc.errorContext().logError();
+                misc.errorContext().append("Failed to re-initialize DX12 buffer contexts.");
+                misc.errorContext().logError(err);
             }
         } else {
             std.log.debug("Nothing to re-initialize.", .{});

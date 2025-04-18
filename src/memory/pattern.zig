@@ -114,7 +114,7 @@ pub const Pattern = struct {
 
     pub fn findAddress(self: *const Self, range: memory.Range) !usize {
         if (!range.isReadable()) {
-            misc.errorContext().new(error.NotReadable, "Provided memory range is not readable.");
+            misc.errorContext().new("Provided memory range is not readable.");
             return error.NotReadable;
         }
         const pattern = self.getBytes();
@@ -133,7 +133,7 @@ pub const Pattern = struct {
                 return address;
             }
         }
-        misc.errorContext().new(error.NotFound, "Memory pattern not found.");
+        misc.errorContext().new("Memory pattern not found.");
         return error.NotFound;
     }
 };

@@ -27,9 +27,9 @@ pub fn Context(comptime buffer_count: usize, comptime svr_heap_size: usize) type
                 .NodeMask = 1,
             }, w32.IID_ID3D12DescriptorHeap, @ptrCast(&rtv_descriptor_heap));
             if (dx12.Error.from(rtv_result)) |err| {
-                misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
-                misc.errorContext().append(error.Dx12Error, "ID3D12Device.CreateDescriptorHeap returned a failure value.");
-                misc.errorContext().append(error.Dx12Error, "Failed to create RTV descriptor heap.");
+                misc.errorContext().newFmt("{}", .{err});
+                misc.errorContext().append("ID3D12Device.CreateDescriptorHeap returned a failure value.");
+                misc.errorContext().append("Failed to create RTV descriptor heap.");
                 return error.Dx12Error;
             }
             errdefer _ = rtv_descriptor_heap.IUnknown.Release();
@@ -42,15 +42,15 @@ pub fn Context(comptime buffer_count: usize, comptime svr_heap_size: usize) type
                 .NodeMask = 0,
             }, w32.IID_ID3D12DescriptorHeap, @ptrCast(&srv_descriptor_heap));
             if (dx12.Error.from(srv_result)) |err| {
-                misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
-                misc.errorContext().append(error.Dx12Error, "ID3D12Device.CreateDescriptorHeap returned a failure value.");
-                misc.errorContext().append(error.Dx12Error, "Failed to create SRV descriptor heap.");
+                misc.errorContext().newFmt("{}", .{err});
+                misc.errorContext().append("ID3D12Device.CreateDescriptorHeap returned a failure value.");
+                misc.errorContext().append("Failed to create SRV descriptor heap.");
                 return error.Dx12Error;
             }
             errdefer _ = srv_descriptor_heap.IUnknown.Release();
 
             const srv_allocator = allocator.create(dx12.DescriptorHeapAllocator(svr_heap_size)) catch |err| {
-                misc.errorContext().new(err, "Failed to allocate a SRV allocator.");
+                misc.errorContext().new("Failed to allocate a SRV allocator.");
                 return err;
             };
             errdefer allocator.destroy(srv_allocator);
@@ -68,7 +68,7 @@ pub fn Context(comptime buffer_count: usize, comptime svr_heap_size: usize) type
                     rtv_descriptor_heap,
                     index,
                 ) catch |err| {
-                    misc.errorContext().appendFmt(err, "Failed to create buffer context with index: {}", .{index});
+                    misc.errorContext().appendFmt("Failed to create buffer context with index: {}", .{index});
                     return err;
                 };
                 errdefer buffer_contexts[index].deinit();
@@ -117,7 +117,7 @@ pub fn Context(comptime buffer_count: usize, comptime svr_heap_size: usize) type
                     self.rtv_descriptor_heap,
                     index,
                 ) catch |err| {
-                    misc.errorContext().appendFmt(err, "Failed to reinitialize buffer context with index: {}", .{index});
+                    misc.errorContext().appendFmt("Failed to reinitialize buffer context with index: {}", .{index});
                     return err;
                 };
             }
@@ -147,9 +147,9 @@ pub const BufferContext = struct {
             @ptrCast(&command_allocator),
         );
         if (dx12.Error.from(allocator_result)) |err| {
-            misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
-            misc.errorContext().append(error.Dx12Error, "ID3D12Device.CreateCommandAllocator returned a failure value.");
-            misc.errorContext().append(error.Dx12Error, "Failed to create command allocator.");
+            misc.errorContext().newFmt("{}", .{err});
+            misc.errorContext().append("ID3D12Device.CreateCommandAllocator returned a failure value.");
+            misc.errorContext().append("Failed to create command allocator.");
             return error.Dx12Error;
         }
         errdefer _ = command_allocator.IUnknown.Release();
@@ -164,27 +164,27 @@ pub const BufferContext = struct {
             @ptrCast(&command_list),
         );
         if (dx12.Error.from(list_result)) |err| {
-            misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
-            misc.errorContext().append(error.Dx12Error, "ID3D12Device.CreateCommandList returned a failure value.");
-            misc.errorContext().append(error.Dx12Error, "Failed to create command list.");
+            misc.errorContext().newFmt("{}", .{err});
+            misc.errorContext().append("ID3D12Device.CreateCommandList returned a failure value.");
+            misc.errorContext().append("Failed to create command list.");
             return error.Dx12Error;
         }
         errdefer _ = command_list.IUnknown.Release();
 
         const close_result = command_list.Close();
         if (dx12.Error.from(close_result)) |err| {
-            misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
-            misc.errorContext().append(error.Dx12Error, "ID3D12GraphicsCommandList.Close returned a failure value.");
-            misc.errorContext().append(error.Dx12Error, "Failed to close command list.");
+            misc.errorContext().newFmt("{}", .{err});
+            misc.errorContext().append("ID3D12GraphicsCommandList.Close returned a failure value.");
+            misc.errorContext().append("Failed to close command list.");
             return error.Dx12Error;
         }
 
         var resource: *w32.ID3D12Resource = undefined;
         const resource_result = swap_chain.GetBuffer(index, w32.IID_ID3D12Resource, @ptrCast(&resource));
         if (dx12.Error.from(resource_result)) |err| {
-            misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
-            misc.errorContext().append(error.Dx12Error, "IDXGISwapChain.GetBuffer returned a failure value.");
-            misc.errorContext().append(error.Dx12Error, "Failed to get buffer resource.");
+            misc.errorContext().newFmt("{}", .{err});
+            misc.errorContext().append("IDXGISwapChain.GetBuffer returned a failure value.");
+            misc.errorContext().append("Failed to get buffer resource.");
             return error.Dx12Error;
         }
         errdefer _ = resource.IUnknown.Release();
@@ -228,12 +228,10 @@ pub fn beforeRender(
     const buffer_index = swap_chain_3.GetCurrentBackBufferIndex();
     if (buffer_index >= buffer_count) {
         misc.errorContext().newFmt(
-            error.IndexOutOfBounds,
             "IDXGISwapChain3.GetCurrentBackBufferIndex returned: {}",
             .{buffer_index},
         );
         misc.errorContext().appendFmt(
-            error.IndexOutOfBounds,
             "Buffer index {} out of bounds. Buffer count is: {}",
             .{ buffer_index, buffer_count },
         );
@@ -243,15 +241,15 @@ pub fn beforeRender(
 
     const allocator_result = buffer_context.command_allocator.Reset();
     if (dx12.Error.from(allocator_result)) |err| {
-        misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
-        misc.errorContext().append(error.Dx12Error, "ID3D12CommandAllocator.Reset returned a failure value.");
+        misc.errorContext().newFmt("{}", .{err});
+        misc.errorContext().append("ID3D12CommandAllocator.Reset returned a failure value.");
         return error.Dx12Error;
     }
 
     const list_result = buffer_context.command_list.Reset(buffer_context.command_allocator, null);
     if (dx12.Error.from(list_result)) |err| {
-        misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
-        misc.errorContext().append(error.Dx12Error, "ID3D12GraphicsCommandList.Reset returned a failure value.");
+        misc.errorContext().newFmt("{}", .{err});
+        misc.errorContext().append("ID3D12GraphicsCommandList.Reset returned a failure value.");
         return error.Dx12Error;
     }
 
@@ -291,8 +289,8 @@ pub fn afterRender(
 
     const list_result = buffer_context.command_list.Close();
     if (dx12.Error.from(list_result)) |err| {
-        misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
-        misc.errorContext().append(error.Dx12Error, "ID3D12GraphicsCommandList.Close returned a failure value.");
+        misc.errorContext().newFmt("{}", .{err});
+        misc.errorContext().append("ID3D12GraphicsCommandList.Close returned a failure value.");
         return error.Dx12Error;
     }
 

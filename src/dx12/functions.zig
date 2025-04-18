@@ -26,7 +26,7 @@ pub const Functions = struct {
 
     pub fn find() !Self {
         const module = os.Module.getMain() catch |err| {
-            misc.errorContext().append(err, "Failed to get the main process module.");
+            misc.errorContext().append("Failed to get the main process module.");
             return err;
         };
 
@@ -50,17 +50,17 @@ pub const Functions = struct {
 
         const register_success = w32.RegisterClassExW(&window_class);
         if (register_success == 0) {
-            misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-            misc.errorContext().append(error.OsError, "RegisterClassExW returned 0.");
+            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+            misc.errorContext().append("RegisterClassExW returned 0.");
             return error.OsError;
         }
         defer {
             const success = w32.UnregisterClassW(window_class.lpszClassName, window_class.hInstance);
             if (success == 0) {
-                misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-                misc.errorContext().append(error.OsError, "UnregisterClassW returned 0.");
-                misc.errorContext().append(error.OsError, "Failed to clean up after finding DX12 functions.");
-                misc.errorContext().logError();
+                misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+                misc.errorContext().append("UnregisterClassW returned 0.");
+                misc.errorContext().append("Failed to clean up after finding DX12 functions.");
+                misc.errorContext().logError(error.OsError);
             }
         }
 
@@ -78,35 +78,35 @@ pub const Functions = struct {
             window_class.hInstance,
             null,
         ) orelse {
-            misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-            misc.errorContext().append(error.OsError, "CreateWindowExW returned 0.");
+            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+            misc.errorContext().append("CreateWindowExW returned 0.");
             return error.OsError;
         };
         defer {
             const success = w32.DestroyWindow(window);
             if (success == 0) {
-                misc.errorContext().newFmt(null, "{}", os.Error.getLast());
-                misc.errorContext().append(error.OsError, "DestroyWindow returned 0.");
-                misc.errorContext().append(error.OsError, "Failed to clean up after finding DX12 functions.");
-                misc.errorContext().logError();
+                misc.errorContext().newFmt("{}", .{os.Error.getLast()});
+                misc.errorContext().append("DestroyWindow returned 0.");
+                misc.errorContext().append("Failed to clean up after finding DX12 functions.");
+                misc.errorContext().logError(error.OsError);
             }
         }
 
         const dxgi_module = os.Module.getLocal("dxgi.dll") catch |err| {
-            misc.errorContext().append(err, "Failed to get local module: dxgi.dll");
+            misc.errorContext().append("Failed to get local module: dxgi.dll");
             return err;
         };
 
         const create_dxgi_factory_address = dxgi_module.getProcedureAddress("CreateDXGIFactory") catch |err| {
-            misc.errorContext().append(err, "Failed to get procedure address of: CreateDXGIFactory");
+            misc.errorContext().append("Failed to get procedure address of: CreateDXGIFactory");
             return err;
         };
         const CreateDXGIFactory: *const @TypeOf(w32.CreateDXGIFactory) = @ptrFromInt(create_dxgi_factory_address);
         var factory: *w32.IDXGIFactory4 = undefined;
         const factory_result = CreateDXGIFactory(w32.IID_IDXGIFactory4, @ptrCast(&factory));
         if (dx12.Error.from(factory_result)) |err| {
-            misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
-            misc.errorContext().append(error.Dx12Error, "CreateDXGIFactory returned a failure value.");
+            misc.errorContext().newFmt("{}", .{err});
+            misc.errorContext().append("CreateDXGIFactory returned a failure value.");
             return error.Dx12Error;
         }
         defer _ = factory.IUnknown.Release();
@@ -114,19 +114,19 @@ pub const Functions = struct {
         var adapter: *w32.IDXGIAdapter = undefined;
         const adapter_result = factory.EnumWarpAdapter(w32.IID_IDXGIAdapter, @ptrCast(&adapter));
         if (dx12.Error.from(adapter_result)) |err| {
-            misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
-            misc.errorContext().append(error.Dx12Error, "IDXGIFactory4.EnumWarpAdapter returned a failure value.");
+            misc.errorContext().newFmt("{}", .{err});
+            misc.errorContext().append("IDXGIFactory4.EnumWarpAdapter returned a failure value.");
             return error.Dx12Error;
         }
         defer _ = adapter.IUnknown.Release();
 
         const d3d12_module = os.Module.getLocal("d3d12.dll") catch |err| {
-            misc.errorContext().append(err, "Failed to get local module: d3d12.dll");
+            misc.errorContext().append("Failed to get local module: d3d12.dll");
             return err;
         };
 
         const create_device_address = d3d12_module.getProcedureAddress("D3D12CreateDevice") catch |err| {
-            misc.errorContext().append(err, "Failed to get procedure address of: D3D12CreateDevice");
+            misc.errorContext().append("Failed to get procedure address of: D3D12CreateDevice");
             return err;
         };
         const D3D12CreateDevice: *const @TypeOf(w32.D3D12CreateDevice) = @ptrFromInt(create_device_address);
@@ -138,8 +138,8 @@ pub const Functions = struct {
             @ptrCast(&device),
         );
         if (dx12.Error.from(device_result)) |err| {
-            misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
-            misc.errorContext().append(error.Dx12Error, "D3D12CreateDevice returned a failure value.");
+            misc.errorContext().newFmt("{}", .{err});
+            misc.errorContext().append("D3D12CreateDevice returned a failure value.");
             return error.Dx12Error;
         }
         defer _ = device.IUnknown.Release();
@@ -156,8 +156,8 @@ pub const Functions = struct {
             @ptrCast(&command_queue),
         );
         if (dx12.Error.from(command_queue_result)) |err| {
-            misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
-            misc.errorContext().append(error.Dx12Error, "ID3D12Device.CreateCommandQueue returned a failure value.");
+            misc.errorContext().newFmt("{}", .{err});
+            misc.errorContext().append("ID3D12Device.CreateCommandQueue returned a failure value.");
             return error.Dx12Error;
         }
         defer _ = command_queue.IUnknown.Release();
@@ -186,8 +186,8 @@ pub const Functions = struct {
             @ptrCast(&swap_chain),
         );
         if (dx12.Error.from(swap_chain_result)) |err| {
-            misc.errorContext().newFmt(error.Dx12Error, "{}", .{err});
-            misc.errorContext().append(error.Dx12Error, "IDXGIFactory.CreateSwapChain returned a failure value.");
+            misc.errorContext().newFmt("{}", .{err});
+            misc.errorContext().append("IDXGIFactory.CreateSwapChain returned a failure value.");
             return error.Dx12Error;
         }
         defer _ = swap_chain.IUnknown.Release();
