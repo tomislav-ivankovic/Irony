@@ -32,6 +32,7 @@ test {
     _ = @import("memory/self_sortable_array.zig");
 
     _ = @import("misc/base_dir.zig");
+    _ = @import("misc/circular_buffer.zig");
     _ = @import("misc/error_context.zig");
     _ = @import("misc/timestamp.zig");
 
