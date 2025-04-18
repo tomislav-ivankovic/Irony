@@ -31,14 +31,6 @@ var only_inject_mode = false;
 pub fn main() !void {
     std.log.info("Application started up.", .{});
 
-    std.log.debug("Checking for only inject mode...", .{});
-    only_inject_mode = getOnlyInjectMode();
-    if (only_inject_mode) {
-        std.log.info("Only inject mode activated.", .{});
-    } else {
-        std.log.debug("Not using only inject mode.", .{});
-    }
-
     std.log.debug("Finding base directory...", .{});
     const base_dir = findBaseDir();
     std.log.info("Base directory set to: {s}", .{base_dir.get()});
@@ -49,6 +41,14 @@ pub fn main() !void {
     } else |err| {
         misc.errorContext().append("Failed to start file logging.");
         misc.errorContext().logError(err);
+    }
+
+    std.log.debug("Checking for only inject mode...", .{});
+    only_inject_mode = getOnlyInjectMode();
+    if (only_inject_mode) {
+        std.log.info("Only inject mode activated.", .{});
+    } else {
+        std.log.debug("Not using only inject mode.", .{});
     }
 
     std.log.debug("Setting console close handler...", .{});
@@ -122,6 +122,7 @@ pub fn onProcessOpen(base_dir: *const misc.BaseDir, process: *const os.Process) 
     };
     const full_path = buffer[0..size];
     std.log.debug("Full path found: {s}", .{full_path});
+
     std.log.info("Injecting module \"{s}\"...", .{module_name});
     injected_module = injector.InjectedModule.inject(process.*, full_path) catch |err| {
         misc.errorContext().appendFmt("Failed to inject module: {s}", .{full_path});
@@ -129,24 +130,37 @@ pub fn onProcessOpen(base_dir: *const misc.BaseDir, process: *const os.Process) 
         return false;
     };
     std.log.info("Module injected successfully.", .{});
+
     if (only_inject_mode) {
+        std.log.info("Closing process (PID = {})...", .{process.id});
+        if (process.close()) {
+            std.log.info("Process closed successfully.", .{});
+        } else |err| {
+            misc.errorContext().appendFmt("Failed to close process with PID: {}", .{process.id});
+            misc.errorContext().logError(err);
+        }
+
+        std.log.info("Stopping file logging...", .{});
+        file_logger.stop();
+
+        std.log.info("Application shutting down...", .{});
         std.process.exit(0);
     }
+
     return true;
 }
 
 pub fn onProcessClose(base_dir: *const misc.BaseDir) void {
     _ = base_dir;
-    if (injected_module == null) {
+    const module = injected_module orelse {
         std.log.info("Nothing to eject.", .{});
         return;
-    }
-    const module = injected_module orelse unreachable;
+    };
     std.log.info("Attempting to eject module \"{s}\"... ", .{module_name});
     if (module.eject()) {
         std.log.info("Module ejected successfully.", .{});
     } else |_| {
-        std.log.info("Module ejected failed. But this is expected.", .{});
+        std.log.info("Module ejection failed. But this is expected.", .{});
     }
     injected_module = null;
 }
@@ -161,6 +175,7 @@ pub fn onConsoleClose() void {
             misc.errorContext().appendFmt("Failed to eject module: {s}", .{module_name});
             misc.errorContext().logError(err);
         }
+
         std.log.info("Closing process (PID = {})...", .{module.module.process.id});
         if (module.module.process.close()) {
             std.log.info("Process closed successfully.", .{});
@@ -168,11 +183,14 @@ pub fn onConsoleClose() void {
             misc.errorContext().appendFmt("Failed to close process with PID: {}", .{module.module.process.id});
             misc.errorContext().logError(err);
         }
+
         injected_module = null;
     } else {
         std.log.info("Nothing to eject.", .{});
     }
+
     std.log.info("Stopping file logging...", .{});
     file_logger.stop();
+
     std.log.info("Application shutting down...", .{});
 }

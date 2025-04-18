@@ -37,7 +37,9 @@ fn runLoopLogic(
             return;
         }
         std.log.info("Process (PID = {}) stopped running.", .{process.id});
+
         onProcessClose(context);
+
         std.log.info("Closing process (PID = {})...", .{process.id});
         if (process.close()) {
             std.log.info("Process closed successfully.", .{});
@@ -60,6 +62,7 @@ fn runLoopLogic(
             },
         };
         std.log.info("Process ID found: {}", .{process_id});
+
         std.log.info("Opening process (PID = {})...", .{process_id});
         const process = os.Process.open(process_id, access_rights) catch |err| {
             misc.errorContext().appendFmt("Failed to open process with PID: {}", .{process_id});
@@ -67,6 +70,7 @@ fn runLoopLogic(
             return;
         };
         std.log.info("Process opened successfully.", .{});
+
         const success = onProcessOpen(context, &process);
         if (success) {
             opened_process.* = process;
