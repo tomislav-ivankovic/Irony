@@ -85,6 +85,9 @@
             .url = "https://github.com/ocornut/imgui_test_engine/archive/refs/tags/v1.91.9.tar.gz",
             .hash = "N-V-__8AAFOZMQBrSaj52IqSx8tgHat5ks3bgsEQfBFc1iVu",
         },
+        .cimgui_test_engine = .{
+            .path = "./dep/cimgui_test_engine",
+        },
     },
 
     // Specifies the set of files and directories that are included in this package.

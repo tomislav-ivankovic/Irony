@@ -1,0 +1,16 @@
+---
+BasedOnStyle: Google
+IndentWidth: 4
+ColumnLimit: 120
+---
+Language: Cpp
+DerivePointerAlignment: false
+PointerAlignment: Left
+AlignAfterOpenBracket: BlockIndent
+Cpp11BracedListStyle: true
+BinPackArguments: false
+AllowAllArgumentsOnNextLine: false
+BinPackParameters: false
+AllowAllParametersOfDeclarationOnNextLine: false
+IncludeBlocks: Preserve
+---

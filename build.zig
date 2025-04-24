@@ -85,6 +85,11 @@ pub fn build(b: *std.Build) void {
         "./imgui_test_engine",
         .{},
     );
+    _ = imgui_files.addCopyDirectory(
+        b.dependency("cimgui_test_engine", .{}).path("."),
+        ".",
+        .{},
+    );
     const imgui_dir = imgui_files.getDirectory();
     const imgui_lib = b.addStaticLibrary(.{
         .name = "imgui",
@@ -103,6 +108,7 @@ pub fn build(b: *std.Build) void {
         "./imgui/imgui_widgets.cpp",
         "./imgui/backends/imgui_impl_dx12.cpp",
         "./imgui/backends/imgui_impl_win32.cpp",
+        "./cimgui_test_engine.cpp",
         "./imgui_test_engine/imgui_capture_tool.cpp",
         "./imgui_test_engine/imgui_te_context.cpp",
         "./imgui_test_engine/imgui_te_coroutine.cpp",
@@ -131,7 +137,7 @@ pub fn build(b: *std.Build) void {
     imgui_lib.linkLibC();
     imgui_lib.linkLibCpp();
     const imgui_c = b.addTranslateC(.{
-        .root_source_file = imgui_dir.path(b, "cimgui.h"),
+        .root_source_file = imgui_dir.path(b, "cimgui_test_engine.h"),
         .target = target,
         .optimize = optimize,
     });
