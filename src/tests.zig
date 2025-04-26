@@ -49,5 +49,5 @@ test {
     _ = @import("os/window_procedure.zig");
 
     _ = @import("ui/context.zig");
-    _ = @import("ui/testing.zig");
+    _ = @import("ui/testing_context.zig");
 }
