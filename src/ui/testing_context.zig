@@ -70,7 +70,7 @@ pub const TestingContext = struct {
         comptime guiFunction: *const Function,
         comptime testFunction: *const Function,
     ) !void {
-        const the_test = imgui.teRegisterTest(self.engine, "category", "test", null, 0);
+        const the_test = imgui.teRegisterTest(self.engine, "", "", null, 0);
         defer imgui.teUnregisterTest(self.engine, the_test);
 
         const GuiFunction = struct {
@@ -121,11 +121,34 @@ pub const TestingContext = struct {
             }
         }
 
-        try std.testing.expectEqual(imgui.ImGuiTestStatus_Success, the_test.*.Output.Status);
+        const status = the_test.*.Output.Status;
+        if (status == imgui.ImGuiTestStatus_Success) {
+            return;
+        }
+        if (status != imgui.ImGuiTestStatus_Error) {
+            std.debug.print(
+                "Expecting the UI test to end with status Success (1) or Error (4) but instead got status: {}",
+                .{status},
+            );
+        }
+
+        const buffer = imgui.ImGuiTextBuffer_ImGuiTextBuffer();
+        defer imgui.ImGuiTextBuffer_destroy(buffer);
+        const count = imgui.ImGuiTestLog_ExtractLinesForVerboseLevels(
+            &the_test.*.Output.Log,
+            imgui.ImGuiTestVerboseLevel_Error,
+            imgui.ImGuiTestVerboseLevel_Warning,
+            buffer,
+        );
+        if (count > 0) {
+            const str = imgui.ImGuiTextBuffer_c_str(buffer);
+            std.debug.print("UI test failed with the following log:\n{s}", .{str});
+        } else {
+            std.debug.print("UI test failed but no logs recorded.", .{});
+        }
+        return error.UiTestFailed;
     }
 };
-
-const testing = std.testing;
 
 test "hello world imgui test engine 1" {
     const context = try getTestingContext();
