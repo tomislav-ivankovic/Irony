@@ -24,7 +24,11 @@ pub const TestingContext = struct {
     imgui_context: *imgui.ImGuiContext,
 
     const Self = @This();
-    const Function = fn (ctx: ui.TestContext) anyerror!void;
+    pub const Function = fn (ctx: ui.TestContext) anyerror!void;
+    pub const Config = struct {
+        run_flags: imgui.ImGuiTestRunFlags = imgui.ImGuiTestRunFlags_None,
+        disable_printing: bool = false,
+    };
 
     pub fn init() !Self {
         const engine = imgui.teCreateContext() orelse {
@@ -68,6 +72,7 @@ pub const TestingContext = struct {
 
     pub fn runTest(
         self: *const Self,
+        comptime config: Config,
         comptime guiFunction: *const Function,
         comptime testFunction: *const Function,
     ) !void {
@@ -75,36 +80,44 @@ pub const TestingContext = struct {
         defer imgui.teUnregisterTest(self.engine, the_test);
 
         const GuiFunction = struct {
-            threadlocal var returned_error: ?anyerror = null;
+            var returned_error: ?anyerror = null;
             fn call(raw_ctx: [*c]imgui.ImGuiTestContext) callconv(.c) void {
-                const ctx = ui.TestContext{ .raw = raw_ctx };
-                if (guiFunction(ctx)) {
-                    returned_error = null;
-                } else |err| {
-                    misc.errorContext().append("Failed to execute test's GUI function.");
-                    misc.errorContext().logError(err);
-                    returned_error = err;
+                if (returned_error != null) {
+                    return;
                 }
+                const ctx = ui.TestContext{ .raw = raw_ctx };
+                guiFunction(ctx) catch |err| {
+                    if (!config.disable_printing) {
+                        misc.errorContext().append("Failed to execute test's GUI function.");
+                        misc.errorContext().logError(err);
+                    }
+                    returned_error = err;
+                };
             }
         };
+        GuiFunction.returned_error = null;
         the_test.*.GuiFunc = GuiFunction.call;
 
         const TestFunction = struct {
-            threadlocal var returned_error: ?anyerror = null;
+            var returned_error: ?anyerror = null;
             fn call(raw_ctx: [*c]imgui.ImGuiTestContext) callconv(.c) void {
-                const ctx = ui.TestContext{ .raw = raw_ctx };
-                if (testFunction(ctx)) {
-                    returned_error = null;
-                } else |err| {
-                    misc.errorContext().append("Failed to execute test's TEST function.");
-                    misc.errorContext().logError(err);
-                    returned_error = err;
+                if (returned_error != null) {
+                    return;
                 }
+                const ctx = ui.TestContext{ .raw = raw_ctx };
+                testFunction(ctx) catch |err| {
+                    if (!config.disable_printing) {
+                        misc.errorContext().append("Failed to execute test's TEST function.");
+                        misc.errorContext().logError(err);
+                    }
+                    returned_error = err;
+                };
             }
         };
+        TestFunction.returned_error = null;
         the_test.*.TestFunc = TestFunction.call;
 
-        imgui.teQueueTest(self.engine, the_test, 0);
+        imgui.teQueueTest(self.engine, the_test, config.run_flags);
         while (!imgui.teIsTestQueueEmpty(self.engine)) {
             misc.errorContext().clear();
 
@@ -115,18 +128,20 @@ pub const TestingContext = struct {
             imgui.igNewFrame();
             imgui.igRender();
             imgui.tePostSwap(self.engine);
-
-            if (GuiFunction.returned_error) |err| {
-                return err;
-            }
-            if (TestFunction.returned_error) |err| {
-                return err;
-            }
         }
 
+        if (GuiFunction.returned_error) |err| {
+            return err;
+        }
+        if (TestFunction.returned_error) |err| {
+            return err;
+        }
         const status = the_test.*.Output.Status;
         if (status == imgui.ImGuiTestStatus_Success) {
             return;
+        }
+        if (config.disable_printing) {
+            return error.UiTestFailed;
         }
         if (status != imgui.ImGuiTestStatus_Error) {
             std.debug.print(
@@ -153,60 +168,81 @@ pub const TestingContext = struct {
     }
 };
 
-test "hello world imgui test engine 1" {
+const testing = std.testing;
+
+test "should pass a successful test" {
     const context = try getTestingContext();
     try context.runTest(
+        .{},
         struct {
-            var b = false;
-            fn call(ctx: ui.TestContext) !void {
-                _ = ctx;
-                _ = imgui.igBegin("Test Window", null, imgui.ImGuiWindowFlags_NoSavedSettings);
-                imgui.igText("Hello, automation world");
-                _ = imgui.igButton("Click Me", .{});
-                if (imgui.igTreeNode_Str("Node")) {
-                    _ = imgui.igCheckbox("Checkbox", &b);
-                    imgui.igTreePop();
-                }
+            fn call(_: ui.TestContext) !void {
+                _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_NoSavedSettings);
                 imgui.igEnd();
             }
         }.call,
         struct {
             fn call(ctx: ui.TestContext) !void {
-                ctx.setRef("Test Window");
-                ctx.itemClick("Click Me", 0, 0);
-                ctx.itemOpen("Node", 0);
-                ctx.itemCheck("Node/Checkbox", 0);
-                ctx.itemUncheck("Node/Checkbox", 0);
+                try testing.expect(ctx.itemExists("Window"));
             }
         }.call,
     );
 }
 
-test "hello world imgui test engine 2" {
+test "should fail the test when testing engine detects a fail" {
     const context = try getTestingContext();
-    try context.runTest(
+    const test_result = context.runTest(
+        .{ .disable_printing = true },
         struct {
-            var b = false;
-            fn call(ctx: ui.TestContext) !void {
-                _ = ctx;
-                _ = imgui.igBegin("Test Window", null, 0);
-                imgui.igText("Hello, automation world");
-                _ = imgui.igButton("Click Me", .{});
-                if (imgui.igTreeNode_Str("Node")) {
-                    _ = imgui.igCheckbox("Checkbox", &b);
-                    imgui.igTreePop();
-                }
+            fn call(_: ui.TestContext) !void {
+                _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_NoSavedSettings);
                 imgui.igEnd();
             }
         }.call,
         struct {
             fn call(ctx: ui.TestContext) !void {
-                ctx.setRef("Test Window");
-                ctx.itemClick("Click Me", 0, 0);
-                ctx.itemOpen("Node", 0);
-                ctx.itemCheck("Node/Checkbox", 0);
-                ctx.itemUncheck("Node/Checkbox", 0);
+                ctx.itemClick("Window/Button", imgui.ImGuiMouseButton_Left, 0);
             }
         }.call,
     );
+    try testing.expectError(error.UiTestFailed, test_result);
+}
+
+test "should fail the test when gui function returns error" {
+    const context = try getTestingContext();
+    const test_result = context.runTest(
+        .{ .disable_printing = true },
+        struct {
+            fn call(_: ui.TestContext) !void {
+                _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_NoSavedSettings);
+                imgui.igEnd();
+                return error.TestError;
+            }
+        }.call,
+        struct {
+            fn call(ctx: ui.TestContext) !void {
+                ctx.setRef("Window");
+            }
+        }.call,
+    );
+    try testing.expectError(error.TestError, test_result);
+}
+
+test "should fail the test when test function returns error" {
+    const context = try getTestingContext();
+    const test_result = context.runTest(
+        .{ .disable_printing = true },
+        struct {
+            fn call(_: ui.TestContext) !void {
+                _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_NoSavedSettings);
+                imgui.igEnd();
+            }
+        }.call,
+        struct {
+            fn call(ctx: ui.TestContext) !void {
+                ctx.setRef("Window");
+                return error.TestError;
+            }
+        }.call,
+    );
+    try testing.expectError(error.TestError, test_result);
 }
