@@ -1,7 +1,8 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const misc = @import("../misc/root.zig");
 const imgui = @import("imgui");
+const misc = @import("../misc/root.zig");
+const ui = @import("root.zig");
 
 threadlocal var instance: ?TestingContext = null;
 
@@ -23,7 +24,7 @@ pub const TestingContext = struct {
     imgui_context: *imgui.ImGuiContext,
 
     const Self = @This();
-    const Function = fn (ctx: *imgui.ImGuiTestContext) anyerror!void;
+    const Function = fn (ctx: ui.TestContext) anyerror!void;
 
     pub fn init() !Self {
         const engine = imgui.teCreateContext() orelse {
@@ -75,7 +76,8 @@ pub const TestingContext = struct {
 
         const GuiFunction = struct {
             threadlocal var returned_error: ?anyerror = null;
-            fn call(ctx: [*c]imgui.ImGuiTestContext) callconv(.c) void {
+            fn call(raw_ctx: [*c]imgui.ImGuiTestContext) callconv(.c) void {
+                const ctx = ui.TestContext{ .raw = raw_ctx };
                 if (guiFunction(ctx)) {
                     returned_error = null;
                 } else |err| {
@@ -89,7 +91,8 @@ pub const TestingContext = struct {
 
         const TestFunction = struct {
             threadlocal var returned_error: ?anyerror = null;
-            fn call(ctx: [*c]imgui.ImGuiTestContext) callconv(.c) void {
+            fn call(raw_ctx: [*c]imgui.ImGuiTestContext) callconv(.c) void {
+                const ctx = ui.TestContext{ .raw = raw_ctx };
                 if (testFunction(ctx)) {
                     returned_error = null;
                 } else |err| {
@@ -155,7 +158,7 @@ test "hello world imgui test engine 1" {
     try context.runTest(
         struct {
             var b = false;
-            fn call(ctx: *imgui.ImGuiTestContext) !void {
+            fn call(ctx: ui.TestContext) !void {
                 _ = ctx;
                 _ = imgui.igBegin("Test Window", null, imgui.ImGuiWindowFlags_NoSavedSettings);
                 imgui.igText("Hello, automation world");
@@ -168,15 +171,12 @@ test "hello world imgui test engine 1" {
             }
         }.call,
         struct {
-            fn call(ctx: *imgui.ImGuiTestContext) !void {
-                imgui.ImGuiTestContext_SetRef1(ctx, path("Test Window"));
-                imgui.ImGuiTestContext_ItemClick(ctx, path("Click Me"), 0, 0);
-                imgui.ImGuiTestContext_ItemOpen(ctx, path("Node"), 0);
-                imgui.ImGuiTestContext_ItemCheck(ctx, path("Node/Checkbox"), 0);
-                imgui.ImGuiTestContext_ItemUncheck(ctx, path("Node/Checkbox"), 0);
-            }
-            fn path(p: [:0]const u8) imgui.ImGuiTestRef {
-                return .{ .ID = 0, .Path = p };
+            fn call(ctx: ui.TestContext) !void {
+                ctx.setRef("Test Window");
+                ctx.itemClick("Click Me", 0, 0);
+                ctx.itemOpen("Node", 0);
+                ctx.itemCheck("Node/Checkbox", 0);
+                ctx.itemUncheck("Node/Checkbox", 0);
             }
         }.call,
     );
@@ -187,9 +187,9 @@ test "hello world imgui test engine 2" {
     try context.runTest(
         struct {
             var b = false;
-            fn call(ctx: *imgui.ImGuiTestContext) !void {
+            fn call(ctx: ui.TestContext) !void {
                 _ = ctx;
-                _ = imgui.igBegin("Test Window", null, imgui.ImGuiWindowFlags_NoSavedSettings);
+                _ = imgui.igBegin("Test Window", null, 0);
                 imgui.igText("Hello, automation world");
                 _ = imgui.igButton("Click Me", .{});
                 if (imgui.igTreeNode_Str("Node")) {
@@ -200,15 +200,12 @@ test "hello world imgui test engine 2" {
             }
         }.call,
         struct {
-            fn call(ctx: *imgui.ImGuiTestContext) !void {
-                imgui.ImGuiTestContext_SetRef1(ctx, path("Test Window"));
-                imgui.ImGuiTestContext_ItemClick(ctx, path("Click Me"), 0, 0);
-                imgui.ImGuiTestContext_ItemOpen(ctx, path("Node"), 0);
-                imgui.ImGuiTestContext_ItemCheck(ctx, path("Node/Checkbox"), 0);
-                imgui.ImGuiTestContext_ItemUncheck(ctx, path("Node/Checkbox"), 0);
-            }
-            fn path(p: [:0]const u8) imgui.ImGuiTestRef {
-                return .{ .ID = 0, .Path = p };
+            fn call(ctx: ui.TestContext) !void {
+                ctx.setRef("Test Window");
+                ctx.itemClick("Click Me", 0, 0);
+                ctx.itemOpen("Node", 0);
+                ctx.itemCheck("Node/Checkbox", 0);
+                ctx.itemUncheck("Node/Checkbox", 0);
             }
         }.call,
     );
