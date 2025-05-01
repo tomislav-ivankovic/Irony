@@ -1,9 +1,11 @@
 const std = @import("std");
 const w32 = @import("win32").everything;
 const imgui = @import("imgui");
+const dll = @import("dll.zig");
 const misc = @import("misc/root.zig");
 const dx12 = @import("dx12/root.zig");
 const ui = @import("ui/root.zig");
+const components = @import("components/root.zig");
 const game = @import("game/root.zig");
 
 pub const EventBuss = struct {
@@ -128,6 +130,7 @@ pub const EventBuss = struct {
 
         ui_context.newFrame();
         imgui.igGetIO().*.MouseDrawCursor = true;
+        components.logsWindow(dll.buffer_logger, null);
         if (imgui.igBegin("Hello world.", null, 0)) {
             imgui.igText("Hello world.");
             if (self.game_memory.player_1.toConstPointer()) |player_1| {

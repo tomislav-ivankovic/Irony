@@ -10,10 +10,11 @@ const EventBuss = @import("event_buss.zig").EventBuss;
 pub const module_name = "irony.dll";
 
 pub const log_file_name = "irony.log";
+pub const buffer_logger = log.BufferLogger(.{});
 pub const file_logger = log.FileLogger(.{});
 pub const std_options = std.Options{
-    .log_level = .debug,
-    .logFn = file_logger.logFn,
+    .log_level = .info,
+    .logFn = log.CompositeLogger(&.{ buffer_logger.logFn, file_logger.logFn }).logFn,
 };
 const main_hooks = hooking.MainHooks(onHooksInit, onHooksDeinit, onHooksUpdate, beforeHooksResize, afterHooksResize);
 

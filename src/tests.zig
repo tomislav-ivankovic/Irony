@@ -3,6 +3,8 @@ test {
     _ = @import("event_buss.zig");
     _ = @import("injector.zig");
 
+    _ = @import("components/logs_window.zig");
+
     _ = @import("dx12/context.zig");
     _ = @import("dx12/descriptor_heap_allocator.zig");
     _ = @import("dx12/error.zig");
