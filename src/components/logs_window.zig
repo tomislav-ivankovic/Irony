@@ -1,5 +1,5 @@
 const std = @import("std");
-const buildin = @import("builtin");
+const builtin = @import("builtin");
 const imgui = @import("imgui");
 const log = @import("../log/root.zig");
 const ui = @import("../ui/root.zig");
@@ -44,7 +44,7 @@ fn getLogColor(log_level: std.log.Level) imgui.ImVec4 {
 }
 
 fn textColored(color: imgui.ImVec4, text: [:0]const u8) void {
-    if (buildin.is_test) {
+    if (builtin.is_test) {
         var pos: imgui.ImVec2 = undefined;
         imgui.igGetCursorScreenPos(&pos);
         var size: imgui.ImVec2 = undefined;
