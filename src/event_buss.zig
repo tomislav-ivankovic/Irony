@@ -128,15 +128,19 @@ pub const EventBuss = struct {
         _ = device;
 
         const delta_time = self.timer.measureDeltaTime();
-        _ = delta_time;
+        ui.toasts.update(delta_time);
 
         const dx12_context = if (self.dx12_context) |*context| context else return;
         const ui_context = if (self.ui_context) |*context| context else return;
 
         ui_context.newFrame();
         imgui.igGetIO().*.MouseDrawCursor = true;
+        ui.toasts.draw();
         components.logsWindow(dll.buffer_logger, null);
         if (imgui.igBegin("Hello world.", null, 0)) {
+            if (imgui.igButton("Send Toast", .{})) {
+                ui.toasts.send(.info, null, "Toast sent. Delta time is: {}", .{delta_time});
+            }
             imgui.igText("Hello world.");
             if (self.game_memory.player_1.toConstPointer()) |player_1| {
                 imgui.igText("Player 1 health: %d", player_1.health);
