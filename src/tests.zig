@@ -51,7 +51,7 @@ test {
 
     _ = @import("ui/context.zig"); // Make sure this test gets executed before UI testing context is initialized.
     _ = @import("ui/testing_context.zig"); // First test using UI testing context.
-    _ = @import("ui/toast.zig");
+    _ = @import("ui/toasts.zig");
 
     _ = @import("components/logs_window.zig");
 }
