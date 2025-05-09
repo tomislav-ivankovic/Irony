@@ -43,14 +43,14 @@ pub fn DllMain(
                 std.log.info("Module handle shared value created.", .{});
                 module_handle_shared_value = shared_value;
             } else |err| {
-                misc.errorContext().append("Failed to create module handle shared value.");
-                misc.errorContext().logError(err);
+                misc.error_context.append("Failed to create module handle shared value.", .{});
+                misc.error_context.logError(err);
             }
 
             std.log.debug("Spawning the initialization thread...", .{});
             const thread = std.Thread.spawn(.{}, init, .{}) catch |err| {
-                misc.errorContext().new("Failed to spawn initialization thread.");
-                misc.errorContext().logError(err);
+                misc.error_context.new("Failed to spawn initialization thread.", .{});
+                misc.error_context.logError(err);
                 return 0;
             };
             thread.detach();
@@ -70,8 +70,8 @@ pub fn DllMain(
                     std.log.info("Module handle shared value destroyed.", .{});
                     module_handle_shared_value = null;
                 } else |err| {
-                    misc.errorContext().append("Failed to destroy module handle shared value.");
-                    misc.errorContext().logError(err);
+                    misc.error_context.append("Failed to destroy module handle shared value.", .{});
+                    misc.error_context.logError(err);
                 }
             } else {
                 std.log.debug("Nothing to destroy.", .{});
@@ -86,17 +86,17 @@ pub fn DllMain(
 
 fn createModuleHandleSharedValue(module_handle: w32.HINSTANCE) !os.SharedValue(w32.HINSTANCE) {
     const shared_value = os.SharedValue(w32.HINSTANCE).create(module_name) catch |err| {
-        misc.errorContext().appendFmt("Failed to create shared value named: {s}", .{module_name});
+        misc.error_context.append("Failed to create shared value named: {s}", .{module_name});
         return err;
     };
     errdefer {
         shared_value.destroy() catch |err| {
-            misc.errorContext().append("Failed to destroy shared value.");
-            misc.errorContext().logError(err);
+            misc.error_context.append("Failed to destroy shared value.", .{});
+            misc.error_context.logError(err);
         };
     }
     shared_value.write(module_handle) catch |err| {
-        misc.errorContext().append("Failed to write the module handle to shared value.");
+        misc.error_context.append("Failed to write the module handle to shared value.", .{});
         return err;
     };
     return shared_value;
@@ -113,22 +113,22 @@ fn init() void {
     if (startFileLogging()) {
         std.log.info("File logging started.", .{});
     } else |err| {
-        misc.errorContext().append("Failed to start file logging.");
-        misc.errorContext().logError(err);
+        misc.error_context.append("Failed to start file logging.", .{});
+        misc.error_context.logError(err);
     }
 
     std.log.debug("Initializing hooking...", .{});
     hooking.init() catch |err| {
-        misc.errorContext().append("Failed to initialize hooking.");
-        misc.errorContext().logError(err);
+        misc.error_context.append("Failed to initialize hooking.", .{});
+        misc.error_context.logError(err);
         return;
     };
     std.log.info("Hooking initialized.", .{});
 
     std.log.debug("Initializing main hooks...", .{});
     main_hooks.init() catch |err| {
-        misc.errorContext().append("Failed to initialize main hooks.");
-        misc.errorContext().logError(err);
+        misc.error_context.append("Failed to initialize main hooks.", .{});
+        misc.error_context.logError(err);
         return;
     };
     std.log.info("Main hooks initialized.", .{});
@@ -147,8 +147,8 @@ fn deinit() void {
     if (hooking.deinit()) {
         std.log.info("Hooking de-initialized.", .{});
     } else |err| {
-        misc.errorContext().append("Failed to de-initialize hooking.");
-        misc.errorContext().logError(err);
+        misc.error_context.append("Failed to de-initialize hooking.", .{});
+        misc.error_context.logError(err);
     }
 
     std.log.info("Stopping file logging...", .{});
@@ -160,17 +160,17 @@ fn deinit() void {
 
 fn findBaseDir() void {
     const dll_module = os.Module.getLocal(module_name) catch |err| {
-        misc.errorContext().appendFmt("Failed to get local module: {s}", .{module_name});
-        misc.errorContext().append("Failed find base directory.");
-        misc.errorContext().logError(err);
+        misc.error_context.append("Failed to get local module: {s}", .{module_name});
+        misc.error_context.append("Failed find base directory.", .{});
+        misc.error_context.logError(err);
         std.log.info("Defaulting base directory to working directory.", .{});
         base_dir = misc.BaseDir.working_dir;
         return;
     };
     base_dir = misc.BaseDir.fromModule(&dll_module) catch |err| {
-        misc.errorContext().appendFmt("Failed to find base directory from module: {s}", .{module_name});
-        misc.errorContext().append("Failed find base directory.");
-        misc.errorContext().logError(err);
+        misc.error_context.append("Failed to find base directory from module: {s}", .{module_name});
+        misc.error_context.append("Failed find base directory.", .{});
+        misc.error_context.logError(err);
         std.log.info("Defaulting base directory to working directory.", .{});
         base_dir = misc.BaseDir.working_dir;
         return;
@@ -180,12 +180,12 @@ fn findBaseDir() void {
 fn startFileLogging() !void {
     var buffer: [os.max_file_path_length]u8 = undefined;
     const size = base_dir.getPath(&buffer, log_file_name) catch |err| {
-        misc.errorContext().append("Failed to find log file path.");
+        misc.error_context.append("Failed to find log file path.", .{});
         return err;
     };
     const file_path = buffer[0..size];
     file_logger.start(file_path) catch |err| {
-        misc.errorContext().appendFmt("Failed to start file logging with file path: {s}", .{file_path});
+        misc.error_context.append("Failed to start file logging with file path: {s}", .{file_path});
         return err;
     };
 }
@@ -205,8 +205,8 @@ fn onHooksInit(
         std.log.info("Window procedure initialized.", .{});
         window_procedure = procedure;
     } else |err| {
-        misc.errorContext().append("Failed to initialize window procedure.");
-        misc.errorContext().logError(err);
+        misc.error_context.append("Failed to initialize window procedure.", .{});
+        misc.error_context.logError(err);
     }
 }
 
@@ -222,8 +222,8 @@ fn onHooksDeinit(
             window_procedure = null;
             std.log.info("Window procedure de-initialized.", .{});
         } else |err| {
-            misc.errorContext().append("Failed to de-initialize window procedure.");
-            misc.errorContext().logError(err);
+            misc.error_context.append("Failed to de-initialize window procedure.", .{});
+            misc.error_context.logError(err);
         }
     } else {
         std.log.info("Nothing to de-initialize.", .{});

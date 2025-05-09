@@ -37,8 +37,8 @@ pub const EventBuss = struct {
             std.log.info("DX12 context initialized.", .{});
             break :block context;
         } else |err| block: {
-            misc.errorContext().append("Failed to initialize DX12 context.");
-            misc.errorContext().logError(err);
+            misc.error_context.append("Failed to initialize DX12 context.", .{});
+            misc.error_context.logError(err);
             break :block null;
         };
 
@@ -58,8 +58,8 @@ pub const EventBuss = struct {
                 std.log.info("UI context initialized.", .{});
                 break :block context;
             } else |err| {
-                misc.errorContext().append("Failed to initialize UI context.");
-                misc.errorContext().logError(err);
+                misc.error_context.append("Failed to initialize UI context.", .{});
+                misc.error_context.logError(err);
                 break :block null;
             }
         } else null;
@@ -142,10 +142,10 @@ pub const EventBuss = struct {
                 ui.toasts.send(.info, null, "Toast sent. Delta time is: {}", .{delta_time});
             }
             if (imgui.igButton("Log Error", .{})) {
-                misc.errorContext().new("Line 1 in causation chain.");
-                misc.errorContext().append("Line 2 in causation chain.");
-                misc.errorContext().append("Line 3 in causation chain.");
-                misc.errorContext().logError(error.Test);
+                misc.error_context.new("Line 1 in causation chain.", .{});
+                misc.error_context.append("Line 2 in causation chain.", .{});
+                misc.error_context.append("Line 3 in causation chain.", .{});
+                misc.error_context.logError(error.Test);
             }
             imgui.igText("Hello world.");
             if (self.game_memory.player_1.toConstPointer()) |player_1| {
@@ -163,14 +163,14 @@ pub const EventBuss = struct {
         ui_context.endFrame();
 
         const buffer_context = dx12.beforeRender(buffer_count, srv_heap_size, dx12_context, swap_chain) catch |err| {
-            misc.errorContext().append("Failed to execute DX12 before render code.");
-            misc.errorContext().logError(err);
+            misc.error_context.append("Failed to execute DX12 before render code.", .{});
+            misc.error_context.logError(err);
             return;
         };
         ui_context.render(buffer_context.command_list);
         dx12.afterRender(buffer_context, command_queue) catch |err| {
-            misc.errorContext().append("Failed to execute DX12 after render code.");
-            misc.errorContext().logError(err);
+            misc.error_context.append("Failed to execute DX12 after render code.", .{});
+            misc.error_context.logError(err);
             return;
         };
     }
@@ -213,8 +213,8 @@ pub const EventBuss = struct {
             if (context.reinitBufferContexts(device, swap_chain)) {
                 std.log.info("DX12 buffer contexts re-initialized.", .{});
             } else |err| {
-                misc.errorContext().append("Failed to re-initialize DX12 buffer contexts.");
-                misc.errorContext().logError(err);
+                misc.error_context.append("Failed to re-initialize DX12 buffer contexts.", .{});
+                misc.error_context.logError(err);
             }
         } else {
             std.log.debug("Nothing to re-initialize.", .{});

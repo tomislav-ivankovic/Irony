@@ -12,7 +12,7 @@ pub fn getTestingContext() !(*const TestingContext) {
     }
     if (instance == null) {
         instance = TestingContext.init() catch |err| {
-            misc.errorContext().append("Failed to initialize UI testing context.");
+            misc.error_context.append("Failed to initialize UI testing context.", .{});
             return err;
         };
     }
@@ -32,13 +32,13 @@ pub const TestingContext = struct {
 
     pub fn init() !Self {
         const engine = imgui.teCreateContext() orelse {
-            misc.errorContext().new("teCreateContext returned null.");
+            misc.error_context.new("teCreateContext returned null.", .{});
             return error.ImguiError;
         };
         errdefer imgui.teDestroyContext(engine);
 
         const imgui_context = imgui.igCreateContext(null) orelse {
-            misc.errorContext().new("igCreateContext returned null.");
+            misc.error_context.new("igCreateContext returned null.", .{});
             return error.ImguiError;
         };
         errdefer imgui.igDestroyContext(imgui_context);
@@ -88,8 +88,8 @@ pub const TestingContext = struct {
                 const ctx = ui.TestContext{ .raw = raw_ctx };
                 guiFunction(ctx) catch |err| {
                     if (!config.disable_printing) {
-                        misc.errorContext().append("Failed to execute test's GUI function.");
-                        misc.errorContext().logError(err);
+                        misc.error_context.append("Failed to execute test's GUI function.", .{});
+                        misc.error_context.logError(err);
                     }
                     returned_error = err;
                 };
@@ -107,8 +107,8 @@ pub const TestingContext = struct {
                 const ctx = ui.TestContext{ .raw = raw_ctx };
                 testFunction(ctx) catch |err| {
                     if (!config.disable_printing) {
-                        misc.errorContext().append("Failed to execute test's TEST function.");
-                        misc.errorContext().logError(err);
+                        misc.error_context.append("Failed to execute test's TEST function.", .{});
+                        misc.error_context.logError(err);
                     }
                     returned_error = err;
                 };
@@ -119,7 +119,7 @@ pub const TestingContext = struct {
 
         imgui.teQueueTest(self.engine, the_test, config.run_flags);
         while (!imgui.teIsTestQueueEmpty(self.engine)) {
-            misc.errorContext().clear();
+            misc.error_context.clear();
 
             const imgui_io = imgui.igGetIO();
             imgui_io.*.DisplaySize = .{ .x = 1280, .y = 720 };

@@ -13,8 +13,8 @@ pub const Module = struct {
 
     pub fn getMain() !Self {
         const handle = w32.GetModuleHandleW(null) orelse {
-            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-            misc.errorContext().append("GetModuleHandleW returned null.");
+            misc.error_context.new("{}", .{os.Error.getLast()});
+            misc.error_context.append("GetModuleHandleW returned null.", .{});
             return error.OsError;
         };
         return .{ .process = os.Process.getCurrent(), .handle = handle };
@@ -23,13 +23,13 @@ pub const Module = struct {
     pub fn getLocal(name: []const u8) !Self {
         var buffer = [_:0]u16{0} ** os.max_file_path_length;
         const size = std.unicode.utf8ToUtf16Le(&buffer, name) catch |err| {
-            misc.errorContext().newFmt("Failed to convert \"{s}\" to UTF-16LE.", .{name});
+            misc.error_context.new("Failed to convert \"{s}\" to UTF-16LE.", .{name});
             return err;
         };
         const utf16_name = buffer[0..size :0];
         const handle = w32.GetModuleHandleW(utf16_name) orelse {
-            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-            misc.errorContext().append("GetModuleHandleW returned null.");
+            misc.error_context.new("{}", .{os.Error.getLast()});
+            misc.error_context.append("GetModuleHandleW returned null.", .{});
             return error.OsError;
         };
         return .{ .process = os.Process.getCurrent(), .handle = handle };
@@ -38,7 +38,7 @@ pub const Module = struct {
     pub fn getRemote(process: os.Process, name: []const u8) !Self {
         return getRemoteFromSharedMemory(process, name) catch {
             return getRemoteBySearching(process, name) catch |err| {
-                misc.errorContext().append("Failed to get the remote module by searching.");
+                misc.error_context.append("Failed to get the remote module by searching.", .{});
                 return err;
             };
         };
@@ -46,15 +46,15 @@ pub const Module = struct {
 
     fn getRemoteFromSharedMemory(process: os.Process, name: []const u8) !Self {
         const shared_value = os.SharedValue(w32.HINSTANCE).open(process.id, name, .{ .READ = 1 }) catch |err| {
-            misc.errorContext().append("Failed to open shared value.");
+            misc.error_context.append("Failed to open shared value.", .{});
             return err;
         };
         defer shared_value.close() catch |err| {
-            misc.errorContext().append("Failed to close shared value.");
-            misc.errorContext().logError(err);
+            misc.error_context.append("Failed to close shared value.", .{});
+            misc.error_context.logError(err);
         };
         const handle = shared_value.read() catch |err| {
-            misc.errorContext().append("Failed to read shared value.");
+            misc.error_context.append("Failed to read shared value.", .{});
             return err;
         };
         return .{
@@ -66,23 +66,23 @@ pub const Module = struct {
     fn getRemoteBySearching(process: os.Process, name: []const u8) !Self {
         var buffer = [_:0]u16{0} ** os.max_file_path_length;
         const size = std.unicode.utf8ToUtf16Le(&buffer, name) catch |err| {
-            misc.errorContext().newFmt("Failed to convert \"{s}\" to UTF-16LE.", .{name});
+            misc.error_context.new("Failed to convert \"{s}\" to UTF-16LE.", .{name});
             return err;
         };
         const utf16_name = buffer[0..size :0];
         const snapshot_handle = w32.CreateToolhelp32Snapshot(.{ .SNAPMODULE = 1 }, process.id.raw);
         if (snapshot_handle == w32.INVALID_HANDLE_VALUE) {
-            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-            misc.errorContext().append("CreateToolhelp32Snapshot returned INVALID_HANDLE_VALUE.");
+            misc.error_context.new("{}", .{os.Error.getLast()});
+            misc.error_context.append("CreateToolhelp32Snapshot returned INVALID_HANDLE_VALUE.", .{});
             return error.OsError;
         }
         defer {
             const success = w32.CloseHandle(snapshot_handle);
             if (success == 0) {
-                misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-                misc.errorContext().append("CloseHandle returned 0.");
-                misc.errorContext().append("Failed to close snapshot handle.");
-                misc.errorContext().logError(error.OsError);
+                misc.error_context.new("{}", .{os.Error.getLast()});
+                misc.error_context.append("CloseHandle returned 0.", .{});
+                misc.error_context.append("Failed to close snapshot handle.", .{});
+                misc.error_context.logError(error.OsError);
             }
         }
         var entry: w32.MODULEENTRY32W = undefined;
@@ -99,17 +99,17 @@ pub const Module = struct {
                     .handle = handle,
                 };
             } else {
-                misc.errorContext().new("Module found, but the handle is NULL.");
+                misc.error_context.new("Module found, but the handle is NULL.", .{});
                 return error.HandleNull;
             }
         }
         const os_error = os.Error.getLast();
         if (os_error.error_code == w32.WIN32_ERROR.ERROR_NO_MORE_FILES) {
-            misc.errorContext().new("Module not found.");
+            misc.error_context.new("Module not found.", .{});
             return error.NotFound;
         } else {
-            misc.errorContext().newFmt("{}", .{os_error});
-            misc.errorContext().append("Module32First or Module32Next returned 0.");
+            misc.error_context.new("{}", .{os_error});
+            misc.error_context.append("Module32First or Module32Next returned 0.", .{});
             return error.OsError;
         }
     }
@@ -118,12 +118,12 @@ pub const Module = struct {
         var buffer: [os.max_file_path_length:0]u16 = undefined;
         const size = w32.K32GetModuleFileNameExW(self.process.handle, self.handle, &buffer, buffer.len);
         if (size == 0) {
-            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-            misc.errorContext().append("K32GetModuleFileNameExW returned 0.");
+            misc.error_context.new("{}", .{os.Error.getLast()});
+            misc.error_context.append("K32GetModuleFileNameExW returned 0.", .{});
             return error.OsError;
         }
         return std.unicode.utf16LeToUtf8(path_buffer, buffer[0..size]) catch |err| {
-            misc.errorContext().new("Failed to convert UTF-16LE string to UTF8.");
+            misc.error_context.new("Failed to convert UTF-16LE string to UTF8.", .{});
             return err;
         };
     }
@@ -132,8 +132,8 @@ pub const Module = struct {
         var info: w32.MODULEINFO = undefined;
         const success = w32.K32GetModuleInformation(self.process.handle, self.handle, &info, @sizeOf(@TypeOf(info)));
         if (success == 0) {
-            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-            misc.errorContext().append("K32GetModuleInformation returned 0.");
+            misc.error_context.new("{}", .{os.Error.getLast()});
+            misc.error_context.append("K32GetModuleInformation returned 0.", .{});
             return error.OsError;
         }
         return .{
@@ -144,12 +144,12 @@ pub const Module = struct {
 
     pub fn getProcedureAddress(self: *const Self, procedure_name: [:0]const u8) !usize {
         if (self.process.handle != os.Process.getCurrent().handle) {
-            misc.errorContext().new("Module is not part of the current process.");
+            misc.error_context.new("Module is not part of the current process.", .{});
             return error.NotCurrentProcess;
         }
         const address = w32.GetProcAddress(self.handle, procedure_name) orelse {
-            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-            misc.errorContext().append("GetProcAddress returned null.");
+            misc.error_context.new("{}", .{os.Error.getLast()});
+            misc.error_context.append("GetProcAddress returned null.", .{});
             return error.OsError;
         };
         return @intFromPtr(address);

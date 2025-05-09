@@ -29,7 +29,7 @@ pub const Timestamp = struct {
         };
         const sec_timestamp: lib_c_time.time_t = @intCast(@divFloor(nano_timestamp, std.time.ns_per_s));
         const time_struct_pointer = cFunction(&sec_timestamp) orelse {
-            misc.errorContext().newFmt("C function {s} returned null.", .{c_function_name});
+            misc.error_context.new("C function {s} returned null.", .{c_function_name});
             return error.CError;
         };
         const time_struct: lib_c_time.struct_tm = time_struct_pointer.*;

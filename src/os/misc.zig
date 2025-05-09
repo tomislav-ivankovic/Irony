@@ -46,7 +46,7 @@ pub fn filePathToDirectoryPath(path: []const u8) []const u8 {
 pub fn getFullPath(full_path_buffer: *[os.max_file_path_length]u8, short_path: []const u8) !usize {
     var short_path_buffer_utf16 = [_:0]u16{0} ** os.max_file_path_length;
     const short_path_size = std.unicode.utf8ToUtf16Le(&short_path_buffer_utf16, short_path) catch |err| {
-        misc.errorContext().newFmt("Failed to convert UTF8 string \"{s}\" to UTF16-LE.", .{short_path});
+        misc.error_context.new("Failed to convert UTF8 string \"{s}\" to UTF16-LE.", .{short_path});
         return err;
     };
     const short_path_utf16 = short_path_buffer_utf16[0..short_path_size :0];
@@ -58,13 +58,13 @@ pub fn getFullPath(full_path_buffer: *[os.max_file_path_length]u8, short_path: [
         null,
     );
     if (full_path_size == 0) {
-        misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-        misc.errorContext().append("GetFullPathNameW returned 0.");
+        misc.error_context.new("{}", .{os.Error.getLast()});
+        misc.error_context.append("GetFullPathNameW returned 0.", .{});
         return error.OsError;
     }
     const full_path_utf16 = full_path_buffer_utf16[0..full_path_size];
     return std.unicode.utf16LeToUtf8(full_path_buffer, full_path_utf16) catch |err| {
-        misc.errorContext().new("Failed to convert UTF16-LE string to UTF8.");
+        misc.error_context.new("Failed to convert UTF16-LE string to UTF8.", .{});
         return err;
     };
 }
@@ -83,8 +83,8 @@ pub fn setConsoleCloseHandler(onConsoleClose: *const fn () void) !void {
     Handler.function = onConsoleClose;
     const success = w32.SetConsoleCtrlHandler(Handler.call, 1);
     if (success == 0) {
-        misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-        misc.errorContext().append("SetConsoleCtrlHandler returned 0.");
+        misc.error_context.new("{}", .{os.Error.getLast()});
+        misc.error_context.append("SetConsoleCtrlHandler returned 0.", .{});
         return error.OsError;
     }
 }

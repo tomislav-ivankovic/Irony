@@ -17,15 +17,15 @@ pub fn FileLogger(comptime config: FileLoggerConfig) type {
 
         pub fn start(file_path: []const u8) !void {
             const file = std.fs.cwd().createFile(file_path, .{ .truncate = false }) catch |err| {
-                misc.errorContext().newFmt("Failed to create or open file: {s}\n", .{file_path});
+                misc.error_context.new("Failed to create or open file: {s}\n", .{file_path});
                 return err;
             };
             const end_pos = file.getEndPos() catch |err| {
-                misc.errorContext().newFmt("Failed to get the end position of the file: {s}\n", .{file_path});
+                misc.error_context.new("Failed to get the end position of the file: {s}\n", .{file_path});
                 return err;
             };
             file.seekTo(end_pos) catch |err| {
-                misc.errorContext().newFmt(
+                misc.error_context.new(
                     "Failed to seek to end position ({}) of the file: {s}\n",
                     .{ end_pos, file_path },
                 );

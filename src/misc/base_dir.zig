@@ -12,7 +12,7 @@ pub const BaseDir = struct {
 
     pub fn fromStr(base_dir: []const u8) !Self {
         if (base_dir.len > os.max_file_path_length) {
-            misc.errorContext().newFmt(
+            misc.error_context.new(
                 "Base directory \"{s}\" is larger then the maximum allowed file path: {}",
                 .{ base_dir, os.max_file_path_length },
             );
@@ -29,7 +29,7 @@ pub const BaseDir = struct {
     pub fn fromModule(module: *const os.Module) !Self {
         var module_path_buffer: [os.max_file_path_length]u8 = undefined;
         const module_path_size = module.getFilePath(&module_path_buffer) catch |err| {
-            misc.errorContext().append("Failed to get file path of module.");
+            misc.error_context.append("Failed to get file path of module.", .{});
             return err;
         };
         const module_path = module_path_buffer[0..module_path_size];
@@ -43,7 +43,7 @@ pub const BaseDir = struct {
 
     pub fn getPath(self: *const Self, buffer: *[os.max_file_path_length]u8, sub_path: []const u8) !usize {
         const full_path = std.fmt.bufPrint(buffer, "{s}\\{s}", .{ self.get(), sub_path }) catch |err| {
-            misc.errorContext().newFmt("Failed to put path into the buffer: {s}\\{s}", .{ self.get(), sub_path });
+            misc.error_context.new("Failed to put path into the buffer: {s}\\{s}", .{ self.get(), sub_path });
             return err;
         };
         return full_path.len;
@@ -51,7 +51,7 @@ pub const BaseDir = struct {
 
     pub fn allocPath(self: *const Self, allocator: std.mem.Allocator, sub_path: []const u8) ![:0]u8 {
         return std.fmt.allocPrintZ(allocator, "{s}\\{s}", .{ self.get(), sub_path }) catch |err| {
-            misc.errorContext().newFmt("Failed to print allocate string: {s}\\{s}", .{ self.get(), sub_path });
+            misc.error_context.new("Failed to print allocate string: {s}\\{s}", .{ self.get(), sub_path });
             return err;
         };
     }

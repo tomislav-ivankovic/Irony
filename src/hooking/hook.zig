@@ -9,8 +9,8 @@ pub const hooking = struct {
     pub fn init() !void {
         const status = minhook.MH_Initialize();
         if (status != minhook.MH_OK) {
-            misc.errorContext().newFmt("{s}", .{minHookStatusToDescription(status)});
-            misc.errorContext().appendFmt("MH_Initialize returned: {}", .{status});
+            misc.error_context.new("{s}", .{minHookStatusToDescription(status)});
+            misc.error_context.append("MH_Initialize returned: {}", .{status});
             return minHookStatusToError(status);
         }
         if (builtin.is_test) {
@@ -24,8 +24,8 @@ pub const hooking = struct {
     pub fn deinit() !void {
         const status = minhook.MH_Uninitialize();
         if (status != minhook.MH_OK) {
-            misc.errorContext().newFmt("{s}", .{minHookStatusToDescription(status)});
-            misc.errorContext().appendFmt("MH_Uninitialize returned: {}", .{status});
+            misc.error_context.new("{s}", .{minHookStatusToDescription(status)});
+            misc.error_context.append("MH_Uninitialize returned: {}", .{status});
             return minHookStatusToError(status);
         }
         if (builtin.is_test) {
@@ -57,8 +57,8 @@ pub fn Hook(comptime Function: type) type {
             var original: *Function = undefined;
             const status = minhook.MH_CreateHook(@constCast(target), @constCast(detour), @ptrCast(&original));
             if (status != minhook.MH_OK) {
-                misc.errorContext().newFmt("{s}", .{minHookStatusToDescription(status)});
-                misc.errorContext().appendFmt("MH_CreateHook returned: {}", .{status});
+                misc.error_context.new("{s}", .{minHookStatusToDescription(status)});
+                misc.error_context.append("MH_CreateHook returned: {}", .{status});
                 return minHookStatusToError(status);
             }
             const test_allocation = if (builtin.is_test) try std.testing.allocator.create(u8) else {};
@@ -73,8 +73,8 @@ pub fn Hook(comptime Function: type) type {
         pub fn destroy(self: *const Self) !void {
             const status = minhook.MH_RemoveHook(@constCast(self.target));
             if (status != minhook.MH_OK) {
-                misc.errorContext().newFmt("{s}", .{minHookStatusToDescription(status)});
-                misc.errorContext().appendFmt("MH_RemoveHook returned: {}", .{status});
+                misc.error_context.new("{s}", .{minHookStatusToDescription(status)});
+                misc.error_context.append("MH_RemoveHook returned: {}", .{status});
                 return minHookStatusToError(status);
             }
             if (builtin.is_test) {
@@ -85,8 +85,8 @@ pub fn Hook(comptime Function: type) type {
         pub fn enable(self: *const Self) !void {
             const status = minhook.MH_EnableHook(@constCast(self.target));
             if (status != minhook.MH_OK) {
-                misc.errorContext().newFmt("{s}", .{minHookStatusToDescription(status)});
-                misc.errorContext().appendFmt("MH_EnableHook returned: {}", .{status});
+                misc.error_context.new("{s}", .{minHookStatusToDescription(status)});
+                misc.error_context.append("MH_EnableHook returned: {}", .{status});
                 return minHookStatusToError(status);
             }
         }
@@ -94,8 +94,8 @@ pub fn Hook(comptime Function: type) type {
         pub fn disable(self: *const Self) !void {
             const status = minhook.MH_DisableHook(@constCast(self.target));
             if (status != minhook.MH_OK) {
-                misc.errorContext().newFmt("{s}", .{minHookStatusToDescription(status)});
-                misc.errorContext().appendFmt("MH_DisableHook returned: {}", .{status});
+                misc.error_context.new("{s}", .{minHookStatusToDescription(status)});
+                misc.error_context.append("MH_DisableHook returned: {}", .{status});
                 return minHookStatusToError(status);
             }
         }

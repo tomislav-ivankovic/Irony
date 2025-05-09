@@ -7,19 +7,19 @@ pub fn resolveRelativeOffset(comptime Offset: type, address: usize) !usize {
         @compileError("Unsupported offset type: " ++ @typeName(Offset));
     }
     if (!os.isMemoryReadable(address, @sizeOf(Offset))) {
-        misc.errorContext().newFmt("Memory address 0x{X} is not readable.", .{address});
+        misc.error_context.new("Memory address 0x{X} is not readable.", .{address});
         return error.NotReadable;
     }
     const pointer: *align(1) Offset = @ptrFromInt(address);
     const offset = pointer.*;
     const addition_1 = @addWithOverflow(address, @sizeOf(Offset));
     if (addition_1[1] == 1) {
-        misc.errorContext().new("Relative offset overflew the address space.");
+        misc.error_context.new("Relative offset overflew the address space.", .{});
         return error.Overflow;
     }
     const addition_2 = @addWithOverflow(addition_1[0], offset);
     if (addition_2[1] == 1) {
-        misc.errorContext().new("Relative offset overflew the address space.");
+        misc.error_context.new("Relative offset overflew the address space.", .{});
         return error.Overflow;
     }
     return addition_2[0];

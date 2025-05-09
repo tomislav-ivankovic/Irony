@@ -14,7 +14,7 @@ pub fn SharedValue(comptime Value: type) type {
         pub fn create(name: []const u8) !Self {
             var buffer = [_:0]u16{0} ** os.max_file_path_length;
             const size = getFullName(&buffer, os.ProcessId.getCurrent(), name) catch |err| {
-                misc.errorContext().append("Failed to get full name.");
+                misc.error_context.append("Failed to get full name.", .{});
                 return err;
             };
             const full_name = buffer[0..size :0];
@@ -26,8 +26,8 @@ pub fn SharedValue(comptime Value: type) type {
                 @intCast(@sizeOf(Value) & 0xFFFFFFFF),
                 full_name,
             ) orelse {
-                misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-                misc.errorContext().append("CreateFileMappingW returned null.");
+                misc.error_context.new("{}", .{os.Error.getLast()});
+                misc.error_context.append("CreateFileMappingW returned null.", .{});
                 return error.OsError;
             };
             return .{
@@ -43,13 +43,13 @@ pub fn SharedValue(comptime Value: type) type {
         pub fn open(process_id: os.ProcessId, name: []const u8, desired_access: w32.FILE_MAP) !Self {
             var buffer = [_:0]u16{0} ** os.max_file_path_length;
             const size = getFullName(&buffer, process_id, name) catch |err| {
-                misc.errorContext().append("Failed to get full name.");
+                misc.error_context.append("Failed to get full name.", .{});
                 return err;
             };
             const full_name = buffer[0..size :0];
             const handle = w32.OpenFileMappingW(@bitCast(desired_access), 0, full_name) orelse {
-                misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-                misc.errorContext().append("OpenFileMappingW returned null.");
+                misc.error_context.new("{}", .{os.Error.getLast()});
+                misc.error_context.append("OpenFileMappingW returned null.", .{});
                 return error.OsError;
             };
             return .{
@@ -64,16 +64,16 @@ pub fn SharedValue(comptime Value: type) type {
 
         pub fn read(self: *const Self) !Value {
             const pointer = w32.MapViewOfFile(self.handle, w32.FILE_MAP_READ, 0, 0, @sizeOf(Value)) orelse {
-                misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-                misc.errorContext().append("MapViewOfFile returned null.");
+                misc.error_context.new("{}", .{os.Error.getLast()});
+                misc.error_context.append("MapViewOfFile returned null.", .{});
                 return error.OsError;
             };
             defer {
                 const success = w32.UnmapViewOfFile(pointer);
                 if (success == 0) {
-                    misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-                    misc.errorContext().append("UnmapViewOfFile returned 0.");
-                    misc.errorContext().logError(error.OsError);
+                    misc.error_context.new("{}", .{os.Error.getLast()});
+                    misc.error_context.append("UnmapViewOfFile returned 0.", .{});
+                    misc.error_context.logError(error.OsError);
                 }
             }
             const value_pointer: *align(1) Value = @ptrCast(pointer);
@@ -82,16 +82,16 @@ pub fn SharedValue(comptime Value: type) type {
 
         pub fn write(self: *const Self, value: Value) !void {
             const pointer = w32.MapViewOfFile(self.handle, w32.FILE_MAP_WRITE, 0, 0, @sizeOf(Value)) orelse {
-                misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-                misc.errorContext().append("MapViewOfFile returned null.");
+                misc.error_context.new("{}", .{os.Error.getLast()});
+                misc.error_context.append("MapViewOfFile returned null.", .{});
                 return error.OsError;
             };
             defer {
                 const success = w32.UnmapViewOfFile(pointer);
                 if (success == 0) {
-                    misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-                    misc.errorContext().append("UnmapViewOfFile returned 0.");
-                    misc.errorContext().logError(error.OsError);
+                    misc.error_context.new("{}", .{os.Error.getLast()});
+                    misc.error_context.append("UnmapViewOfFile returned 0.", .{});
+                    misc.error_context.logError(error.OsError);
                 }
             }
             const value_pointer: *align(1) Value = @ptrCast(pointer);
@@ -102,11 +102,11 @@ pub fn SharedValue(comptime Value: type) type {
             const pid = process_id.raw;
             var utf8_buffer: [os.max_file_path_length]u8 = undefined;
             const utf8_name = std.fmt.bufPrint(&utf8_buffer, "Global\\{}-{s}", .{ pid, name }) catch |err| {
-                misc.errorContext().newFmt("Failed to construct full name: \"Global\\{}-{s}\"", .{ pid, name });
+                misc.error_context.new("Failed to construct full name: \"Global\\{}-{s}\"", .{ pid, name });
                 return err;
             };
             return std.unicode.utf8ToUtf16Le(buffer, utf8_name) catch |err| {
-                misc.errorContext().newFmt("Failed to convert \"{s}\" to UTF-16LE.", .{name});
+                misc.error_context.new("Failed to convert \"{s}\" to UTF-16LE.", .{name});
                 return err;
             };
         }
@@ -114,8 +114,8 @@ pub fn SharedValue(comptime Value: type) type {
         fn deinit(self: *const Self) !void {
             const success = w32.CloseHandle(self.handle);
             if (success == 0) {
-                misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-                misc.errorContext().append("CloseHandle returned 0.");
+                misc.error_context.new("{}", .{os.Error.getLast()});
+                misc.error_context.append("CloseHandle returned 0.", .{});
                 return error.OsError;
             }
             if (builtin.is_test) {

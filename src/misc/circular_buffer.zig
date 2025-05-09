@@ -39,6 +39,11 @@ pub fn CircularBuffer(comptime capacity: usize, comptime Element: type) type {
             return element;
         }
 
+        pub fn clear(self: *Self) void {
+            self.start_index = 0;
+            self.len = 0;
+        }
+
         pub fn getFirst(self: *const Self) !(*const Element) {
             if (self.len == 0) {
                 return error.Empty;
@@ -165,6 +170,15 @@ test "removeLast should remove and return the element with the highest index" {
 test "removeLast should error when buffer is empty" {
     var buffer = CircularBuffer(5, i32){};
     try testing.expectError(error.Empty, buffer.removeLast());
+}
+
+test "clear should remove all elements" {
+    var buffer = CircularBuffer(5, i32){};
+    _ = buffer.addToBack(1);
+    _ = buffer.addToBack(2);
+    _ = buffer.addToBack(3);
+    buffer.clear();
+    try testing.expectEqual(0, buffer.len);
 }
 
 test "getFirst should return the element with the lowest index" {

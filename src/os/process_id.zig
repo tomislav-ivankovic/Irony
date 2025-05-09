@@ -21,8 +21,8 @@ pub const ProcessId = struct {
             &number_of_bytes,
         );
         if (success == 0) {
-            misc.errorContext().newFmt("{}", .{os.Error.getLast()});
-            misc.errorContext().append("K32EnumProcesses returned 0.");
+            misc.error_context.new("{}", .{os.Error.getLast()});
+            misc.error_context.append("K32EnumProcesses returned 0.", .{});
             return error.OsError;
         }
         const number_of_elements = number_of_bytes / @sizeOf(u32);
@@ -49,18 +49,18 @@ pub const ProcessId = struct {
 
     pub fn findByFileName(file_name: []const u8) !Self {
         var iterator = Self.findAll() catch |err| {
-            misc.errorContext().append("Failed to find all process ID-s.");
+            misc.error_context.append("Failed to find all process ID-s.", .{});
             return err;
         };
         while (iterator.next()) |process_id| {
             var process = os.Process.open(process_id, .{ .QUERY_LIMITED_INFORMATION = 1 }) catch continue;
             defer process.close() catch |err| {
-                misc.errorContext().appendFmt("Failed to close process with ID: {}", .{process_id});
-                misc.errorContext().logError(err);
+                misc.error_context.append("Failed to close process with ID: {}", .{process_id});
+                misc.error_context.logError(err);
             };
             var buffer: [os.max_file_path_length]u8 = undefined;
             const size = process.getFilePath(&buffer) catch |err| {
-                misc.errorContext().appendFmt("Failed to get file path for process with ID: {}", .{process_id});
+                misc.error_context.append("Failed to get file path for process with ID: {}", .{process_id});
                 return err;
             };
             const path = buffer[0..size];
@@ -69,7 +69,7 @@ pub const ProcessId = struct {
                 return process_id;
             }
         }
-        misc.errorContext().new("Process not found.");
+        misc.error_context.new("Process not found.", .{});
         return error.NotFound;
     }
 

@@ -34,7 +34,7 @@ pub fn MainHooks(
 
             std.log.debug("Finding DX12 functions...", .{});
             const dx12_functions = dx12.Functions.find() catch |err| {
-                misc.errorContext().append("Failed to find DX12 functions.");
+                misc.error_context.append("Failed to find DX12 functions.", .{});
                 return err;
             };
             std.log.info("DX12 functions found.", .{});
@@ -44,14 +44,14 @@ pub fn MainHooks(
                 dx12_functions.executeCommandLists,
                 onExecuteCommandLists,
             ) catch |err| {
-                misc.errorContext().append("Failed to create execute command lists hook.");
+                misc.error_context.append("Failed to create execute command lists hook.", .{});
                 return err;
             };
             std.log.info("Execute command lists hook created.", .{});
             errdefer {
                 execute_command_lists_hook.?.destroy() catch |err| {
-                    misc.errorContext().append("Failed to destroy execute command lists hook.");
-                    misc.errorContext().logError(err);
+                    misc.error_context.append("Failed to destroy execute command lists hook.", .{});
+                    misc.error_context.logError(err);
                 };
                 execute_command_lists_hook = null;
             }
@@ -61,14 +61,14 @@ pub fn MainHooks(
                 dx12_functions.resizeBuffers,
                 onResizeBuffers,
             ) catch |err| {
-                misc.errorContext().append("Failed to create resize buffers hook.");
+                misc.error_context.append("Failed to create resize buffers hook.", .{});
                 return err;
             };
             std.log.info("Resize buffers hook created.", .{});
             errdefer {
                 resize_buffers_hook.?.destroy() catch |err| {
-                    misc.errorContext().append("Failed to destroy resize buffers hook.");
-                    misc.errorContext().logError(err);
+                    misc.error_context.append("Failed to destroy resize buffers hook.", .{});
+                    misc.error_context.logError(err);
                 };
                 resize_buffers_hook = null;
             }
@@ -78,35 +78,35 @@ pub fn MainHooks(
                 dx12_functions.present,
                 onPresent,
             ) catch |err| {
-                misc.errorContext().append("Failed to create present hook.");
+                misc.error_context.append("Failed to create present hook.", .{});
                 return err;
             };
             std.log.info("Present hook created.", .{});
             errdefer {
                 present_hook.?.destroy() catch |err| {
-                    misc.errorContext().append("Failed to destroy present hook hook.");
-                    misc.errorContext().logError(err);
+                    misc.error_context.append("Failed to destroy present hook hook.", .{});
+                    misc.error_context.logError(err);
                 };
                 present_hook = null;
             }
 
             std.log.debug("Enabling execute command lists hook...", .{});
             execute_command_lists_hook.?.enable() catch |err| {
-                misc.errorContext().append("Failed to enable execute command lists hook.");
+                misc.error_context.append("Failed to enable execute command lists hook.", .{});
                 return err;
             };
             std.log.info("Execute command lists hook enabled.", .{});
 
             std.log.debug("Enabling resize buffers hook...", .{});
             resize_buffers_hook.?.enable() catch |err| {
-                misc.errorContext().append("Failed to enable resize buffers hook.");
+                misc.error_context.append("Failed to enable resize buffers hook.", .{});
                 return err;
             };
             std.log.info("Resize buffers hook enabled.", .{});
 
             std.log.debug("Enabling present hook...", .{});
             present_hook.?.enable() catch |err| {
-                misc.errorContext().append("Failed to enable present hook.");
+                misc.error_context.append("Failed to enable present hook.", .{});
                 return err;
             };
             std.log.info("Present hook enabled.", .{});
@@ -120,8 +120,8 @@ pub fn MainHooks(
                     std.log.info("Present hook destroyed.", .{});
                     break :block hook.target;
                 } else |err| {
-                    misc.errorContext().append("Failed destroy present hook.");
-                    misc.errorContext().logError(err);
+                    misc.error_context.append("Failed destroy present hook.", .{});
+                    misc.error_context.logError(err);
                     break :block null;
                 }
             } else block: {
@@ -135,8 +135,8 @@ pub fn MainHooks(
                     resize_buffers_hook = null;
                     std.log.info("Resize buffers hook destroyed.", .{});
                 } else |err| {
-                    misc.errorContext().append("Failed destroy resize buffers hook.");
-                    misc.errorContext().logError(err);
+                    misc.error_context.append("Failed destroy resize buffers hook.", .{});
+                    misc.error_context.logError(err);
                 }
             } else {
                 std.log.debug("Nothing to destroy.", .{});
@@ -148,8 +148,8 @@ pub fn MainHooks(
                     execute_command_lists_hook = null;
                     std.log.info("Execute command lists hook destroyed.", .{});
                 } else |err| {
-                    misc.errorContext().append("Failed destroy execute command lists hook.");
-                    misc.errorContext().logError(err);
+                    misc.error_context.append("Failed destroy execute command lists hook.", .{});
+                    misc.error_context.logError(err);
                 }
             } else {
                 std.log.debug("Nothing to destroy.", .{});
@@ -158,8 +158,8 @@ pub fn MainHooks(
             if (presentFunction) |present| last_present: {
                 std.log.debug("Creating the last present hook...", .{});
                 present_hook = hooking.Hook(dx12.Functions.Present).create(present, onPresentCleanup) catch |err| {
-                    misc.errorContext().append("Failed to create last present hook.");
-                    misc.errorContext().logError(err);
+                    misc.error_context.append("Failed to create last present hook.", .{});
+                    misc.error_context.logError(err);
                     break :last_present;
                 };
                 std.log.info("Last present hook created.", .{});
@@ -169,15 +169,15 @@ pub fn MainHooks(
                         present_hook = null;
                         std.log.info("Last present hook destroyed.", .{});
                     } else |err| {
-                        misc.errorContext().append("Failed destroy last present hook.");
-                        misc.errorContext().logError(err);
+                        misc.error_context.append("Failed destroy last present hook.", .{});
+                        misc.error_context.logError(err);
                     }
                 }
 
                 std.log.debug("Enabling last present hook...", .{});
                 present_hook.?.enable() catch |err| {
-                    misc.errorContext().append("Failed to enable last present hook.");
-                    misc.errorContext().logError(err);
+                    misc.error_context.append("Failed to enable last present hook.", .{});
+                    misc.error_context.logError(err);
                     break :last_present;
                 };
                 std.log.info("Last present hook enabled.", .{});
@@ -218,13 +218,13 @@ pub fn MainHooks(
                 return present_hook.?.original(swap_chain, sync_interval, flags);
             };
             const window = dx12.getWindowFromSwapChain(swap_chain) catch |err| {
-                misc.errorContext().append("Failed to get the window from DX12 swap chain.");
-                misc.errorContext().logError(err);
+                misc.error_context.append("Failed to get the window from DX12 swap chain.", .{});
+                misc.error_context.logError(err);
                 return present_hook.?.original(swap_chain, sync_interval, flags);
             };
             const device = dx12.getDeviceFromSwapChain(swap_chain) catch |err| {
-                misc.errorContext().append("Failed to get DX12 device from swap chain.");
-                misc.errorContext().logError(err);
+                misc.error_context.append("Failed to get DX12 device from swap chain.", .{});
+                misc.error_context.logError(err);
                 return present_hook.?.original(swap_chain, sync_interval, flags);
             };
             if (!is_init_called) {
@@ -268,8 +268,8 @@ pub fn MainHooks(
                 );
             }
             const window = dx12.getWindowFromSwapChain(swap_chain) catch |err| {
-                misc.errorContext().append("Failed to get the window from DX12 swap chain.");
-                misc.errorContext().logError(err);
+                misc.error_context.append("Failed to get the window from DX12 swap chain.", .{});
+                misc.error_context.logError(err);
                 return resize_buffers_hook.?.original(
                     swap_chain,
                     buffer_count,
@@ -280,8 +280,8 @@ pub fn MainHooks(
                 );
             };
             const device = dx12.getDeviceFromSwapChain(swap_chain) catch |err| {
-                misc.errorContext().append("Failed to get DX12 device from swap chain.");
-                misc.errorContext().logError(err);
+                misc.error_context.append("Failed to get DX12 device from swap chain.", .{});
+                misc.error_context.logError(err);
                 return resize_buffers_hook.?.original(
                     swap_chain,
                     buffer_count,
@@ -317,13 +317,13 @@ pub fn MainHooks(
                 return present_hook.?.original(swap_chain, sync_interval, flags);
             }
             const window = dx12.getWindowFromSwapChain(swap_chain) catch |err| {
-                misc.errorContext().append("Failed to get the window from DX12 swap chain.");
-                misc.errorContext().logError(err);
+                misc.error_context.append("Failed to get the window from DX12 swap chain.", .{});
+                misc.error_context.logError(err);
                 return present_hook.?.original(swap_chain, sync_interval, flags);
             };
             const device = dx12.getDeviceFromSwapChain(swap_chain) catch |err| {
-                misc.errorContext().append("Failed to get DX12 device from swap chain.");
-                misc.errorContext().logError(err);
+                misc.error_context.append("Failed to get DX12 device from swap chain.", .{});
+                misc.error_context.logError(err);
                 return present_hook.?.original(swap_chain, sync_interval, flags);
             };
             std.log.info("Last present function called.", .{});
