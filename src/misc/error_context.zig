@@ -70,7 +70,7 @@ pub fn ErrorContext(comptime config: ErrorContextConfig) type {
 
         fn clearBufferRegion(self: *Self, region: []const u8) void {
             while (self.items.getFirst() catch null) |item| {
-                if (!collides(item.getBufferRegion(), region)) {
+                if (!misc.doSlicesCollide(u8, item.getBufferRegion(), region)) {
                     break;
                 }
                 _ = self.items.removeFirst() catch unreachable;
@@ -78,17 +78,6 @@ pub fn ErrorContext(comptime config: ErrorContextConfig) type {
                     std.log.warn("Discarded the earliest item from the error context because buffer was full.", .{});
                 }
             }
-        }
-
-        fn collides(a: []const u8, b: []const u8) bool {
-            if (a.len == 0 or b.len == 0) {
-                return false;
-            }
-            const a_min = @intFromPtr(&a[0]);
-            const a_max = @intFromPtr(&a[a.len - 1]);
-            const b_min = @intFromPtr(&b[0]);
-            const b_max = @intFromPtr(&b[b.len - 1]);
-            return (a_max >= b_min) and (b_max >= a_min);
         }
 
         pub fn clear(self: *Self) void {

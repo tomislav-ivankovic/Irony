@@ -4,6 +4,7 @@ pub const ErrorContextConfig = @import("error_context.zig").ErrorContextConfig;
 pub const ErrorContextItem = @import("error_context.zig").ErrorContextItem;
 pub const ErrorContext = @import("error_context.zig").ErrorContext;
 pub threadlocal var error_context = ErrorContext(.{}){};
+pub const doSlicesCollide = @import("misc.zig").doSlicesCollide;
 pub const Timer = @import("timer.zig").Timer;
 pub const TimerConfig = @import("timer.zig").TimerConfig;
 pub const Timestamp = @import("timestamp.zig").Timestamp;

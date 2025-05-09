@@ -35,6 +35,7 @@ test {
     _ = @import("misc/base_dir.zig");
     _ = @import("misc/circular_buffer.zig");
     _ = @import("misc/error_context.zig");
+    _ = @import("misc/misc.zig");
     _ = @import("misc/timer.zig");
     _ = @import("misc/timestamp.zig");
 
