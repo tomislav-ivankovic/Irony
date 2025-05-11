@@ -4,34 +4,37 @@ const imgui = @import("imgui");
 const log = @import("../log/root.zig");
 const ui = @import("../ui/root.zig");
 
-pub fn logsWindow(comptime buffer_logger: type, open: ?*bool) void {
-    if (imgui.igBegin("Logs", open, imgui.ImGuiWindowFlags_HorizontalScrollbar)) {
-        {
-            const entries = buffer_logger.lockAndGetEntries();
-            defer buffer_logger.unlock();
-            for (0..entries.len) |index| {
-                const entry = entries.get(index) catch unreachable;
-                textColored(getLogColor(entry.level), entry.full_message);
-            }
-        }
-        const storage = imgui.igGetStateStorage();
-
-        const scroll_at_bottom_id = imgui.igGetID_Str("is_scroll_at_bottom");
-        const scroll_y_id = imgui.igGetID_Str("scroll_y");
-
-        const was_scroll_at_bottom = imgui.ImGuiStorage_GetBool(storage, scroll_at_bottom_id, true);
-        const previous_scroll_y = imgui.ImGuiStorage_GetFloat(storage, scroll_y_id, imgui.igGetScrollY());
-        const scroll_y_changed = imgui.igGetScrollY() != previous_scroll_y;
-
-        if (was_scroll_at_bottom and !scroll_y_changed) {
-            imgui.igSetScrollHereY(1.0);
-        }
-
-        const is_scroll_at_bottom = imgui.igGetScrollY() >= imgui.igGetScrollMaxY() - 1.0;
-        imgui.ImGuiStorage_SetBool(storage, scroll_at_bottom_id, is_scroll_at_bottom);
-        imgui.ImGuiStorage_SetFloat(storage, scroll_y_id, imgui.igGetScrollY());
+pub fn drawLogsWindow(comptime buffer_logger: type, open: ?*bool) void {
+    const is_open = imgui.igBegin("Logs", open, imgui.ImGuiWindowFlags_HorizontalScrollbar);
+    defer imgui.igEnd();
+    if (!is_open) {
+        return;
     }
-    imgui.igEnd();
+
+    {
+        const entries = buffer_logger.lockAndGetEntries();
+        defer buffer_logger.unlock();
+        for (0..entries.len) |index| {
+            const entry = entries.get(index) catch unreachable;
+            drawColoredText(getLogColor(entry.level), entry.full_message);
+        }
+    }
+
+    const storage = imgui.igGetStateStorage();
+    const is_scroll_at_bottom_id = imgui.igGetID_Str("is_scroll_at_bottom");
+    const scroll_y_id = imgui.igGetID_Str("scroll_y");
+
+    const was_scroll_at_bottom = imgui.ImGuiStorage_GetBool(storage, is_scroll_at_bottom_id, true);
+    const previous_scroll_y = imgui.ImGuiStorage_GetFloat(storage, scroll_y_id, imgui.igGetScrollY());
+    const scroll_y_changed = imgui.igGetScrollY() != previous_scroll_y;
+
+    if (was_scroll_at_bottom and !scroll_y_changed) {
+        imgui.igSetScrollHereY(1.0);
+    }
+
+    const is_scroll_at_bottom = imgui.igGetScrollY() >= imgui.igGetScrollMaxY() - 1.0;
+    imgui.ImGuiStorage_SetBool(storage, is_scroll_at_bottom_id, is_scroll_at_bottom);
+    imgui.ImGuiStorage_SetFloat(storage, scroll_y_id, imgui.igGetScrollY());
 }
 
 fn getLogColor(log_level: std.log.Level) imgui.ImVec4 {
@@ -43,7 +46,7 @@ fn getLogColor(log_level: std.log.Level) imgui.ImVec4 {
     };
 }
 
-fn textColored(color: imgui.ImVec4, text: [:0]const u8) void {
+fn drawColoredText(color: imgui.ImVec4, text: [:0]const u8) void {
     if (builtin.is_test) {
         var pos: imgui.ImVec2 = undefined;
         imgui.igGetCursorScreenPos(&pos);
@@ -81,7 +84,7 @@ test "should render every log message" {
         .{},
         struct {
             fn call(_: ui.TestContext) !void {
-                logsWindow(logger, null);
+                drawLogsWindow(logger, null);
             }
         }.call,
         struct {
@@ -119,7 +122,7 @@ test "should scroll to the bottom by default and still be able to scroll up" {
         .{},
         struct {
             fn call(_: ui.TestContext) !void {
-                logsWindow(logger, null);
+                drawLogsWindow(logger, null);
             }
         }.call,
         struct {

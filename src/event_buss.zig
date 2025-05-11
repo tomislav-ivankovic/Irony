@@ -136,7 +136,7 @@ pub const EventBuss = struct {
         ui_context.newFrame();
         imgui.igGetIO().*.MouseDrawCursor = true;
         ui.toasts.draw();
-        components.logsWindow(dll.buffer_logger, null);
+        components.drawLogsWindow(dll.buffer_logger, null);
         if (imgui.igBegin("Hello world.", null, 0)) {
             if (imgui.igButton("Send Toast", .{})) {
                 ui.toasts.send(.info, null, "Toast sent. Delta time is: {}", .{delta_time});

@@ -156,7 +156,7 @@ pub fn Toasts(comptime config: ToastsConfig) type {
             _ = imgui.igBegin(window_name, null, window_flags);
             defer imgui.igEnd();
 
-            textColored(toast.color, toast.message);
+            drawColoredText(toast.color, toast.message);
         }
 
         fn getToastAnimationFactor(toast: *const Toast) f32 {
@@ -190,7 +190,7 @@ pub fn Toasts(comptime config: ToastsConfig) type {
     };
 }
 
-fn textColored(color: imgui.ImVec4, text: [:0]const u8) void {
+fn drawColoredText(color: imgui.ImVec4, text: [:0]const u8) void {
     if (builtin.is_test) {
         var pos: imgui.ImVec2 = undefined;
         imgui.igGetCursorScreenPos(&pos);

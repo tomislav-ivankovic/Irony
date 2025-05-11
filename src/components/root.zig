@@ -1,1 +1,1 @@
-pub const logsWindow = @import("logs_window.zig").logsWindow;
+pub const drawLogsWindow = @import("logs_window.zig").drawLogsWindow;
