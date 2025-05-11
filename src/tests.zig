@@ -31,6 +31,7 @@ test {
     _ = @import("memory/range.zig");
     _ = @import("memory/relative_offset.zig");
     _ = @import("memory/self_sortable_array.zig");
+    _ = @import("memory/struct_with_offsets.zig");
 
     _ = @import("misc/base_dir.zig");
     _ = @import("misc/circular_buffer.zig");

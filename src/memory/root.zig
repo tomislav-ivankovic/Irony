@@ -5,3 +5,5 @@ pub const PointerTrail = @import("pointer_trail.zig").PointerTrail;
 pub const Range = @import("range.zig").Range;
 pub const resolveRelativeOffset = @import("relative_offset.zig").resolveRelativeOffset;
 pub const SelfSortableArray = @import("self_sortable_array.zig").SelfSortableArray;
+pub const StructWithOffsetsMember = @import("struct_with_offsets.zig").StructWithOffsetsMember;
+pub const StructWithOffsets = @import("struct_with_offsets.zig").StructWithOffsets;
