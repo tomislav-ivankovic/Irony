@@ -1,7 +1,7 @@
 const std = @import("std");
 const os = @import("../os/root.zig");
 
-pub fn MultilevelPointer(comptime Type: type) type {
+pub fn PointerTrail(comptime Type: type) type {
     return struct {
         buffer: [max_len]?usize,
         len: usize,
@@ -16,7 +16,7 @@ pub fn MultilevelPointer(comptime Type: type) type {
             }
             if (array.len > max_len) {
                 @compileError(std.fmt.comptimePrint(
-                    "The provided array with length {} is larger then maximum multilevel pointer length: {}",
+                    "The provided array with length {} is larger then maximum pointer trail length: {}",
                     .{ array.len, max_len },
                 ));
             }
@@ -96,15 +96,11 @@ const Struct = packed struct {
 const value_1_offset = 0;
 const value_2_offset = @sizeOf(i32);
 
-test "test" {
-    _ = MultilevelPointer(i32).fromArray(.{ 0x1, 0x2, 0x3, 0x4 });
-}
-
-test "toConstPointer should return a pointer when the multilevel pointer is valid" {
+test "toConstPointer should return a pointer when the pointer trail is valid" {
     const testCase = struct {
         fn call(comptime size: comptime_int, offsets: [size]?usize, expected_pointer: *const i32) !void {
-            const multilevel_pointer = MultilevelPointer(i32).fromArray(offsets);
-            const actual_pointer = multilevel_pointer.toConstPointer();
+            const trail = PointerTrail(i32).fromArray(offsets);
+            const actual_pointer = trail.toConstPointer();
             try testing.expectEqual(expected_pointer, actual_pointer);
         }
     }.call;
@@ -117,11 +113,11 @@ test "toConstPointer should return a pointer when the multilevel pointer is vali
     try testCase(2, .{ str_address_address, value_2_offset }, &str.value_2);
 }
 
-test "toConstPointer should return null when the multilevel pointer is invalid or incomplete" {
+test "toConstPointer should return null when the pointer trail is invalid or incomplete" {
     const testCase = struct {
         fn call(comptime size: comptime_int, offsets: [size]?usize) !void {
-            const multilevel_pointer = MultilevelPointer(i32).fromArray(offsets);
-            const actual_pointer = multilevel_pointer.toConstPointer();
+            const trail = PointerTrail(i32).fromArray(offsets);
+            const actual_pointer = trail.toConstPointer();
             try testing.expectEqual(null, actual_pointer);
         }
     }.call;
@@ -138,11 +134,11 @@ test "toConstPointer should return null when the multilevel pointer is invalid o
     try testCase(3, .{ str_address_address, null, value_1_offset });
 }
 
-test "toMutablePointer should return a pointer when the multilevel pointer is valid" {
+test "toMutablePointer should return a pointer when the pointer trail is valid" {
     const testCase = struct {
         fn call(comptime size: comptime_int, offsets: [size]?usize, expected_pointer: *i32) !void {
-            const multilevel_pointer = MultilevelPointer(i32).fromArray(offsets);
-            const actual_pointer = multilevel_pointer.toMutablePointer();
+            const trail = PointerTrail(i32).fromArray(offsets);
+            const actual_pointer = trail.toMutablePointer();
             try testing.expectEqual(expected_pointer, actual_pointer);
         }
     }.call;
@@ -155,11 +151,11 @@ test "toMutablePointer should return a pointer when the multilevel pointer is va
     try testCase(2, .{ str_address_address, value_2_offset }, &str.value_2);
 }
 
-test "toMutablePointer should return null when the multilevel pointer is invalid or incomplete" {
+test "toMutablePointer should return null when the pointer trail is invalid or incomplete" {
     const testCase = struct {
         fn call(comptime size: comptime_int, offsets: [size]?usize) !void {
-            const multilevel_pointer = MultilevelPointer(i32).fromArray(offsets);
-            const actual_pointer = multilevel_pointer.toMutablePointer();
+            const trail = PointerTrail(i32).fromArray(offsets);
+            const actual_pointer = trail.toMutablePointer();
             try testing.expectEqual(null, actual_pointer);
         }
     }.call;
@@ -176,11 +172,11 @@ test "toMutablePointer should return null when the multilevel pointer is invalid
     try testCase(3, .{ str_address_address, null, value_1_offset });
 }
 
-test "findMemoryAddress should return a value when the multilevel pointer is valid" {
+test "findMemoryAddress should return a value when the pointer trail is valid" {
     const testCase = struct {
         fn call(comptime size: comptime_int, offsets: [size]?usize, expected_address: usize) !void {
-            const multilevel_pointer = MultilevelPointer(i32).fromArray(offsets);
-            const actual_address = multilevel_pointer.findMemoryAddress();
+            const trail = PointerTrail(i32).fromArray(offsets);
+            const actual_address = trail.findMemoryAddress();
             try testing.expectEqual(expected_address, actual_address);
         }
     }.call;
@@ -193,11 +189,11 @@ test "findMemoryAddress should return a value when the multilevel pointer is val
     try testCase(2, .{ str_address_address, value_2_offset }, @intFromPtr(&str.value_2));
 }
 
-test "findMemoryAddress should return null when the multilevel pointer is invalid or incomplete" {
+test "findMemoryAddress should return null when the pointer trail is invalid or incomplete" {
     const testCase = struct {
         fn call(comptime size: comptime_int, offsets: [size]?usize) !void {
-            const multilevel_pointer = MultilevelPointer(i32).fromArray(offsets);
-            const actual_address = multilevel_pointer.findMemoryAddress();
+            const trail = PointerTrail(i32).fromArray(offsets);
+            const actual_address = trail.findMemoryAddress();
             try testing.expectEqual(null, actual_address);
         }
     }.call;

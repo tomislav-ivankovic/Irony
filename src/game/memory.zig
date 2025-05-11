@@ -6,8 +6,8 @@ const memory = @import("../memory/root.zig");
 const game = @import("root.zig");
 
 pub const Memory = struct {
-    player_1: memory.MultilevelPointer(game.Player),
-    player_2: memory.MultilevelPointer(game.Player),
+    player_1: memory.PointerTrail(game.Player),
+    player_2: memory.PointerTrail(game.Player),
 
     const Self = @This();
 
@@ -18,13 +18,13 @@ pub const Memory = struct {
             break :block null;
         };
         return .{
-            .player_1 = multilevelPointer("player_1", game.Player, .{
+            .player_1 = trail("player_1", game.Player, .{
                 relativeOffset(u32, add(3, pattern(r, "4C 89 35 ?? ?? ?? ?? 41 88 5E 28"))),
                 0x0,
                 0x30,
                 0x0,
             }),
-            .player_2 = multilevelPointer("player_2", game.Player, .{
+            .player_2 = trail("player_2", game.Player, .{
                 relativeOffset(u32, add(3, pattern(r, "4C 89 35 ?? ?? ?? ?? 41 88 5E 28"))),
                 0x0,
                 0x38,
@@ -42,14 +42,14 @@ pub const Memory = struct {
     }
 };
 
-fn multilevelPointer(
+fn trail(
     name: []const u8,
     comptime Type: type,
     offsets: anytype,
-) memory.MultilevelPointer(Type) {
+) memory.PointerTrail(Type) {
     if (@typeInfo(@TypeOf(offsets)) != .array) {
         const coerced: [offsets.len]anyerror!usize = offsets;
-        return multilevelPointer(name, Type, coerced);
+        return trail(name, Type, coerced);
     }
     var last_error: ?anyerror = null;
     var mapped_offsets: [offsets.len]?usize = undefined;
@@ -63,11 +63,11 @@ fn multilevelPointer(
     }
     if (last_error) |err| {
         if (!builtin.is_test) {
-            misc.error_context.append("Failed to resolve multilevel pointer: {s}", .{name});
+            misc.error_context.append("Failed to resolve pointer trail: {s}", .{name});
             misc.error_context.logError(err);
         }
     }
-    return memory.MultilevelPointer(Type).fromArray(mapped_offsets);
+    return memory.PointerTrail(Type).fromArray(mapped_offsets);
 }
 
 fn pattern(memory_range: ?memory.Range, comptime pattern_string: []const u8) !usize {
@@ -107,14 +107,14 @@ fn add(addition: usize, address: anyerror!usize) !usize {
 
 const testing = std.testing;
 
-test "multilevelPointer should construct a multilevel pointer from array" {
-    const pointer = multilevelPointer("pointer", u8, .{ 1, 2, 3 });
+test "trail should construct a pointer trail from array" {
+    const pointer = trail("pointer", u8, .{ 1, 2, 3 });
     try testing.expectEqualSlices(?usize, &.{ 1, 2, 3 }, pointer.getOffsets());
 }
 
-test "multilevelPointer should map errors to null values" {
+test "trail should map errors to null values" {
     misc.error_context.new("Test error.", .{});
-    const pointer = multilevelPointer("pointer", u8, .{ 1, error.Test, 2, error.Test, 3, error.Test });
+    const pointer = trail("pointer", u8, .{ 1, error.Test, 2, error.Test, 3, error.Test });
     try testing.expectEqualSlices(?usize, &.{ 1, null, 2, null, 3, null }, pointer.getOffsets());
 }
 

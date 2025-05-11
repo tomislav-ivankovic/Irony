@@ -25,9 +25,9 @@ test {
     _ = @import("log/file.zig");
 
     _ = @import("memory/converted_value.zig");
-    _ = @import("memory/multilevel_pointer.zig");
     _ = @import("memory/pattern.zig");
     _ = @import("memory/pointer.zig");
+    _ = @import("memory/pointer_trail.zig");
     _ = @import("memory/range.zig");
     _ = @import("memory/relative_offset.zig");
     _ = @import("memory/self_sortable_array.zig");
