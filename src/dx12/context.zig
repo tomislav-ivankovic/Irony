@@ -6,6 +6,7 @@ const dx12 = @import("root.zig");
 
 pub fn Context(comptime buffer_count: usize, comptime svr_heap_size: usize) type {
     return struct {
+        allocator: std.mem.Allocator,
         rtv_descriptor_heap: *w32.ID3D12DescriptorHeap,
         srv_descriptor_heap: *w32.ID3D12DescriptorHeap,
         srv_allocator: *dx12.DescriptorHeapAllocator(svr_heap_size),
@@ -77,6 +78,7 @@ pub fn Context(comptime buffer_count: usize, comptime svr_heap_size: usize) type
             const test_allocation = if (builtin.is_test) try std.testing.allocator.create(u8) else {};
 
             return .{
+                .allocator = allocator,
                 .rtv_descriptor_heap = rtv_descriptor_heap,
                 .srv_descriptor_heap = srv_descriptor_heap,
                 .srv_allocator = srv_allocator,
@@ -85,12 +87,12 @@ pub fn Context(comptime buffer_count: usize, comptime svr_heap_size: usize) type
             };
         }
 
-        pub fn deinit(self: *const Self, allocator: std.mem.Allocator) void {
+        pub fn deinit(self: *const Self) void {
             inline for (self.buffer_contexts) |context| {
                 context.deinit();
             }
 
-            allocator.destroy(self.srv_allocator);
+            self.allocator.destroy(self.srv_allocator);
             _ = self.srv_descriptor_heap.IUnknown.Release();
             _ = self.rtv_descriptor_heap.IUnknown.Release();
 
@@ -304,14 +306,14 @@ test "init and deinit should succeed" {
     const testing_context = try dx12.TestingContext.init();
     defer testing_context.deinit();
     const context = try Context(3, 64).init(testing.allocator, testing_context.device, testing_context.swap_chain);
-    defer context.deinit(testing.allocator);
+    defer context.deinit();
 }
 
 test "beforeRender and afterRender should succeed" {
     const testing_context = try dx12.TestingContext.init();
     defer testing_context.deinit();
     const context = try Context(3, 64).init(testing.allocator, testing_context.device, testing_context.swap_chain);
-    defer context.deinit(testing.allocator);
+    defer context.deinit();
     const buffer_context = try beforeRender(3, 64, &context, testing_context.swap_chain);
     try afterRender(buffer_context, testing_context.command_queue);
 }
@@ -320,7 +322,7 @@ test "deinitBufferContexts and reinitBufferContexts should succeed" {
     const testing_context = try dx12.TestingContext.init();
     defer testing_context.deinit();
     var context = try Context(3, 64).init(testing.allocator, testing_context.device, testing_context.swap_chain);
-    defer context.deinit(testing.allocator);
+    defer context.deinit();
     context.deinitBufferContexts();
     try context.reinitBufferContexts(testing_context.device, testing_context.swap_chain);
 }

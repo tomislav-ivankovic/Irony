@@ -7,6 +7,7 @@ const dx12 = @import("../dx12/root.zig");
 const ui = @import("root.zig");
 
 pub const Context = struct {
+    allocator: std.mem.Allocator,
     imgui_context: *imgui.ImGuiContext,
     ini_file_path: ?[:0]const u8,
     test_allocation: if (builtin.is_test) *u8 else void,
@@ -97,19 +98,20 @@ pub const Context = struct {
         const test_allocation = if (builtin.is_test) try std.testing.allocator.create(u8) else {};
 
         return .{
+            .allocator = allocator,
             .imgui_context = imgui_context,
             .ini_file_path = ini_file_path,
             .test_allocation = test_allocation,
         };
     }
 
-    pub fn deinit(self: *const Self, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *const Self) void {
         imgui.igSetCurrentContext(self.imgui_context);
         ui.backend.ImGui_ImplDX12_Shutdown();
         ui.backend.ImGui_ImplWin32_Shutdown();
         imgui.igGetIO().*.IniFilename = null;
         if (self.ini_file_path) |path| {
-            allocator.free(path);
+            self.allocator.free(path);
         }
         imgui.igDestroyContext(self.imgui_context);
 
@@ -160,7 +162,7 @@ test "should render hello world successfully" {
         testing_context.device,
         testing_context.swap_chain,
     );
-    defer dx12_context.deinit(testing.allocator);
+    defer dx12_context.deinit();
 
     const ui_context = try Context.init(
         3,
@@ -173,7 +175,7 @@ test "should render hello world successfully" {
         dx12_context.srv_descriptor_heap,
         dx12_context.srv_allocator,
     );
-    defer ui_context.deinit(testing.allocator);
+    defer ui_context.deinit();
 
     ui_context.newFrame();
     if (imgui.igBegin("Hello world.", null, 0)) {

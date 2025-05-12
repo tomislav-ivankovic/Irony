@@ -93,7 +93,7 @@ pub const EventBuss = struct {
 
         std.log.debug("De-initializing UI context...", .{});
         if (self.ui_context) |*context| {
-            context.deinit(self.gpa.allocator());
+            context.deinit();
             self.ui_context = null;
             std.log.info("UI context de-initialized.", .{});
         } else {
@@ -102,7 +102,7 @@ pub const EventBuss = struct {
 
         std.log.debug("De-initializing DX12 context...", .{});
         if (self.dx12_context) |*context| {
-            context.deinit(self.gpa.allocator());
+            context.deinit();
             self.dx12_context = null;
             std.log.info("DX12 context de-initialized.", .{});
         } else {
