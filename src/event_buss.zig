@@ -129,29 +129,25 @@ pub const EventBuss = struct {
         imgui.igGetIO().*.MouseDrawCursor = true;
         ui.toasts.draw();
         components.drawLogsWindow(dll.buffer_logger, null);
-        if (imgui.igBegin("Hello world.", null, 0)) {
+        game_memory: {
+            const is_open = imgui.igBegin("Game Memory", null, 0);
+            defer imgui.igEnd();
+            if (!is_open) break :game_memory;
+            components.drawData("game memory", &self.game_memory);
+        }
+        hello_world: {
+            const is_open = imgui.igBegin("Hello World", null, 0);
+            defer imgui.igEnd();
+            if (!is_open) break :hello_world;
             if (imgui.igButton("Send Toast", .{})) {
                 ui.toasts.send(.info, null, "Toast sent. Delta time is: {}", .{delta_time});
             }
             if (imgui.igButton("Log Error", .{})) {
-                misc.error_context.new("Line 1 in causation chain.", .{});
-                misc.error_context.append("Line 2 in causation chain.", .{});
-                misc.error_context.append("Line 3 in causation chain.", .{});
+                misc.error_context.new("User clicked the log error button.", .{});
+                misc.error_context.append("This is a test error.", .{});
                 misc.error_context.logError(error.Test);
             }
-            imgui.igText("Hello world.");
-            if (self.game_memory.player_1.toConstPointer()) |player_1| {
-                imgui.igText("Player 1 health: %d", player_1.health);
-            } else {
-                imgui.igText("Player 1 not found.");
-            }
-            if (self.game_memory.player_2.toConstPointer()) |player_2| {
-                imgui.igText("Player 2 health: %d", player_2.health);
-            } else {
-                imgui.igText("Player 2 not found.");
-            }
         }
-        imgui.igEnd();
         ui_context.endFrame();
 
         const buffer_context = dx12.beforeRender(buffer_count, srv_heap_size, dx12_context, swap_chain) catch |err| {
