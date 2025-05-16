@@ -5,173 +5,194 @@ const memory = @import("../memory/root.zig");
 const error_color = imgui.ImVec4{ .x = 1, .y = 0.5, .z = 0.5, .w = 1 };
 const null_color = imgui.ImVec4{ .x = 0, .y = 1, .z = 1, .w = 1 };
 
+const Context = struct {
+    label: [:0]const u8,
+    type_name: [:0]const u8,
+    parent: ?*const Context,
+};
+
 pub fn drawData(label: [:0]const u8, pointer: anytype) void {
-    const base_info = @typeInfo(@TypeOf(pointer));
-    const ChildType = switch (base_info) {
-        .pointer => |info| info.child,
+    const type_name = switch (@typeInfo(@TypeOf(pointer))) {
+        .pointer => |info| @typeName(info.child),
         else => @compileError(
             "The drawData function expects a pointer but provided value is of type: " ++ @typeName(@TypeOf(pointer)),
         ),
     };
+    const ctx = Context{
+        .label = label,
+        .type_name = type_name,
+        .parent = null,
+    };
+    drawAny(&ctx, pointer);
+}
+
+fn drawAny(ctx: *const Context, pointer: anytype) void {
+    const base_info = @typeInfo(@TypeOf(pointer));
+    const ChildType = switch (base_info) {
+        .pointer => |info| info.child,
+        else => @compileError(
+            "The drawAny function expects a pointer but provided value is of type: " ++ @typeName(@TypeOf(pointer)),
+        ),
+    };
     if (hasTag(ChildType, memory.converted_value_tag)) {
-        drawConvertedValue(label, pointer);
+        drawConvertedValue(ctx, pointer);
     } else if (hasTag(ChildType, memory.pointer_tag)) {
-        drawPointer(label, pointer);
+        drawPointer(ctx, pointer);
     } else if (hasTag(ChildType, memory.pointer_trail_tag)) {
-        drawPointerTrail(label, pointer);
+        drawPointerTrail(ctx, pointer);
     } else if (hasTag(ChildType, memory.self_sortable_array_tag)) {
-        drawSelfSortableArray(label, pointer);
+        drawSelfSortableArray(ctx, pointer);
     } else switch (@typeInfo(ChildType)) {
-        .pointer => drawData(label, pointer.*),
-        .void => drawVoid(label),
-        .null => drawNull(label),
+        .pointer => drawAny(ctx, pointer.*),
+        .void => drawVoid(ctx),
+        .null => drawNull(ctx),
         .undefined => drawUndefined(),
-        .bool => drawBool(label, pointer),
-        .int => drawNumber(label, pointer),
-        .float => drawNumber(label, pointer),
-        .comptime_float => drawComptimeNumber(label, pointer),
-        .comptime_int => drawComptimeNumber(label, pointer),
-        .@"fn" => drawMemoryAddress(label, pointer),
-        .@"opaque" => drawMemoryAddress(label, pointer),
-        .type => drawType(label, pointer),
-        .enum_literal => drawEnumLiteral(label, pointer),
-        .@"enum" => drawEnum(label, pointer),
-        .error_set => drawError(label, pointer),
-        .optional => drawOptional(label, pointer),
-        .error_union => drawErrorUnion(label, pointer),
-        .array => drawArray(label, pointer),
-        .@"struct" => drawStruct(label, pointer),
-        .@"union" => drawUnion(label, pointer),
+        .bool => drawBool(ctx, pointer),
+        .int => drawNumber(ctx, pointer),
+        .float => drawNumber(ctx, pointer),
+        .comptime_float => drawComptimeNumber(ctx, pointer),
+        .comptime_int => drawComptimeNumber(ctx, pointer),
+        .@"fn" => drawMemoryAddress(ctx, pointer),
+        .@"opaque" => drawMemoryAddress(ctx, pointer),
+        .type => drawType(ctx, pointer),
+        .enum_literal => drawEnumLiteral(ctx, pointer),
+        .@"enum" => drawEnum(ctx, pointer),
+        .error_set => drawError(ctx, pointer),
+        .optional => drawOptional(ctx, pointer),
+        .error_union => drawErrorUnion(ctx, pointer),
+        .array => drawArray(ctx, pointer),
+        .@"struct" => drawStruct(ctx, pointer),
+        .@"union" => drawUnion(ctx, pointer),
         else => @compileError("Unsupported data type: " ++ @tagName(@typeInfo(ChildType))),
     }
 }
 
-fn drawConvertedValue(label: [:0]const u8, pointer: anytype) void {
-    drawData(label, &pointer.getValue());
+fn drawConvertedValue(ctx: *const Context, pointer: anytype) void {
+    drawAny(ctx, &pointer.getValue());
 }
 
-fn drawPointer(label: [:0]const u8, pointer: anytype) void {
+fn drawPointer(ctx: *const Context, pointer: anytype) void {
     if (pointer.toConstPointer()) |ptr| {
-        drawData(label, ptr);
+        drawAny(ctx, ptr);
     } else {
-        drawText(label, "Invalid pointer.", error_color);
+        drawText(ctx.label, "Invalid pointer.", error_color);
     }
 }
 
-fn drawPointerTrail(label: [:0]const u8, pointer: anytype) void {
+fn drawPointerTrail(ctx: *const Context, pointer: anytype) void {
     if (pointer.toConstPointer()) |ptr| {
-        drawData(label, ptr);
+        drawAny(ctx, ptr);
     } else {
-        drawText(label, "Invalid pointer trail.", error_color);
+        drawText(ctx.label, "Invalid pointer trail.", error_color);
     }
 }
 
-fn drawSelfSortableArray(label: [:0]const u8, pointer: anytype) void {
-    drawData(label, pointer.sortedConst());
+fn drawSelfSortableArray(ctx: *const Context, pointer: anytype) void {
+    drawAny(ctx, pointer.sortedConst());
 }
 
-fn drawVoid(label: [:0]const u8) void {
-    drawText(label, "{} (void instance)", null);
+fn drawVoid(ctx: *const Context) void {
+    drawText(ctx, "{} (void instance)", null);
 }
 
-fn drawNull(label: [:0]const u8) void {
-    drawText(label, "null", null_color);
+fn drawNull(ctx: *const Context) void {
+    drawText(ctx, "null", null_color);
 }
 
-fn drawUndefined(label: [:0]const u8) void {
-    drawText(label, "undefined", null);
+fn drawUndefined(ctx: *const Context) void {
+    drawText(ctx, "undefined", null);
 }
 
-fn drawBool(label: [:0]const u8, pointer: *const bool) void {
+fn drawBool(ctx: *const Context, pointer: *const bool) void {
     const text = if (pointer.*) "true" else "false";
-    drawText(label, text, null);
+    drawText(ctx.label, text, null);
 }
 
-fn drawNumber(label: [:0]const u8, pointer: anytype) void {
+fn drawNumber(ctx: *const Context, pointer: anytype) void {
     var buffer: [64]u8 = undefined;
-    const text = std.fmt.bufPrintZ(&buffer, "{}", .{pointer.*}) catch {
-        drawText(label, "Display error.", error_color);
-        return;
-    };
-    drawText(label, text, null);
+    const text = std.fmt.bufPrintZ(&buffer, "{}", .{pointer.*}) catch "display error";
+    drawText(ctx.label, text, null);
 }
 
-fn drawComptimeNumber(label: [:0]const u8, pointer: anytype) void {
+fn drawComptimeNumber(ctx: *const Context, pointer: anytype) void {
     const text = std.fmt.comptimePrint("{}", .{pointer.*});
-    drawText(label, text, null);
+    drawText(ctx.label, text, null);
 }
 
-fn drawMemoryAddress(label: [:0]const u8, pointer: anytype) void {
+fn drawMemoryAddress(ctx: *const Context, pointer: anytype) void {
     const address = @intFromPtr(pointer);
     var buffer: [64]u8 = undefined;
-    const text = std.fmt.bufPrintZ(&buffer, "0x{X}", .{address}) catch {
-        drawText(label, "Display error.", error_color);
-        return;
-    };
-    drawText(label, text, null);
+    const text = std.fmt.bufPrintZ(&buffer, "0x{X}", .{address}) catch "display error";
+    drawText(ctx.label, text, null);
 }
 
-fn drawType(label: [:0]const u8, pointer: *const type) void {
+fn drawType(ctx: *const Context, pointer: *const type) void {
     const text = @typeName(pointer.*);
-    drawText(label, text, null);
+    drawText(ctx.label, text, null);
 }
 
-fn drawEnumLiteral(label: [:0]const u8, pointer: anytype) void {
+fn drawEnumLiteral(ctx: *const Context, pointer: anytype) void {
     const text = @tagName(pointer.*);
-    drawText(label, text, null);
+    drawText(ctx.label, text, null);
 }
 
-fn drawEnum(label: [:0]const u8, pointer: anytype) void {
-    const child_type = @typeInfo(@TypeOf(pointer)).pointer.child;
-    const info = @typeInfo(child_type).@"enum";
+fn drawEnum(ctx: *const Context, pointer: anytype) void {
+    const ChildType = @typeInfo(@TypeOf(pointer)).pointer.child;
+    const info = @typeInfo(ChildType).@"enum";
     const value = @intFromEnum(pointer.*);
     inline for (info.fields) |*field| {
         if (field.value == value) {
-            drawText(label, field.name, null);
+            drawText(ctx.label, field.name, null);
             break;
         }
     } else {
-        drawData(label, &value);
+        drawAny(ctx, &value);
     }
 }
 
-fn drawError(label: [:0]const u8, pointer: anytype) void {
+fn drawError(ctx: *const Context, pointer: anytype) void {
     const text = @errorName(pointer.*);
-    drawText(label, text, error_color);
+    drawText(ctx.label, text, error_color);
 }
 
-fn drawOptional(label: [:0]const u8, pointer: anytype) void {
+fn drawOptional(ctx: *const Context, pointer: anytype) void {
     if (pointer.*) |*data| {
-        drawData(label, data);
+        drawAny(ctx, data);
     } else {
-        drawNull(label);
+        drawNull(ctx);
     }
 }
 
-fn drawErrorUnion(label: [:0]const u8, pointer: anytype) void {
+fn drawErrorUnion(ctx: *const Context, pointer: anytype) void {
     if (pointer.*) |*data| {
-        drawData(label, data);
+        drawAny(ctx.label, data);
     } else |err| {
-        drawError(label, &err);
+        drawError(ctx.label, &err);
     }
 }
 
-fn drawArray(label: [:0]const u8, pointer: anytype) void {
-    if (!imgui.igTreeNode_Str(label)) {
+fn drawArray(ctx: *const Context, pointer: anytype) void {
+    const ChildType = @typeInfo(@TypeOf(pointer)).pointer.child;
+    const ElementType = @typeInfo(ChildType).array.child;
+    if (!imgui.igTreeNode_Str(ctx.label)) {
         return;
     }
     defer imgui.igTreePop();
-    for (pointer, 0..) |*element, index| {
+    for (pointer, 0..) |*element_pointer, index| {
         var buffer: [64]u8 = undefined;
-        const element_label = std.fmt.bufPrintZ(&buffer, "{}", .{index}) catch "display error";
-        drawData(element_label, element);
+        const element_ctx = Context{
+            .label = std.fmt.bufPrintZ(&buffer, "{}", .{index}) catch "display error",
+            .type_name = @typeName(ElementType),
+            .parent = ctx,
+        };
+        drawAny(&element_ctx, element_pointer);
     }
 }
 
-fn drawStruct(label: [:0]const u8, pointer: anytype) void {
-    const child_type = @typeInfo(@TypeOf(pointer)).pointer.child;
-    const info = @typeInfo(child_type).@"struct";
-    if (!imgui.igTreeNode_Str(label)) {
+fn drawStruct(ctx: *const Context, pointer: anytype) void {
+    const ChildType = @typeInfo(@TypeOf(pointer)).pointer.child;
+    const info = @typeInfo(ChildType).@"struct";
+    if (!imgui.igTreeNode_Str(ctx.label)) {
         return;
     }
     defer imgui.igTreePop();
@@ -179,25 +200,49 @@ fn drawStruct(label: [:0]const u8, pointer: anytype) void {
         if (comptime std.mem.startsWith(u8, field.name, "_")) {
             continue;
         }
-        drawData(field.name, &@field(pointer, field.name));
+        const field_ctx = Context{
+            .label = field.name,
+            .type_name = @typeName(field.type),
+            .parent = ctx,
+        };
+        const field_pointer = &@field(pointer, field.name);
+        drawAny(&field_ctx, field_pointer);
     }
 }
 
-fn drawUnion(label: [:0]const u8, pointer: anytype) void {
-    const child_type = @typeInfo(@TypeOf(pointer)).pointer.child;
-    const info = @typeInfo(child_type).@"union";
-    if (!imgui.igTreeNode_Str(label)) {
+fn drawUnion(ctx: *const Context, pointer: anytype) void {
+    const ChildType = @typeInfo(@TypeOf(pointer)).pointer.child;
+    const info = @typeInfo(ChildType).@"union";
+    if (!imgui.igTreeNode_Str(ctx.label)) {
         return;
     }
     defer imgui.igTreePop();
     if (info.tag_type) |tag_type| {
-        drawData("tag", &@as(tag_type, pointer.*));
-        switch (pointer.*) {
-            inline else => |*value_pointer| drawData("value", value_pointer),
-        }
+        const tag_ctx = Context{
+            .label = "tag",
+            .type_name = @typeName(tag_type),
+            .parent = ctx,
+        };
+        const tag_pointer = &@as(tag_type, pointer.*);
+        drawAny(&tag_ctx, tag_pointer);
+
+        const value_pointer = switch (pointer.*) {
+            inline else => |*ptr| ptr,
+        };
+        const value_ctx = Context{
+            .label = "value",
+            .type_name = @typeName(@typeInfo(@TypeOf(value_pointer)).pointer.child),
+            .parent = ctx,
+        };
+        drawAny(&value_ctx, value_pointer);
     } else inline for (info.fields) |*field| {
+        const field_ctx = Context{
+            .label = field.name,
+            .type_name = @typeName(field.type),
+            .parent = ctx,
+        };
         const field_pointer: *const field.type = @ptrCast(pointer);
-        drawData(field.name, field_pointer);
+        drawAny(&field_ctx, field_pointer);
     }
 }
 
@@ -213,6 +258,8 @@ pub inline fn hasTag(comptime Type: type, comptime tag: type) bool {
 fn drawText(label: [:0]const u8, text: [:0]const u8, color: ?imgui.ImVec4) void {
     imgui.igIndent(0.0);
     defer imgui.igUnindent(0.0);
+    imgui.igBeginGroup();
+    defer imgui.igEndGroup();
     imgui.igText("%s:", label.ptr);
     imgui.igSameLine(0.0, -0.1);
     if (color) |col| {
