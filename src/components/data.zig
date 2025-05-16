@@ -40,10 +40,10 @@ fn drawAny(ctx: *const Context, pointer: anytype) void {
         .null => drawNull(ctx, pointer),
         .undefined => drawUndefined(ctx, pointer),
         .bool => drawBool(ctx, pointer),
-        .int => drawInt(ctx, pointer),
-        .float => drawFloat(ctx, pointer),
-        .comptime_float => drawComptimeInt(ctx, pointer),
-        .comptime_int => drawComptimeFloat(ctx, pointer),
+        .int => drawNumber(ctx, pointer),
+        .float => drawNumber(ctx, pointer),
+        .comptime_float => drawNumber(ctx, pointer),
+        .comptime_int => drawNumber(ctx, pointer),
         .@"fn" => drawMemoryAddress(ctx, pointer),
         .@"opaque" => drawMemoryAddress(ctx, pointer),
         .type => drawType(ctx, pointer),
@@ -147,61 +147,47 @@ fn drawBool(ctx: *const Context, pointer: *const bool) void {
     drawMenuText("value", text);
 }
 
-fn drawInt(ctx: *const Context, pointer: anytype) void {
+fn drawNumber(ctx: *const Context, pointer: anytype) void {
     const value = pointer.*;
     var buffer: [64]u8 = undefined;
 
-    const text = std.fmt.bufPrintZ(&buffer, "{}", .{value}) catch "display error";
+    const text = std.fmt.bufPrintZ(&buffer, "{}", .{value}) catch error_string;
     drawText(ctx.label, text);
 
     if (!beginMenu(ctx, pointer)) return;
     defer endMenu();
 
     drawSeparator();
-    drawMenuText("decimal", text);
-    const hex = std.fmt.bufPrintZ(&buffer, "{X}", .{pointer.*}) catch "display error";
-    drawMenuText("hexadecimal", hex);
-}
+    if (@typeInfo(@TypeOf(value)) == .int) {
+        const value_text = std.fmt.bufPrintZ(&buffer, "{} (0x{X})", .{ value, value }) catch error_string;
+        drawMenuText("value", value_text);
+    } else {
+        drawMenuText("value", text);
+    }
 
-fn drawFloat(ctx: *const Context, pointer: anytype) void {
-    var buffer: [64]u8 = undefined;
-    const text = std.fmt.bufPrintZ(&buffer, "{}", .{pointer.*}) catch "display error";
-    drawText(ctx.label, text);
-
-    if (!beginMenu(ctx, pointer)) return;
-    defer endMenu();
-
+    const bits = @bitSizeOf(@TypeOf(value));
     drawSeparator();
-    drawMenuText("value", text);
-}
-
-fn drawComptimeInt(ctx: *const Context, pointer: *const comptime_int) void {
-    const text = std.fmt.comptimePrint("{}", .{pointer.*});
-    drawText(ctx.label, text);
-
-    if (!beginMenu(ctx, pointer)) return;
-    defer endMenu();
-
-    drawSeparator();
-    drawMenuText("value", text);
-}
-
-fn drawComptimeFloat(ctx: *const Context, pointer: *const comptime_float) void {
-    const text = std.fmt.comptimePrint("{}", .{pointer.*});
-    drawText(ctx.label, text);
-
-    if (!beginMenu(ctx, pointer)) return;
-    defer endMenu();
-
-    drawSeparator();
-    drawMenuText("value", text);
+    const UType = @Type(std.builtin.Type{ .int = .{ .signedness = .unsigned, .bits = bits } });
+    const u_value: UType = @bitCast(value);
+    const u_text = std.fmt.bufPrintZ(&buffer, "{} (0x{X})", .{ u_value, u_value }) catch error_string;
+    drawMenuText(@typeName(UType), u_text);
+    const IType = @Type(std.builtin.Type{ .int = .{ .signedness = .signed, .bits = bits } });
+    const i_value: IType = @bitCast(value);
+    const i_text = std.fmt.bufPrintZ(&buffer, "{} (0x{X})", .{ i_value, i_value }) catch error_string;
+    drawMenuText(@typeName(IType), i_text);
+    if (bits == 16 or bits == 32 or bits == 64 or bits == 80 or bits == 128) {
+        const FType = @Type(std.builtin.Type{ .float = .{ .bits = bits } });
+        const f_value: FType = @bitCast(value);
+        const f_text = std.fmt.bufPrintZ(&buffer, "{}", .{f_value}) catch error_string;
+        drawMenuText(@typeName(FType), f_text);
+    }
 }
 
 fn drawMemoryAddress(ctx: *const Context, pointer: anytype) void {
     const address = @intFromPtr(pointer);
 
     var buffer: [64]u8 = undefined;
-    const text = std.fmt.bufPrintZ(&buffer, "0x{X}", .{address}) catch "display error";
+    const text = std.fmt.bufPrintZ(&buffer, "0x{X}", .{address}) catch error_string;
     drawText(ctx.label, text);
 
     if (!beginMenu(ctx, pointer)) return;
@@ -294,7 +280,7 @@ fn drawArray(ctx: *const Context, pointer: anytype) void {
     for (pointer, 0..) |*element_pointer, index| {
         var buffer: [64]u8 = undefined;
         const element_ctx = Context{
-            .label = std.fmt.bufPrintZ(&buffer, "{}", .{index}) catch "display error",
+            .label = std.fmt.bufPrintZ(&buffer, "{}", .{index}) catch error_string,
             .type_name = @typeName(ElementType),
             .offset = @intFromPtr(element_pointer) - @intFromPtr(pointer),
             .parent = ctx,
@@ -370,6 +356,8 @@ fn drawUnion(ctx: *const Context, pointer: anytype) void {
 
 // Helpers.
 
+const error_string = "display error";
+
 const Context = struct {
     label: [:0]const u8,
     type_name: [:0]const u8,
@@ -429,19 +417,19 @@ fn beginMenu(ctx: *const Context, pointer: anytype) bool {
     var buffer: [128]u8 = undefined;
 
     drawMenuText("label", ctx.label);
-    drawMenuText("path", ctx.getPath(&buffer) catch "display error");
+    drawMenuText("path", ctx.getPath(&buffer) catch error_string);
     drawMenuText("type", ctx.type_name);
 
     drawSeparator();
 
     const address = @intFromPtr(pointer);
-    const address_text = std.fmt.bufPrintZ(&buffer, "0x{X}", .{address}) catch "display error";
+    const address_text = std.fmt.bufPrintZ(&buffer, "0x{X}", .{address}) catch error_string;
     drawMenuText("address", address_text);
     const offset = ctx.offset;
-    const offset_text = std.fmt.bufPrintZ(&buffer, "{} (0x{X})", .{ offset, offset }) catch "display error";
+    const offset_text = std.fmt.bufPrintZ(&buffer, "{} (0x{X})", .{ offset, offset }) catch error_string;
     drawMenuText("offset", offset_text);
     const size = @sizeOf(@TypeOf(pointer.*));
-    const size_text = std.fmt.bufPrintZ(&buffer, "{} (0x{X})", .{ size, size }) catch "display error";
+    const size_text = std.fmt.bufPrintZ(&buffer, "{} (0x{X})", .{ size, size }) catch error_string;
     drawMenuText("size", size_text);
 
     return true;
