@@ -4,7 +4,7 @@ const os = @import("../os/root.zig");
 pub const pointer_tag = opaque {};
 
 pub fn Pointer(comptime Type: type) type {
-    return packed struct {
+    return extern struct {
         address: usize,
 
         const Self = @This();

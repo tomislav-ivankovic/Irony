@@ -13,7 +13,7 @@ pub fn drawData(label: [:0]const u8, pointer: anytype) void {
         .label = label,
         .type_name = type_name,
         .address = @intFromPtr(pointer),
-        .bit_offset = 0,
+        .bit_offset = null,
         .bit_size = @bitSizeOf(@TypeOf(pointer.*)),
         .parent = null,
     };
@@ -31,13 +31,12 @@ fn drawAny(ctx: *const Context, pointer: anytype) void {
     if (hasTag(ChildType, memory.converted_value_tag)) {
         drawConvertedValue(ctx, pointer);
     } else if (hasTag(ChildType, memory.pointer_tag)) {
-        drawPointer(ctx, pointer);
+        drawCustomPointer(ctx, pointer);
     } else if (hasTag(ChildType, memory.pointer_trail_tag)) {
         drawPointerTrail(ctx, pointer);
     } else if (hasTag(ChildType, memory.self_sortable_array_tag)) {
         drawSelfSortableArray(ctx, pointer);
     } else switch (@typeInfo(ChildType)) {
-        .pointer => drawAny(ctx, pointer.*),
         .void => drawVoid(ctx),
         .null => drawNull(ctx),
         .undefined => drawUndefined(ctx),
@@ -57,50 +56,9 @@ fn drawAny(ctx: *const Context, pointer: anytype) void {
         .array => drawArray(ctx, pointer),
         .@"struct" => drawStruct(ctx, pointer),
         .@"union" => drawUnion(ctx, pointer),
+        .pointer => drawPointer(ctx, pointer),
         else => @compileError("Unsupported data type: " ++ @tagName(@typeInfo(ChildType))),
     }
-}
-
-// Rendering of custom types.
-
-fn drawConvertedValue(ctx: *const Context, pointer: anytype) void {
-    drawAny(ctx, &pointer.getValue());
-}
-
-fn drawPointer(ctx: *const Context, pointer: anytype) void {
-    if (pointer.toConstPointer()) |ptr| {
-        drawAny(ctx, ptr);
-        return;
-    }
-
-    const text = "Invalid pointer.";
-    drawText(ctx.label, text);
-
-    if (!beginMenu(ctx)) return;
-    defer endMenu();
-
-    drawSeparator();
-    drawMenuText("value", text);
-}
-
-fn drawPointerTrail(ctx: *const Context, pointer: anytype) void {
-    if (pointer.toConstPointer()) |ptr| {
-        drawAny(ctx, ptr);
-        return;
-    }
-
-    const text = "Invalid pointer trail.";
-    drawText(ctx.label, text);
-
-    if (!beginMenu(ctx)) return;
-    defer endMenu();
-
-    drawSeparator();
-    drawMenuText("value", text);
-}
-
-fn drawSelfSortableArray(ctx: *const Context, pointer: anytype) void {
-    drawAny(ctx, pointer.sortedConst());
 }
 
 // Rendering of language types.
@@ -118,7 +76,7 @@ fn drawVoid(ctx: *const Context) void {
 
 fn drawNull(ctx: *const Context) void {
     const text = "null";
-    drawText(ctx, text);
+    drawText(ctx.label, text);
 
     if (!beginMenu(ctx)) return;
     defer endMenu();
@@ -153,19 +111,18 @@ fn drawNumber(ctx: *const Context, pointer: anytype) void {
     const value = pointer.*;
     var buffer: [64]u8 = undefined;
 
-    const text = std.fmt.bufPrintZ(&buffer, "{}", .{value}) catch error_string;
+    const text = if (@typeInfo(@TypeOf(value)) == .int) block: {
+        break :block std.fmt.bufPrintZ(&buffer, "{} (0x{X})", .{ value, value }) catch error_string;
+    } else block: {
+        break :block std.fmt.bufPrintZ(&buffer, "{}", .{value}) catch error_string;
+    };
     drawText(ctx.label, text);
 
     if (!beginMenu(ctx)) return;
     defer endMenu();
 
     drawSeparator();
-    if (@typeInfo(@TypeOf(value)) == .int) {
-        const value_text = std.fmt.bufPrintZ(&buffer, "{} (0x{X})", .{ value, value }) catch error_string;
-        drawMenuText("value", value_text);
-    } else {
-        drawMenuText("value", text);
-    }
+    drawMenuText("value", text);
 
     const bits = @bitSizeOf(@TypeOf(value));
     drawSeparator();
@@ -186,17 +143,8 @@ fn drawNumber(ctx: *const Context, pointer: anytype) void {
 }
 
 fn drawMemoryAddress(ctx: *const Context, pointer: anytype) void {
-    const address = @intFromPtr(pointer);
-
-    var buffer: [64]u8 = undefined;
-    const text = std.fmt.bufPrintZ(&buffer, "0x{X}", .{address}) catch error_string;
-    drawText(ctx.label, text);
-
-    if (!beginMenu(ctx)) return;
-    defer endMenu();
-
-    drawSeparator();
-    drawMenuText("value", text);
+    const casted_pointer: *const usize = @ptrCast(pointer);
+    drawAny(ctx, casted_pointer);
 }
 
 fn drawType(ctx: *const Context, pointer: *const type) void {
@@ -336,7 +284,7 @@ fn drawUnion(ctx: *const Context, pointer: anytype) void {
             .label = "tag",
             .type_name = @typeName(Tag),
             .address = @intFromPtr(tag_pointer),
-            .bit_offset = 0,
+            .bit_offset = null,
             .bit_size = @bitSizeOf(Tag),
             .parent = ctx,
         };
@@ -349,7 +297,7 @@ fn drawUnion(ctx: *const Context, pointer: anytype) void {
             .label = "value",
             .type_name = @typeName(@TypeOf(value_pointer.*)),
             .address = @intFromPtr(value_pointer),
-            .bit_offset = std.mem.byte_size_in_bits * (@intFromPtr(value_pointer) - @intFromPtr(pointer)),
+            .bit_offset = null,
             .bit_size = @bitSizeOf(@TypeOf(value_pointer.*)),
             .parent = ctx,
         };
@@ -360,7 +308,7 @@ fn drawUnion(ctx: *const Context, pointer: anytype) void {
             .label = field.name,
             .type_name = @typeName(field.type),
             .address = @intFromPtr(field_pointer),
-            .bit_offset = 0,
+            .bit_offset = null,
             .bit_size = @bitSizeOf(field.type),
             .parent = ctx,
         };
@@ -368,7 +316,205 @@ fn drawUnion(ctx: *const Context, pointer: anytype) void {
     }
 }
 
-// Helpers.
+fn drawPointer(ctx: *const Context, pointer: anytype) void {
+    const node_open = beginNode(ctx.label);
+    if (beginMenu(ctx)) {
+        defer endMenu();
+    }
+    if (!node_open) return;
+    defer endNode();
+
+    const address_pointer: *const usize = @ptrCast(pointer);
+    const address_ctx = Context{
+        .label = "address",
+        .type_name = @typeName(usize),
+        .address = @intFromPtr(address_pointer),
+        .bit_offset = null,
+        .bit_size = @bitSizeOf(usize),
+        .parent = ctx,
+    };
+    drawAny(&address_ctx, address_pointer);
+
+    const info = @typeInfo(@TypeOf(pointer.*)).pointer;
+    switch (info.size) {
+        .one => {
+            const value_pointer = pointer.*;
+            const value_ctx = Context{
+                .label = "value",
+                .type_name = @typeName(@TypeOf(value_pointer.*)),
+                .address = @intFromPtr(value_pointer),
+                .bit_offset = null,
+                .bit_size = @bitSizeOf(@TypeOf(value_pointer.*)),
+                .parent = ctx,
+            };
+            drawAny(&value_ctx, value_pointer);
+        },
+        .slice => {
+            const len_pointer = &pointer.len;
+            const len_ctx = Context{
+                .label = "len",
+                .type_name = @typeName(@TypeOf(len_pointer.*)),
+                .address = @intFromPtr(address_pointer),
+                .bit_offset = null,
+                .bit_size = @bitSizeOf(@TypeOf(len_pointer.*)),
+                .parent = ctx,
+            };
+            drawAny(&len_ctx, len_pointer);
+
+            for (pointer.*, 0..) |*element_pointer, index| {
+                var buffer: [64]u8 = undefined;
+                const element_ctx = Context{
+                    .label = std.fmt.bufPrintZ(&buffer, "{}", .{index}) catch error_string,
+                    .type_name = @typeName(@TypeOf(element_pointer.*)),
+                    .address = @intFromPtr(element_pointer),
+                    .bit_offset = std.mem.byte_size_in_bits * (@intFromPtr(element_pointer) - @intFromPtr(pointer.ptr)),
+                    .bit_size = @bitSizeOf(@TypeOf(element_pointer.*)),
+                    .parent = ctx,
+                };
+                drawAny(&element_ctx, element_pointer);
+            }
+        },
+        else => {},
+    }
+}
+
+// Rendering of custom types.
+
+fn drawConvertedValue(ctx: *const Context, pointer: anytype) void {
+    const node_open = beginNode(ctx.label);
+    if (beginMenu(ctx)) {
+        defer endMenu();
+    }
+    if (!node_open) return;
+    defer endNode();
+
+    const raw_pointer = &pointer.raw;
+    const raw_ctx = Context{
+        .label = "raw",
+        .type_name = @typeName(@TypeOf(raw_pointer.*)),
+        .address = @intFromPtr(raw_pointer),
+        .bit_offset = @bitOffsetOf(@TypeOf(pointer.*), "raw"),
+        .bit_size = @bitSizeOf(@TypeOf(raw_pointer.*)),
+        .parent = ctx,
+    };
+    drawAny(&raw_ctx, raw_pointer);
+
+    const value_pointer = &pointer.getValue();
+    const value_ctx = Context{
+        .label = "value",
+        .type_name = @typeName(@TypeOf(raw_pointer.*)),
+        .address = @intFromPtr(raw_pointer),
+        .bit_offset = null,
+        .bit_size = @bitSizeOf(@TypeOf(raw_pointer.*)),
+        .parent = ctx,
+    };
+    drawAny(&value_ctx, value_pointer);
+}
+
+fn drawCustomPointer(ctx: *const Context, pointer: anytype) void {
+    const node_open = beginNode(ctx.label);
+    if (beginMenu(ctx)) {
+        defer endMenu();
+    }
+    if (!node_open) return;
+    defer endNode();
+
+    const address_pointer = &pointer.address;
+    const address_ctx = Context{
+        .label = "address",
+        .type_name = @typeName(@TypeOf(address_pointer.*)),
+        .address = @intFromPtr(address_pointer),
+        .bit_offset = @bitOffsetOf(@TypeOf(pointer.*), "address"),
+        .bit_size = @bitSizeOf(@TypeOf(address_pointer.*)),
+        .parent = ctx,
+    };
+    drawAny(&address_ctx, address_pointer);
+
+    const value_pointer = pointer.toConstPointer() orelse {
+        drawText(ctx.label, "Invalid pointer.");
+        if (!beginMenu(ctx)) return;
+        defer endMenu();
+        return;
+    };
+    const value_ctx = Context{
+        .label = "value",
+        .type_name = @typeName(@TypeOf(value_pointer.*)),
+        .address = @intFromPtr(value_pointer),
+        .bit_offset = null,
+        .bit_size = @bitSizeOf(@TypeOf(value_pointer.*)),
+        .parent = ctx,
+    };
+    drawAny(&value_ctx, value_pointer);
+}
+
+fn drawPointerTrail(ctx: *const Context, pointer: anytype) void {
+    const node_open = beginNode(ctx.label);
+    if (beginMenu(ctx)) {
+        defer endMenu();
+    }
+    if (!node_open) return;
+    defer endNode();
+
+    const offsets_pointer = &pointer.getOffsets();
+    const offsets_ctx = Context{
+        .label = "offsets",
+        .type_name = @typeName(@TypeOf(offsets_pointer.*)),
+        .address = @intFromPtr(offsets_pointer),
+        .bit_offset = null,
+        .bit_size = @bitSizeOf(@TypeOf(offsets_pointer.*)),
+        .parent = ctx,
+    };
+    drawAny(&offsets_ctx, offsets_pointer);
+
+    const value_pointer = pointer.toConstPointer() orelse {
+        drawText(ctx.label, "Invalid pointer trail.");
+        if (!beginMenu(ctx)) return;
+        defer endMenu();
+        return;
+    };
+    const value_ctx = Context{
+        .label = "value",
+        .type_name = @typeName(@TypeOf(value_pointer.*)),
+        .address = @intFromPtr(value_pointer),
+        .bit_offset = null,
+        .bit_size = @bitSizeOf(@TypeOf(value_pointer.*)),
+        .parent = ctx,
+    };
+    drawAny(&value_ctx, value_pointer);
+}
+
+fn drawSelfSortableArray(ctx: *const Context, pointer: anytype) void {
+    const node_open = beginNode(ctx.label);
+    if (beginMenu(ctx)) {
+        defer endMenu();
+    }
+    if (!node_open) return;
+    defer endNode();
+
+    const raw_pointer = &pointer.raw;
+    const raw_ctx = Context{
+        .label = "raw",
+        .type_name = @typeName(@TypeOf(raw_pointer.*)),
+        .address = @intFromPtr(raw_pointer),
+        .bit_offset = @bitOffsetOf(@TypeOf(pointer.*), "raw"),
+        .bit_size = @bitSizeOf(@TypeOf(raw_pointer.*)),
+        .parent = ctx,
+    };
+    drawAny(&raw_ctx, raw_pointer);
+
+    const sorted_pointer = &pointer.sortedConst();
+    const sorted_ctx = Context{
+        .label = "sorted",
+        .type_name = @typeName(@TypeOf(sorted_pointer.*)),
+        .address = @intFromPtr(sorted_pointer),
+        .bit_offset = null,
+        .bit_size = @bitSizeOf(@TypeOf(sorted_pointer.*)),
+        .parent = ctx,
+    };
+    drawAny(&sorted_ctx, sorted_pointer);
+}
+
+// Helper data-structures and functions.
 
 const error_string = "display error";
 
@@ -376,7 +522,7 @@ const Context = struct {
     label: [:0]const u8,
     type_name: [:0]const u8,
     address: usize,
-    bit_offset: usize,
+    bit_offset: ?usize,
     bit_size: usize,
     parent: ?*const Context,
 
@@ -426,7 +572,6 @@ fn endNode() void {
 }
 
 fn beginMenu(ctx: *const Context) bool {
-    imgui.igSetItemTooltip("Right-click to open popup.");
     const menu_open = imgui.igBeginPopupContextItem(ctx.label, imgui.ImGuiPopupFlags_MouseButtonRight);
     if (!menu_open) return false;
 
@@ -437,7 +582,9 @@ fn beginMenu(ctx: *const Context) bool {
     drawMenuText("type", ctx.type_name);
     drawSeparator();
     drawMenuText("address", std.fmt.bufPrintZ(&buffer, "{} (0x{X})", .{ ctx.address, ctx.address }) catch error_string);
-    drawMenuText("offset", bitsToText(&buffer, ctx.bit_offset) catch error_string);
+    if (ctx.bit_offset) |offset| {
+        drawMenuText("offset", bitsToText(&buffer, offset) catch error_string);
+    }
     drawMenuText("size", bitsToText(&buffer, ctx.bit_size) catch error_string);
 
     return true;
