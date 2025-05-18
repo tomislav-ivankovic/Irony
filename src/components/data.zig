@@ -113,7 +113,7 @@ fn drawBool(ctx: *const Context, pointer: *const bool) void {
 
 fn drawNumber(ctx: *const Context, pointer: anytype) void {
     const value = pointer.*;
-    var buffer: [64]u8 = undefined;
+    var buffer: [string_buffer_size]u8 = undefined;
 
     const text = if (@typeInfo(@TypeOf(value)) == .int) block: {
         break :block std.fmt.bufPrintZ(&buffer, "{} (0x{X})", .{ value, value }) catch error_string;
@@ -240,7 +240,7 @@ fn drawArray(ctx: *const Context, pointer: anytype) void {
     defer endNode();
 
     for (pointer, 0..) |*element_pointer, index| {
-        var buffer: [64]u8 = undefined;
+        var buffer: [string_buffer_size]u8 = undefined;
         const element_ctx = Context{
             .label = std.fmt.bufPrintZ(&buffer, "{}", .{index}) catch error_string,
             .type_name = @typeName(@TypeOf(element_pointer.*)),
@@ -381,7 +381,7 @@ fn drawPointer(ctx: *const Context, pointer: anytype) void {
             drawAny(&len_ctx, len_pointer);
 
             for (pointer.*, 0..) |*element_pointer, index| {
-                var buffer: [64]u8 = undefined;
+                var buffer: [string_buffer_size]u8 = undefined;
                 const element_ctx = Context{
                     .label = std.fmt.bufPrintZ(&buffer, "{}", .{index}) catch error_string,
                     .type_name = @typeName(@TypeOf(element_pointer.*)),
@@ -524,6 +524,7 @@ fn drawSelfSortableArray(ctx: *const Context, pointer: anytype) void {
 // Helper data-structures and functions.
 
 const error_string = "display error";
+const string_buffer_size = 128;
 
 const Context = struct {
     label: [:0]const u8,
@@ -593,7 +594,7 @@ fn useDefaultMenu(ctx: *const Context) void {
 }
 
 fn drawDefaultMenuItems(ctx: *const Context) void {
-    var buffer: [128]u8 = undefined;
+    var buffer: [string_buffer_size]u8 = undefined;
     drawMenuText("label", ctx.label);
     drawMenuText("path", ctx.getPath(&buffer) catch error_string);
     drawMenuText("type", ctx.type_name);
