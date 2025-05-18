@@ -67,9 +67,10 @@ fn drawVoid(ctx: *const Context) void {
     const text = "{} (void instance)";
     drawText(ctx, text);
 
-    if (!beginMenu(ctx)) return;
+    if (!beginMenu(ctx.label)) return;
     defer endMenu();
 
+    drawDefaultMenuItems(ctx);
     drawSeparator();
     drawMenuText("value", text);
 }
@@ -78,9 +79,10 @@ fn drawNull(ctx: *const Context) void {
     const text = "null";
     drawText(ctx.label, text);
 
-    if (!beginMenu(ctx)) return;
+    if (!beginMenu(ctx.label)) return;
     defer endMenu();
 
+    drawDefaultMenuItems(ctx);
     drawSeparator();
     drawMenuText("value", text);
 }
@@ -89,9 +91,10 @@ fn drawUndefined(ctx: *const Context) void {
     const text = "undefined";
     drawText(ctx, text);
 
-    if (!beginMenu(ctx)) return;
+    if (!beginMenu(ctx.label)) return;
     defer endMenu();
 
+    drawDefaultMenuItems(ctx);
     drawSeparator();
     drawMenuText("value", text);
 }
@@ -100,9 +103,10 @@ fn drawBool(ctx: *const Context, pointer: *const bool) void {
     const text = if (pointer.*) "true" else "false";
     drawText(ctx.label, text);
 
-    if (!beginMenu(ctx)) return;
+    if (!beginMenu(ctx.label)) return;
     defer endMenu();
 
+    drawDefaultMenuItems(ctx);
     drawSeparator();
     drawMenuText("value", text);
 }
@@ -118,14 +122,15 @@ fn drawNumber(ctx: *const Context, pointer: anytype) void {
     };
     drawText(ctx.label, text);
 
-    if (!beginMenu(ctx)) return;
+    if (!beginMenu(ctx.label)) return;
     defer endMenu();
 
+    drawDefaultMenuItems(ctx);
     drawSeparator();
     drawMenuText("value", text);
+    drawSeparator();
 
     const bits = @bitSizeOf(@TypeOf(value));
-    drawSeparator();
     const UType = @Type(std.builtin.Type{ .int = .{ .signedness = .unsigned, .bits = bits } });
     const u_value: UType = @bitCast(value);
     const u_text = std.fmt.bufPrintZ(&buffer, "{} (0x{X})", .{ u_value, u_value }) catch error_string;
@@ -140,6 +145,12 @@ fn drawNumber(ctx: *const Context, pointer: anytype) void {
         const f_text = std.fmt.bufPrintZ(&buffer, "{}", .{f_value}) catch error_string;
         drawMenuText(@typeName(FType), f_text);
     }
+
+    if (bits == 8) {
+        drawSeparator();
+        const char_text = std.fmt.bufPrintZ(&buffer, "{c}", .{value}) catch error_string;
+        drawMenuText("character", char_text);
+    }
 }
 
 fn drawMemoryAddress(ctx: *const Context, pointer: anytype) void {
@@ -151,9 +162,10 @@ fn drawType(ctx: *const Context, pointer: *const type) void {
     const text = @typeName(pointer.*);
     drawText(ctx.label, text);
 
-    if (!beginMenu(ctx)) return;
+    if (!beginMenu(ctx.label)) return;
     defer endMenu();
 
+    drawDefaultMenuItems(ctx);
     drawSeparator();
     drawMenuText("value", text);
 }
@@ -162,9 +174,10 @@ fn drawEnumLiteral(ctx: *const Context, pointer: anytype) void {
     const text = @tagName(pointer.*);
     drawText(ctx.label, text);
 
-    if (!beginMenu(ctx)) return;
+    if (!beginMenu(ctx.label)) return;
     defer endMenu();
 
+    drawDefaultMenuItems(ctx);
     drawSeparator();
     drawMenuText("value", text);
 }
@@ -184,9 +197,10 @@ fn drawEnum(ctx: *const Context, pointer: anytype) void {
     }
     drawText(ctx.label, text);
 
-    if (!beginMenu(ctx)) return;
+    if (!beginMenu(ctx.label)) return;
     defer endMenu();
 
+    drawDefaultMenuItems(ctx);
     drawSeparator();
     drawMenuText("value", text);
 }
@@ -195,9 +209,10 @@ fn drawError(ctx: *const Context, pointer: anytype) void {
     const text = @errorName(pointer.*);
     drawText(ctx.label, text);
 
-    if (!beginMenu(ctx)) return;
+    if (!beginMenu(ctx.label)) return;
     defer endMenu();
 
+    drawDefaultMenuItems(ctx);
     drawSeparator();
     drawMenuText("value", text);
 }
@@ -220,9 +235,7 @@ fn drawErrorUnion(ctx: *const Context, pointer: anytype) void {
 
 fn drawArray(ctx: *const Context, pointer: anytype) void {
     const node_open = beginNode(ctx.label);
-    if (beginMenu(ctx)) {
-        defer endMenu();
-    }
+    useDefaultMenu(ctx);
     if (!node_open) return;
     defer endNode();
 
@@ -242,9 +255,7 @@ fn drawArray(ctx: *const Context, pointer: anytype) void {
 
 fn drawStruct(ctx: *const Context, pointer: anytype) void {
     const node_open = beginNode(ctx.label);
-    if (beginMenu(ctx)) {
-        defer endMenu();
-    }
+    useDefaultMenu(ctx);
     if (!node_open) return;
     defer endNode();
 
@@ -271,9 +282,7 @@ fn drawStruct(ctx: *const Context, pointer: anytype) void {
 
 fn drawUnion(ctx: *const Context, pointer: anytype) void {
     const node_open = beginNode(ctx.label);
-    if (beginMenu(ctx)) {
-        defer endMenu();
-    }
+    useDefaultMenu(ctx);
     if (!node_open) return;
     defer endNode();
 
@@ -318,9 +327,7 @@ fn drawUnion(ctx: *const Context, pointer: anytype) void {
 
 fn drawPointer(ctx: *const Context, pointer: anytype) void {
     const node_open = beginNode(ctx.label);
-    if (beginMenu(ctx)) {
-        defer endMenu();
-    }
+    useDefaultMenu(ctx);
     if (!node_open) return;
     defer endNode();
 
@@ -382,9 +389,7 @@ fn drawPointer(ctx: *const Context, pointer: anytype) void {
 
 fn drawConvertedValue(ctx: *const Context, pointer: anytype) void {
     const node_open = beginNode(ctx.label);
-    if (beginMenu(ctx)) {
-        defer endMenu();
-    }
+    useDefaultMenu(ctx);
     if (!node_open) return;
     defer endNode();
 
@@ -413,9 +418,7 @@ fn drawConvertedValue(ctx: *const Context, pointer: anytype) void {
 
 fn drawCustomPointer(ctx: *const Context, pointer: anytype) void {
     const node_open = beginNode(ctx.label);
-    if (beginMenu(ctx)) {
-        defer endMenu();
-    }
+    useDefaultMenu(ctx);
     if (!node_open) return;
     defer endNode();
 
@@ -432,8 +435,7 @@ fn drawCustomPointer(ctx: *const Context, pointer: anytype) void {
 
     const value_pointer = pointer.toConstPointer() orelse {
         drawText(ctx.label, "Invalid pointer.");
-        if (!beginMenu(ctx)) return;
-        defer endMenu();
+        useDefaultMenu(ctx);
         return;
     };
     const value_ctx = Context{
@@ -449,9 +451,7 @@ fn drawCustomPointer(ctx: *const Context, pointer: anytype) void {
 
 fn drawPointerTrail(ctx: *const Context, pointer: anytype) void {
     const node_open = beginNode(ctx.label);
-    if (beginMenu(ctx)) {
-        defer endMenu();
-    }
+    useDefaultMenu(ctx);
     if (!node_open) return;
     defer endNode();
 
@@ -468,8 +468,7 @@ fn drawPointerTrail(ctx: *const Context, pointer: anytype) void {
 
     const value_pointer = pointer.toConstPointer() orelse {
         drawText(ctx.label, "Invalid pointer trail.");
-        if (!beginMenu(ctx)) return;
-        defer endMenu();
+        useDefaultMenu(ctx);
         return;
     };
     const value_ctx = Context{
@@ -485,9 +484,7 @@ fn drawPointerTrail(ctx: *const Context, pointer: anytype) void {
 
 fn drawSelfSortableArray(ctx: *const Context, pointer: anytype) void {
     const node_open = beginNode(ctx.label);
-    if (beginMenu(ctx)) {
-        defer endMenu();
-    }
+    useDefaultMenu(ctx);
     if (!node_open) return;
     defer endNode();
 
@@ -571,12 +568,22 @@ fn endNode() void {
     imgui.igTreePop();
 }
 
-fn beginMenu(ctx: *const Context) bool {
-    const menu_open = imgui.igBeginPopupContextItem(ctx.label, imgui.ImGuiPopupFlags_MouseButtonRight);
-    if (!menu_open) return false;
+fn beginMenu(id: [:0]const u8) bool {
+    return imgui.igBeginPopupContextItem(id, imgui.ImGuiPopupFlags_MouseButtonRight);
+}
 
+fn endMenu() void {
+    imgui.igEndPopup();
+}
+
+fn useDefaultMenu(ctx: *const Context) void {
+    if (!beginMenu(ctx.label)) return;
+    defer endMenu();
+    drawDefaultMenuItems(ctx);
+}
+
+fn drawDefaultMenuItems(ctx: *const Context) void {
     var buffer: [128]u8 = undefined;
-
     drawMenuText("label", ctx.label);
     drawMenuText("path", ctx.getPath(&buffer) catch error_string);
     drawMenuText("type", ctx.type_name);
@@ -586,8 +593,6 @@ fn beginMenu(ctx: *const Context) bool {
         drawMenuText("offset", bitsToText(&buffer, offset) catch error_string);
     }
     drawMenuText("size", bitsToText(&buffer, ctx.bit_size) catch error_string);
-
-    return true;
 }
 
 fn bitsToText(buffer: []u8, bits_value: usize) ![:0]u8 {
@@ -600,10 +605,6 @@ fn bitsToText(buffer: []u8, bits_value: usize) ![:0]u8 {
     } else {
         return std.fmt.bufPrintZ(buffer, "{} (0x{X}) bytes, {} (0x{X}) bits", .{ bytes, bytes, bits, bits });
     }
-}
-
-fn endMenu() void {
-    imgui.igEndPopup();
 }
 
 fn drawMenuText(label: [:0]const u8, text: [:0]const u8) void {
