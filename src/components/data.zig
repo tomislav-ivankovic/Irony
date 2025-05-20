@@ -115,7 +115,9 @@ fn drawNumber(ctx: *const Context, pointer: anytype) void {
     const value = pointer.*;
     var buffer: [string_buffer_size]u8 = undefined;
 
-    const text = if (@typeInfo(@TypeOf(value)) == .int) block: {
+    const text = if (@TypeOf(value) == u8 and std.ascii.isPrint(value)) block: {
+        break :block std.fmt.bufPrintZ(&buffer, "{} (0x{X}) '{c}'", .{ value, value, value }) catch error_string;
+    } else if (@typeInfo(@TypeOf(value)) == .int) block: {
         break :block std.fmt.bufPrintZ(&buffer, "{} (0x{X})", .{ value, value }) catch error_string;
     } else block: {
         break :block std.fmt.bufPrintZ(&buffer, "{}", .{value}) catch error_string;
@@ -148,8 +150,12 @@ fn drawNumber(ctx: *const Context, pointer: anytype) void {
 
     if (bits == 8) {
         drawSeparator();
-        const char_text = std.fmt.bufPrintZ(&buffer, "{c}", .{u_value}) catch error_string;
-        drawMenuText("character", char_text);
+        if (std.ascii.isPrint(u_value)) {
+            const char_text = std.fmt.bufPrintZ(&buffer, "{c}", .{u_value}) catch error_string;
+            drawMenuText("character", char_text);
+        } else {
+            drawMenuText("character", "not printable");
+        }
     }
 }
 
