@@ -198,6 +198,8 @@ fn drawEnum(ctx: *const Context, pointer: anytype) void {
             break;
         }
     } else {
+        pushErrorStyle();
+        defer popErrorStyle();
         drawAny(ctx, &value);
         return;
     }
@@ -241,9 +243,9 @@ fn drawErrorUnion(ctx: *const Context, pointer: anytype) void {
 
 fn drawArray(ctx: *const Context, pointer: anytype) void {
     const node_open = beginNode(ctx.label);
+    defer if (node_open) endNode();
     useDefaultMenu(ctx);
     if (!node_open) return;
-    defer endNode();
 
     for (pointer, 0..) |*element_pointer, index| {
         var buffer: [string_buffer_size]u8 = undefined;
@@ -261,6 +263,7 @@ fn drawArray(ctx: *const Context, pointer: anytype) void {
 
 fn drawStruct(ctx: *const Context, pointer: anytype) void {
     const node_open = beginNode(ctx.label);
+    defer if (node_open) endNode();
 
     const storage = imgui.igGetStateStorage();
     const show_hidden_id = imgui.igGetID_Str("show_hidden");
@@ -278,7 +281,6 @@ fn drawStruct(ctx: *const Context, pointer: anytype) void {
     imgui.ImGuiStorage_SetBool(storage, cast_to_array_id, cast_to_array);
 
     if (!node_open) return;
-    defer endNode();
 
     if (cast_to_array) {
         drawStructAsArray(ctx, pointer);
@@ -344,9 +346,9 @@ fn drawStructAsArray(ctx: *const Context, pointer: anytype) void {
 
 fn drawUnion(ctx: *const Context, pointer: anytype) void {
     const node_open = beginNode(ctx.label);
+    defer if (node_open) endNode();
     useDefaultMenu(ctx);
     if (!node_open) return;
-    defer endNode();
 
     const info = @typeInfo(@TypeOf(pointer.*)).@"union";
     if (info.tag_type) |Tag| {
@@ -389,9 +391,9 @@ fn drawUnion(ctx: *const Context, pointer: anytype) void {
 
 fn drawPointer(ctx: *const Context, pointer: anytype) void {
     const node_open = beginNode(ctx.label);
+    defer if (node_open) endNode();
     useDefaultMenu(ctx);
     if (!node_open) return;
-    defer endNode();
 
     const address_pointer: *const usize = @ptrCast(pointer);
     const address_ctx = Context{
@@ -451,9 +453,9 @@ fn drawPointer(ctx: *const Context, pointer: anytype) void {
 
 fn drawConvertedValue(ctx: *const Context, pointer: anytype) void {
     const node_open = beginNode(ctx.label);
+    defer if (node_open) endNode();
     useDefaultMenu(ctx);
     if (!node_open) return;
-    defer endNode();
 
     const raw_pointer = &pointer.raw;
     const raw_ctx = Context{
@@ -479,10 +481,14 @@ fn drawConvertedValue(ctx: *const Context, pointer: anytype) void {
 }
 
 fn drawCustomPointer(ctx: *const Context, pointer: anytype) void {
+    const maybe_value_pointer = pointer.toConstPointer();
+    if (maybe_value_pointer == null) pushErrorStyle();
+    defer if (maybe_value_pointer == null) popErrorStyle();
+
     const node_open = beginNode(ctx.label);
+    defer if (node_open) endNode();
     useDefaultMenu(ctx);
     if (!node_open) return;
-    defer endNode();
 
     const address_pointer = &pointer.address;
     const address_ctx = Context{
@@ -495,7 +501,7 @@ fn drawCustomPointer(ctx: *const Context, pointer: anytype) void {
     };
     drawAny(&address_ctx, address_pointer);
 
-    const value_pointer = pointer.toConstPointer() orelse {
+    const value_pointer = maybe_value_pointer orelse {
         drawText("value", "not readable");
         return;
     };
@@ -511,10 +517,14 @@ fn drawCustomPointer(ctx: *const Context, pointer: anytype) void {
 }
 
 fn drawPointerTrail(ctx: *const Context, pointer: anytype) void {
+    const maybe_value_pointer = pointer.toConstPointer();
+    if (maybe_value_pointer == null) pushErrorStyle();
+    defer if (maybe_value_pointer == null) popErrorStyle();
+
     const node_open = beginNode(ctx.label);
+    defer if (node_open) endNode();
     useDefaultMenu(ctx);
     if (!node_open) return;
-    defer endNode();
 
     const offsets_pointer = &pointer.getOffsets();
     const offsets_ctx = Context{
@@ -527,7 +537,7 @@ fn drawPointerTrail(ctx: *const Context, pointer: anytype) void {
     };
     drawAny(&offsets_ctx, offsets_pointer);
 
-    const value_pointer = pointer.toConstPointer() orelse {
+    const value_pointer = maybe_value_pointer orelse {
         drawText("value", "not readable");
         return;
     };
@@ -544,9 +554,9 @@ fn drawPointerTrail(ctx: *const Context, pointer: anytype) void {
 
 fn drawSelfSortableArray(ctx: *const Context, pointer: anytype) void {
     const node_open = beginNode(ctx.label);
+    defer if (node_open) endNode();
     useDefaultMenu(ctx);
     if (!node_open) return;
-    defer endNode();
 
     const raw_pointer = &pointer.raw;
     const raw_ctx = Context{
@@ -574,6 +584,7 @@ fn drawSelfSortableArray(ctx: *const Context, pointer: anytype) void {
 // Helper data-structures and functions.
 
 const error_string = "display error";
+const error_color = imgui.ImVec4{ .x = 1, .y = 0.5, .z = 0.5, .w = 1 };
 const string_buffer_size = 128;
 
 const Context = struct {
@@ -627,6 +638,14 @@ fn beginNode(label: [:0]const u8) bool {
 
 fn endNode() void {
     imgui.igTreePop();
+}
+
+fn pushErrorStyle() void {
+    imgui.igPushStyleColor_Vec4(imgui.ImGuiCol_Text, error_color);
+}
+
+fn popErrorStyle() void {
+    imgui.igPopStyleColor(1);
 }
 
 fn beginMenu(id: [:0]const u8) bool {
