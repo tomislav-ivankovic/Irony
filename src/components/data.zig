@@ -148,7 +148,7 @@ fn drawNumber(ctx: *const Context, pointer: anytype) void {
 
     if (bits == 8) {
         drawSeparator();
-        const char_text = std.fmt.bufPrintZ(&buffer, "{c}", .{value}) catch error_string;
+        const char_text = std.fmt.bufPrintZ(&buffer, "{c}", .{u_value}) catch error_string;
         drawMenuText("character", char_text);
     }
 }
@@ -255,18 +255,29 @@ fn drawArray(ctx: *const Context, pointer: anytype) void {
 
 fn drawStruct(ctx: *const Context, pointer: anytype) void {
     const node_open = beginNode(ctx.label);
+
     const storage = imgui.igGetStateStorage();
     const show_hidden_id = imgui.igGetID_Str("show_hidden");
+    const cast_to_array_id = imgui.igGetID_Str("cast_to_array");
     var show_hidden = imgui.ImGuiStorage_GetBool(storage, show_hidden_id, false);
+    var cast_to_array = imgui.ImGuiStorage_GetBool(storage, cast_to_array_id, false);
     if (beginMenu(ctx.label)) {
         defer endMenu();
         drawDefaultMenuItems(ctx);
         drawSeparator();
         _ = imgui.igCheckbox("Show Hidden Fields", &show_hidden);
+        _ = imgui.igCheckbox("Cast to Array", &cast_to_array);
     }
     imgui.ImGuiStorage_SetBool(storage, show_hidden_id, show_hidden);
+    imgui.ImGuiStorage_SetBool(storage, cast_to_array_id, cast_to_array);
+
     if (!node_open) return;
     defer endNode();
+
+    if (cast_to_array) {
+        drawStructAsArray(ctx, pointer);
+        return;
+    }
 
     const info = @typeInfo(@TypeOf(pointer.*)).@"struct";
     if (info.backing_integer) |BackingInt| {
@@ -298,6 +309,30 @@ fn drawStruct(ctx: *const Context, pointer: anytype) void {
             };
             drawAny(&field_ctx, field_pointer);
         }
+    }
+}
+
+fn drawStructAsArray(ctx: *const Context, pointer: anytype) void {
+    const Struct = @TypeOf(pointer.*);
+    inline for (.{ u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, f32, f64 }) |Element| {
+        if (@sizeOf(Element) > @sizeOf(Struct) or @alignOf(Struct) % @alignOf(Element) != 0) {
+            continue;
+        }
+        const Array = @Type(.{ .array = .{
+            .child = Element,
+            .len = @sizeOf(Struct) / @sizeOf(Element),
+            .sentinel_ptr = null,
+        } });
+        const array_pointer: *const Array = @ptrCast(pointer);
+        const array_ctx = Context{
+            .label = @typeName(Array),
+            .type_name = @typeName(Array),
+            .address = @intFromPtr(array_pointer),
+            .bit_offset = null,
+            .bit_size = @bitSizeOf(Array),
+            .parent = ctx,
+        };
+        drawAny(&array_ctx, array_pointer);
     }
 }
 
