@@ -690,6 +690,18 @@ pub const TestContext = struct {
 
     // Custom functions:
 
+    pub fn expectItemExists(self: Self, ref: anytype) !void {
+        const exists = self.itemExists(ref);
+        if (exists) return;
+        const ref_object = anyToRef(ref);
+        if (ref_object.Path != null) {
+            std.log.err("Failed to find item with ID: \"{s}\"", .{ref_object.Path});
+        } else {
+            std.log.err("Failed to find item with ID: {}", .{ref_object.ID});
+        }
+        return error.ItemNotFound;
+    }
+
     pub fn getScrollX(self: Self, window_ref: anytype) f32 {
         return imgui.ImGuiTestContext_GetScrollX(self.raw, anyToRef(window_ref));
     }

@@ -47,15 +47,15 @@ fn getLogColor(log_level: std.log.Level) imgui.ImVec4 {
 }
 
 fn drawColoredText(color: imgui.ImVec4, text: [:0]const u8) void {
+    imgui.igTextColored(color, "%s", text.ptr);
     if (builtin.is_test) {
-        var pos: imgui.ImVec2 = undefined;
-        imgui.igGetCursorScreenPos(&pos);
-        var size: imgui.ImVec2 = undefined;
-        imgui.igCalcTextSize(&size, text, null, false, -1.0);
-        const rect = imgui.ImRect{ .Min = pos, .Max = .{ .x = pos.x + size.x, .y = pos.y + size.y } };
+        var min: imgui.ImVec2 = undefined;
+        var max: imgui.ImVec2 = undefined;
+        imgui.igGetItemRectMin(&min);
+        imgui.igGetItemRectMax(&max);
+        const rect = imgui.ImRect{ .Min = min, .Max = max };
         imgui.teItemAdd(imgui.igGetCurrentContext(), imgui.igGetID_Str(text), &rect, null);
     }
-    imgui.igTextColored(color, "%s", text.ptr);
 }
 
 const testing = std.testing;
@@ -90,10 +90,10 @@ test "should render every log message" {
         struct {
             fn call(ctx: ui.TestContext) !void {
                 ctx.setRef("Logs");
-                try testing.expect(ctx.itemExists("2020-01-02T03:04:05.123456789 [debug] Message: 1"));
-                try testing.expect(ctx.itemExists("2020-01-02T03:04:05.123456789 [info] Message: 2"));
-                try testing.expect(ctx.itemExists("2020-01-02T03:04:05.123456789 [warning] Message: 3"));
-                try testing.expect(ctx.itemExists("2020-01-02T03:04:05.123456789 [error] Message: 4"));
+                try ctx.expectItemExists("2020-01-02T03:04:05.123456789 [debug] Message: 1");
+                try ctx.expectItemExists("2020-01-02T03:04:05.123456789 [info] Message: 2");
+                try ctx.expectItemExists("2020-01-02T03:04:05.123456789 [warning] Message: 3");
+                try ctx.expectItemExists("2020-01-02T03:04:05.123456789 [error] Message: 4");
             }
         }.call,
     );
