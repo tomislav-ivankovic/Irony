@@ -409,7 +409,7 @@ fn drawPointer(ctx: *const Context, pointer: anytype) void {
             const len_ctx = Context{
                 .label = "len",
                 .type_name = @typeName(@TypeOf(len_pointer.*)),
-                .address = @intFromPtr(address_pointer),
+                .address = @intFromPtr(len_pointer),
                 .bit_offset = null,
                 .bit_size = @bitSizeOf(@TypeOf(len_pointer.*)),
                 .parent = ctx,
@@ -455,10 +455,10 @@ fn drawConvertedValue(ctx: *const Context, pointer: anytype) void {
     const value_pointer = &pointer.getValue();
     const value_ctx = Context{
         .label = "value",
-        .type_name = @typeName(@TypeOf(raw_pointer.*)),
-        .address = @intFromPtr(raw_pointer),
+        .type_name = @typeName(@TypeOf(value_pointer.*)),
+        .address = @intFromPtr(value_pointer),
         .bit_offset = null,
-        .bit_size = @bitSizeOf(@TypeOf(raw_pointer.*)),
+        .bit_size = @bitSizeOf(@TypeOf(value_pointer.*)),
         .parent = ctx,
     };
     drawAny(&value_ctx, value_pointer);
@@ -728,6 +728,8 @@ fn drawSeparator() void {
     imgui.igSeparator();
 }
 
+// Language types tests.
+
 const testing = std.testing;
 
 test "should draw void correctly" {
@@ -742,6 +744,8 @@ test "should draw void correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
+            const address = @intFromPtr(&value);
+
             ctx.setRef("Window");
             try ctx.expectItemExists("test: {} (void instance)");
             ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
@@ -750,10 +754,7 @@ test "should draw void correctly" {
             try ctx.expectItemExists("label: test");
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: void");
-            const address = @intFromPtr(&value);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            try ctx.expectItemExists(address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
             try ctx.expectItemExists("size: 0 (0x0) bytes");
             try ctx.expectItemExists("value: {} (void instance)");
         }
@@ -774,6 +775,8 @@ test "should draw null correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
+            const address = @intFromPtr(&value);
+
             ctx.setRef("Window");
             try ctx.expectItemExists("test: null");
             ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
@@ -782,10 +785,7 @@ test "should draw null correctly" {
             try ctx.expectItemExists("label: test");
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: ?void");
-            const address = @intFromPtr(&value);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            try ctx.expectItemExists(address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
             try ctx.expectItemExists("size: 1 (0x1) bytes");
             try ctx.expectItemExists("value: null");
         }
@@ -806,6 +806,8 @@ test "should draw bool correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
+            const address = @intFromPtr(&value);
+
             ctx.setRef("Window");
             try ctx.expectItemExists("test: false");
             ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
@@ -814,10 +816,7 @@ test "should draw bool correctly" {
             try ctx.expectItemExists("label: test");
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: bool");
-            const address = @intFromPtr(&value);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            try ctx.expectItemExists(address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
             try ctx.expectItemExists("size: 1 (0x1) bits");
             try ctx.expectItemExists("value: false");
 
@@ -847,6 +846,8 @@ test "should draw int correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
+            const address = @intFromPtr(&value);
+
             ctx.setRef("Window");
             try ctx.expectItemExists("test: 97 (0x61) 'a'");
             ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
@@ -855,10 +856,7 @@ test "should draw int correctly" {
             try ctx.expectItemExists("label: test");
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: u8");
-            const address = @intFromPtr(&value);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            try ctx.expectItemExists(address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
             try ctx.expectItemExists("size: 1 (0x1) bytes");
             try ctx.expectItemExists("value: 97 (0x61) 'a'");
             try ctx.expectItemExists("u8: 97 (0x61)");
@@ -890,6 +888,8 @@ test "should draw float correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
+            const address = @intFromPtr(&value);
+
             ctx.setRef("Window");
             try ctx.expectItemExists("test: -1e0");
             ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
@@ -898,10 +898,7 @@ test "should draw float correctly" {
             try ctx.expectItemExists("label: test");
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: f32");
-            const address = @intFromPtr(&value);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            try ctx.expectItemExists(address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
             try ctx.expectItemExists("size: 4 (0x4) bytes");
             try ctx.expectItemExists("value: -1e0");
             try ctx.expectItemExists("u32: 3212836864 (0xBF800000)");
@@ -926,6 +923,8 @@ test "should draw enum correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
+            const address = @intFromPtr(&value);
+
             ctx.setRef("Window");
             try ctx.expectItemExists("test: test_value");
             ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
@@ -934,10 +933,7 @@ test "should draw enum correctly" {
             try ctx.expectItemExists("label: test");
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: " ++ @typeName(Enum));
-            const address = @intFromPtr(&value);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            try ctx.expectItemExists(address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
             try ctx.expectItemExists("size: 1 (0x1) bytes");
             try ctx.expectItemExists("value: test_value");
             try ctx.expectItemExists("u8: 255 (0xFF)");
@@ -973,6 +969,9 @@ test "should draw error correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
+            const address = @intFromPtr(&value);
+            const size = @sizeOf(anyerror);
+
             ctx.setRef("Window");
             try ctx.expectItemExists("test: error.TestError");
             ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
@@ -981,14 +980,8 @@ test "should draw error correctly" {
             try ctx.expectItemExists("label: test");
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: anyerror");
-            const address = @intFromPtr(&value);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            try ctx.expectItemExists(address_str);
-            const size = @sizeOf(anyerror);
-            const size_str = try std.fmt.allocPrintZ(testing.allocator, "size: {} (0x{X}) bytes", .{ size, size });
-            defer testing.allocator.free(size_str);
-            try ctx.expectItemExists(size_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ size, size });
             try ctx.expectItemExists("value: error.TestError");
         }
     };
@@ -1008,6 +1001,8 @@ test "should draw optional correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
+            const address = @intFromPtr(&value);
+
             ctx.setRef("Window");
             try ctx.expectItemExists("test: null");
             ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
@@ -1016,10 +1011,7 @@ test "should draw optional correctly" {
             try ctx.expectItemExists("label: test");
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: ?bool");
-            const address = @intFromPtr(&value);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            try ctx.expectItemExists(address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
             try ctx.expectItemExists("size: 2 (0x2) bytes");
             try ctx.expectItemExists("value: null");
 
@@ -1049,6 +1041,9 @@ test "should draw error union correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
+            const address = @intFromPtr(&value);
+            const size = @sizeOf(anyerror!bool);
+
             ctx.setRef("Window");
             try ctx.expectItemExists("test: false");
             ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
@@ -1057,14 +1052,8 @@ test "should draw error union correctly" {
             try ctx.expectItemExists("label: test");
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: anyerror!bool");
-            const address = @intFromPtr(&value);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            try ctx.expectItemExists(address_str);
-            const size = @sizeOf(anyerror!bool);
-            const size_str = try std.fmt.allocPrintZ(testing.allocator, "size: {} (0x{X}) bytes", .{ size, size });
-            defer testing.allocator.free(size_str);
-            try ctx.expectItemExists(size_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ size, size });
             try ctx.expectItemExists("value: false");
 
             value = error.TestError;
@@ -1101,26 +1090,17 @@ test "should draw function correctly" {
             const int_value = @intFromPtr(value);
             const size = @sizeOf(usize);
 
-            const test_str = try std.fmt.allocPrintZ(testing.allocator, "test: {} (0x{X})", .{ int_value, int_value });
-            defer testing.allocator.free(test_str);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            const size_str = try std.fmt.allocPrintZ(testing.allocator, "size: {} (0x{X}) bytes", .{ size, size });
-            defer testing.allocator.free(size_str);
-            const value_str = try std.fmt.allocPrintZ(testing.allocator, "value: {} (0x{X})", .{ int_value, int_value });
-            defer testing.allocator.free(value_str);
-
             ctx.setRef("Window");
-            try ctx.expectItemExists(test_str);
+            try ctx.expectItemExistsFmt("test: {} (0x{X})", .{ int_value, int_value });
             ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
 
             ctx.setRef("//$FOCUSED");
             try ctx.expectItemExists("label: test");
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: *const fn (i32, i32) i32");
-            try ctx.expectItemExists(address_str);
-            try ctx.expectItemExists(size_str);
-            try ctx.expectItemExists(value_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ size, size });
+            try ctx.expectItemExistsFmt("value: {} (0x{X})", .{ int_value, int_value });
         }
     };
     const context = try ui.getTestingContext();
@@ -1139,6 +1119,9 @@ test "should draw opaque correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
+            const address = @intFromPtr(&value);
+            const size = @sizeOf(usize);
+
             ctx.setRef("Window");
             try ctx.expectItemExists("test: 1234 (0x4D2)");
             ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
@@ -1147,13 +1130,8 @@ test "should draw opaque correctly" {
             try ctx.expectItemExists("label: test");
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: " ++ @typeName(@TypeOf(value)));
-            const address = @intFromPtr(&value);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            try ctx.expectItemExists(address_str);
-            const size = @sizeOf(usize);
-            const size_str = try std.fmt.allocPrintZ(testing.allocator, "size: {} (0x{X}) bytes", .{ size, size });
-            defer testing.allocator.free(size_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ size, size });
             try ctx.expectItemExists("value: 1234 (0x4D2)");
             try ctx.expectItemExists("u64: 1234 (0x4D2)");
             try ctx.expectItemExists("i64: 1234 (0x4D2)");
@@ -1175,6 +1153,9 @@ test "should draw array correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
+            const array_address = @intFromPtr(&value);
+            const element_address = @intFromPtr(&value[2]);
+
             ctx.setRef("Window");
             try ctx.expectItemExists("array");
             ctx.itemClick("array", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
@@ -1183,10 +1164,8 @@ test "should draw array correctly" {
             try ctx.expectItemExists("label: array");
             try ctx.expectItemExists("path: array");
             try ctx.expectItemExists("type: [3]u32");
-            const address = @intFromPtr(&value);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            try ctx.expectItemExists(address_str);
+
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ array_address, array_address });
             try ctx.expectItemExists("size: 12 (0xC) bytes");
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
 
@@ -1201,14 +1180,7 @@ test "should draw array correctly" {
             try ctx.expectItemExists("label: 2");
             try ctx.expectItemExists("path: array.2");
             try ctx.expectItemExists("type: u32");
-            const element_address = address + 8;
-            const element_address_str = try std.fmt.allocPrintZ(
-                testing.allocator,
-                "address: {} (0x{X})",
-                .{ element_address, element_address },
-            );
-            defer testing.allocator.free(element_address_str);
-            try ctx.expectItemExists(element_address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ element_address, element_address });
             try ctx.expectItemExists("offset: 8 (0x8) bytes");
             try ctx.expectItemExists("size: 4 (0x4) bytes");
             try ctx.expectItemExists("value: 3 (0x3)");
@@ -1236,6 +1208,9 @@ test "should draw struct correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
+            const struct_address = @intFromPtr(&value);
+            const field_address = @intFromPtr(&value.field_2);
+
             ctx.setRef("Window");
             try ctx.expectItemExists("struct");
             ctx.itemClick("struct", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
@@ -1244,10 +1219,7 @@ test "should draw struct correctly" {
             try ctx.expectItemExists("label: struct");
             try ctx.expectItemExists("path: struct");
             try ctx.expectItemExists("type: " ++ @typeName(Struct));
-            const address = @intFromPtr(&value);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            try ctx.expectItemExists(address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ struct_address, struct_address });
             try ctx.expectItemExists("size: 16 (0x10) bytes");
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
 
@@ -1263,14 +1235,7 @@ test "should draw struct correctly" {
             try ctx.expectItemExists("label: field_2");
             try ctx.expectItemExists("path: struct.field_2");
             try ctx.expectItemExists("type: u32");
-            const element_address = address + 8;
-            const element_address_str = try std.fmt.allocPrintZ(
-                testing.allocator,
-                "address: {} (0x{X})",
-                .{ element_address, element_address },
-            );
-            defer testing.allocator.free(element_address_str);
-            try ctx.expectItemExists(element_address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ field_address, field_address });
             try ctx.expectItemExists("offset: 8 (0x8) bytes");
             try ctx.expectItemExists("size: 4 (0x4) bytes");
             try ctx.expectItemExists("value: 3 (0x3)");
@@ -1335,6 +1300,9 @@ test "should draw packed struct correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
+            const struct_address = @intFromPtr(&value);
+            const field_address = @intFromPtr(&value.field_2);
+
             ctx.setRef("Window");
             try ctx.expectItemExists("packed");
             ctx.itemClick("packed", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
@@ -1343,10 +1311,7 @@ test "should draw packed struct correctly" {
             try ctx.expectItemExists("label: packed");
             try ctx.expectItemExists("path: packed");
             try ctx.expectItemExists("type: " ++ @typeName(Struct));
-            const address = @intFromPtr(&value);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            try ctx.expectItemExists(address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ struct_address, struct_address });
             try ctx.expectItemExists("size: 1 (0x1) bytes");
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
 
@@ -1363,7 +1328,7 @@ test "should draw packed struct correctly" {
             try ctx.expectItemExists("label: field_1");
             try ctx.expectItemExists("path: packed.field_1");
             try ctx.expectItemExists("type: bool");
-            try ctx.expectItemExists(address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ field_address, field_address });
             try ctx.expectItemExists("offset: 2 (0x2) bits");
             try ctx.expectItemExists("size: 1 (0x1) bits");
             try ctx.expectItemExists("value: true");
@@ -1403,6 +1368,8 @@ test "should draw union correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
+            const address = @intFromPtr(&value);
+
             ctx.setRef("Window");
             try ctx.expectItemExists("union");
             ctx.itemClick("union", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
@@ -1411,10 +1378,7 @@ test "should draw union correctly" {
             try ctx.expectItemExists("label: union");
             try ctx.expectItemExists("path: union");
             try ctx.expectItemExists("type: " ++ @typeName(Int8));
-            const address = @intFromPtr(&value);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            try ctx.expectItemExists(address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
             try ctx.expectItemExists("size: 1 (0x1) bytes");
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
 
@@ -1428,7 +1392,7 @@ test "should draw union correctly" {
             try ctx.expectItemExists("label: signed");
             try ctx.expectItemExists("path: union.signed");
             try ctx.expectItemExists("type: i8");
-            try ctx.expectItemExists(address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
             try ctx.expectItemExists("size: 1 (0x1) bytes");
             try ctx.expectItemExists("value: -1 (0x-1)");
         }
@@ -1455,16 +1419,8 @@ test "should draw tagged union correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
-            const address = @intFromPtr(&value);
-            const address_str = try std.fmt.allocPrintZ(testing.allocator, "address: {} (0x{X})", .{ address, address });
-            defer testing.allocator.free(address_str);
-            const value_address = address + 1;
-            const value_address_str = try std.fmt.allocPrintZ(
-                testing.allocator,
-                "address: {} (0x{X})",
-                .{ value_address, value_address },
-            );
-            defer testing.allocator.free(value_address_str);
+            const tag_address = @intFromPtr(&value);
+            const value_address = tag_address + 1;
 
             ctx.setRef("Window");
             try ctx.expectItemExists("tagged");
@@ -1474,7 +1430,7 @@ test "should draw tagged union correctly" {
             try ctx.expectItemExists("label: tagged");
             try ctx.expectItemExists("path: tagged");
             try ctx.expectItemExists("type: " ++ @typeName(Int8));
-            try ctx.expectItemExists(address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ tag_address, tag_address });
             try ctx.expectItemExists("size: 2 (0x2) bytes");
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
 
@@ -1488,7 +1444,7 @@ test "should draw tagged union correctly" {
             try ctx.expectItemExists("label: tag");
             try ctx.expectItemExists("path: tagged.tag");
             try ctx.expectItemExists("type: " ++ @typeName(@typeInfo(Int8).@"union".tag_type.?));
-            try ctx.expectItemExists(address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ tag_address, tag_address });
             try ctx.expectItemExists("offset: 0 (0x0) bytes");
             try ctx.expectItemExists("size: 1 (0x1) bytes");
             try ctx.expectItemExists("value: unsigned");
@@ -1501,7 +1457,7 @@ test "should draw tagged union correctly" {
             try ctx.expectItemExists("label: value");
             try ctx.expectItemExists("path: tagged.value");
             try ctx.expectItemExists("type: u8");
-            try ctx.expectItemExists(value_address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ value_address, value_address });
             try ctx.expectItemExists("offset: 1 (0x1) bytes");
             try ctx.expectItemExists("size: 1 (0x1) bytes");
             try ctx.expectItemExists("value: 255 (0xFF)");
@@ -1519,7 +1475,7 @@ test "should draw tagged union correctly" {
             try ctx.expectItemExists("label: value");
             try ctx.expectItemExists("path: tagged.value");
             try ctx.expectItemExists("type: i8");
-            try ctx.expectItemExists(value_address_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ value_address, value_address });
             try ctx.expectItemExists("offset: 1 (0x1) bytes");
             try ctx.expectItemExists("size: 1 (0x1) bytes");
             try ctx.expectItemExists("value: -1 (0x-1)");
@@ -1543,38 +1499,7 @@ test "should draw pointer correctly" {
         fn testFunction(ctx: ui.TestContext) !void {
             const pointer_address = @intFromPtr(&value);
             const value_address = @intFromPtr(value);
-            const word_size = @sizeOf(usize);
-
-            const address_str_1 = try std.fmt.allocPrintZ(
-                testing.allocator,
-                "address: {} (0x{X})",
-                .{ pointer_address, pointer_address },
-            );
-            defer testing.allocator.free(address_str_1);
-            const address_str_2 = try std.fmt.allocPrintZ(
-                testing.allocator,
-                "address: {} (0x{X})",
-                .{ value_address, value_address },
-            );
-            defer testing.allocator.free(address_str_2);
-            const pointer_address_str = try std.fmt.allocPrintZ(
-                testing.allocator,
-                "pointer/address: {} (0x{X})",
-                .{ value_address, value_address },
-            );
-            defer testing.allocator.free(pointer_address_str);
-            const value_str = try std.fmt.allocPrintZ(
-                testing.allocator,
-                "value: {} (0x{X})",
-                .{ value_address, value_address },
-            );
-            defer testing.allocator.free(value_str);
-            const size_str = try std.fmt.allocPrintZ(
-                testing.allocator,
-                "size: {} (0x{X}) bytes",
-                .{ word_size, word_size },
-            );
-            defer testing.allocator.free(size_str);
+            const pointer_size = @sizeOf(usize);
 
             ctx.setRef("Window");
             try ctx.expectItemExists("pointer");
@@ -1584,13 +1509,13 @@ test "should draw pointer correctly" {
             try ctx.expectItemExists("label: pointer");
             try ctx.expectItemExists("path: pointer");
             try ctx.expectItemExists("type: *const i32");
-            try ctx.expectItemExists(address_str_1);
-            try ctx.expectItemExists(size_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ pointer_address, pointer_address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ pointer_size, pointer_size });
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
 
             ctx.setRef("Window");
             ctx.itemClick("pointer", imgui.ImGuiMouseButton_Left, 0);
-            try ctx.expectItemExists(pointer_address_str);
+            try ctx.expectItemExistsFmt("pointer/address: {} (0x{X})", .{ value_address, value_address });
             try ctx.expectItemExists("pointer/value: 123 (0x7B)");
             ctx.itemClick("pointer/address", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
 
@@ -1598,9 +1523,9 @@ test "should draw pointer correctly" {
             try ctx.expectItemExists("label: address");
             try ctx.expectItemExists("path: pointer.address");
             try ctx.expectItemExists("type: usize");
-            try ctx.expectItemExists(address_str_1);
-            try ctx.expectItemExists(size_str);
-            try ctx.expectItemExists(value_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ pointer_address, pointer_address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ pointer_size, pointer_size });
+            try ctx.expectItemExistsFmt("value: {} (0x{X})", .{ value_address, value_address });
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
 
             ctx.setRef("Window");
@@ -1610,7 +1535,7 @@ test "should draw pointer correctly" {
             try ctx.expectItemExists("label: value");
             try ctx.expectItemExists("path: pointer.value");
             try ctx.expectItemExists("type: i32");
-            try ctx.expectItemExists(address_str_2);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ value_address, value_address });
             try ctx.expectItemExists("size: 4 (0x4) bytes");
             try ctx.expectItemExists("value: 123 (0x7B)");
         }
@@ -1632,54 +1557,11 @@ test "should draw slice correctly" {
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
-            const slice_address = @intFromPtr(&slice.ptr);
+            const slice_address = @intFromPtr(&slice);
             const len_address = @intFromPtr(&slice.len);
             const array_address = @intFromPtr(&array);
             const element_address = @intFromPtr(&array[2]);
-            const word_size = @sizeOf(usize);
-
-            const address_str_1 = try std.fmt.allocPrintZ(
-                testing.allocator,
-                "address: {} (0x{X})",
-                .{ slice_address, slice_address },
-            );
-            defer testing.allocator.free(address_str_1);
-            const address_str_2 = try std.fmt.allocPrintZ(
-                testing.allocator,
-                "address: {} (0x{X})",
-                .{ len_address, len_address },
-            );
-            defer testing.allocator.free(address_str_2);
-            const address_str_3 = try std.fmt.allocPrintZ(
-                testing.allocator,
-                "address: {} (0x{X})",
-                .{ element_address, element_address },
-            );
-            defer testing.allocator.free(address_str_3);
-            const slice_address_str = try std.fmt.allocPrintZ(
-                testing.allocator,
-                "slice/address: {} (0x{X})",
-                .{ array_address, array_address },
-            );
-            defer testing.allocator.free(slice_address_str);
-            const value_str = try std.fmt.allocPrintZ(
-                testing.allocator,
-                "value: {} (0x{X})",
-                .{ array_address, array_address },
-            );
-            defer testing.allocator.free(value_str);
-            const size_str_1 = try std.fmt.allocPrintZ(
-                testing.allocator,
-                "size: {} (0x{X}) bytes",
-                .{ 2 * word_size, 2 * word_size },
-            );
-            defer testing.allocator.free(size_str_1);
-            const size_str_2 = try std.fmt.allocPrintZ(
-                testing.allocator,
-                "size: {} (0x{X}) bytes",
-                .{ word_size, word_size },
-            );
-            defer testing.allocator.free(size_str_2);
+            const pointer_size = @sizeOf(usize);
 
             ctx.setRef("Window");
             try ctx.expectItemExists("slice");
@@ -1689,13 +1571,13 @@ test "should draw slice correctly" {
             try ctx.expectItemExists("label: slice");
             try ctx.expectItemExists("path: slice");
             try ctx.expectItemExists("type: []u32");
-            try ctx.expectItemExists(address_str_1);
-            try ctx.expectItemExists(size_str_1);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ slice_address, slice_address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ 2 * pointer_size, 2 * pointer_size });
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
 
             ctx.setRef("Window");
             ctx.itemClick("slice", imgui.ImGuiMouseButton_Left, 0);
-            try ctx.expectItemExists(slice_address_str);
+            try ctx.expectItemExistsFmt("slice/address: {} (0x{X})", .{ array_address, array_address });
             try ctx.expectItemExists("slice/len: 3 (0x3)");
             try ctx.expectItemExists("slice/0: 1 (0x1)");
             try ctx.expectItemExists("slice/1: 2 (0x2)");
@@ -1706,9 +1588,9 @@ test "should draw slice correctly" {
             try ctx.expectItemExists("label: address");
             try ctx.expectItemExists("path: slice.address");
             try ctx.expectItemExists("type: usize");
-            try ctx.expectItemExists(address_str_1);
-            try ctx.expectItemExists(size_str_2);
-            try ctx.expectItemExists(value_str);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ slice_address, slice_address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ pointer_size, pointer_size });
+            try ctx.expectItemExistsFmt("value: {} (0x{X})", .{ array_address, array_address });
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
 
             ctx.setRef("Window");
@@ -1718,8 +1600,8 @@ test "should draw slice correctly" {
             try ctx.expectItemExists("label: len");
             try ctx.expectItemExists("path: slice.len");
             try ctx.expectItemExists("type: usize");
-            try ctx.expectItemExists(address_str_1);
-            try ctx.expectItemExists(size_str_2);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ len_address, len_address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ pointer_size, pointer_size });
             try ctx.expectItemExists("value: 3 (0x3)");
 
             ctx.setRef("Window");
@@ -1729,7 +1611,7 @@ test "should draw slice correctly" {
             try ctx.expectItemExists("label: 2");
             try ctx.expectItemExists("path: slice.2");
             try ctx.expectItemExists("type: u32");
-            try ctx.expectItemExists(address_str_3);
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ element_address, element_address });
             try ctx.expectItemExists("offset: 8 (0x8) bytes");
             try ctx.expectItemExists("size: 4 (0x4) bytes");
             try ctx.expectItemExists("value: 3 (0x3)");

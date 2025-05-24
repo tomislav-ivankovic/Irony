@@ -702,6 +702,12 @@ pub const TestContext = struct {
         return error.ExpectedItemNotFound;
     }
 
+    pub fn expectItemExistsFmt(self: Self, comptime fmt: []const u8, args: anytype) !void {
+        const ref = try std.fmt.allocPrintZ(std.testing.allocator, fmt, args);
+        defer std.testing.allocator.free(ref);
+        return self.expectItemExists(ref);
+    }
+
     pub fn expectItemNotExists(self: Self, ref: anytype) !void {
         const exists = self.itemExists(ref);
         if (!exists) return;
