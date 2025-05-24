@@ -1620,3 +1620,266 @@ test "should draw slice correctly" {
     const context = try ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
+
+// Custom types tests.
+
+test "should draw converted value correctly" {
+    const Test = struct {
+        var converted: memory.ConvertedValue(i32, i64, rawToValue, null) = .{
+            .raw = 123,
+        };
+
+        fn rawToValue(raw: i32) i64 {
+            return raw * 2;
+        }
+
+        fn guiFunction(_: ui.TestContext) !void {
+            const is_open = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            if (!is_open) return;
+            drawData("converted", &converted);
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            const address = @intFromPtr(&converted);
+
+            ctx.setRef("Window");
+            try ctx.expectItemExists("converted");
+            ctx.itemClick("converted", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: converted");
+            try ctx.expectItemExists("path: converted");
+            try ctx.expectItemExists("type");
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
+            try ctx.expectItemExists("size: 4 (0x4) bytes");
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            ctx.setRef("Window");
+            ctx.itemClick("converted", imgui.ImGuiMouseButton_Left, 0);
+            try ctx.expectItemExists("converted/raw: 123 (0x7B)");
+            try ctx.expectItemExists("converted/value: 246 (0xF6)");
+            ctx.itemClick("converted/raw", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: raw");
+            try ctx.expectItemExists("path: converted.raw");
+            try ctx.expectItemExists("type: i32");
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
+            try ctx.expectItemExists("size: 4 (0x4) bytes");
+            try ctx.expectItemExists("value: 123 (0x7B)");
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            ctx.setRef("Window");
+            ctx.itemClick("converted/value", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: value");
+            try ctx.expectItemExists("path: converted.value");
+            try ctx.expectItemExists("type: i64");
+            try ctx.expectItemExists("address");
+            try ctx.expectItemExists("size: 8 (0x8) bytes");
+            try ctx.expectItemExists("value: 246 (0xF6)");
+        }
+    };
+    const context = try ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw custom pointer correctly" {
+    const Test = struct {
+        var pointer: memory.Pointer(i32) = .{ .address = 0 };
+        var value: i32 = 123;
+
+        fn guiFunction(_: ui.TestContext) !void {
+            const is_open = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            if (!is_open) return;
+            drawData("custom_pointer", &pointer);
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            const pointer_address = @intFromPtr(&pointer);
+            const value_address = @intFromPtr(&value);
+            const pointer_size = @sizeOf(usize);
+
+            pointer.address = value_address;
+            ctx.yield(1);
+
+            ctx.setRef("Window");
+            try ctx.expectItemExists("custom_pointer");
+            ctx.itemClick("custom_pointer", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: custom_pointer");
+            try ctx.expectItemExists("path: custom_pointer");
+            try ctx.expectItemExists("type: " ++ @typeName(memory.Pointer(i32)));
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ pointer_address, pointer_address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ pointer_size, pointer_size });
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            ctx.setRef("Window");
+            ctx.itemClick("custom_pointer", imgui.ImGuiMouseButton_Left, 0);
+            try ctx.expectItemExistsFmt("custom_pointer/address: {} (0x{X})", .{ value_address, value_address });
+            try ctx.expectItemExists("custom_pointer/value: 123 (0x7B)");
+            ctx.itemClick("custom_pointer/address", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: address");
+            try ctx.expectItemExists("path: custom_pointer.address");
+            try ctx.expectItemExists("type: usize");
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ pointer_address, pointer_address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ pointer_size, pointer_size });
+            try ctx.expectItemExistsFmt("value: {} (0x{X})", .{ value_address, value_address });
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            ctx.setRef("Window");
+            ctx.itemClick("custom_pointer/value", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: value");
+            try ctx.expectItemExists("path: custom_pointer.value");
+            try ctx.expectItemExists("type: i32");
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ value_address, value_address });
+            try ctx.expectItemExists("size: 4 (0x4) bytes");
+            try ctx.expectItemExists("value: 123 (0x7B)");
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            pointer.address = 0;
+            ctx.yield(1);
+
+            ctx.setRef("Window");
+            try ctx.expectItemExists("custom_pointer/address: 0 (0x0)");
+            try ctx.expectItemExists("custom_pointer/value: not readable");
+        }
+    };
+    const context = try ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw pointer trail correctly" {
+    const Test = struct {
+        var trail: memory.PointerTrail(i32) = .fromArray(.{});
+        var value: i32 = 123;
+
+        fn guiFunction(_: ui.TestContext) !void {
+            const is_open = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            if (!is_open) return;
+            drawData("trail", &trail);
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            const trail_address = @intFromPtr(&trail);
+            const value_address = @intFromPtr(&value);
+            const trail_size = @sizeOf(@TypeOf(trail));
+
+            trail = .fromArray(.{value_address});
+            ctx.yield(1);
+
+            ctx.setRef("Window");
+            try ctx.expectItemExists("trail");
+            ctx.itemClick("trail", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: trail");
+            try ctx.expectItemExists("path: trail");
+            try ctx.expectItemExists("type: " ++ @typeName(memory.PointerTrail(i32)));
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ trail_address, trail_address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ trail_size, trail_size });
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            ctx.setRef("Window");
+            ctx.itemClick("trail", imgui.ImGuiMouseButton_Left, 0);
+            try ctx.expectItemExists("trail/offsets");
+            try ctx.expectItemExists("trail/value: 123 (0x7B)");
+            ctx.itemClick("trail/value", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: value");
+            try ctx.expectItemExists("path: trail.value");
+            try ctx.expectItemExists("type: i32");
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ value_address, value_address });
+            try ctx.expectItemExists("size: 4 (0x4) bytes");
+            try ctx.expectItemExists("value: 123 (0x7B)");
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            ctx.setRef("Window");
+            ctx.itemClick("trail/offsets", imgui.ImGuiMouseButton_Left, 0);
+            try ctx.expectItemExists("trail/offsets/address");
+            try ctx.expectItemExists("trail/offsets/len: 1 (0x1)");
+            try ctx.expectItemExistsFmt("trail/offsets/0: {} (0x{X})", .{ value_address, value_address });
+
+            trail = .fromArray(.{null});
+            ctx.yield(1);
+
+            ctx.setRef("Window");
+            try ctx.expectItemExists("trail/offsets/address");
+            try ctx.expectItemExists("trail/offsets/len: 1 (0x1)");
+            try ctx.expectItemExists("trail/offsets/0: null");
+            try ctx.expectItemExists("trail/value: not readable");
+        }
+    };
+    const context = try ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw self sortable array correctly" {
+    const Test = struct {
+        var value: memory.SelfSortableArray(3, i32, isLessThan) = .{
+            .raw = .{ 2, 1, 3 },
+        };
+
+        fn isLessThan(lhs: *const i32, rhs: *const i32) bool {
+            return lhs.* < rhs.*;
+        }
+
+        fn guiFunction(_: ui.TestContext) !void {
+            const is_open = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            if (!is_open) return;
+            drawData("sortable", &value);
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            const address = @intFromPtr(&value);
+            const address_of_1 = @intFromPtr(&value.raw[1]);
+            const address_of_2 = @intFromPtr(&value.raw[0]);
+            const address_of_3 = @intFromPtr(&value.raw[2]);
+            const size = @sizeOf(@TypeOf(value));
+
+            ctx.setRef("Window");
+            try ctx.expectItemExists("sortable");
+            ctx.itemClick("sortable", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: sortable");
+            try ctx.expectItemExists("path: sortable");
+            try ctx.expectItemExists("type");
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ size, size });
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            ctx.setRef("Window");
+            ctx.itemClick("sortable", imgui.ImGuiMouseButton_Left, 0);
+            try ctx.expectItemExists("sortable/raw");
+            try ctx.expectItemExists("sortable/sorted");
+            ctx.itemClick("sortable/raw", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("sortable/sorted", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("sortable/sorted/0", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("sortable/sorted/1", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("sortable/sorted/2", imgui.ImGuiMouseButton_Left, 0);
+            try ctx.expectItemExists("sortable/raw/0: 2 (0x2)");
+            try ctx.expectItemExists("sortable/raw/1: 1 (0x1)");
+            try ctx.expectItemExists("sortable/raw/2: 3 (0x3)");
+            try ctx.expectItemExistsFmt("sortable/sorted/0/address: {} (0x{X})", .{ address_of_1, address_of_1 });
+            try ctx.expectItemExists("sortable/sorted/0/value: 1 (0x1)");
+            try ctx.expectItemExistsFmt("sortable/sorted/1/address: {} (0x{X})", .{ address_of_2, address_of_2 });
+            try ctx.expectItemExists("sortable/sorted/1/value: 2 (0x2)");
+            try ctx.expectItemExistsFmt("sortable/sorted/2/address: {} (0x{X})", .{ address_of_3, address_of_3 });
+            try ctx.expectItemExists("sortable/sorted/2/value: 3 (0x3)");
+        }
+    };
+    const context = try ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
