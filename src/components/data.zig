@@ -244,12 +244,15 @@ fn drawArray(ctx: *const Context, pointer: anytype) void {
 }
 
 fn drawStruct(ctx: *const Context, pointer: anytype) void {
-    const node_open = beginNode(ctx.label);
-    defer if (node_open) endNode();
-
+    imgui.igPushID_Str(ctx.label);
     const storage = imgui.igGetStateStorage();
     const show_hidden_id = imgui.igGetID_Str("show_hidden");
     const cast_to_array_id = imgui.igGetID_Str("cast_to_array");
+    imgui.igPopID();
+
+    const node_open = beginNode(ctx.label);
+    defer if (node_open) endNode();
+
     var show_hidden = imgui.ImGuiStorage_GetBool(storage, show_hidden_id, false);
     var cast_to_array = imgui.ImGuiStorage_GetBool(storage, cast_to_array_id, false);
     if (beginMenu()) {
