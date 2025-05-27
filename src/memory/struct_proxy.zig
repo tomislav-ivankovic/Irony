@@ -1,5 +1,6 @@
 const std = @import("std");
 const os = @import("../os/root.zig");
+const misc = @import("../misc/root.zig");
 const memory = @import("root.zig");
 
 pub const struct_proxy_tag = opaque {};
@@ -11,7 +12,7 @@ pub fn StructProxy(comptime Struct: type) type {
     };
     return struct {
         base_trail: memory.PointerTrail,
-        field_offsets: memory.FieldOffsets(Struct),
+        field_offsets: misc.FieldMap(Struct, ?usize),
 
         const Self = @This();
         pub const tag = struct_proxy_tag;
@@ -22,7 +23,7 @@ pub fn StructProxy(comptime Struct: type) type {
 
         pub fn findFieldAddress(self: *const Self, comptime field_name: []const u8) ?usize {
             const base_address = self.findBaseAddress() orelse return null;
-            const field_offset = @field(self.field_offsets, field_name);
+            const field_offset = @field(self.field_offsets, field_name) orelse return null;
             const add_result = @addWithOverflow(base_address, field_offset);
             if (add_result[1] == 1) {
                 return null;
@@ -85,7 +86,7 @@ test "findBaseAddress should return null when base trail is not resolvable" {
     try testing.expectEqual(null, proxy.findBaseAddress());
 }
 
-test "findFieldAddress should return a value when findBaseAddress succeeds and field offset does not overflow" {
+test "findFieldAddress should return a value when findBaseAddress succeeds and field offset exists and does not overflow" {
     const Struct = struct { field_1: u8, field_2: u16, field_3: u32 };
     const proxy = StructProxy(Struct){
         .base_trail = .fromArray(.{100}),
@@ -100,7 +101,7 @@ test "findFieldAddress should return a value when findBaseAddress succeeds and f
     try testing.expectEqual(130, proxy.findFieldAddress("field_3"));
 }
 
-test "findFieldAddress should return null when findBaseAddress fails or field offset overflows" {
+test "findFieldAddress should return null when findBaseAddress fails or field offset is null or overflows" {
     const Struct = struct { field: u8 };
     const proxy_1 = StructProxy(Struct){
         .base_trail = .fromArray(.{ 0, 100 }),
@@ -108,10 +109,15 @@ test "findFieldAddress should return null when findBaseAddress fails or field of
     };
     const proxy_2 = StructProxy(Struct){
         .base_trail = .fromArray(.{100}),
+        .field_offsets = .{ .field = null },
+    };
+    const proxy_3 = StructProxy(Struct){
+        .base_trail = .fromArray(.{100}),
         .field_offsets = .{ .field = std.math.maxInt(usize) },
     };
     try testing.expectEqual(null, proxy_1.findFieldAddress("field"));
     try testing.expectEqual(null, proxy_2.findFieldAddress("field"));
+    try testing.expectEqual(null, proxy_3.findFieldAddress("field"));
 }
 
 test "findConstFieldPointer should return a pointer when findFieldAddress succeeds and memory is readable" {

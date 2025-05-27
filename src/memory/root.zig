@@ -2,7 +2,6 @@ pub const BitfieldMember = @import("bitfield.zig").BitfieldMember;
 pub const Bitfield = @import("bitfield.zig").Bitfield;
 pub const converted_value_tag = @import("converted_value.zig").converted_value_tag;
 pub const ConvertedValue = @import("converted_value.zig").ConvertedValue;
-pub const FieldOffsets = @import("field_offsets.zig").FieldOffsets;
 pub const Pattern = @import("pattern.zig").Pattern;
 pub const pointer_tag = @import("pointer.zig").pointer_tag;
 pub const Pointer = @import("pointer.zig").Pointer;

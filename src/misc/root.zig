@@ -5,6 +5,7 @@ pub const ErrorContextItem = @import("error_context.zig").ErrorContextItem;
 pub const ErrorContextMessage = @import("error_context.zig").ErrorContextMessage;
 pub const ErrorContext = @import("error_context.zig").ErrorContext;
 pub threadlocal var error_context = ErrorContext(.{}){};
+pub const FieldMap = @import("misc.zig").FieldMap;
 pub const doSlicesCollide = @import("misc.zig").doSlicesCollide;
 pub const Timer = @import("timer.zig").Timer;
 pub const TimerConfig = @import("timer.zig").TimerConfig;

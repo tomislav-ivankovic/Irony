@@ -26,7 +26,6 @@ test {
 
     _ = @import("memory/bitfield.zig");
     _ = @import("memory/converted_value.zig");
-    _ = @import("memory/field_offsets.zig");
     _ = @import("memory/pattern.zig");
     _ = @import("memory/pointer.zig");
     _ = @import("memory/pointer_trail.zig");
