@@ -10,7 +10,7 @@ pub fn StructProxy(comptime Struct: type) type {
         else => @compileError("StructProxy expects a struct type as argument."),
     };
     return struct {
-        base_trail: memory.PointerTrail(void),
+        base_trail: memory.Proxy(void),
         field_offsets: memory.FieldOffsets(Struct),
 
         const Self = @This();
@@ -64,7 +64,7 @@ const testing = std.testing;
 test "getBaseAddress should return a value when base trail memory address is resolvable" {
     const Struct = struct {};
     const proxy = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{12345}),
+        .base_trail = .fromArray(.{12345}),
         .field_offsets = .{},
     };
     try testing.expectEqual(12345, proxy.getBaseAddress());
@@ -73,7 +73,7 @@ test "getBaseAddress should return a value when base trail memory address is res
 test "getBaseAddress should return null when base trail memory address is not resolvable" {
     const Struct = struct {};
     const proxy = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{ 0, 100 }),
+        .base_trail = .fromArray(.{ 0, 100 }),
         .field_offsets = .{},
     };
     try testing.expectEqual(null, proxy.getBaseAddress());
@@ -86,7 +86,7 @@ test "getFieldAddress should return a value when getBaseAddress succeeds and fie
         field_3: u32,
     };
     const proxy = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{100}),
+        .base_trail = .fromArray(.{100}),
         .field_offsets = .{
             .field_1 = 10,
             .field_2 = 20,
@@ -101,11 +101,11 @@ test "getFieldAddress should return a value when getBaseAddress succeeds and fie
 test "getFieldAddress should return null when getBaseAddress fails or field offset overflows" {
     const Struct = struct { field: u8 };
     const proxy_1 = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{ 0, 100 }),
+        .base_trail = .fromArray(.{ 0, 100 }),
         .field_offsets = .{ .field = 10 },
     };
     const proxy_2 = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{100}),
+        .base_trail = .fromArray(.{100}),
         .field_offsets = .{ .field = std.math.maxInt(usize) },
     };
     try testing.expectEqual(null, proxy_1.getFieldAddress("field"));
@@ -124,7 +124,7 @@ test "getFieldConst should return a pointer when getFieldAddress succeeds and me
         .field_3 = 3,
     };
     const proxy = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{@intFromPtr(&value)}),
+        .base_trail = .fromArray(.{@intFromPtr(&value)}),
         .field_offsets = .{
             .field_1 = @offsetOf(Struct, "field_1"),
             .field_2 = @offsetOf(Struct, "field_2"),
@@ -140,15 +140,15 @@ test "getFieldConst should return null when getFieldAddress fails or memory on t
     const Struct = struct { field: u8 };
     const value = Struct{ .field = 1 };
     const proxy_1 = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{ 0, 100 }),
+        .base_trail = .fromArray(.{ 0, 100 }),
         .field_offsets = .{ .field = 0 },
     };
     const proxy_2 = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{@intFromPtr(&value)}),
+        .base_trail = .fromArray(.{@intFromPtr(&value)}),
         .field_offsets = .{ .field = std.math.maxInt(usize) },
     };
     const proxy_3 = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{0}),
+        .base_trail = .fromArray(.{0}),
         .field_offsets = .{ .field = 0 },
     };
     try testing.expectEqual(null, proxy_1.getFieldConst("field"));
@@ -168,7 +168,7 @@ test "getFieldMut should return a pointer when getFieldAddress succeeds and memo
         .field_3 = 3,
     };
     const proxy = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{@intFromPtr(&value)}),
+        .base_trail = .fromArray(.{@intFromPtr(&value)}),
         .field_offsets = .{
             .field_1 = @offsetOf(Struct, "field_1"),
             .field_2 = @offsetOf(Struct, "field_2"),
@@ -185,19 +185,19 @@ test "getFieldMut should return null when getFieldAddress fails or memory on tha
     const const_value = Struct{ .field = 1 };
     var var_value = Struct{ .field = 1 };
     const proxy_1 = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{ 0, 100 }),
+        .base_trail = .fromArray(.{ 0, 100 }),
         .field_offsets = .{ .field = @offsetOf(Struct, "field") },
     };
     const proxy_2 = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{@intFromPtr(&var_value)}),
+        .base_trail = .fromArray(.{@intFromPtr(&var_value)}),
         .field_offsets = .{ .field = std.math.maxInt(usize) },
     };
     const proxy_3 = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{0}),
+        .base_trail = .fromArray(.{0}),
         .field_offsets = .{ .field = @offsetOf(Struct, "field") },
     };
     const proxy_4 = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{@intFromPtr(&const_value)}),
+        .base_trail = .fromArray(.{@intFromPtr(&const_value)}),
         .field_offsets = .{ .field = @offsetOf(Struct, "field") },
     };
     try testing.expectEqual(null, proxy_1.getFieldMut("field"));
@@ -218,7 +218,7 @@ test "takeStaticCopy should return a value when getFieldConst succeeds for every
         .field_3 = 3,
     };
     const proxy = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{@intFromPtr(&value)}),
+        .base_trail = .fromArray(.{@intFromPtr(&value)}),
         .field_offsets = .{
             .field_1 = @offsetOf(Struct, "field_1"),
             .field_2 = @offsetOf(Struct, "field_2"),
@@ -242,7 +242,7 @@ test "takeStaticCopy should return null when getFieldConst fails for at least on
         .field_3 = 3,
     };
     const proxy = StructProxy(Struct){
-        .base_trail = memory.PointerTrail(void).fromArray(.{@intFromPtr(&value)}),
+        .base_trail = .fromArray(.{@intFromPtr(&value)}),
         .field_offsets = .{
             .field_1 = @offsetOf(Struct, "field_1"),
             .field_2 = @offsetOf(Struct, "field_2"),

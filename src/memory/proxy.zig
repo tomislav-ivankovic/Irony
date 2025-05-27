@@ -1,16 +1,16 @@
 const std = @import("std");
 const os = @import("../os/root.zig");
 
-pub const pointer_trail_tag = opaque {};
+pub const proxy_tag = opaque {};
 
-pub fn PointerTrail(comptime Type: type) type {
+pub fn Proxy(comptime Type: type) type {
     return struct {
         buffer: [max_len]?usize,
         len: usize,
 
         const Self = @This();
         const max_len = 32;
-        pub const tag = pointer_trail_tag;
+        pub const tag = proxy_tag;
 
         pub fn fromArray(array: anytype) Self {
             if (@typeInfo(@TypeOf(array)) != .array) {
@@ -94,7 +94,7 @@ const value_2_offset = @sizeOf(i32);
 test "toConstPointer should return a pointer when the pointer trail is valid" {
     const testCase = struct {
         fn call(comptime size: comptime_int, offsets: [size]?usize, expected_pointer: *const i32) !void {
-            const trail = PointerTrail(i32).fromArray(offsets);
+            const trail = Proxy(i32).fromArray(offsets);
             const actual_pointer = trail.toConstPointer();
             try testing.expectEqual(expected_pointer, actual_pointer);
         }
@@ -111,7 +111,7 @@ test "toConstPointer should return a pointer when the pointer trail is valid" {
 test "toConstPointer should return null when the pointer trail is invalid or incomplete" {
     const testCase = struct {
         fn call(comptime size: comptime_int, offsets: [size]?usize) !void {
-            const trail = PointerTrail(i32).fromArray(offsets);
+            const trail = Proxy(i32).fromArray(offsets);
             const actual_pointer = trail.toConstPointer();
             try testing.expectEqual(null, actual_pointer);
         }
@@ -132,7 +132,7 @@ test "toConstPointer should return null when the pointer trail is invalid or inc
 test "toMutablePointer should return a pointer when the pointer trail is valid" {
     const testCase = struct {
         fn call(comptime size: comptime_int, offsets: [size]?usize, expected_pointer: *i32) !void {
-            const trail = PointerTrail(i32).fromArray(offsets);
+            const trail = Proxy(i32).fromArray(offsets);
             const actual_pointer = trail.toMutablePointer();
             try testing.expectEqual(expected_pointer, actual_pointer);
         }
@@ -149,7 +149,7 @@ test "toMutablePointer should return a pointer when the pointer trail is valid" 
 test "toMutablePointer should return null when the pointer trail is invalid or incomplete" {
     const testCase = struct {
         fn call(comptime size: comptime_int, offsets: [size]?usize) !void {
-            const trail = PointerTrail(i32).fromArray(offsets);
+            const trail = Proxy(i32).fromArray(offsets);
             const actual_pointer = trail.toMutablePointer();
             try testing.expectEqual(null, actual_pointer);
         }
@@ -170,7 +170,7 @@ test "toMutablePointer should return null when the pointer trail is invalid or i
 test "findMemoryAddress should return a value when the pointer trail is valid or almost valid" {
     const testCase = struct {
         fn call(comptime size: comptime_int, offsets: [size]?usize, expected_address: usize) !void {
-            const trail = PointerTrail(i32).fromArray(offsets);
+            const trail = Proxy(i32).fromArray(offsets);
             const actual_address = trail.findMemoryAddress();
             try testing.expectEqual(expected_address, actual_address);
         }
@@ -188,7 +188,7 @@ test "findMemoryAddress should return a value when the pointer trail is valid or
 test "findMemoryAddress should return null when the pointer trail incomplete or is not almost valid" {
     const testCase = struct {
         fn call(comptime size: comptime_int, offsets: [size]?usize) !void {
-            const trail = PointerTrail(i32).fromArray(offsets);
+            const trail = Proxy(i32).fromArray(offsets);
             const actual_address = trail.findMemoryAddress();
             try testing.expectEqual(null, actual_address);
         }

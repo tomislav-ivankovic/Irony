@@ -6,8 +6,8 @@ const memory = @import("../memory/root.zig");
 const game = @import("root.zig");
 
 pub const Memory = struct {
-    player_1: memory.PointerTrail(game.Player),
-    player_2: memory.PointerTrail(game.Player),
+    player_1: memory.Proxy(game.Player),
+    player_2: memory.Proxy(game.Player),
 
     const Self = @This();
 
@@ -18,12 +18,12 @@ pub const Memory = struct {
             break :block null;
         };
         return .{
-            .player_1 = trail("player_1", game.Player, .{
+            .player_1 = proxy("player_1", game.Player, .{
                 relativeOffset(u32, add(3, pattern(r, "4C 89 35 ?? ?? ?? ?? 41 88 5E 28"))),
                 0x30,
                 0x0,
             }),
-            .player_2 = trail("player_2", game.Player, .{
+            .player_2 = proxy("player_2", game.Player, .{
                 relativeOffset(u32, add(3, pattern(r, "4C 89 35 ?? ?? ?? ?? 41 88 5E 28"))),
                 0x38,
                 0x0,
@@ -40,14 +40,14 @@ pub const Memory = struct {
     }
 };
 
-fn trail(
+fn proxy(
     name: []const u8,
     comptime Type: type,
     offsets: anytype,
-) memory.PointerTrail(Type) {
+) memory.Proxy(Type) {
     if (@typeInfo(@TypeOf(offsets)) != .array) {
         const coerced: [offsets.len]anyerror!usize = offsets;
-        return trail(name, Type, coerced);
+        return proxy(name, Type, coerced);
     }
     var last_error: ?anyerror = null;
     var mapped_offsets: [offsets.len]?usize = undefined;
@@ -61,11 +61,11 @@ fn trail(
     }
     if (last_error) |err| {
         if (!builtin.is_test) {
-            misc.error_context.append("Failed to resolve pointer trail: {s}", .{name});
+            misc.error_context.append("Failed to resolve proxy: {s}", .{name});
             misc.error_context.logError(err);
         }
     }
-    return memory.PointerTrail(Type).fromArray(mapped_offsets);
+    return memory.Proxy(Type).fromArray(mapped_offsets);
 }
 
 fn pattern(memory_range: ?memory.Range, comptime pattern_string: []const u8) !usize {
@@ -105,14 +105,14 @@ fn add(addition: usize, address: anyerror!usize) !usize {
 
 const testing = std.testing;
 
-test "trail should construct a pointer trail from array" {
-    const pointer = trail("pointer", u8, .{ 1, 2, 3 });
+test "proxy should construct a proxy from array" {
+    const pointer = proxy("pointer", u8, .{ 1, 2, 3 });
     try testing.expectEqualSlices(?usize, &.{ 1, 2, 3 }, pointer.getOffsets());
 }
 
-test "trail should map errors to null values" {
+test "proxy should map errors to null values" {
     misc.error_context.new("Test error.", .{});
-    const pointer = trail("pointer", u8, .{ 1, error.Test, 2, error.Test, 3, error.Test });
+    const pointer = proxy("pointer", u8, .{ 1, error.Test, 2, error.Test, 3, error.Test });
     try testing.expectEqualSlices(?usize, &.{ 1, null, 2, null, 3, null }, pointer.getOffsets());
 }
 

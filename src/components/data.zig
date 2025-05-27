@@ -33,8 +33,8 @@ fn drawAny(ctx: *const Context, pointer: anytype) void {
         drawConvertedValue(ctx, pointer);
     } else if (hasTag(Type, memory.pointer_tag)) {
         drawCustomPointer(ctx, pointer);
-    } else if (hasTag(Type, memory.pointer_trail_tag)) {
-        drawPointerTrail(ctx, pointer);
+    } else if (hasTag(Type, memory.proxy_tag)) {
+        drawProxy(ctx, pointer);
     } else if (hasTag(Type, memory.self_sortable_array_tag)) {
         drawSelfSortableArray(ctx, pointer);
     } else switch (@typeInfo(Type)) {
@@ -503,7 +503,7 @@ fn drawCustomPointer(ctx: *const Context, pointer: anytype) void {
     drawAny(&value_ctx, value_pointer);
 }
 
-fn drawPointerTrail(ctx: *const Context, pointer: anytype) void {
+fn drawProxy(ctx: *const Context, pointer: anytype) void {
     const maybe_value_pointer = pointer.toConstPointer();
     if (maybe_value_pointer == null) pushErrorStyle();
     defer if (maybe_value_pointer == null) popErrorStyle();
@@ -1758,24 +1758,24 @@ test "should draw custom pointer correctly" {
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should draw pointer trail correctly" {
+test "should draw proxy correctly" {
     const Test = struct {
-        var trail: memory.PointerTrail(i32) = .fromArray(.{});
+        var proxy: memory.Proxy(i32) = .fromArray(.{});
         var value: i32 = 123;
 
         fn guiFunction(_: ui.TestContext) !void {
             const is_open = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             if (!is_open) return;
-            drawData("test", &trail);
+            drawData("test", &proxy);
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
-            const trail_address = @intFromPtr(&trail);
+            const proxy_address = @intFromPtr(&proxy);
             const value_address = @intFromPtr(&value);
-            const trail_size = @sizeOf(@TypeOf(trail));
+            const trail_size = @sizeOf(@TypeOf(proxy));
 
-            trail = .fromArray(.{value_address});
+            proxy = .fromArray(.{value_address});
             ctx.yield(1);
 
             ctx.setRef("Window");
@@ -1785,8 +1785,8 @@ test "should draw pointer trail correctly" {
             ctx.setRef("//$FOCUSED");
             try ctx.expectItemExists("label: test");
             try ctx.expectItemExists("path: test");
-            try ctx.expectItemExists("type: " ++ @typeName(memory.PointerTrail(i32)));
-            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ trail_address, trail_address });
+            try ctx.expectItemExists("type: " ++ @typeName(@TypeOf(proxy)));
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ proxy_address, proxy_address });
             try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ trail_size, trail_size });
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
 
@@ -1811,7 +1811,7 @@ test "should draw pointer trail correctly" {
             try ctx.expectItemExists("test/offsets/len: 1 (0x1)");
             try ctx.expectItemExistsFmt("test/offsets/0: {} (0x{X})", .{ value_address, value_address });
 
-            trail = .fromArray(.{null});
+            proxy = .fromArray(.{null});
             ctx.yield(1);
 
             ctx.setRef("Window");
