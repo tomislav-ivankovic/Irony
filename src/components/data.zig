@@ -251,30 +251,21 @@ fn drawStruct(ctx: *const Context, pointer: anytype) void {
     imgui.igPushID_Str(ctx.label);
     const storage = imgui.igGetStateStorage();
     const show_hidden_id = imgui.igGetID_Str("show_hidden");
-    const cast_to_array_id = imgui.igGetID_Str("cast_to_array");
     imgui.igPopID();
 
     const node_open = beginNode(ctx.label);
     defer if (node_open) endNode();
 
     var show_hidden = imgui.ImGuiStorage_GetBool(storage, show_hidden_id, false);
-    var cast_to_array = imgui.ImGuiStorage_GetBool(storage, cast_to_array_id, false);
     if (beginMenu()) {
         defer endMenu();
         drawDefaultMenuItems(ctx);
         drawSeparator();
         _ = imgui.igCheckbox("Show Hidden Fields", &show_hidden);
-        _ = imgui.igCheckbox("Cast to Array", &cast_to_array);
     }
     imgui.ImGuiStorage_SetBool(storage, show_hidden_id, show_hidden);
-    imgui.ImGuiStorage_SetBool(storage, cast_to_array_id, cast_to_array);
 
     if (!node_open) return;
-
-    if (cast_to_array) {
-        drawStructAsArray(ctx, pointer);
-        return;
-    }
 
     const info = @typeInfo(@TypeOf(pointer.*)).@"struct";
     if (info.backing_integer) |BackingInt| {
@@ -306,30 +297,6 @@ fn drawStruct(ctx: *const Context, pointer: anytype) void {
             };
             drawAny(&field_ctx, field_pointer);
         }
-    }
-}
-
-fn drawStructAsArray(ctx: *const Context, pointer: anytype) void {
-    const Struct = @TypeOf(pointer.*);
-    inline for (.{ u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, f32, f64 }) |Element| {
-        if (@sizeOf(Element) > @sizeOf(Struct) or @alignOf(Struct) % @alignOf(Element) != 0) {
-            continue;
-        }
-        const Array = @Type(.{ .array = .{
-            .child = Element,
-            .len = @sizeOf(Struct) / @sizeOf(Element),
-            .sentinel_ptr = null,
-        } });
-        const array_pointer: *const Array = @ptrCast(pointer);
-        const array_ctx = Context{
-            .label = @typeName(Array),
-            .type_name = @typeName(Array),
-            .address = @intFromPtr(array_pointer),
-            .bit_offset = null,
-            .bit_size = @bitSizeOf(Array),
-            .parent = ctx,
-        };
-        drawAny(&array_ctx, array_pointer);
     }
 }
 
@@ -1359,30 +1326,6 @@ test "should draw struct correctly" {
             try ctx.expectItemExists("test/field_1: 2 (0x2)");
             try ctx.expectItemExists("test/field_2: 3 (0x3)");
             try ctx.expectItemExists("test/_field_3: 4 (0x4)");
-
-            ctx.setRef("Window");
-            ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
-            ctx.setRef("//$FOCUSED");
-            ctx.itemClick("Cast to Array", imgui.ImGuiMouseButton_Left, 0);
-            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
-
-            ctx.setRef("Window");
-            try ctx.expectItemExists("test/[16]u8");
-            try ctx.expectItemExists("test/[8]u16");
-            try ctx.expectItemExists("test/[4]u32");
-            try ctx.expectItemExists("test/[16]i8");
-            try ctx.expectItemExists("test/[8]i16");
-            try ctx.expectItemExists("test/[4]i32");
-            try ctx.expectItemExists("test/[4]f32");
-            ctx.itemClick("test/[8]u16", imgui.ImGuiMouseButton_Left, 0);
-            try ctx.expectItemExists("test/[8]u16/0: 1 (0x1)");
-            try ctx.expectItemExists("test/[8]u16/1: 0 (0x0)");
-            try ctx.expectItemExists("test/[8]u16/2: 2 (0x2)");
-            try ctx.expectItemExists("test/[8]u16/3: 0 (0x0)");
-            try ctx.expectItemExists("test/[8]u16/4: 3 (0x3)");
-            try ctx.expectItemExists("test/[8]u16/5: 0 (0x0)");
-            try ctx.expectItemExists("test/[8]u16/6: 4 (0x4)");
-            try ctx.expectItemExists("test/[8]u16/7: 0 (0x0)");
         }
     };
     const context = try ui.getTestingContext();
@@ -1730,7 +1673,81 @@ test "should draw slice correctly" {
 
 // Custom types tests.
 
-// TODO add "should draw pointer trail correctly" test
+test "should draw pointer trail correctly" {
+    const Test = struct {
+        var trail: memory.PointerTrail = .fromArray(.{});
+
+        fn guiFunction(_: ui.TestContext) !void {
+            const is_open = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            if (!is_open) return;
+            drawData("test", &trail);
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            const address = @intFromPtr(&trail);
+            const size = @sizeOf(@TypeOf(trail));
+
+            trail = .fromArray(.{123});
+            ctx.yield(1);
+
+            ctx.setRef("Window");
+            try ctx.expectItemExists("test");
+            ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: test");
+            try ctx.expectItemExists("path: test");
+            try ctx.expectItemExists("type: " ++ @typeName(@TypeOf(trail)));
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ size, size });
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            ctx.setRef("Window");
+            ctx.itemClick("test", imgui.ImGuiMouseButton_Left, 0);
+            try ctx.expectItemExists("test/offsets");
+            try ctx.expectItemExists("test/resolved: 123 (0x7B)");
+            ctx.itemClick("test/offsets", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: offsets");
+            try ctx.expectItemExists("path: test.offsets");
+            try ctx.expectItemExists("type: []const ?usize");
+            try ctx.expectItemExists("address");
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ @sizeOf([]const ?usize), @sizeOf([]const ?usize) });
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            ctx.setRef("Window");
+            ctx.itemClick("test/resolved", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: resolved");
+            try ctx.expectItemExists("path: test.resolved");
+            try ctx.expectItemExists("type: ?usize");
+            try ctx.expectItemExists("address");
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ @sizeOf(?usize), @sizeOf(?usize) });
+            try ctx.expectItemExists("value: 123 (0x7B)");
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            ctx.setRef("Window");
+            ctx.itemClick("test/offsets", imgui.ImGuiMouseButton_Left, 0);
+            try ctx.expectItemExists("test/offsets/address");
+            try ctx.expectItemExists("test/offsets/len: 1 (0x1)");
+            try ctx.expectItemExists("test/offsets/0: 123 (0x7B)");
+
+            trail = .fromArray(.{ 123, null });
+            ctx.yield(1);
+
+            ctx.setRef("Window");
+            try ctx.expectItemExists("test/offsets/len: 1 (0x1)");
+            try ctx.expectItemExists("test/offsets/0: 123 (0x7B)");
+            try ctx.expectItemExists("test/offsets/1: null");
+            try ctx.expectItemExists("test/resolved: null");
+        }
+    };
+    const context = try ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
 
 test "should draw converted value correctly" {
     const Test = struct {
@@ -1864,76 +1881,188 @@ test "should draw custom pointer correctly" {
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-// TODO fix this "should draw proxy correctly" test
+test "should draw proxy correctly" {
+    const Test = struct {
+        var proxy: memory.Proxy(i32) = .fromArray(.{});
+        var value: i32 = 123;
 
-// test "should draw proxy correctly" {
-//     const Test = struct {
-//         var proxy: memory.Proxy(i32) = .fromArray(.{});
-//         var value: i32 = 123;
-//
-//         fn guiFunction(_: ui.TestContext) !void {
-//             const is_open = imgui.igBegin("Window", null, 0);
-//             defer imgui.igEnd();
-//             if (!is_open) return;
-//             drawData("test", &proxy);
-//         }
-//
-//         fn testFunction(ctx: ui.TestContext) !void {
-//             const proxy_address = @intFromPtr(&proxy);
-//             const value_address = @intFromPtr(&value);
-//             const trail_size = @sizeOf(@TypeOf(proxy));
-//
-//             proxy = .fromArray(.{value_address});
-//             ctx.yield(1);
-//
-//             ctx.setRef("Window");
-//             try ctx.expectItemExists("test");
-//             ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
-//
-//             ctx.setRef("//$FOCUSED");
-//             try ctx.expectItemExists("label: test");
-//             try ctx.expectItemExists("path: test");
-//             try ctx.expectItemExists("type: " ++ @typeName(@TypeOf(proxy)));
-//             try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ proxy_address, proxy_address });
-//             try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ trail_size, trail_size });
-//             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
-//
-//             ctx.setRef("Window");
-//             ctx.itemClick("test", imgui.ImGuiMouseButton_Left, 0);
-//             try ctx.expectItemExists("test/offsets");
-//             try ctx.expectItemExists("test/value: 123 (0x7B)");
-//             ctx.itemClick("test/value", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
-//
-//             ctx.setRef("//$FOCUSED");
-//             try ctx.expectItemExists("label: value");
-//             try ctx.expectItemExists("path: test.value");
-//             try ctx.expectItemExists("type: i32");
-//             try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ value_address, value_address });
-//             try ctx.expectItemExists("size: 4 (0x4) bytes");
-//             try ctx.expectItemExists("value: 123 (0x7B)");
-//             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
-//
-//             ctx.setRef("Window");
-//             ctx.itemClick("test/offsets", imgui.ImGuiMouseButton_Left, 0);
-//             try ctx.expectItemExists("test/offsets/address");
-//             try ctx.expectItemExists("test/offsets/len: 1 (0x1)");
-//             try ctx.expectItemExistsFmt("test/offsets/0: {} (0x{X})", .{ value_address, value_address });
-//
-//             proxy = .fromArray(.{null});
-//             ctx.yield(1);
-//
-//             ctx.setRef("Window");
-//             try ctx.expectItemExists("test/offsets/address");
-//             try ctx.expectItemExists("test/offsets/len: 1 (0x1)");
-//             try ctx.expectItemExists("test/offsets/0: null");
-//             try ctx.expectItemExists("test/value: not readable");
-//         }
-//     };
-//     const context = try ui.getTestingContext();
-//     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
-// }
+        fn guiFunction(_: ui.TestContext) !void {
+            const is_open = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            if (!is_open) return;
+            drawData("test", &proxy);
+        }
 
-// TODO add "should draw struct proxy correctly" test
+        fn testFunction(ctx: ui.TestContext) !void {
+            const proxy_address = @intFromPtr(&proxy);
+            const value_address = @intFromPtr(&value);
+            const proxy_size = @sizeOf(@TypeOf(proxy));
+
+            proxy = .fromArray(.{value_address});
+            ctx.yield(1);
+
+            ctx.setRef("Window");
+            try ctx.expectItemExists("test");
+            ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: test");
+            try ctx.expectItemExists("path: test");
+            try ctx.expectItemExists("type: " ++ @typeName(@TypeOf(proxy)));
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ proxy_address, proxy_address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ proxy_size, proxy_size });
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            ctx.setRef("Window");
+            ctx.itemClick("test", imgui.ImGuiMouseButton_Left, 0);
+            try ctx.expectItemExists("test/trail");
+            try ctx.expectItemExists("test/value: 123 (0x7B)");
+            ctx.itemClick("test/value", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: value");
+            try ctx.expectItemExists("path: test.value");
+            try ctx.expectItemExists("type: i32");
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ value_address, value_address });
+            try ctx.expectItemExists("size: 4 (0x4) bytes");
+            try ctx.expectItemExists("value: 123 (0x7B)");
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            ctx.setRef("Window");
+            ctx.itemClick("test/trail", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("test/trail/offsets", imgui.ImGuiMouseButton_Left, 0);
+            try ctx.expectItemExists("test/trail/offsets/address");
+            try ctx.expectItemExists("test/trail/offsets/len: 1 (0x1)");
+            try ctx.expectItemExistsFmt("test/trail/offsets/0: {} (0x{X})", .{ value_address, value_address });
+            try ctx.expectItemExistsFmt("test/trail/resolved: {} (0x{X})", .{ value_address, value_address });
+
+            proxy = .fromArray(.{null});
+            ctx.yield(1);
+
+            ctx.setRef("Window");
+            try ctx.expectItemExists("test/trail/offsets/address");
+            try ctx.expectItemExists("test/trail/offsets/len: 1 (0x1)");
+            try ctx.expectItemExists("test/trail/offsets/0: null");
+            try ctx.expectItemExists("test/trail/resolved: null");
+            try ctx.expectItemExists("test/value: not readable");
+        }
+    };
+    const context = try ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw struct proxy correctly" {
+    const Struct = extern struct { field_1: u8, field_2: u16, field_3: u32 };
+    const Test = struct {
+        var proxy: memory.StructProxy(Struct) = .{
+            .base_trail = .fromArray(.{}),
+            .field_offsets = .{
+                .field_1 = @offsetOf(Struct, "field_1"),
+                .field_2 = @offsetOf(Struct, "field_2"),
+                .field_3 = @offsetOf(Struct, "field_3"),
+            },
+        };
+        var value: Struct = .{ .field_1 = 1, .field_2 = 2, .field_3 = 3 };
+
+        fn guiFunction(_: ui.TestContext) !void {
+            const is_open = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            if (!is_open) return;
+            drawData("test", &proxy);
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            const proxy_address = @intFromPtr(&proxy);
+            const value_address = @intFromPtr(&value);
+            const field_2_address = @intFromPtr(&value.field_2);
+            const field_1_offset = @offsetOf(Struct, "field_1");
+            const field_2_offset = @offsetOf(Struct, "field_2");
+            const field_3_offset = @offsetOf(Struct, "field_3");
+            const proxy_size = @sizeOf(@TypeOf(proxy));
+            const value_size = field_3_offset + @sizeOf(@FieldType(Struct, "field_3"));
+
+            proxy.base_trail = .fromArray(.{value_address});
+            ctx.yield(1);
+
+            ctx.setRef("Window");
+            try ctx.expectItemExists("test");
+            ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: test");
+            try ctx.expectItemExists("path: test");
+            try ctx.expectItemExists("type: " ++ @typeName(@TypeOf(proxy)));
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ proxy_address, proxy_address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ proxy_size, proxy_size });
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            ctx.setRef("Window");
+            ctx.itemClick("test", imgui.ImGuiMouseButton_Left, 0);
+            try ctx.expectItemExists("test/base_trail");
+            try ctx.expectItemExists("test/field_offsets");
+            try ctx.expectItemExists("test/value");
+            ctx.itemClick("test/value", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: value");
+            try ctx.expectItemExists("path: test.value");
+            try ctx.expectItemExists("type: " ++ @typeName(@TypeOf(value)));
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ value_address, value_address });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ value_size, value_size });
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            ctx.setRef("Window");
+
+            try ctx.expectItemExists("test/base_trail");
+            try ctx.expectItemExists("test/field_offsets");
+            try ctx.expectItemExists("test/value");
+
+            ctx.itemClick("test/base_trail", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("test/base_trail/offsets", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("test/field_offsets", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("test/value", imgui.ImGuiMouseButton_Left, 0);
+            try ctx.expectItemExists("test/base_trail/offsets/address");
+            try ctx.expectItemExists("test/base_trail/offsets/len: 1 (0x1)");
+            try ctx.expectItemExistsFmt("test/base_trail/offsets/0: {} (0x{X})", .{ value_address, value_address });
+            try ctx.expectItemExistsFmt("test/base_trail/resolved: {} (0x{X})", .{ value_address, value_address });
+            try ctx.expectItemExistsFmt("test/field_offsets/field_1: {} (0x{X})", .{ field_1_offset, field_1_offset });
+            try ctx.expectItemExistsFmt("test/field_offsets/field_2: {} (0x{X})", .{ field_2_offset, field_2_offset });
+            try ctx.expectItemExistsFmt("test/field_offsets/field_3: {} (0x{X})", .{ field_3_offset, field_3_offset });
+            try ctx.expectItemExists("test/value/field_1: 1 (0x1)");
+            try ctx.expectItemExists("test/value/field_2: 2 (0x2)");
+            try ctx.expectItemExists("test/value/field_3: 3 (0x3)");
+            ctx.itemClick("test/value/field_2", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: field_2");
+            try ctx.expectItemExists("path: test.value.field_2");
+            try ctx.expectItemExists("type: u16");
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ field_2_address, field_2_address });
+            try ctx.expectItemExists("size: 2 (0x2) bytes");
+            try ctx.expectItemExists("value: 2 (0x2)");
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            proxy.field_offsets.field_3 = null;
+            ctx.yield(1);
+
+            ctx.setRef("Window");
+            try ctx.expectItemExists("test/field_offsets/field_3: null");
+            try ctx.expectItemExists("test/value/field_3: not readable");
+
+            proxy.base_trail = .fromArray(.{null});
+            ctx.yield(1);
+
+            ctx.setRef("Window");
+            try ctx.expectItemExists("test/base_trail/offsets/len: 1 (0x1)");
+            try ctx.expectItemExists("test/base_trail/offsets/0: null");
+            try ctx.expectItemExists("test/value/field_1: not readable");
+            try ctx.expectItemExists("test/value/field_2: not readable");
+            try ctx.expectItemExists("test/value/field_3: not readable");
+        }
+    };
+    const context = try ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
 
 test "should draw self sortable array correctly" {
     const Test = struct {
