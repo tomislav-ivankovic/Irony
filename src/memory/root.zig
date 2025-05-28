@@ -1,6 +1,8 @@
 pub const BitfieldMember = @import("bitfield.zig").BitfieldMember;
 pub const Bitfield = @import("bitfield.zig").Bitfield;
 pub const converted_value_tag = @import("converted_value.zig").converted_value_tag;
+pub const dereferenceMisaligned = @import("misc.zig").dereferenceMisaligned;
+pub const resolveRelativeOffset = @import("misc.zig").resolveRelativeOffset;
 pub const ConvertedValue = @import("converted_value.zig").ConvertedValue;
 pub const Pattern = @import("pattern.zig").Pattern;
 pub const pointer_tag = @import("pointer.zig").pointer_tag;
@@ -9,7 +11,6 @@ pub const PointerTrail = @import("pointer_trail.zig").PointerTrail;
 pub const proxy_tag = @import("proxy.zig").proxy_tag;
 pub const Proxy = @import("proxy.zig").Proxy;
 pub const Range = @import("range.zig").Range;
-pub const resolveRelativeOffset = @import("relative_offset.zig").resolveRelativeOffset;
 pub const self_sortable_array_tag = @import("self_sortable_array.zig").self_sortable_array_tag;
 pub const SelfSortableArray = @import("self_sortable_array.zig").SelfSortableArray;
 pub const StructProxy = @import("struct_proxy.zig").StructProxy;

@@ -173,7 +173,7 @@ pub const Player = struct {
     current_move_id: u32, // 0x0548
     can_move: u32, // 0x05C8
     current_move_total_frames: u32, // 0x05D4
-    hit_outcome: f32, // 0x0610 },
+    hit_outcome: f32, // 0x0610
     already_attacked: u32, // 0x066C
     already_attacked_2: u32, // 0x0674
     stun: Stun, // 0x0774

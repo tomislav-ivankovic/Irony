@@ -18,7 +18,6 @@ pub const Memory = struct {
             break :block null;
         };
         const player_offsets = structOffsets(game.Player, .{
-            // TODO Add runtime known struct offsets based on memory patterns here.
             .player_id = 0x0004,
             .is_picked_by_main_player = 0x0009,
             .character_id = 0x0168,
@@ -28,32 +27,65 @@ pub const Memory = struct {
             .position_x_relative_to_floor = 0x018C,
             .position_z_relative_to_floor = 0x01A4,
             .location = 0x0230,
-            .current_frame_number = 0x0390,
+            .current_frame_number = deref(u32, add(8, pattern(
+                range,
+                "8B 81 ?? ?? 00 00 39 81 ?? ?? 00 00 0F 84 ?? ?? 00 00 48 C7 81",
+            ))),
             .current_frame_float = 0x03BC,
             .current_move_pointer = 0x03D8,
             .current_move_pointer_2 = 0x03E0,
             .previous_move_pointer = 0x03E8,
             .attack_damage = 0x0504,
-            .attack_type = 0x0510,
+            .attack_type = deref(u32, add(2, pattern(
+                range,
+                "89 8E ?? ?? 00 00 48 8D 8E ?? ?? 00 00 E8 ?? ?? ?? ?? 48 8D 8E ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 86",
+            ))),
             .current_move_id = 0x0548,
             .can_move = 0x05C8,
+            // .can_move = deref(u32, add(3, pattern(
+            //     range,
+            //     "48 C7 86 ?? ?? ?? ?? ?? ?? ?? ?? 66 C7 86 ?? ?? ?? ?? ?? ?? 44 89 AE",
+            // ))),
             .current_move_total_frames = 0x05D4,
+            // .current_move_total_frames = deref(u32, relativeOffset(u32, add(2, pattern(
+            //     range,
+            //     "89 86 ?? ?? ?? ?? 48 C7 86 ?? ?? ?? ?? ?? ?? ?? ?? 89 BE",
+            // )))),
             .hit_outcome = 0x0610,
-            .already_attacked = 0x066C,
+            // .hit_outcome = deref(u32, add(3, pattern(
+            //     range,
+            //     "44 89 A6 ?? ?? ?? ?? 8B 86 ?? ?? ?? ?? 25",
+            // ))),
+            .already_attacked = add(-1, deref(u32, add(24, pattern(
+                range,
+                "40 53 48 83 EC ?? 80 B9 ?? ?? ?? ?? ?? 48 8B D9 0F 85 ?? ?? ?? ?? 80 B9 ?? ?? ?? ?? ?? 0F 84",
+            )))),
             .already_attacked_2 = 0x0674,
             .stun = 0x0774,
             .cancel_flags = 0x0C80,
-            .rage = 0x0D71,
-            .floor_number_1 = 0x1770,
+            .rage = deref(u32, add(2, pattern(
+                range,
+                "88 9E ?? ?? ?? 00 48 8D 8E ?? ?? 00 00 45 33 FF",
+            ))),
+            .floor_number_1 = deref(u32, add(3, pattern(
+                range,
+                "44 8B 80 ?? ?? ?? ?? 48 8B CB",
+            ))),
             .floor_number_2 = 0x1774,
             .floor_number_3 = 0x1778,
-            .frame_data_flags = 0x19E0,
+            .frame_data_flags = deref(u32, add(3, pattern(
+                range,
+                "0F 11 87 ?? ?? ?? ?? 0F 10 86 ?? ?? ?? ?? 0F 11 86 ?? ?? ?? ?? 41 0F 10 04 24",
+            ))),
             .next_move_pointer = 0x1F30,
             .next_move_id = 0x1F4C,
             .reaction_to_have = 0x1F50,
             .attack_input = 0x1F70,
             .direction_input = 0x1F74,
-            .used_heat = 0x2110,
+            .used_heat = deref(u32, add(3, pattern(
+                range,
+                "48 C7 86 ?? ?? 00 00 01 00 00 00 44 89 BE ?? ?? 00 00",
+            ))),
             .input = 0x2494,
             .health = 0x2EE4,
         });
@@ -178,6 +210,18 @@ fn pattern(memory_range: ?memory.Range, comptime pattern_string: []const u8) !us
     return address;
 }
 
+fn deref(comptime Type: type, address: anyerror!usize) !usize {
+    if (Type != u8 and Type != u16 and Type != u32 and Type != u64) {
+        @compileError("Unsupported deref type: " ++ @typeName(Type));
+    }
+    const addr = try address;
+    const value = memory.dereferenceMisaligned(Type, addr) catch |err| {
+        misc.error_context.append("Failed to dereference {s} on memory address: 0x{X}", .{ @typeName(Type), addr });
+        return err;
+    };
+    return @intCast(value);
+}
+
 fn relativeOffset(comptime Offset: type, address: anyerror!usize) !usize {
     const addr = try address;
     const offset_address = memory.resolveRelativeOffset(Offset, addr) catch |err| {
@@ -190,9 +234,9 @@ fn relativeOffset(comptime Offset: type, address: anyerror!usize) !usize {
     return offset_address;
 }
 
-fn add(addition: usize, address: anyerror!usize) !usize {
+fn add(comptime addition: comptime_int, address: anyerror!usize) !usize {
     const addr = try address;
-    const result = @addWithOverflow(addr, addition);
+    const result = if (addition >= 0) @addWithOverflow(addr, addition) else @subWithOverflow(addr, -addition);
     if (result[1] == 1) {
         misc.error_context.new("Adding 0x{X} to address 0x{X} resulted in a overflow.", .{ addr, addition });
         return error.Overflow;
@@ -273,6 +317,20 @@ test "pattern should error when pattern does not exist" {
     try testing.expectError(error.NotFound, pattern(range, "05 ?? ?? 02"));
 }
 
+test "deref should return correct value when memory is readable" {
+    const value: u64 = 0xFF00;
+    const address = @intFromPtr(&value) + 1;
+    try testing.expectEqual(0xFF, deref(u32, address));
+}
+
+test "deref should return error when error argument" {
+    try testing.expectError(error.Test, deref(u64, error.Test));
+}
+
+test "deref should return error when memory is not readable" {
+    try testing.expectError(error.NotReadable, deref(u64, 0));
+}
+
 test "relativeOffset should return correct value when good offset address" {
     const data = [_]u8{ 3, 1, 2, 3, 4 };
     const offset_address = relativeOffset(u8, @intFromPtr(&data[0]));
@@ -287,8 +345,9 @@ test "relativeOffset should error when bad offset address" {
     try testing.expectError(error.NotReadable, relativeOffset(u8, std.math.maxInt(usize)));
 }
 
-test "add should return correct value when no overflow" {
+test "add should return correct value when no overflow and positive argument" {
     try testing.expectEqual(3, add(1, 2));
+    try testing.expectEqual(3, add(-2, 5));
 }
 
 test "add should error when error argument" {
@@ -297,4 +356,5 @@ test "add should error when error argument" {
 
 test "add should error when address space overflows" {
     try testing.expectError(error.Overflow, add(1, std.math.maxInt(usize)));
+    try testing.expectError(error.Overflow, add(-1, 0));
 }
