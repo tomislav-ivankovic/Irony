@@ -850,6 +850,7 @@ test "should draw null correctly" {
 
         fn testFunction(ctx: ui.TestContext) !void {
             const address = @intFromPtr(&value);
+            const size = @sizeOf(@TypeOf(value));
 
             ctx.setRef("Window");
             try ctx.expectItemExists("test: null");
@@ -860,7 +861,7 @@ test "should draw null correctly" {
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: ?void");
             try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
-            try ctx.expectItemExists("size: 1 (0x1) bytes");
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ size, size });
             try ctx.expectItemExists("value: null");
         }
     };
@@ -910,7 +911,7 @@ test "should draw bool correctly" {
 
 test "should draw int correctly" {
     const Test = struct {
-        var value: u8 = 97;
+        var value: u8 = 0;
 
         fn guiFunction(_: ui.TestContext) !void {
             const is_open = imgui.igBegin("Window", null, 0);
@@ -921,6 +922,9 @@ test "should draw int correctly" {
 
         fn testFunction(ctx: ui.TestContext) !void {
             const address = @intFromPtr(&value);
+
+            value = 97;
+            ctx.yield(1);
 
             ctx.setRef("Window");
             try ctx.expectItemExists("test: 97 (0x61) 'a'");
@@ -987,7 +991,7 @@ test "should draw float correctly" {
 test "should draw enum correctly" {
     const Enum = enum(u8) { test_value = 255, _ };
     const Test = struct {
-        var value: Enum = .test_value;
+        var value: Enum = @enumFromInt(0);
 
         fn guiFunction(_: ui.TestContext) !void {
             const is_open = imgui.igBegin("Window", null, 0);
@@ -998,6 +1002,9 @@ test "should draw enum correctly" {
 
         fn testFunction(ctx: ui.TestContext) !void {
             const address = @intFromPtr(&value);
+
+            value = .test_value;
+            ctx.yield(1);
 
             ctx.setRef("Window");
             try ctx.expectItemExists("test: test_value");
@@ -1044,7 +1051,7 @@ test "should draw error correctly" {
 
         fn testFunction(ctx: ui.TestContext) !void {
             const address = @intFromPtr(&value);
-            const size = @sizeOf(anyerror);
+            const size = @sizeOf(@TypeOf(value));
 
             ctx.setRef("Window");
             try ctx.expectItemExists("test: error.TestError");
@@ -1076,6 +1083,10 @@ test "should draw optional correctly" {
 
         fn testFunction(ctx: ui.TestContext) !void {
             const address = @intFromPtr(&value);
+            const size = @sizeOf(@TypeOf(value));
+
+            value = null;
+            ctx.yield(1);
 
             ctx.setRef("Window");
             try ctx.expectItemExists("test: null");
@@ -1086,7 +1097,7 @@ test "should draw optional correctly" {
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: ?bool");
             try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address, address });
-            try ctx.expectItemExists("size: 2 (0x2) bytes");
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ size, size });
             try ctx.expectItemExists("value: null");
 
             value = true;
@@ -1116,7 +1127,10 @@ test "should draw error union correctly" {
 
         fn testFunction(ctx: ui.TestContext) !void {
             const address = @intFromPtr(&value);
-            const size = @sizeOf(anyerror!bool);
+            const size = @sizeOf(@TypeOf(value));
+
+            value = false;
+            ctx.yield(1);
 
             ctx.setRef("Window");
             try ctx.expectItemExists("test: false");
@@ -1162,7 +1176,7 @@ test "should draw function correctly" {
         fn testFunction(ctx: ui.TestContext) !void {
             const address = @intFromPtr(&value);
             const int_value = @intFromPtr(value);
-            const size = @sizeOf(usize);
+            const size = @sizeOf(@TypeOf(value));
 
             ctx.setRef("Window");
             try ctx.expectItemExistsFmt("test: {} (0x{X})", .{ int_value, int_value });
@@ -1194,7 +1208,7 @@ test "should draw opaque correctly" {
 
         fn testFunction(ctx: ui.TestContext) !void {
             const address = @intFromPtr(&value);
-            const size = @sizeOf(usize);
+            const size = @sizeOf(@TypeOf(value));
 
             ctx.setRef("Window");
             try ctx.expectItemExists("test: 1234 (0x4D2)");
@@ -1238,7 +1252,6 @@ test "should draw array correctly" {
             try ctx.expectItemExists("label: test");
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: [3]u32");
-
             try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ array_address, array_address });
             try ctx.expectItemExists("size: 12 (0xC) bytes");
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
@@ -1457,7 +1470,7 @@ test "should draw tagged union correctly" {
         signed: i8,
     };
     const Test = struct {
-        var value: Int8 = .{ .unsigned = 255 };
+        var value: Int8 = .{ .unsigned = 0 };
 
         fn guiFunction(_: ui.TestContext) !void {
             const is_open = imgui.igBegin("Window", null, 0);
@@ -1471,6 +1484,9 @@ test "should draw tagged union correctly" {
         fn testFunction(ctx: ui.TestContext) !void {
             const tag_address = @intFromPtr(&value);
             const value_address = tag_address + 1;
+
+            value = .{ .unsigned = 255 };
+            ctx.yield(1);
 
             ctx.setRef("Window");
             try ctx.expectItemExists("test");
@@ -1612,6 +1628,7 @@ test "should draw slice correctly" {
             const array_address = @intFromPtr(&array);
             const element_address = @intFromPtr(&array[2]);
             const pointer_size = @sizeOf(usize);
+            const slice_size = @sizeOf([]u32);
 
             ctx.setRef("Window");
             try ctx.expectItemExists("test");
@@ -1622,7 +1639,7 @@ test "should draw slice correctly" {
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: []u32");
             try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ slice_address, slice_address });
-            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ 2 * pointer_size, 2 * pointer_size });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ slice_size, slice_size });
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
 
             ctx.setRef("Window");
