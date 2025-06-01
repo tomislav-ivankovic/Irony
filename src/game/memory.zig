@@ -1,6 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const os = @import("../os/module.zig");
+const os = @import("../os/root.zig");
 const misc = @import("../misc/root.zig");
 const memory = @import("../memory/root.zig");
 const game = @import("root.zig");
@@ -10,12 +10,16 @@ pub const Memory = struct {
     player_2: memory.StructProxy(game.Player),
 
     const Self = @This();
+    const pattern_cache_file_name = "pattern_cache.json";
 
-    pub fn init() Self {
-        const range = findMainModuleMemoryRange() catch |err| block: {
-            misc.error_context.append("Failed to get main module memory range.", .{});
+    pub fn init(allocator: std.mem.Allocator, base_dir: *const misc.BaseDir) Self {
+        var cache = initPatternCache(allocator, base_dir) catch |err| block: {
+            misc.error_context.append("Failed to initialize pattern cache.", .{});
             misc.error_context.logError(err);
             break :block null;
+        };
+        defer if (cache) |*pattern_cache| {
+            deinitPatternCache(pattern_cache, base_dir);
         };
         const player_offsets = structOffsets(game.Player, .{
             .player_id = 0x0004,
@@ -28,7 +32,7 @@ pub const Memory = struct {
             .position_z_relative_to_floor = 0x01A4,
             .location = 0x0230,
             .current_frame_number = deref(u32, add(8, pattern(
-                range,
+                &cache,
                 "8B 81 ?? ?? 00 00 39 81 ?? ?? 00 00 0F 84 ?? ?? 00 00 48 C7 81",
             ))),
             .current_frame_float = 0x03BC,
@@ -37,44 +41,44 @@ pub const Memory = struct {
             .previous_move_pointer = 0x03E8,
             .attack_damage = 0x0504,
             .attack_type = deref(u32, add(2, pattern(
-                range,
+                &cache,
                 "89 8E ?? ?? 00 00 48 8D 8E ?? ?? 00 00 E8 ?? ?? ?? ?? 48 8D 8E ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 86",
             ))),
             .current_move_id = 0x0548,
             .can_move = 0x05C8,
             // .can_move = deref(u32, add(3, pattern(
-            //     range,
+            //     &cache,
             //     "48 C7 86 ?? ?? ?? ?? ?? ?? ?? ?? 66 C7 86 ?? ?? ?? ?? ?? ?? 44 89 AE",
             // ))),
             .current_move_total_frames = 0x05D4,
             // .current_move_total_frames = deref(u32, relativeOffset(u32, add(2, pattern(
-            //     range,
+            //     &cache,
             //     "89 86 ?? ?? ?? ?? 48 C7 86 ?? ?? ?? ?? ?? ?? ?? ?? 89 BE",
             // )))),
             .hit_outcome = 0x0610,
             // .hit_outcome = deref(u32, add(3, pattern(
-            //     range,
+            //     &cache,
             //     "44 89 A6 ?? ?? ?? ?? 8B 86 ?? ?? ?? ?? 25",
             // ))),
             .already_attacked = add(-1, deref(u32, add(24, pattern(
-                range,
+                &cache,
                 "40 53 48 83 EC ?? 80 B9 ?? ?? ?? ?? ?? 48 8B D9 0F 85 ?? ?? ?? ?? 80 B9 ?? ?? ?? ?? ?? 0F 84",
             )))),
             .already_attacked_2 = 0x0674,
             .stun = 0x0774,
             .cancel_flags = 0x0C80,
             .rage = deref(u32, add(2, pattern(
-                range,
+                &cache,
                 "88 9E ?? ?? ?? 00 48 8D 8E ?? ?? 00 00 45 33 FF",
             ))),
             .floor_number_1 = deref(u32, add(3, pattern(
-                range,
+                &cache,
                 "44 8B 80 ?? ?? ?? ?? 48 8B CB",
             ))),
             .floor_number_2 = 0x1774,
             .floor_number_3 = 0x1778,
             .frame_data_flags = deref(u32, add(3, pattern(
-                range,
+                &cache,
                 "0F 11 87 ?? ?? ?? ?? 0F 10 86 ?? ?? ?? ?? 0F 11 86 ?? ?? ?? ?? 41 0F 10 04 24",
             ))),
             .next_move_pointer = 0x1F30,
@@ -83,7 +87,7 @@ pub const Memory = struct {
             .attack_input = 0x1F70,
             .direction_input = 0x1F74,
             .used_heat = deref(u32, add(3, pattern(
-                range,
+                &cache,
                 "48 C7 86 ?? ?? 00 00 01 00 00 00 44 89 BE ?? ?? 00 00",
             ))),
             .input = 0x2494,
@@ -91,24 +95,73 @@ pub const Memory = struct {
         });
         return .{
             .player_1 = structProxy("player_1", game.Player, .{
-                relativeOffset(u32, add(3, pattern(range, "4C 89 35 ?? ?? ?? ?? 41 88 5E 28"))),
+                relativeOffset(u32, add(3, pattern(&cache, "4C 89 35 ?? ?? ?? ?? 41 88 5E 28"))),
                 0x30,
                 0x0,
             }, player_offsets),
             .player_2 = structProxy("player_2", game.Player, .{
-                relativeOffset(u32, add(3, pattern(range, "4C 89 35 ?? ?? ?? ?? 41 88 5E 28"))),
+                relativeOffset(u32, add(3, pattern(&cache, "4C 89 35 ?? ?? ?? ?? 41 88 5E 28"))),
                 0x38,
                 0x0,
             }, player_offsets),
         };
     }
 
-    fn findMainModuleMemoryRange() !memory.Range {
+    fn initPatternCache(allocator: std.mem.Allocator, base_dir: *const misc.BaseDir) !memory.PatternCache {
         const main_module = os.Module.getMain() catch |err| {
             misc.error_context.append("Failed to get main module.", .{});
             return err;
         };
-        return main_module.getMemoryRange();
+        const range = main_module.getMemoryRange() catch |err| {
+            misc.error_context.append("Failed to get main module memory range.", .{});
+            return err;
+        };
+        var cache = memory.PatternCache.init(allocator, range);
+        loadPatternCache(&cache, base_dir) catch |err| {
+            misc.error_context.append("Failed to load memory pattern cache. Using empty cache.", .{});
+            misc.error_context.logWarning(err);
+        };
+        return cache;
+    }
+
+    fn deinitPatternCache(cache: *memory.PatternCache, base_dir: *const misc.BaseDir) void {
+        savePatternCache(cache, base_dir) catch |err| {
+            misc.error_context.append("Failed to save memory pattern cache.", .{});
+            misc.error_context.logWarning(err);
+        };
+        cache.deinit();
+    }
+
+    fn loadPatternCache(cache: *memory.PatternCache, base_dir: *const misc.BaseDir) !void {
+        var buffer: [os.max_file_path_length]u8 = undefined;
+        const size = base_dir.getPath(&buffer, pattern_cache_file_name) catch |err| {
+            misc.error_context.append("Failed to construct file path.", .{});
+            return err;
+        };
+        const file_path = buffer[0..size];
+
+        const executable_timestamp = os.getExecutableTimestamp() catch |err| {
+            misc.error_context.append("Failed to get executable timestamp.", .{});
+            return err;
+        };
+
+        return cache.load(file_path, executable_timestamp);
+    }
+
+    fn savePatternCache(cache: *memory.PatternCache, base_dir: *const misc.BaseDir) !void {
+        var buffer: [os.max_file_path_length]u8 = undefined;
+        const size = base_dir.getPath(&buffer, pattern_cache_file_name) catch |err| {
+            misc.error_context.append("Failed to construct file path.", .{});
+            return err;
+        };
+        const file_path = buffer[0..size];
+
+        const executable_timestamp = os.getExecutableTimestamp() catch |err| {
+            misc.error_context.append("Failed to get executable timestamp.", .{});
+            return err;
+        };
+
+        return cache.save(file_path, executable_timestamp);
     }
 };
 
@@ -197,13 +250,13 @@ fn structProxy(
     };
 }
 
-fn pattern(memory_range: ?memory.Range, comptime pattern_string: []const u8) !usize {
-    const range = memory_range orelse {
-        misc.error_context.new("No memory range to find the memory pattern in.", .{});
-        return error.NoMemoryRange;
+fn pattern(pattern_cache: *?memory.PatternCache, comptime pattern_string: []const u8) !usize {
+    const cache = if (pattern_cache.*) |*c| c else {
+        misc.error_context.new("No memory pattern cache to find the memory pattern in.", .{});
+        return error.NoPatternCache;
     };
     const memory_pattern = memory.Pattern.fromComptime(pattern_string);
-    const address = memory_pattern.findAddress(range) catch |err| {
+    const address = cache.findAddress(&memory_pattern) catch |err| {
         misc.error_context.append("Failed to find address of memory pattern: {}", .{memory_pattern});
         return err;
     };
@@ -304,17 +357,22 @@ test "structProxy should map errors to null values in base offsets" {
 test "pattern should return correct value when pattern exists" {
     const data = [_]u8{ 0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9 };
     const range = memory.Range.fromPointer(&data);
-    try testing.expectEqual(@intFromPtr(&data[4]), pattern(range, "04 ?? ?? 07"));
+    var cache: ?memory.PatternCache = memory.PatternCache.init(testing.allocator, range);
+    defer if (cache) |*c| c.deinit();
+    try testing.expectEqual(@intFromPtr(&data[4]), pattern(&cache, "04 ?? ?? 07"));
 }
 
-test "pattern should error when no memory range" {
-    try testing.expectError(error.NoMemoryRange, pattern(null, "04 ?? ?? 07"));
+test "pattern should error when no cache" {
+    var cache: ?memory.PatternCache = null;
+    try testing.expectError(error.NoPatternCache, pattern(&cache, "04 ?? ?? 07"));
 }
 
 test "pattern should error when pattern does not exist" {
     const data = [_]u8{ 0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9 };
     const range = memory.Range.fromPointer(&data);
-    try testing.expectError(error.NotFound, pattern(range, "05 ?? ?? 02"));
+    var cache: ?memory.PatternCache = memory.PatternCache.init(testing.allocator, range);
+    defer if (cache) |*c| c.deinit();
+    try testing.expectError(error.NotFound, pattern(&cache, "05 ?? ?? 02"));
 }
 
 test "deref should return correct value when memory is readable" {

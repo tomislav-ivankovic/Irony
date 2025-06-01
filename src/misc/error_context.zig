@@ -136,6 +136,18 @@ pub fn ErrorContext(comptime config: ErrorContextConfig) type {
             }
         }
 
+        pub fn logWarning(self: *const Self, err: anyerror) void {
+            if (self.items.getLast() catch null) |last_item| {
+                const message = switch (last_item.message) {
+                    .static => |msg| msg,
+                    .dynamic => |msg| msg,
+                };
+                std.log.warn("{s} [{}]\nCausation chain:\n{}", .{ message, err, self });
+            } else {
+                std.log.warn("No items inside the error context. [{}]", .{err});
+            }
+        }
+
         pub fn format(
             self: Self,
             comptime fmt: []const u8,

@@ -12,7 +12,7 @@ pub const EventBuss = struct {
     timer: misc.Timer(.{}),
     dx12_context: ?dx12.Context(buffer_count, srv_heap_size),
     ui_context: ?ui.Context,
-    game_memory: game.Memory,
+    game_memory: ?game.Memory,
 
     const Self = @This();
     const buffer_count = 3;
@@ -63,8 +63,19 @@ pub const EventBuss = struct {
         } else null;
 
         std.log.debug("Initializing game memory...", .{});
-        const game_memory = game.Memory.init();
-        std.log.info("Game memory initialized.", .{});
+        var game_memory: ?game.Memory = null;
+        if (std.Thread.spawn(.{}, struct {
+            fn call(out: *?game.Memory, alloc: std.mem.Allocator, dir: *const misc.BaseDir) void {
+                out.* = game.Memory.init(alloc, dir);
+            }
+        }.call, .{ &game_memory, allocator, base_dir })) |thread| {
+            thread.join();
+            std.log.info("Game memory initialized.", .{});
+        } else |err| {
+            misc.error_context.new("Failed to spawn game memory thread.", .{});
+            misc.error_context.append("Failed to initialize game memory.", .{});
+            misc.error_context.logError(err);
+        }
 
         return .{
             .timer = .{},
@@ -124,12 +135,13 @@ pub const EventBuss = struct {
 
         const dx12_context = if (self.dx12_context) |*context| context else return;
         const ui_context = if (self.ui_context) |*context| context else return;
+        const game_memory = if (self.game_memory) |*memory| memory else return;
 
         ui_context.newFrame();
         imgui.igGetIO().*.MouseDrawCursor = true;
         ui.toasts.draw();
         components.drawLogsWindow(dll.buffer_logger, null);
-        components.drawGameMemoryWindow(&self.game_memory, null);
+        components.drawGameMemoryWindow(game_memory, null);
         hello_world: {
             const is_open = imgui.igBegin("Hello World", null, 0);
             defer imgui.igEnd();

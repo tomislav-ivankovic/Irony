@@ -212,10 +212,10 @@ fn onHooksInit(
     command_queue: *const w32.ID3D12CommandQueue,
     swap_chain: *const w32.IDXGISwapChain,
 ) void {
-    const allocator = if (main_allocator) |*a| a else return;
+    const allocator = if (main_allocator) |*a| a.allocator() else return;
 
     std.log.info("Initializing event buss...", .{});
-    event_buss = EventBuss.init(allocator.allocator(), &base_dir, window, device, command_queue, swap_chain);
+    event_buss = EventBuss.init(allocator, &base_dir, window, device, command_queue, swap_chain);
     std.log.info("Event buss initialized.", .{});
 
     std.log.debug("Initializing window procedure...", .{});
