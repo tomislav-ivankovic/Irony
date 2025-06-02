@@ -45,10 +45,6 @@ pub fn Task(comptime Result: type) type {
             } };
         }
 
-        pub fn createCompleted(result: Result) Self {
-            return .{ .completed = result };
-        }
-
         pub fn join(self: *Self) *Result {
             switch (self.*) {
                 .in_progress => |*task| {
@@ -60,6 +56,10 @@ pub fn Task(comptime Result: type) type {
                 },
                 .completed => |*result| return result,
             }
+        }
+
+        pub fn createCompleted(result: Result) Self {
+            return .{ .completed = result };
         }
 
         pub fn peek(self: *Self) ?*Result {
@@ -78,4 +78,51 @@ pub fn Task(comptime Result: type) type {
     };
 }
 
-// TODO Write tests for this.
+const testing = std.testing;
+
+test "join should should block and return the result when the task is done" {
+    var task = try Task(usize).spawn(testing.allocator, struct {
+        fn call() usize {
+            var counter: usize = 0;
+            for (0..10) |_| {
+                counter += 1;
+                std.Thread.yield() catch {};
+            }
+            return counter;
+        }
+    }.call, .{});
+    try testing.expectEqual(10, task.join().*);
+}
+
+test "peek should not block and return null while task is getting executed and return a value as soon as the task is done" {
+    var counter = std.atomic.Value(usize).init(0);
+
+    var task = try Task(usize).spawn(testing.allocator, struct {
+        fn call(atomic: *std.atomic.Value(usize)) usize {
+            var value = atomic.load(.seq_cst);
+            while (value < 10) {
+                std.Thread.yield() catch {};
+                value = atomic.load(.seq_cst);
+            }
+            return value;
+        }
+    }.call, .{&counter});
+    defer _ = task.join();
+
+    for (0..10) |_| {
+        try testing.expectEqual(null, task.peek());
+        _ = counter.fetchAdd(1, .seq_cst);
+        try std.Thread.yield();
+    }
+    std.Thread.sleep(std.time.ns_per_ms);
+
+    try testing.expect(task.peek() != null);
+    try testing.expectEqual(10, task.peek().?.*);
+}
+
+test "createCompleted should create a task that make peek and join to instantly return the value" {
+    var task = Task(usize).createCompleted(123);
+    try testing.expect(task.peek() != null);
+    try testing.expectEqual(123, task.peek().?.*);
+    try testing.expectEqual(123, task.join().*);
+}
