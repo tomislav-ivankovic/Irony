@@ -217,78 +217,75 @@ test "should render correct messages at correct time" {
         .fly_in_time = 0.0,
         .fly_out_time = 0.0,
     });
+    const Test = struct {
+        fn guiFunction(_: ui.TestContext) !void {
+            toasts.draw();
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            toasts.send(.default, 1.0, "Message: {}", .{1});
+            toasts.send(.info, null, "Message: {}", .{2});
+            toasts.send(.success, 2.0, "Message: {}", .{3});
+            toasts.send(.warn, 6.0, "Message: {}", .{4});
+            toasts.send(.err, 3.0, "Message: {}", .{5});
+
+            toasts.update(0.5); //t = 0.5
+            ctx.yield(1);
+
+            try ctx.expectItemExists("//toast-0/Message: 1");
+            try ctx.expectItemExists("//toast-1/Message: 2");
+            try ctx.expectItemExists("//toast-2/Message: 3");
+            try ctx.expectItemExists("//toast-3/Message: 4");
+            try ctx.expectItemExists("//toast-4/Message: 5");
+            try ctx.expectItemNotExists("//toast-5");
+
+            toasts.update(1.0); // t = 1.5
+            ctx.yield(1);
+
+            try ctx.expectItemExists("//toast-0/Message: 2");
+            try ctx.expectItemExists("//toast-1/Message: 3");
+            try ctx.expectItemExists("//toast-2/Message: 4");
+            try ctx.expectItemExists("//toast-3/Message: 5");
+            try ctx.expectItemNotExists("//toast-4");
+
+            toasts.update(1.0); // t = 2.5
+            ctx.yield(1);
+
+            try ctx.expectItemExists("//toast-0/Message: 2");
+            try ctx.expectItemExists("//toast-1/Message: 4");
+            try ctx.expectItemExists("//toast-2/Message: 5");
+            try ctx.expectItemNotExists("//toast-3");
+
+            toasts.update(1.0); // t = 3.5
+            toasts.send(.default, 0.5, "Message: {}", .{6}); // lasts until t = 4.0
+            ctx.yield(1);
+
+            try ctx.expectItemExists("//toast-0/Message: 2");
+            try ctx.expectItemExists("//toast-1/Message: 4");
+            try ctx.expectItemExists("//toast-2/Message: 6");
+            try ctx.expectItemNotExists("//toast-3");
+
+            toasts.update(1.0); // t = 4.5
+            ctx.yield(1);
+
+            try ctx.expectItemExists("//toast-0/Message: 2");
+            try ctx.expectItemExists("//toast-1/Message: 4");
+            try ctx.expectItemNotExists("//toast-2");
+
+            toasts.update(1.0); // t = 5.5
+            ctx.yield(1);
+
+            try ctx.expectItemExists("//toast-0/Message: 4");
+            try ctx.expectItemNotExists("//toast-1");
+
+            toasts.update(1.0); // t = 6.5
+            ctx.yield(1);
+
+            try ctx.expectItemNotExists("//toast-0");
+        }
+    };
     const context = try ui.getTestingContext();
-    try context.runTest(
-        .{},
-        struct {
-            fn call(_: ui.TestContext) !void {
-                toasts.draw();
-            }
-        }.call,
-        struct {
-            fn call(ctx: ui.TestContext) !void {
-                toasts.send(.default, 1.0, "Message: {}", .{1});
-                toasts.send(.info, null, "Message: {}", .{2});
-                toasts.send(.success, 2.0, "Message: {}", .{3});
-                toasts.send(.warn, 6.0, "Message: {}", .{4});
-                toasts.send(.err, 3.0, "Message: {}", .{5});
-
-                toasts.update(0.5); //t = 0.5
-                ctx.yield(1);
-
-                try ctx.expectItemExists("//toast-0/Message: 1");
-                try ctx.expectItemExists("//toast-1/Message: 2");
-                try ctx.expectItemExists("//toast-2/Message: 3");
-                try ctx.expectItemExists("//toast-3/Message: 4");
-                try ctx.expectItemExists("//toast-4/Message: 5");
-                try ctx.expectItemNotExists("//toast-5");
-
-                toasts.update(1.0); // t = 1.5
-                ctx.yield(1);
-
-                try ctx.expectItemExists("//toast-0/Message: 2");
-                try ctx.expectItemExists("//toast-1/Message: 3");
-                try ctx.expectItemExists("//toast-2/Message: 4");
-                try ctx.expectItemExists("//toast-3/Message: 5");
-                try ctx.expectItemNotExists("//toast-4");
-
-                toasts.update(1.0); // t = 2.5
-                ctx.yield(1);
-
-                try ctx.expectItemExists("//toast-0/Message: 2");
-                try ctx.expectItemExists("//toast-1/Message: 4");
-                try ctx.expectItemExists("//toast-2/Message: 5");
-                try ctx.expectItemNotExists("//toast-3");
-
-                toasts.update(1.0); // t = 3.5
-                toasts.send(.default, 0.5, "Message: {}", .{6}); // lasts until t = 4.0
-                ctx.yield(1);
-
-                try ctx.expectItemExists("//toast-0/Message: 2");
-                try ctx.expectItemExists("//toast-1/Message: 4");
-                try ctx.expectItemExists("//toast-2/Message: 6");
-                try ctx.expectItemNotExists("//toast-3");
-
-                toasts.update(1.0); // t = 4.5
-                ctx.yield(1);
-
-                try ctx.expectItemExists("//toast-0/Message: 2");
-                try ctx.expectItemExists("//toast-1/Message: 4");
-                try ctx.expectItemNotExists("//toast-2");
-
-                toasts.update(1.0); // t = 5.5
-                ctx.yield(1);
-
-                try ctx.expectItemExists("//toast-0/Message: 4");
-                try ctx.expectItemNotExists("//toast-1");
-
-                toasts.update(1.0); // t = 6.5
-                ctx.yield(1);
-
-                try ctx.expectItemNotExists("//toast-0");
-            }
-        }.call,
-    );
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
 test "should discard earliest toasts when exceeding max toasts" {
@@ -300,40 +297,37 @@ test "should discard earliest toasts when exceeding max toasts" {
         .fly_in_time = 0.0,
         .fly_out_time = 0.0,
     });
+    const Test = struct {
+        fn guiFunction(_: ui.TestContext) !void {
+            toasts.draw();
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            toasts.send(.default, null, "Message: 1", .{});
+            toasts.send(.default, null, "Message: 2", .{});
+            ctx.yield(1);
+
+            try ctx.expectItemExists("//toast-0/Message: 1");
+            try ctx.expectItemExists("//toast-1/Message: 2");
+            try ctx.expectItemNotExists("//toast-2");
+
+            toasts.send(.default, null, "Message: 3", .{});
+            ctx.yield(1);
+
+            try ctx.expectItemExists("//toast-0/Message: 2");
+            try ctx.expectItemExists("//toast-1/Message: 3");
+            try ctx.expectItemNotExists("//toast-2");
+
+            toasts.send(.default, null, "Message: 4", .{});
+            ctx.yield(1);
+
+            try ctx.expectItemExists("//toast-0/Message: 3");
+            try ctx.expectItemExists("//toast-1/Message: 4");
+            try ctx.expectItemNotExists("//toast-2");
+        }
+    };
     const context = try ui.getTestingContext();
-    try context.runTest(
-        .{},
-        struct {
-            fn call(_: ui.TestContext) !void {
-                toasts.draw();
-            }
-        }.call,
-        struct {
-            fn call(ctx: ui.TestContext) !void {
-                toasts.send(.default, null, "Message: 1", .{});
-                toasts.send(.default, null, "Message: 2", .{});
-                ctx.yield(1);
-
-                try ctx.expectItemExists("//toast-0/Message: 1");
-                try ctx.expectItemExists("//toast-1/Message: 2");
-                try ctx.expectItemNotExists("//toast-2");
-
-                toasts.send(.default, null, "Message: 3", .{});
-                ctx.yield(1);
-
-                try ctx.expectItemExists("//toast-0/Message: 2");
-                try ctx.expectItemExists("//toast-1/Message: 3");
-                try ctx.expectItemNotExists("//toast-2");
-
-                toasts.send(.default, null, "Message: 4", .{});
-                ctx.yield(1);
-
-                try ctx.expectItemExists("//toast-0/Message: 3");
-                try ctx.expectItemExists("//toast-1/Message: 4");
-                try ctx.expectItemNotExists("//toast-2");
-            }
-        }.call,
-    );
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
 test "should discard earliest entries when exceeding buffer size" {
@@ -345,39 +339,36 @@ test "should discard earliest entries when exceeding buffer size" {
         .fly_in_time = 0.0,
         .fly_out_time = 0.0,
     });
+    const Test = struct {
+        fn guiFunction(_: ui.TestContext) !void {
+            toasts.draw();
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            toasts.send(.default, null, "Message: 1", .{});
+            toasts.send(.default, null, "Message: 2", .{});
+            ctx.yield(1);
+
+            try ctx.expectItemExists("//toast-0/Message: 1");
+            try ctx.expectItemExists("//toast-1/Message: 2");
+            try ctx.expectItemNotExists("//toast-2");
+
+            toasts.send(.default, null, "Message: 3", .{});
+            ctx.yield(1);
+
+            try ctx.expectItemExists("//toast-0/Message: 2");
+            try ctx.expectItemExists("//toast-1/Message: 3");
+            try ctx.expectItemNotExists("//toast-2");
+
+            toasts.send(.default, null, "Message: 123", .{});
+            ctx.yield(1);
+
+            try ctx.expectItemExists("//toast-0/Message: 123");
+            try ctx.expectItemNotExists("//toast-1");
+        }
+    };
     const context = try ui.getTestingContext();
-    try context.runTest(
-        .{},
-        struct {
-            fn call(_: ui.TestContext) !void {
-                toasts.draw();
-            }
-        }.call,
-        struct {
-            fn call(ctx: ui.TestContext) !void {
-                toasts.send(.default, null, "Message: 1", .{});
-                toasts.send(.default, null, "Message: 2", .{});
-                ctx.yield(1);
-
-                try ctx.expectItemExists("//toast-0/Message: 1");
-                try ctx.expectItemExists("//toast-1/Message: 2");
-                try ctx.expectItemNotExists("//toast-2");
-
-                toasts.send(.default, null, "Message: 3", .{});
-                ctx.yield(1);
-
-                try ctx.expectItemExists("//toast-0/Message: 2");
-                try ctx.expectItemExists("//toast-1/Message: 3");
-                try ctx.expectItemNotExists("//toast-2");
-
-                toasts.send(.default, null, "Message: 123", .{});
-                ctx.yield(1);
-
-                try ctx.expectItemExists("//toast-0/Message: 123");
-                try ctx.expectItemNotExists("//toast-1");
-            }
-        }.call,
-    );
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
 test "should discard all toasts when message is larger then the buffer" {
@@ -389,29 +380,26 @@ test "should discard all toasts when message is larger then the buffer" {
         .fly_in_time = 0.0,
         .fly_out_time = 0.0,
     });
+    const Test = struct {
+        fn guiFunction(_: ui.TestContext) !void {
+            toasts.draw();
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            toasts.send(.default, null, "Message: 1", .{});
+            ctx.yield(1);
+
+            try ctx.expectItemExists("//toast-0/Message: 1");
+            try ctx.expectItemNotExists("//toast-1");
+
+            toasts.send(.default, null, "Message: 123", .{});
+            ctx.yield(1);
+
+            try ctx.expectItemNotExists("//toast-0");
+        }
+    };
     const context = try ui.getTestingContext();
-    try context.runTest(
-        .{},
-        struct {
-            fn call(_: ui.TestContext) !void {
-                toasts.draw();
-            }
-        }.call,
-        struct {
-            fn call(ctx: ui.TestContext) !void {
-                toasts.send(.default, null, "Message: 1", .{});
-                ctx.yield(1);
-
-                try ctx.expectItemExists("//toast-0/Message: 1");
-                try ctx.expectItemNotExists("//toast-1");
-
-                toasts.send(.default, null, "Message: 123", .{});
-                ctx.yield(1);
-
-                try ctx.expectItemNotExists("//toast-0");
-            }
-        }.call,
-    );
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
 test "should send toasts only for warning and error logs" {
@@ -423,26 +411,23 @@ test "should send toasts only for warning and error logs" {
         .fly_in_time = 0.0,
         .fly_out_time = 0.0,
     });
-    const context = try ui.getTestingContext();
-    try context.runTest(
-        .{},
-        struct {
-            fn call(_: ui.TestContext) !void {
-                toasts.draw();
-            }
-        }.call,
-        struct {
-            fn call(ctx: ui.TestContext) !void {
-                toasts.logFn(.debug, std.log.default_log_scope, "Message: {}", .{1});
-                toasts.logFn(.info, std.log.default_log_scope, "Message: {}", .{2});
-                toasts.logFn(.warn, std.log.default_log_scope, "Message: {}", .{3});
-                toasts.logFn(.err, std.log.default_log_scope, "Message: {}", .{4});
-                ctx.yield(1);
+    const Test = struct {
+        fn guiFunction(_: ui.TestContext) !void {
+            toasts.draw();
+        }
 
-                try ctx.expectItemExists("//toast-0/Message: 3");
-                try ctx.expectItemExists("//toast-1/Message: 4");
-                try ctx.expectItemNotExists("//toast-2");
-            }
-        }.call,
-    );
+        fn testFunction(ctx: ui.TestContext) !void {
+            toasts.logFn(.debug, std.log.default_log_scope, "Message: {}", .{1});
+            toasts.logFn(.info, std.log.default_log_scope, "Message: {}", .{2});
+            toasts.logFn(.warn, std.log.default_log_scope, "Message: {}", .{3});
+            toasts.logFn(.err, std.log.default_log_scope, "Message: {}", .{4});
+            ctx.yield(1);
+
+            try ctx.expectItemExists("//toast-0/Message: 3");
+            try ctx.expectItemExists("//toast-1/Message: 4");
+            try ctx.expectItemNotExists("//toast-2");
+        }
+    };
+    const context = try ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }

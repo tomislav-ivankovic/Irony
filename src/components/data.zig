@@ -813,9 +813,8 @@ test "should draw void correctly" {
         var value: void = {};
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -844,9 +843,8 @@ test "should draw null correctly" {
         var value: ?void = null;
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -876,9 +874,8 @@ test "should draw bool correctly" {
         var value: bool = false;
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -916,9 +913,8 @@ test "should draw int correctly" {
         var value: u8 = 0;
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -961,9 +957,8 @@ test "should draw float correctly" {
         var value: f32 = -1.0;
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -996,9 +991,8 @@ test "should draw enum correctly" {
         var value: Enum = @enumFromInt(0);
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -1045,9 +1039,8 @@ test "should draw error correctly" {
         var value: anyerror = error.TestError;
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -1077,9 +1070,8 @@ test "should draw optional correctly" {
         var value: ?bool = null;
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -1121,9 +1113,8 @@ test "should draw error union correctly" {
         var value: anyerror!bool = false;
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -1169,9 +1160,8 @@ test "should draw function correctly" {
         }
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -1202,9 +1192,8 @@ test "should draw opaque correctly" {
         var value: *const opaque {} = @ptrFromInt(1234);
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -1236,9 +1225,8 @@ test "should draw array correctly" {
         var value: [3]u32 = .{ 1, 2, 3 };
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -1290,9 +1278,8 @@ test "should draw struct correctly" {
         var value: Struct = .{};
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -1358,9 +1345,8 @@ test "should draw packed struct correctly" {
         var value: Struct = .{};
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -1426,9 +1412,8 @@ test "should draw union correctly" {
         var value: Int8 = .{ .unsigned = 255 };
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -1475,11 +1460,8 @@ test "should draw tagged union correctly" {
         var value: Int8 = .{ .unsigned = 0 };
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) {
-                return;
-            }
             drawData("test", &value);
         }
 
@@ -1558,9 +1540,8 @@ test "should draw pointer correctly" {
         var value: *const i32 = &123;
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -1618,9 +1599,8 @@ test "should draw slice correctly" {
         var slice: []u32 = &array;
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &slice);
         }
 
@@ -1697,9 +1677,8 @@ test "should draw pointer trail correctly" {
         var trail: memory.PointerTrail = .fromArray(.{});
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &trail);
         }
 
@@ -1777,9 +1756,8 @@ test "should draw converted value correctly" {
         }
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &converted);
         }
 
@@ -1835,9 +1813,8 @@ test "should draw custom pointer correctly" {
         var value: i32 = 123;
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &pointer);
         }
 
@@ -1906,9 +1883,8 @@ test "should draw proxy correctly" {
         var value: i32 = 123;
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &proxy);
         }
 
@@ -1984,9 +1960,8 @@ test "should draw struct proxy correctly" {
         var value: Struct = .{ .field_1 = 1, .field_2 = 2, .field_3 = 3 };
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &proxy);
         }
 
@@ -2094,9 +2069,8 @@ test "should draw self sortable array correctly" {
         }
 
         fn guiFunction(_: ui.TestContext) !void {
-            const is_open = imgui.igBegin("Window", null, 0);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
-            if (!is_open) return;
             drawData("test", &value);
         }
 
@@ -2148,10 +2122,11 @@ test "should copy correct text to clipboard when left clicking text" {
         var value: u8 = 97;
 
         fn guiFunction(_: ui.TestContext) !void {
-            if (imgui.igBegin("Window", null, 0)) {
+            {
+                _ = imgui.igBegin("Window", null, 0);
+                defer imgui.igEnd();
                 drawData("test", &value);
             }
-            imgui.igEnd();
             ui.toasts.draw();
         }
 

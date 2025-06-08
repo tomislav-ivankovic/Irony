@@ -213,103 +213,87 @@ pub const TestingContext = struct {
 const testing = std.testing;
 
 test "should pass a successful test" {
+    const Test = struct {
+        fn guiFunction(_: ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            try ctx.expectItemExists("Window");
+        }
+    };
     const context = try getTestingContext();
-    try context.runTest(
-        .{},
-        struct {
-            fn call(_: ui.TestContext) !void {
-                _ = imgui.igBegin("Window", null, 0);
-                imgui.igEnd();
-            }
-        }.call,
-        struct {
-            fn call(ctx: ui.TestContext) !void {
-                try ctx.expectItemExists("Window");
-            }
-        }.call,
-    );
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
 test "should fail the test when testing engine detects a fail" {
+    const Test = struct {
+        fn guiFunction(_: ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            ctx.itemClick("Window/Button", imgui.ImGuiMouseButton_Left, 0);
+        }
+    };
     const context = try getTestingContext();
-    const test_result = context.runTest(
-        .{ .disable_printing = true },
-        struct {
-            fn call(_: ui.TestContext) !void {
-                _ = imgui.igBegin("Window", null, 0);
-                imgui.igEnd();
-            }
-        }.call,
-        struct {
-            fn call(ctx: ui.TestContext) !void {
-                ctx.itemClick("Window/Button", imgui.ImGuiMouseButton_Left, 0);
-            }
-        }.call,
-    );
+    const test_result = context.runTest(.{ .disable_printing = true }, Test.guiFunction, Test.testFunction);
     try testing.expectError(error.UiTestFailed, test_result);
 }
 
 test "should fail the test when gui function returns error" {
+    const Test = struct {
+        fn guiFunction(_: ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            return error.TestError;
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            ctx.setRef("Window");
+        }
+    };
     const context = try getTestingContext();
-    const test_result = context.runTest(
-        .{ .disable_printing = true },
-        struct {
-            fn call(_: ui.TestContext) !void {
-                _ = imgui.igBegin("Window", null, 0);
-                imgui.igEnd();
-                return error.TestError;
-            }
-        }.call,
-        struct {
-            fn call(ctx: ui.TestContext) !void {
-                ctx.setRef("Window");
-            }
-        }.call,
-    );
+    const test_result = context.runTest(.{ .disable_printing = true }, Test.guiFunction, Test.testFunction);
     try testing.expectError(error.TestError, test_result);
 }
 
 test "should fail the test when test function returns error" {
+    const Test = struct {
+        fn guiFunction(_: ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            ctx.setRef("Window");
+            return error.TestError;
+        }
+    };
     const context = try getTestingContext();
-    const test_result = context.runTest(
-        .{ .disable_printing = true },
-        struct {
-            fn call(_: ui.TestContext) !void {
-                _ = imgui.igBegin("Window", null, 0);
-                imgui.igEnd();
-            }
-        }.call,
-        struct {
-            fn call(ctx: ui.TestContext) !void {
-                ctx.setRef("Window");
-                return error.TestError;
-            }
-        }.call,
-    );
+    const test_result = context.runTest(.{ .disable_printing = true }, Test.guiFunction, Test.testFunction);
     try testing.expectError(error.TestError, test_result);
 }
 
 test "should have a working clipboard" {
+    const Test = struct {
+        fn guiFunction(_: ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            if (imgui.igButton("Button", .{})) {
+                imgui.igSetClipboardText("clipboard text");
+            }
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            try ctx.expectClipboardText("");
+            ctx.setRef("Window");
+            ctx.itemClick("Button", imgui.ImGuiMouseButton_Left, 0);
+            try ctx.expectClipboardText("clipboard text");
+        }
+    };
     const context = try getTestingContext();
-    try context.runTest(
-        .{},
-        struct {
-            fn call(_: ui.TestContext) !void {
-                const is_open = imgui.igBegin("Window", null, 0);
-                defer imgui.igEnd();
-                if (!is_open) return;
-                if (imgui.igButton("Button", .{})) {
-                    imgui.igSetClipboardText("clipboard text");
-                }
-            }
-        }.call,
-        struct {
-            fn call(ctx: ui.TestContext) !void {
-                try ctx.expectClipboardText("");
-                ctx.setRef("Window");
-                ctx.itemClick("Button", imgui.ImGuiMouseButton_Left, 0);
-                try ctx.expectClipboardText("clipboard text");
-            }
-        }.call,
-    );
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
