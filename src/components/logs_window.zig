@@ -5,14 +5,19 @@ const log = @import("../log/root.zig");
 const ui = @import("../ui/root.zig");
 
 pub const LogsWindow = struct {
+    is_open: bool = false,
     is_scroll_at_bottom: bool = true,
     scroll_y: f32 = 0.0,
 
     const Self = @This();
     pub const name = "Logs";
 
-    pub fn draw(self: *Self, open: ?*bool, comptime buffer_logger: type) void {
-        const render_content = imgui.igBegin(name, open, imgui.ImGuiWindowFlags_HorizontalScrollbar);
+    pub fn draw(self: *Self, comptime buffer_logger: type) void {
+        if (!self.is_open) {
+            return;
+        }
+
+        const render_content = imgui.igBegin(name, &self.is_open, imgui.ImGuiWindowFlags_HorizontalScrollbar);
         defer imgui.igEnd();
         if (!render_content) {
             return;
@@ -80,10 +85,10 @@ test "should render every log message" {
     logger.logFn(.err, std.log.default_log_scope, "Message: 4", .{});
 
     const Test = struct {
-        var window = LogsWindow{};
+        var window = LogsWindow{ .is_open = true };
 
         fn guiFunction(_: ui.TestContext) !void {
-            window.draw(null, logger);
+            window.draw(logger);
         }
 
         fn testFunction(ctx: ui.TestContext) !void {
@@ -117,10 +122,10 @@ test "should scroll to the bottom by default and still be able to scroll up" {
     }
 
     const Test = struct {
-        var window = LogsWindow{};
+        var window = LogsWindow{ .is_open = true };
 
         fn guiFunction(_: ui.TestContext) !void {
-            window.draw(null, logger);
+            window.draw(logger);
         }
 
         fn testFunction(ctx: ui.TestContext) !void {

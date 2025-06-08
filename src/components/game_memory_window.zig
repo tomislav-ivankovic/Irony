@@ -4,11 +4,16 @@ const game = @import("../game/root.zig");
 const components = @import("root.zig");
 
 pub const GameMemoryWindow = struct {
+    is_open: bool = false,
+
     const Self = @This();
     pub const name = "Game Memory";
 
-    pub fn draw(_: *Self, open: ?*bool, game_memory: *const game.Memory) void {
-        const render_content = imgui.igBegin(name, open, imgui.ImGuiWindowFlags_HorizontalScrollbar);
+    pub fn draw(self: *Self, game_memory: *const game.Memory) void {
+        if (!self.is_open) {
+            return;
+        }
+        const render_content = imgui.igBegin(name, &self.is_open, imgui.ImGuiWindowFlags_HorizontalScrollbar);
         defer imgui.igEnd();
         if (!render_content) {
             return;
