@@ -30,10 +30,10 @@ pub const Pattern = struct {
                     len += 1;
                     previous_char = null;
                 } else if (previous_char) |p_char| {
-                    const error_fmt = "Memory pattern \"{s}\" contains a mix of question mark and hex digit: {c}?";
-                    const error_args = .{ pattern, p_char };
-                    if (@inComptime()) @compileError(std.fmt.comptimePrint(error_fmt, error_args));
-                    misc.error_context.new(error_fmt, error_args);
+                    const fmt = "Memory pattern \"{s}\" contains a mix of question mark and hex digit: {c}?";
+                    const args = .{ pattern, p_char };
+                    if (@inComptime()) @compileError(std.fmt.comptimePrint(fmt, args));
+                    misc.error_context.new(fmt, args);
                     return error.MixedByte;
                 } else {
                     previous_char = char;
