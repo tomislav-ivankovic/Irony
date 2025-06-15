@@ -198,6 +198,39 @@ pub const Input = packed struct(u32) {
     }
 };
 
+pub const HitLinePoint = extern struct {
+    position: [3]f32,
+    _padding: f32,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 16);
+    }
+};
+
+pub const HurtCylinder = extern struct {
+    position: [3]f32,
+    multiplier: f32,
+    half_height: f32,
+    squared_radius: f32,
+    radius: f32,
+    _padding: [9]f32,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 64);
+    }
+};
+
+pub const CollisionSphere = extern struct {
+    position: [3]f32,
+    multiplier: f32,
+    radius: f32,
+    _padding: [3]f32,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 32);
+    }
+};
+
 pub const Player = struct {
     player_id: i32, // 0x0004
     is_picked_by_main_player: bool, // 0x0009
@@ -235,6 +268,10 @@ pub const Player = struct {
     direction_input: u32, // 0x1F74
     used_heat: u32, // 0x2110
     input: Input, // 0x2494
+    hit_lines_start: [3]HitLinePoint, // 0x2500
+    hit_lines_end: [3]HitLinePoint, // 0x2540
+    hurt_cylinders: [14]HurtCylinder, // 0x2900
+    collision_spheres: [11]CollisionSphere, // 0x2D40
     health: i32, // 0x2EE4
 };
 
