@@ -24,6 +24,8 @@ test {
     _ = @import("log/console.zig");
     _ = @import("log/file.zig");
 
+    _ = @import("math/vector.zig");
+
     _ = @import("memory/bitfield.zig");
     _ = @import("memory/converted_value.zig");
     _ = @import("memory/misc.zig");
