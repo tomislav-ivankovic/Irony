@@ -6,13 +6,41 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
     if (@typeInfo(Element) != .int and @typeInfo(Element) != .float) {
         @compileError("Expected a int or float type argument but got type: " ++ @typeName(Element));
     }
-    return extern struct {
-        array: [size]Element,
+    return extern union {
+        array: Array,
+        coords: Coords,
+        color: Color,
 
         const Self = @This();
+        pub const Array = [size]Element;
+        pub const Coords = switch (size) {
+            0 => void,
+            1 => extern struct { x: Element },
+            2 => extern struct { x: Element, y: Element },
+            3 => extern struct { x: Element, y: Element, z: Element },
+            else => extern struct { x: Element, y: Element, z: Element, w: Element },
+        };
+        pub const Color = switch (size) {
+            0 => void,
+            1 => extern struct { r: Element },
+            2 => extern struct { r: Element, g: Element },
+            3 => extern struct { r: Element, g: Element, b: Element },
+            else => extern struct { r: Element, g: Element, b: Element, a: Element },
+        };
 
-        pub fn fromArray(array: [size]Element) Self {
+        pub fn fromArray(array: Array) Self {
             return .{ .array = array };
+        }
+
+        pub fn fromCoords(coords: Coords) Self {
+            if (size > 4) {
+                @compileError("This operation is not defined for vectors larger then 4D.");
+            }
+            return .{ .coords = coords };
+        }
+
+        pub fn fromColor(color: Color) Self {
+            return .{ .color = color };
         }
 
         pub fn fill(value: Element) Self {
@@ -362,6 +390,16 @@ const testing = std.testing;
 
 test "fromArray should return correct value" {
     const vec = Vector(4, f32).fromArray(.{ 1, 2, 3, 4 });
+    try testing.expectEqual(.{ 1, 2, 3, 4 }, vec.array);
+}
+
+test "fromCoords should return correct value" {
+    const vec = Vector(4, f32).fromCoords(.{ .x = 1, .y = 2, .z = 3, .w = 4 });
+    try testing.expectEqual(.{ 1, 2, 3, 4 }, vec.array);
+}
+
+test "fromColor should return correct value" {
+    const vec = Vector(4, f32).fromColor(.{ .r = 1, .g = 2, .b = 3, .a = 4 });
     try testing.expectEqual(.{ 1, 2, 3, 4 }, vec.array);
 }
 

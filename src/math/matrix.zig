@@ -6,18 +6,68 @@ pub fn Matrix(comptime size: usize, comptime Element: type) type {
     if (@typeInfo(Element) != .int and @typeInfo(Element) != .float) {
         @compileError("Expected a int or float type argument but got type: " ++ @typeName(Element));
     }
-    return extern struct {
-        array: [size][size]Element,
+    return extern union {
+        array: Array,
+        flat: Flat,
+        coords: Coords,
 
         const Self = @This();
+        pub const Array = [size][size]Element;
+        pub const Flat = [size * size]Element;
+        pub const Coords = switch (size) {
+            0 => void,
+            1 => extern struct { xx: Element },
+            2 => extern struct { xx: Element, xy: Element, yx: Element, yy: Element },
+            3 => extern struct {
+                xx: Element,
+                xy: Element,
+                xz: Element,
+                yx: Element,
+                yy: Element,
+                yz: Element,
+                zx: Element,
+                zy: Element,
+                zz: Element,
+            },
+            4 => extern struct {
+                xx: Element,
+                xy: Element,
+                xz: Element,
+                xw: Element,
+                yx: Element,
+                yy: Element,
+                yz: Element,
+                yw: Element,
+                zx: Element,
+                zy: Element,
+                zz: Element,
+                zw: Element,
+                wx: Element,
+                wy: Element,
+                wz: Element,
+                ww: Element,
+            },
+            else => void,
+        };
 
-        pub fn fromArray(array: [size][size]Element) Self {
+        pub fn fromArray(array: Array) Self {
             return .{ .array = array };
+        }
+
+        pub fn fromFlat(flat: Flat) Self {
+            return .{ .flat = flat };
+        }
+
+        pub fn fromCoords(coords: Coords) Self {
+            if (size > 4) {
+                @compileError("This operation is not defined for vectors larger then 4D.");
+            }
+            return .{ .coords = coords };
         }
 
         pub fn identity() Self {
             return comptime block: {
-                var array: [size][size]Element = undefined;
+                var array: Array = undefined;
                 for (0..size) |i| {
                     for (0..size) |j| {
                         array[i][j] = if (i == j) 1 else 0;
@@ -383,6 +433,43 @@ test "fromArray should return correct value" {
     }, matrix.array);
 }
 
+test "fromFlat should return correct value" {
+    const matrix = Matrix(4, f32).fromFlat(.{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 });
+    try testing.expectEqual([4][4]f32{
+        .{ 1, 2, 3, 4 },
+        .{ 5, 6, 7, 8 },
+        .{ 9, 10, 11, 12 },
+        .{ 13, 14, 15, 16 },
+    }, matrix.array);
+}
+
+test "fromCoords should return correct value" {
+    const matrix = Matrix(4, f32).fromCoords(.{
+        .xx = 1,
+        .xy = 2,
+        .xz = 3,
+        .xw = 4,
+        .yx = 5,
+        .yy = 6,
+        .yz = 7,
+        .yw = 8,
+        .zx = 9,
+        .zy = 10,
+        .zz = 11,
+        .zw = 12,
+        .wx = 13,
+        .wy = 14,
+        .wz = 15,
+        .ww = 16,
+    });
+    try testing.expectEqual([4][4]f32{
+        .{ 1, 2, 3, 4 },
+        .{ 5, 6, 7, 8 },
+        .{ 9, 10, 11, 12 },
+        .{ 13, 14, 15, 16 },
+    }, matrix.array);
+}
+
 test "identity should return correct value" {
     const matrix = Matrix(4, f32).identity();
     try testing.expectEqual([4][4]f32{
@@ -531,7 +618,7 @@ test "inverse should return correct value when 3D matrix" {
         .{ 4, 5, 6 },
         .{ 7, 8, 9 },
     });
-    try testing.expectEqual(null, matrix_1.inverse());
+    try testing.expect(matrix_1.inverse() == null);
     const matrix_2 = Matrix(3, f32).fromArray(.{
         .{ 1, 2, 3 },
         .{ 8, 9, 4 },
@@ -551,7 +638,7 @@ test "inverse should return correct value when 4D matrix" {
         .{ 9, 10, 11, 12 },
         .{ 13, 14, 15, 16 },
     });
-    try testing.expectEqual(null, matrix_1.inverse());
+    try testing.expect(matrix_1.inverse() == null);
     const matrix_2 = Matrix(4, f32).fromArray(.{
         .{ 1, 2, 3, 4 },
         .{ 12, 13, 14, 5 },
@@ -574,7 +661,7 @@ test "inverse should return correct value when 5D matrix" {
         .{ 16, 17, 18, 19, 20 },
         .{ 21, 22, 23, 24, 25 },
     });
-    try testing.expectEqual(null, matrix_1.inverse());
+    try testing.expect(matrix_1.inverse() == null);
     const matrix_2 = Matrix(5, f32).fromArray(.{
         .{ 1, 2, 3, 4, 5 },
         .{ 16, 17, 18, 19, 6 },
