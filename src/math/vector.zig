@@ -18,7 +18,7 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
             return .{ .array = [1]Element{value} ** size };
         }
 
-        pub fn zeroes() Self {
+        pub fn zero() Self {
             return .{ .array = [1]Element{0} ** size };
         }
 
@@ -284,8 +284,8 @@ test "fill should return correct value" {
     try testing.expectEqual(.{ 123, 123, 123, 123 }, vec.array);
 }
 
-test "zeroes should return correct value" {
-    const vec = Vector(4, f32).zeroes();
+test "zero should return correct value" {
+    const vec = Vector(4, f32).zero();
     try testing.expectEqual(.{ 0, 0, 0, 0 }, vec.array);
 }
 
@@ -402,7 +402,7 @@ test "isNormalized should return correct value" {
 
 test "isZero should return correct value" {
     const vec_1 = Vector(4, f32).fromArray(.{ 1, 2, 3, 4 });
-    const vec_2 = Vector(4, f32).zeroes();
+    const vec_2 = Vector(4, f32).zero();
     const vec_3 = Vector(4, f32).fromArray(.{ 0.000001, -0.000001, 0, 0 });
     try testing.expectEqual(false, vec_1.isZero(0.00001));
     try testing.expectEqual(true, vec_2.isZero(0.00001));

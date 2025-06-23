@@ -25,6 +25,7 @@ test {
     _ = @import("log/file.zig");
 
     _ = @import("math/vector.zig");
+    _ = @import("math/matrix.zig");
 
     _ = @import("memory/bitfield.zig");
     _ = @import("memory/converted_value.zig");
