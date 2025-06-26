@@ -62,13 +62,29 @@ pub fn StructProxy(comptime Struct: type) type {
             return @ptrFromInt(address);
         }
 
-        pub fn takeStaticCopy(self: *const Self) ?Struct {
-            var static_copy: Struct = undefined;
+        pub fn takeFullCopy(self: *const Self) ?Struct {
+            var copy: Struct = undefined;
             inline for (struct_fields) |*field| {
                 const value_pointer = self.findConstFieldPointer(field.name) orelse return null;
-                @field(static_copy, field.name) = value_pointer.*;
+                @field(copy, field.name) = value_pointer.*;
             }
-            return static_copy;
+            return copy;
+        }
+
+        pub fn takePartialCopy(self: *const Self, comptime Partial: type) ?Partial {
+            const partial_fields = switch (@typeInfo(Partial)) {
+                .@"struct" => |info| info.fields,
+                else => @compileError(std.fmt.comptimePrint(
+                    "Expected Partial to be a struct type but got: {}",
+                    .{@typeName(Partial)},
+                )),
+            };
+            var copy: Partial = undefined;
+            inline for (partial_fields) |*field| {
+                const value_pointer = self.findConstFieldPointer(field.name) orelse return null;
+                @field(copy, field.name) = value_pointer.*;
+            }
+            return copy;
         }
 
         pub fn findSizeFromMaxOffset(self: *const Self) usize {
@@ -228,7 +244,7 @@ test "findMutableFieldPointer should return null when findFieldAddress fails, ad
     try testing.expectEqual(null, proxy_5.findMutableFieldPointer("field_1"));
 }
 
-test "takeStaticCopy should return a value when findConstFieldPointer succeeds for every field of the struct" {
+test "takeFullCopy should return a value when findConstFieldPointer succeeds for every field of the struct" {
     const Struct = struct { field_1: u8, field_2: u16, field_3: u32 };
     const value = Struct{ .field_1 = 1, .field_2 = 2, .field_3 = 3 };
     const proxy = StructProxy(Struct){
@@ -239,12 +255,12 @@ test "takeStaticCopy should return a value when findConstFieldPointer succeeds f
             .field_3 = @offsetOf(Struct, "field_3"),
         },
     };
-    const copy = proxy.takeStaticCopy();
+    const copy = proxy.takeFullCopy();
     try testing.expect(copy != null);
     try testing.expectEqual(value, copy.?);
 }
 
-test "takeStaticCopy should return null when getFieldConst fails for at least one field of the struct" {
+test "takeFullCopy should return null when getFieldConst fails for at least one field of the struct" {
     const Struct = struct { field_1: u8, field_2: u16, field_3: u32 };
     const value = Struct{ .field_1 = 1, .field_2 = 2, .field_3 = 3 };
     const proxy = StructProxy(Struct){
@@ -255,7 +271,40 @@ test "takeStaticCopy should return null when getFieldConst fails for at least on
             .field_3 = std.math.maxInt(usize),
         },
     };
-    const copy = proxy.takeStaticCopy();
+    const copy = proxy.takeFullCopy();
+    try testing.expectEqual(null, copy);
+}
+
+test "takePartialCopy should return a value when findConstFieldPointer succeeds for every field of the partial struct" {
+    const Struct = struct { field_1: u8, field_2: u16, field_3: u32 };
+    const Partial = struct { field_1: u8, field_2: u16 };
+    const value = Struct{ .field_1 = 1, .field_2 = 2, .field_3 = 3 };
+    const proxy = StructProxy(Struct){
+        .base_trail = .fromArray(.{@intFromPtr(&value)}),
+        .field_offsets = .{
+            .field_1 = @offsetOf(Struct, "field_1"),
+            .field_2 = @offsetOf(Struct, "field_2"),
+            .field_3 = std.math.maxInt(usize),
+        },
+    };
+    const copy = proxy.takePartialCopy(Partial);
+    try testing.expect(copy != null);
+    try testing.expectEqual(Partial{ .field_1 = 1, .field_2 = 2 }, copy.?);
+}
+
+test "takePartialCopy should return null when getFieldConst fails for at least one field of the partial struct" {
+    const Struct = struct { field_1: u8, field_2: u16, field_3: u32 };
+    const Partial = struct { field_1: u8, field_2: u16 };
+    const value = Struct{ .field_1 = 1, .field_2 = 2, .field_3 = 3 };
+    const proxy = StructProxy(Struct){
+        .base_trail = .fromArray(.{@intFromPtr(&value)}),
+        .field_offsets = .{
+            .field_1 = @offsetOf(Struct, "field_1"),
+            .field_2 = std.math.maxInt(usize),
+            .field_3 = @offsetOf(Struct, "field_3"),
+        },
+    };
+    const copy = proxy.takePartialCopy(Partial);
     try testing.expectEqual(null, copy);
 }
 

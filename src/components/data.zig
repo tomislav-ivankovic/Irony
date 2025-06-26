@@ -540,7 +540,7 @@ fn drawProxy(ctx: *const Context, pointer: anytype) void {
 }
 
 fn drawStructProxy(ctx: *const Context, pointer: anytype) void {
-    const is_valid = pointer.takeStaticCopy() != null;
+    const is_valid = pointer.takeFullCopy() != null;
     if (!is_valid) pushErrorStyle();
     const node_open = beginNode(ctx.label);
     defer if (node_open) endNode();
@@ -582,7 +582,7 @@ fn drawStructProxy(ctx: *const Context, pointer: anytype) void {
 }
 
 fn drawStructProxyFields(ctx: *const Context, pointer: anytype) void {
-    const is_valid = pointer.takeStaticCopy() != null;
+    const is_valid = pointer.takeFullCopy() != null;
     if (!is_valid) pushErrorStyle();
     const node_open = beginNode(ctx.label);
     defer if (node_open) endNode();
