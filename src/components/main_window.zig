@@ -11,6 +11,7 @@ pub const MainWindow = struct {
     logs_window: components.LogsWindow = .{},
     game_memory_window: components.GameMemoryWindow = .{},
     quadrant_layout: components.QuadrantLayout = .{},
+    view: components.View = .{},
     controls_height: f32 = 0,
 
     const Self = @This();
@@ -80,14 +81,14 @@ pub const MainWindow = struct {
 
     const QuadrantContext = struct {
         self: *Self,
-        player_1: *const components.View.Player,
-        player_2: *const components.View.Player,
+        player_1: ?*const components.View.Player,
+        player_2: ?*const components.View.Player,
     };
 
     fn drawQuadrants(self: *Self, game_memory: *const game.Memory) void {
-        const player_1 = game_memory.player_1.takePartialCopy(components.View.Player) orelse return;
-        const player_2 = game_memory.player_2.takePartialCopy(components.View.Player) orelse return;
-        const context = QuadrantContext{ .self = self, .player_1 = &player_1, .player_2 = &player_2 };
+        const player_1 = if (game_memory.player_1.takePartialCopy(components.View.Player)) |p| &p else null;
+        const player_2 = if (game_memory.player_2.takePartialCopy(components.View.Player)) |p| &p else null;
+        const context = QuadrantContext{ .self = self, .player_1 = player_1, .player_2 = player_2 };
         self.quadrant_layout.draw(context, &.{
             .top_left = .{ .id = "front", .content = drawFrontView },
             .top_right = .{ .id = "side", .content = drawSideView },
@@ -97,15 +98,30 @@ pub const MainWindow = struct {
     }
 
     fn drawFrontView(context: QuadrantContext) void {
-        components.View.front.draw(context.player_1, context.player_2);
+        const self = context.self;
+        if (context.player_1) |player_1| {
+            if (context.player_2) |player_2| {
+                self.view.draw(.front, player_1, player_2);
+            }
+        }
     }
 
     fn drawSideView(context: QuadrantContext) void {
-        components.View.side.draw(context.player_1, context.player_2);
+        const self = context.self;
+        if (context.player_1) |player_1| {
+            if (context.player_2) |player_2| {
+                self.view.draw(.side, player_1, player_2);
+            }
+        }
     }
 
     fn drawTopView(context: QuadrantContext) void {
-        components.View.top.draw(context.player_1, context.player_2);
+        const self = context.self;
+        if (context.player_1) |player_1| {
+            if (context.player_2) |player_2| {
+                self.view.draw(.top, player_1, player_2);
+            }
+        }
     }
 
     fn drawDetails(_: QuadrantContext) void {

@@ -3,12 +3,15 @@ const imgui = @import("imgui");
 const math = @import("../math/root.zig");
 const game = @import("../game/root.zig");
 
-pub const View = enum {
-    front,
-    side,
-    top,
+pub const View = struct {
+    window_size: std.EnumArray(Direction, math.Vec2) = .initFill(math.Vec2.zero),
 
     const Self = @This();
+    pub const Direction = enum {
+        front,
+        side,
+        top,
+    };
     pub const Player = struct {
         hit_lines_start: game.HitLinePoints,
         hit_lines_end: game.HitLinePoints,
@@ -23,22 +26,85 @@ pub const View = enum {
     const stick_figure_color = imgui.ImVec4{ .x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0 };
     const stick_figure_thickness = 2.0;
 
-    pub fn draw(self: Self, player_1: *const Player, player_2: *const Player) void {
-        const matrix = self.calculateFinalMatrix(player_1, player_2);
+    pub fn draw(self: *Self, direction: Direction, player_1: *const Player, player_2: *const Player) void {
+        self.updateWindowSize(direction);
+        const matrix = self.calculateFinalMatrix(direction, player_1, player_2);
         const inverse_matrix = matrix.inverse() orelse math.Mat4.identity;
         drawCollisionSpheres(player_1, matrix, inverse_matrix);
         drawCollisionSpheres(player_2, matrix, inverse_matrix);
-        self.drawHurtCylinders(player_1, matrix, inverse_matrix);
-        self.drawHurtCylinders(player_2, matrix, inverse_matrix);
+        drawHurtCylinders(direction, player_1, matrix, inverse_matrix);
+        drawHurtCylinders(direction, player_2, matrix, inverse_matrix);
         drawStickFigure(player_1, matrix);
         drawStickFigure(player_2, matrix);
     }
 
-    fn calculateFinalMatrix(self: Self, player_1: *const Player, player_2: *const Player) math.Mat4 {
-        const look_at_matrix = self.calculateLookAtMatrix(player_1, player_2);
-        const orthographic_matrix = calculateOrthographicMatrix(player_1, player_2, look_at_matrix);
+    fn updateWindowSize(self: *Self, direction: Direction) void {
+        var window_size: math.Vec2 = undefined;
+        imgui.igGetContentRegionAvail(window_size.asImVecPointer());
+        self.window_size.set(direction, window_size);
+    }
+
+    fn calculateFinalMatrix(self: *const Self, direction: Direction, player_1: *const Player, player_2: *const Player) math.Mat4 {
+        const look_at_matrix = calculateLookAtMatrix(direction, player_1, player_2);
+        const orthographic_matrix = self.calculateOrthographicMatrix(direction, player_1, player_2);
         const window_matrix = calculateWindowMatrix();
         return look_at_matrix.multiply(orthographic_matrix).multiply(window_matrix);
+    }
+
+    fn calculateLookAtMatrix(direction: Direction, player_1: *const Player, player_2: *const Player) math.Mat4 {
+        const p1 = math.Vec3.fromArray(player_1.collision_spheres.get(.lower_torso).getValue().position);
+        const p2 = math.Vec3.fromArray(player_2.collision_spheres.get(.lower_torso).getValue().position);
+        const eye = p1.add(p2).scale(0.5);
+        const difference_2d = p2.swizzle("xy").subtract(p1.swizzle("xy"));
+        const player_dir = if (!difference_2d.isZero(0)) difference_2d.normalize().extend(0) else math.Vec3.plus_x;
+        const look_direction = switch (direction) {
+            .front => player_dir.cross(math.Vec3.minus_z),
+            .side => player_dir.negate(),
+            .top => math.Vec3.plus_z,
+        };
+        const target = eye.add(look_direction);
+        const up = switch (direction) {
+            .front, .side => math.Vec3.plus_z,
+            .top => player_dir.cross(math.Vec3.plus_z),
+        };
+        return math.Mat4.fromLookAt(eye, target, up);
+    }
+
+    fn calculateOrthographicMatrix(
+        self: *const Self,
+        direction: Direction,
+        player_1: *const Player,
+        player_2: *const Player,
+    ) math.Mat4 {
+        const p1 = math.Vec3.fromArray(player_1.collision_spheres.get(.lower_torso).getValue().position);
+        const p2 = math.Vec3.fromArray(player_2.collision_spheres.get(.lower_torso).getValue().position);
+        const distance = p2.swizzle("xy").distanceTo(p1.swizzle("xy"));
+        const padded_distance = distance + 300;
+        const viewport_size = switch (direction) {
+            .front, .top => block: {
+                const window_size = self.window_size.get(direction);
+                const aspect_ratio = window_size.x() / window_size.y();
+                break :block math.Vec2.fromArray(.{ padded_distance, padded_distance / aspect_ratio });
+            },
+            .side => block: {
+                const front_window_size = self.window_size.get(.front);
+                const front_aspect_ratio = front_window_size.x() / front_window_size.y();
+                const side_window_size = self.window_size.get(.side);
+                const side_aspect_ratio = side_window_size.x() / side_window_size.y();
+                break :block math.Vec2.fromArray(.{
+                    padded_distance * side_aspect_ratio / front_aspect_ratio,
+                    padded_distance / front_aspect_ratio,
+                });
+            },
+        };
+        return math.Mat4.fromOrthographic(
+            -0.5 * viewport_size.x(),
+            0.5 * viewport_size.x(),
+            -0.5 * viewport_size.y(),
+            0.5 * viewport_size.y(),
+            0,
+            1,
+        );
     }
 
     fn calculateWindowMatrix() math.Mat4 {
@@ -49,70 +115,6 @@ pub const View = enum {
         return math.Mat4.identity
             .scale(math.Vec3.fromArray(.{ 0.5 * window_size.x(), -0.5 * window_size.y(), 1 }))
             .translate(window_size.scale(0.5).add(window_pos).extend(0));
-    }
-
-    fn calculateLookAtMatrix(self: Self, player_1: *const Player, player_2: *const Player) math.Mat4 {
-        const p1 = getPlayerPosition(player_1);
-        const p2 = getPlayerPosition(player_2);
-        const eye = p1.add(p2).scale(0.5);
-        const difference_2d = p2.swizzle("xy").subtract(p1.swizzle("xy"));
-        const player_dir = if (!difference_2d.isZero(0)) difference_2d.normalize().extend(0) else math.Vec3.plus_x;
-        const look_direction = switch (self) {
-            .front => player_dir.cross(math.Vec3.minus_z),
-            .side => player_dir,
-            .top => math.Vec3.minus_z,
-        };
-        const target = eye.add(look_direction);
-        const up = switch (self) {
-            .front, .side => math.Vec3.plus_z,
-            .top => player_dir.cross(math.Vec3.minus_z),
-        };
-        return math.Mat4.fromLookAt(eye, target, up);
-    }
-
-    fn calculateOrthographicMatrix(player_1: *const Player, player_2: *const Player, look_at_matrix: math.Mat4) math.Mat4 {
-        var min = math.Vec3.fill(std.math.inf(f32));
-        var max = math.Vec3.fill(-std.math.inf(f32));
-        for ([2](*const Player){ player_1, player_2 }) |player| {
-            for (player.hurt_cylinders.values) |c| {
-                const cylinder = c.getValue();
-                const pos = math.Vec3.fromArray(cylinder.position).pointTransform(look_at_matrix);
-                const half_size = math.Vec3.fromArray(.{
-                    cylinder.radius,
-                    cylinder.radius,
-                    cylinder.half_height,
-                }).directionTransform(look_at_matrix);
-                const min_pos = pos.subtract(half_size);
-                const max_pos = pos.add(half_size);
-                if (min_pos.x() < min.x()) min.coords.x = min_pos.x();
-                if (min_pos.y() < min.y()) min.coords.y = min_pos.y();
-                if (min_pos.z() < min.z()) min.coords.z = min_pos.z();
-                if (max_pos.x() > max.x()) max.coords.x = max_pos.x();
-                if (max_pos.y() > max.y()) max.coords.y = max_pos.y();
-                if (max_pos.z() > max.z()) max.coords.z = max_pos.z();
-            }
-            for (player.collision_spheres.values) |s| {
-                const sphere = s.getValue();
-                const pos = math.Vec3.fromArray(sphere.position).pointTransform(look_at_matrix);
-                const half_size = math.Vec3.fill(sphere.radius).directionTransform(look_at_matrix);
-                const min_pos = pos.subtract(half_size);
-                const max_pos = pos.add(half_size);
-                if (min_pos.x() < min.x()) min.coords.x = min_pos.x();
-                if (min_pos.y() < min.y()) min.coords.y = min_pos.y();
-                if (min_pos.z() < min.z()) min.coords.z = min_pos.z();
-                if (max_pos.x() > max.x()) max.coords.x = max_pos.x();
-                if (max_pos.y() > max.y()) max.coords.y = max_pos.y();
-                if (max_pos.z() > max.z()) max.coords.z = max_pos.z();
-            }
-        }
-        const padding = math.Vec3.fill(50);
-        min = min.subtract(padding);
-        max = max.add(padding);
-        return math.Mat4.fromOrthographic(min.x(), max.x(), min.y(), max.y(), min.z(), max.z());
-    }
-
-    fn getPlayerPosition(player: *const Player) math.Vec3 {
-        return math.Vec3.fromArray(player.collision_spheres.get(.lower_torso).getValue().position);
     }
 
     fn drawCollisionSpheres(player: *const Player, matrix: math.Mat4, inverse_matrix: math.Mat4) void {
@@ -131,7 +133,7 @@ pub const View = enum {
         }
     }
 
-    fn drawHurtCylinders(self: Self, player: *const Player, matrix: math.Mat4, inverse_matrix: math.Mat4) void {
+    fn drawHurtCylinders(direction: Direction, player: *const Player, matrix: math.Mat4, inverse_matrix: math.Mat4) void {
         const world_right = math.Vec3.plus_x.directionTransform(inverse_matrix).normalize();
         const world_up = math.Vec3.plus_y.directionTransform(inverse_matrix).normalize();
 
@@ -142,7 +144,7 @@ pub const View = enum {
         for (player.hurt_cylinders.values) |c| {
             const cylinder = c.getValue();
             const pos = math.Vec3.fromArray(cylinder.position).pointTransform(matrix).swizzle("xy");
-            switch (self) {
+            switch (direction) {
                 .front, .side => {
                     const half_size = world_up.scale(cylinder.half_height)
                         .add(world_right.scale(cylinder.radius))
