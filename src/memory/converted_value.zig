@@ -8,7 +8,7 @@ pub fn ConvertedValue(
     comptime rawToValue: ?*const fn (raw: Raw) Value,
     comptime valueToRaw: ?*const fn (value: Value) Raw,
 ) type {
-    return packed struct {
+    return extern struct {
         raw: Raw,
 
         const Self = @This();

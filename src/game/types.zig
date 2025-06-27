@@ -1,5 +1,6 @@
 const std = @import("std");
 const memory = @import("../memory/root.zig");
+const game = @import("root.zig");
 
 pub const AttackType = enum(u32) {
     not_attack = 0xC000001D,
@@ -207,7 +208,12 @@ pub const HitLinePoint = extern struct {
     }
 };
 
-pub const HitLinePoints = [3]HitLinePoint;
+pub const HitLinePoints = [3]memory.ConvertedValue(
+    HitLinePoint,
+    HitLinePoint,
+    game.hitLinePointToUnrealSpace,
+    game.hitLinePointFromUnrealSpace,
+);
 comptime {
     std.debug.assert(@sizeOf(HitLinePoints) == 48);
 }
@@ -242,7 +248,15 @@ pub const HurtCylinder = extern struct {
     }
 };
 
-pub const HurtCylinders = std.EnumArray(HurtCylinderId, HurtCylinder);
+pub const HurtCylinders = std.EnumArray(
+    HurtCylinderId,
+    memory.ConvertedValue(
+        HurtCylinder,
+        HurtCylinder,
+        game.hurtCylinderToUnrealSpace,
+        game.hurtCylinderFromUnrealSpace,
+    ),
+);
 comptime {
     std.debug.assert(@sizeOf(HurtCylinders) == 896);
 }
@@ -269,7 +283,15 @@ pub const CollisionSphere = extern struct {
     }
 };
 
-pub const CollisionSpheres = std.EnumArray(CollisionSphereId, CollisionSphere);
+pub const CollisionSpheres = std.EnumArray(
+    CollisionSphereId,
+    memory.ConvertedValue(
+        CollisionSphere,
+        CollisionSphere,
+        game.collisionSphereToUnrealSpace,
+        game.collisionSphereFromUnrealSpace,
+    ),
+);
 comptime {
     std.debug.assert(@sizeOf(CollisionSpheres) == 256);
 }

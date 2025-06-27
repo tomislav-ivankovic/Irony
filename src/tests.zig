@@ -10,6 +10,7 @@ test {
     _ = @import("dx12/misc.zig");
     _ = @import("dx12/testing_context.zig");
 
+    _ = @import("game/conversions.zig");
     _ = @import("game/memory.zig");
     _ = @import("game/types.zig");
 
