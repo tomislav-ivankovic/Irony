@@ -25,6 +25,8 @@ pub const View = struct {
     const hurt_cylinders_thickness = 1.0;
     const stick_figure_color = imgui.ImVec4{ .x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0 };
     const stick_figure_thickness = 2.0;
+    const hit_line_color = imgui.ImVec4{ .x = 1.0, .y = 0.0, .z = 0.0, .w = 1.0 };
+    const hit_line_thickness = 1.0;
 
     pub fn draw(self: *Self, direction: Direction, player_1: *const Player, player_2: *const Player) void {
         self.updateWindowSize(direction);
@@ -36,6 +38,8 @@ pub const View = struct {
         drawHurtCylinders(direction, player_2, matrix, inverse_matrix);
         drawStickFigure(player_1, matrix);
         drawStickFigure(player_2, matrix);
+        drawHitLines(player_1, matrix);
+        drawHitLines(player_2, matrix);
     }
 
     fn updateWindowSize(self: *Self, direction: Direction) void {
@@ -234,5 +238,17 @@ pub const View = struct {
         imgui.ImDrawList_AddLine(draw_list, right_pelvis, right_knee, color, thickness);
         imgui.ImDrawList_AddLine(draw_list, left_knee, left_ankle, color, thickness);
         imgui.ImDrawList_AddLine(draw_list, right_knee, right_ankle, color, thickness);
+    }
+
+    fn drawHitLines(player: *const Player, matrix: math.Mat4) void {
+        const color = imgui.igGetColorU32_Vec4(hit_line_color);
+        const thickness = hit_line_thickness;
+
+        const draw_list = imgui.igGetWindowDrawList();
+        for (player.hit_lines_start, player.hit_lines_end) |start_point, end_point| {
+            const start = math.Vec3.fromArray(start_point.getValue().position).pointTransform(matrix).swizzle("xy");
+            const end = math.Vec3.fromArray(end_point.getValue().position).pointTransform(matrix).swizzle("xy");
+            imgui.ImDrawList_AddLine(draw_list, start.toImVec(), end.toImVec(), color, thickness);
+        }
     }
 };
