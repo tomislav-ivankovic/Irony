@@ -46,7 +46,7 @@ pub const View = struct {
 
     fn calculateFinalMatrix(self: *const Self, direction: Direction, player_1: *const Player, player_2: *const Player) math.Mat4 {
         const look_at_matrix = calculateLookAtMatrix(direction, player_1, player_2);
-        const orthographic_matrix = self.calculateOrthographicMatrix(direction, player_1, player_2);
+        const orthographic_matrix = self.calculateOrthographicMatrix(direction, player_1, player_2, look_at_matrix);
         const window_matrix = calculateWindowMatrix();
         return look_at_matrix.multiply(orthographic_matrix).multiply(window_matrix);
     }
@@ -75,35 +75,59 @@ pub const View = struct {
         direction: Direction,
         player_1: *const Player,
         player_2: *const Player,
+        look_at_matrix: math.Mat4,
     ) math.Mat4 {
-        const p1 = math.Vec3.fromArray(player_1.collision_spheres.get(.lower_torso).getValue().position);
-        const p2 = math.Vec3.fromArray(player_2.collision_spheres.get(.lower_torso).getValue().position);
-        const distance = p2.swizzle("xy").distanceTo(p1.swizzle("xy"));
-        const padded_distance = distance + 300;
-        const viewport_size = switch (direction) {
-            .front, .top => block: {
-                const window_size = self.window_size.get(direction);
-                const aspect_ratio = window_size.x() / window_size.y();
-                break :block math.Vec2.fromArray(.{ padded_distance, padded_distance / aspect_ratio });
-            },
-            .side => block: {
-                const front_window_size = self.window_size.get(.front);
-                const front_aspect_ratio = front_window_size.x() / front_window_size.y();
-                const side_window_size = self.window_size.get(.side);
-                const side_aspect_ratio = side_window_size.x() / side_window_size.y();
-                break :block math.Vec2.fromArray(.{
-                    padded_distance * side_aspect_ratio / front_aspect_ratio,
-                    padded_distance / front_aspect_ratio,
+        var min = math.Vec3.fill(std.math.inf(f32));
+        var max = math.Vec3.fill(-std.math.inf(f32));
+        for ([_](*const Player){ player_1, player_2 }) |player| {
+            for (player.collision_spheres.values) |s| {
+                const sphere = s.getValue();
+                const pos = math.Vec3.fromArray(sphere.position).pointTransform(look_at_matrix);
+                const half_size = math.Vec3.fill(sphere.radius);
+                min = math.Vec3.min(min, pos.subtract(half_size));
+                max = math.Vec3.max(max, pos.add(half_size));
+            }
+            for (player.hurt_cylinders.values) |c| {
+                const cylinder = c.getValue();
+                const pos = math.Vec3.fromArray(cylinder.position).pointTransform(look_at_matrix);
+                const half_size = math.Vec3.fromArray(.{
+                    cylinder.radius,
+                    cylinder.radius,
+                    cylinder.half_height,
                 });
-            },
+                min = math.Vec3.min(min, pos.subtract(half_size));
+                max = math.Vec3.max(max, pos.add(half_size));
+            }
+        }
+        const padding = math.Vec3.fill(50);
+        const world_box = math.Vec3.max(min.negate(), max).add(padding).scale(2);
+        const screen_box = switch (direction) {
+            .front => math.Vec3.fromArray(.{
+                @min(self.window_size.get(.front).x(), self.window_size.get(.top).x()),
+                @min(self.window_size.get(.front).y(), self.window_size.get(.side).y()),
+                @min(self.window_size.get(.top).y(), self.window_size.get(.side).x()),
+            }),
+            .side => math.Vec3.fromArray(.{
+                @min(self.window_size.get(.side).x(), self.window_size.get(.top).y()),
+                @min(self.window_size.get(.side).y(), self.window_size.get(.front).y()),
+                @min(self.window_size.get(.front).x(), self.window_size.get(.top).x()),
+            }),
+            .top => math.Vec3.fromArray(.{
+                @min(self.window_size.get(.top).x(), self.window_size.get(.front).x()),
+                @min(self.window_size.get(.top).y(), self.window_size.get(.side).x()),
+                @min(self.window_size.get(.front).y(), self.window_size.get(.side).y()),
+            }),
         };
+        const scale_factors = world_box.divideElements(screen_box);
+        const max_factor = @max(scale_factors.x(), scale_factors.y(), scale_factors.z());
+        const viewport_size = self.window_size.get(direction).extend(screen_box.z()).scale(max_factor);
         return math.Mat4.fromOrthographic(
             -0.5 * viewport_size.x(),
             0.5 * viewport_size.x(),
             -0.5 * viewport_size.y(),
             0.5 * viewport_size.y(),
-            0,
-            1,
+            -0.5 * viewport_size.z(),
+            0.5 * viewport_size.z(),
         );
     }
 
