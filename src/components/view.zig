@@ -88,8 +88,8 @@ pub const View = struct {
                 const sphere = s.getValue();
                 const pos = math.Vec3.fromArray(sphere.position).pointTransform(look_at_matrix);
                 const half_size = math.Vec3.fill(sphere.radius);
-                min = math.Vec3.min(min, pos.subtract(half_size));
-                max = math.Vec3.max(max, pos.add(half_size));
+                min = math.Vec3.minElements(min, pos.subtract(half_size));
+                max = math.Vec3.maxElements(max, pos.add(half_size));
             }
             for (player.hurt_cylinders.values) |c| {
                 const cylinder = c.getValue();
@@ -99,12 +99,12 @@ pub const View = struct {
                     cylinder.radius,
                     cylinder.half_height,
                 });
-                min = math.Vec3.min(min, pos.subtract(half_size));
-                max = math.Vec3.max(max, pos.add(half_size));
+                min = math.Vec3.minElements(min, pos.subtract(half_size));
+                max = math.Vec3.maxElements(max, pos.add(half_size));
             }
         }
         const padding = math.Vec3.fill(50);
-        const world_box = math.Vec3.max(min.negate(), max).add(padding).scale(2);
+        const world_box = math.Vec3.maxElements(min.negate(), max).add(padding).scale(2);
         const screen_box = switch (direction) {
             .front => math.Vec3.fromArray(.{
                 @min(self.window_size.get(.front).x(), self.window_size.get(.top).x()),

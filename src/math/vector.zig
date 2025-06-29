@@ -298,6 +298,22 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
             return result;
         }
 
+        pub fn minElements(self: Self, other: Self) Self {
+            var result: Self = undefined;
+            inline for (self.array, other.array, 0..) |self_element, other_element, index| {
+                result.array[index] = @min(self_element, other_element);
+            }
+            return result;
+        }
+
+        pub fn maxElements(self: Self, other: Self) Self {
+            var result: Self = undefined;
+            inline for (self.array, other.array, 0..) |self_element, other_element, index| {
+                result.array[index] = @max(self_element, other_element);
+            }
+            return result;
+        }
+
         pub fn dot(self: Self, other: Self) Element {
             var result: Element = 0;
             inline for (self.array, other.array) |self_element, other_element| {
@@ -421,22 +437,6 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
             const homogeneous_input = self.extend(0);
             const homogeneous_result = homogeneous_input.multiply(matrix);
             return homogeneous_result.shrink(size);
-        }
-
-        pub fn min(self: Self, other: Self) Self {
-            var result: Self = undefined;
-            inline for (self.array, other.array, 0..) |self_element, other_element, index| {
-                result.array[index] = @min(self_element, other_element);
-            }
-            return result;
-        }
-
-        pub fn max(self: Self, other: Self) Self {
-            var result: Self = undefined;
-            inline for (self.array, other.array, 0..) |self_element, other_element, index| {
-                result.array[index] = @max(self_element, other_element);
-            }
-            return result;
         }
     };
 }
@@ -655,6 +655,18 @@ test "divideElements should return correct value" {
     try testing.expectEqual(.{ 5, 6, 7, 8 }, vec_1.divideElements(vec_2).array);
 }
 
+test "minElements should return correct value" {
+    const vec_1 = Vector(4, f32).fromArray(.{ 1, 4, 5, 8 });
+    const vec_2 = Vector(4, f32).fromArray(.{ 2, 3, 6, 7 });
+    try testing.expectEqual(.{ 1, 3, 5, 7 }, vec_1.minElements(vec_2).array);
+}
+
+test "maxElements should return correct value" {
+    const vec_1 = Vector(4, f32).fromArray(.{ 1, 4, 5, 8 });
+    const vec_2 = Vector(4, f32).fromArray(.{ 2, 3, 6, 7 });
+    try testing.expectEqual(.{ 2, 4, 6, 8 }, vec_1.maxElements(vec_2).array);
+}
+
 test "dot should return correct value" {
     const vec_1 = Vector(4, f32).fromArray(.{ 1, 2, 3, 4 });
     const vec_2 = Vector(4, f32).fromArray(.{ 5, 6, 7, 8 });
@@ -764,16 +776,4 @@ test "directionTransform should return correct value" {
         .{ 0, 0, 0, 1 },
     });
     try testing.expectEqual(.{ 1, 4, 9 }, vec.directionTransform(matrix_2).array);
-}
-
-test "min should return correct value" {
-    const vec_1 = Vector(4, f32).fromArray(.{ 1, 4, 5, 8 });
-    const vec_2 = Vector(4, f32).fromArray(.{ 2, 3, 6, 7 });
-    try testing.expectEqual(.{ 1, 3, 5, 7 }, vec_1.min(vec_2).array);
-}
-
-test "max should return correct value" {
-    const vec_1 = Vector(4, f32).fromArray(.{ 1, 4, 5, 8 });
-    const vec_2 = Vector(4, f32).fromArray(.{ 2, 3, 6, 7 });
-    try testing.expectEqual(.{ 2, 4, 6, 8 }, vec_1.max(vec_2).array);
 }
