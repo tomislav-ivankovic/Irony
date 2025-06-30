@@ -8,6 +8,7 @@ const game = @import("root.zig");
 pub const Memory = struct {
     player_1: memory.StructProxy(game.Player),
     player_2: memory.StructProxy(game.Player),
+    tick_function: ?*const game.TickFunction,
 
     const Self = @This();
     const pattern_cache_file_name = "pattern_cache.json";
@@ -108,6 +109,11 @@ pub const Memory = struct {
                 0x38,
                 0x0,
             }, player_offsets),
+            .tick_function = functionPointer(
+                "tick_function",
+                game.TickFunction,
+                pattern(&cache, "48 8B 0D ?? ?? ?? ?? 48 85 C9 74 0A 48 8B 01 0F 28 C8"),
+            ),
         };
     }
 
@@ -258,6 +264,29 @@ fn structProxy(
     };
 }
 
+fn functionPointer(
+    name: []const u8,
+    comptime Function: type,
+    address: anyerror!usize,
+) ?*const Function {
+    const addr = address catch |err| {
+        if (!builtin.is_test) {
+            misc.error_context.append("Failed to resolve function pointer: {s}", .{name});
+            misc.error_context.logError(err);
+        }
+        return null;
+    };
+    if (!os.isMemoryReadable(addr, 6)) {
+        if (!builtin.is_test) {
+            misc.error_context.new("The memory address is not readable: 0x{X}", .{addr});
+            misc.error_context.append("Failed to resolve function pointer: {s}", .{name});
+            misc.error_context.logError(error.NotReadable);
+        }
+        return null;
+    }
+    return @ptrFromInt(addr);
+}
+
 fn pattern(pattern_cache: *?memory.PatternCache, comptime pattern_string: []const u8) !usize {
     const cache = if (pattern_cache.*) |*c| c else {
         misc.error_context.new("No memory pattern cache to find the memory pattern in.", .{});
@@ -360,6 +389,26 @@ test "structProxy should map errors to null values in base offsets" {
         .{ .field_1 = 4, .field_2 = 5 },
     );
     try testing.expectEqualSlices(?usize, &.{ 1, null, 2, null, 3, null }, struct_proxy.base_trail.getOffsets());
+}
+
+test "functionPointer should return a function pointer when address is valid" {
+    const function = struct {
+        fn call(a: i32, b: i32) i32 {
+            return a + b;
+        }
+    }.call;
+    const function_pointer = functionPointer("function", @TypeOf(function), @intFromPtr(&function));
+    try testing.expectEqual(function, function_pointer);
+}
+
+test "functionPointer should return null when address is error" {
+    const function_pointer = functionPointer("function", fn (i32, i32) i32, error.Test);
+    try testing.expectEqual(null, function_pointer);
+}
+
+test "functionPointer should return null when address is not readable" {
+    const function_pointer = functionPointer("function", fn (i32, i32) i32, std.math.maxInt(usize));
+    try testing.expectEqual(null, function_pointer);
 }
 
 test "pattern should return correct value when pattern exists" {

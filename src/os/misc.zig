@@ -72,7 +72,7 @@ pub fn getFullPath(full_path_buffer: *[os.max_file_path_length]u8, short_path: [
 pub fn setConsoleCloseHandler(onConsoleClose: *const fn () void) !void {
     const Handler = struct {
         var function: ?*const fn () void = null;
-        fn call(event: u32) callconv(.C) w32.BOOL {
+        fn call(event: u32) callconv(.c) w32.BOOL {
             if (event != w32.CTRL_C_EVENT and event != w32.CTRL_CLOSE_EVENT) {
                 return 0;
             }

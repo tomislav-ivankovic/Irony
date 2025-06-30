@@ -11,3 +11,4 @@ pub const HurtCylinders = @import("types.zig").HurtCylinders;
 pub const CollisionSphere = @import("types.zig").CollisionSphere;
 pub const CollisionSpheres = @import("types.zig").CollisionSpheres;
 pub const Player = @import("types.zig").Player;
+pub const TickFunction = @import("types.zig").TickFunction;

@@ -70,7 +70,7 @@ pub const Context = struct {
                     info: *ui.backend.ImGui_ImplDX12_InitInfo,
                     cpu_handle: *w32.D3D12_CPU_DESCRIPTOR_HANDLE,
                     gpu_handle: *w32.D3D12_GPU_DESCRIPTOR_HANDLE,
-                ) callconv(.C) void {
+                ) callconv(.c) void {
                     const a: *dx12.DescriptorHeapAllocator(srv_heap_size) = @alignCast(@ptrCast(info.user_data));
                     a.alloc(cpu_handle, gpu_handle) catch |err| {
                         misc.error_context.append("Failed to allocate memory on SRV heap.", .{});
@@ -83,7 +83,7 @@ pub const Context = struct {
                     info: *ui.backend.ImGui_ImplDX12_InitInfo,
                     cpu_handle: w32.D3D12_CPU_DESCRIPTOR_HANDLE,
                     gpu_handle: w32.D3D12_GPU_DESCRIPTOR_HANDLE,
-                ) callconv(.C) void {
+                ) callconv(.c) void {
                     const a: *dx12.DescriptorHeapAllocator(srv_heap_size) = @alignCast(@ptrCast(info.user_data));
                     a.free(cpu_handle, gpu_handle) catch |err| {
                         misc.error_context.append("Failed to free memory on SRV heap.", .{});

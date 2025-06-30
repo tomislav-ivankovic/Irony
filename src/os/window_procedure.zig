@@ -112,7 +112,7 @@ test "should capture window events" {
             u_msg: u32,
             w_param: w32.WPARAM,
             l_param: w32.LPARAM,
-        ) callconv(std.os.windows.WINAPI) w32.LRESULT {
+        ) callconv(.winapi) w32.LRESULT {
             times_called += 1;
             last_window_handle = window_handle;
             last_u_msg = u_msg;
