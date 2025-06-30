@@ -2,14 +2,14 @@ const std = @import("std");
 const imgui = @import("imgui");
 const math = @import("root.zig");
 
+pub const vector_tag = opaque {};
+
 pub fn Vector(comptime size: usize, comptime Element: type) type {
     if (@typeInfo(Element) != .int and @typeInfo(Element) != .float) {
         @compileError("Expected a int or float type argument but got type: " ++ @typeName(Element));
     }
-    return extern union {
+    return extern struct {
         array: Array,
-        coords: Coords,
-        color: Color,
 
         const Self = @This();
         pub const Array = [size]Element;
@@ -28,6 +28,7 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
             else => extern struct { r: Element, g: Element, b: Element, a: Element },
         };
 
+        pub const tag = vector_tag;
         pub const zero = Self.fill(0);
         pub const ones = Self.fill(1);
         pub const plus_x = Self.fromAxis(0);
@@ -47,14 +48,14 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
             if (size > 4) {
                 @compileError("This operation is not defined for vectors larger then 4D.");
             }
-            return .{ .coords = coords };
+            return @bitCast(coords);
         }
 
         pub fn fromColor(color: Color) Self {
             if (size > 4) {
                 @compileError("This operation is not defined for vectors larger then 4D.");
             }
-            return .{ .color = color };
+            return @bitCast(color);
         }
 
         pub fn fill(value: Element) Self {
@@ -73,6 +74,48 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
                 array[i] = if (i == axis_index) 1 else 0;
             }
             return .{ .array = array };
+        }
+
+        pub fn toCoords(self: Self) Coords {
+            if (size > 4) {
+                @compileError("This operation is not defined for vectors larger then 4D.");
+            }
+            return @bitCast(self);
+        }
+
+        pub fn asCoords(self: *Self) *Coords {
+            if (size > 4) {
+                @compileError("This operation is not defined for vectors larger then 4D.");
+            }
+            return @ptrCast(self);
+        }
+
+        pub fn asConstCoords(self: *const Self) *const Coords {
+            if (size > 4) {
+                @compileError("This operation is not defined for vectors larger then 4D.");
+            }
+            return @ptrCast(self);
+        }
+
+        pub fn toColor(self: Self) Color {
+            if (size > 4) {
+                @compileError("This operation is not defined for vectors larger then 4D.");
+            }
+            return @bitCast(self);
+        }
+
+        pub fn asColor(self: *Self) *Color {
+            if (size > 4) {
+                @compileError("This operation is not defined for vectors larger then 4D.");
+            }
+            return @ptrCast(self);
+        }
+
+        pub fn asConstColor(self: *const Self) *const Color {
+            if (size > 4) {
+                @compileError("This operation is not defined for vectors larger then 4D.");
+            }
+            return @ptrCast(self);
         }
 
         pub fn x(self: Self) Element {
@@ -199,7 +242,14 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
             return @bitCast(self);
         }
 
-        pub fn asImVecPointer(self: *Self) *ImVec {
+        pub fn asImVec(self: *Self) *ImVec {
+            if (ImVec == void) {
+                @compileError("Imgui does not have a type that is equivalent to: " ++ @typeName(Self));
+            }
+            return @ptrCast(self);
+        }
+
+        pub fn asConstImVec(self: *const Self) *const ImVec {
             if (ImVec == void) {
                 @compileError("Imgui does not have a type that is equivalent to: " ++ @typeName(Self));
             }
@@ -516,6 +566,48 @@ test "fromAxis should return correct value" {
     try testing.expectEqual(.{ 0, 0, 1, 0 }, vec.array);
 }
 
+test "toCoords should return correct value" {
+    const vec = Vector(4, f32).fromArray(.{ 1, 2, 3, 4 });
+    try testing.expectEqual(Vector(4, f32).Coords{ .x = 1, .y = 2, .z = 3, .w = 4 }, vec.toCoords());
+}
+
+test "asCoords should return correct value" {
+    var vec = Vector(4, f32).fromArray(.{ 1, 2, 3, 4 });
+    try testing.expectEqual(&vec.array[0], &vec.asCoords().x);
+    try testing.expectEqual(&vec.array[1], &vec.asCoords().y);
+    try testing.expectEqual(&vec.array[2], &vec.asCoords().z);
+    try testing.expectEqual(&vec.array[3], &vec.asCoords().w);
+}
+
+test "asConstCoords should return correct value" {
+    const vec = Vector(4, f32).fromArray(.{ 1, 2, 3, 4 });
+    try testing.expectEqual(&vec.array[0], &vec.asConstCoords().x);
+    try testing.expectEqual(&vec.array[1], &vec.asConstCoords().y);
+    try testing.expectEqual(&vec.array[2], &vec.asConstCoords().z);
+    try testing.expectEqual(&vec.array[3], &vec.asConstCoords().w);
+}
+
+test "toColor should return correct value" {
+    const vec = Vector(4, f32).fromArray(.{ 1, 2, 3, 4 });
+    try testing.expectEqual(Vector(4, f32).Color{ .r = 1, .g = 2, .b = 3, .a = 4 }, vec.toColor());
+}
+
+test "asColor should return correct value" {
+    var vec = Vector(4, f32).fromArray(.{ 1, 2, 3, 4 });
+    try testing.expectEqual(&vec.array[0], &vec.asColor().r);
+    try testing.expectEqual(&vec.array[1], &vec.asColor().g);
+    try testing.expectEqual(&vec.array[2], &vec.asColor().b);
+    try testing.expectEqual(&vec.array[3], &vec.asColor().a);
+}
+
+test "asConstColor should return correct value" {
+    const vec = Vector(4, f32).fromArray(.{ 1, 2, 3, 4 });
+    try testing.expectEqual(&vec.array[0], &vec.asConstColor().r);
+    try testing.expectEqual(&vec.array[1], &vec.asConstColor().g);
+    try testing.expectEqual(&vec.array[2], &vec.asConstColor().b);
+    try testing.expectEqual(&vec.array[3], &vec.asConstColor().a);
+}
+
 test "x,y,z,w should return correct value" {
     const vec = Vector(4, f32).fromArray(.{ 1, 2, 3, 4 });
     try testing.expectEqual(1, vec.x());
@@ -592,20 +684,36 @@ test "toImVec should return correct value" {
     );
 }
 
-test "asImVecPointer should return correct value" {
+test "asImVec should return correct value" {
     var vec_1 = Vector(1, f32).fromArray(.{1});
     var vec_2 = Vector(2, f32).fromArray(.{ 1, 2 });
     var vec_4 = Vector(4, f32).fromArray(.{ 1, 2, 3, 4 });
     var vec_2_i = Vector(2, i16).fromArray(.{ 1, 2 });
-    try testing.expectEqual(&vec_1.array[0], &vec_1.asImVecPointer().x);
-    try testing.expectEqual(&vec_2.array[0], &vec_2.asImVecPointer().x);
-    try testing.expectEqual(&vec_2.array[1], &vec_2.asImVecPointer().y);
-    try testing.expectEqual(&vec_4.array[0], &vec_4.asImVecPointer().x);
-    try testing.expectEqual(&vec_4.array[1], &vec_4.asImVecPointer().y);
-    try testing.expectEqual(&vec_4.array[2], &vec_4.asImVecPointer().z);
-    try testing.expectEqual(&vec_4.array[3], &vec_4.asImVecPointer().w);
-    try testing.expectEqual(&vec_2_i.array[0], &vec_2_i.asImVecPointer().x);
-    try testing.expectEqual(&vec_2_i.array[1], &vec_2_i.asImVecPointer().y);
+    try testing.expectEqual(&vec_1.array[0], &vec_1.asImVec().x);
+    try testing.expectEqual(&vec_2.array[0], &vec_2.asImVec().x);
+    try testing.expectEqual(&vec_2.array[1], &vec_2.asImVec().y);
+    try testing.expectEqual(&vec_4.array[0], &vec_4.asImVec().x);
+    try testing.expectEqual(&vec_4.array[1], &vec_4.asImVec().y);
+    try testing.expectEqual(&vec_4.array[2], &vec_4.asImVec().z);
+    try testing.expectEqual(&vec_4.array[3], &vec_4.asImVec().w);
+    try testing.expectEqual(&vec_2_i.array[0], &vec_2_i.asImVec().x);
+    try testing.expectEqual(&vec_2_i.array[1], &vec_2_i.asImVec().y);
+}
+
+test "asConstImVec should return correct value" {
+    const vec_1 = Vector(1, f32).fromArray(.{1});
+    const vec_2 = Vector(2, f32).fromArray(.{ 1, 2 });
+    const vec_4 = Vector(4, f32).fromArray(.{ 1, 2, 3, 4 });
+    const vec_2_i = Vector(2, i16).fromArray(.{ 1, 2 });
+    try testing.expectEqual(&vec_1.array[0], &vec_1.asConstImVec().x);
+    try testing.expectEqual(&vec_2.array[0], &vec_2.asConstImVec().x);
+    try testing.expectEqual(&vec_2.array[1], &vec_2.asConstImVec().y);
+    try testing.expectEqual(&vec_4.array[0], &vec_4.asConstImVec().x);
+    try testing.expectEqual(&vec_4.array[1], &vec_4.asConstImVec().y);
+    try testing.expectEqual(&vec_4.array[2], &vec_4.asConstImVec().z);
+    try testing.expectEqual(&vec_4.array[3], &vec_4.asConstImVec().w);
+    try testing.expectEqual(&vec_2_i.array[0], &vec_2_i.asConstImVec().x);
+    try testing.expectEqual(&vec_2_i.array[1], &vec_2_i.asConstImVec().y);
 }
 
 test "lengthSquared should return correct value" {

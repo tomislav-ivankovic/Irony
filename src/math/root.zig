@@ -1,7 +1,9 @@
+pub const vector_tag = @import("vector.zig").vector_tag;
 pub const Vector = @import("vector.zig").Vector;
 pub const Vec2 = Vector(2, f32);
 pub const Vec3 = Vector(3, f32);
 pub const Vec4 = Vector(4, f32);
+pub const matrix_tag = @import("matrix.zig").matrix_tag;
 pub const Matrix = @import("matrix.zig").Matrix;
 pub const Mat2 = Matrix(2, f32);
 pub const Mat3 = Matrix(3, f32);

@@ -1,5 +1,6 @@
 const std = @import("std");
 const memory = @import("../memory/root.zig");
+const math = @import("../math/root.zig");
 const game = @import("root.zig");
 
 pub const AttackType = enum(u32) {
@@ -200,7 +201,7 @@ pub const Input = packed struct(u32) {
 };
 
 pub const HitLinePoint = extern struct {
-    position: [3]f32,
+    position: math.Vec3,
     _padding: f32,
 
     comptime {
@@ -214,7 +215,7 @@ comptime {
 }
 
 pub const HurtCylinder = extern struct {
-    position: [3]f32,
+    position: math.Vec3,
     multiplier: f32,
     half_height: f32,
     squared_radius: f32,
@@ -260,7 +261,7 @@ pub const HurtCylinders = extern struct {
 };
 
 pub const CollisionSphere = extern struct {
-    position: [3]f32,
+    position: math.Vec3,
     multiplier: f32,
     radius: f32,
     _padding: [3]f32,
@@ -306,7 +307,12 @@ pub const Player = struct {
     position_y_relative_to_floor: f32, // 0x0184
     position_x_relative_to_floor: f32, // 0x018C
     position_z_relative_to_floor: f32, // 0x01A4
-    location: [4]f32, //0x0230
+    location: memory.ConvertedValue(
+        math.Vec3,
+        math.Vec3,
+        game.conversions.pointToUnrealSpace,
+        game.conversions.pointFromUnrealSpace,
+    ), //0x0230
     current_frame_number: u32, // 0x0390
     current_frame_float: f32, // 0x03BC
     current_move_pointer: usize, // 0x03D8

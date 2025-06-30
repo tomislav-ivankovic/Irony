@@ -44,7 +44,7 @@ pub const View = struct {
 
     fn updateWindowSize(self: *Self, direction: Direction) void {
         var window_size: math.Vec2 = undefined;
-        imgui.igGetContentRegionAvail(window_size.asImVecPointer());
+        imgui.igGetContentRegionAvail(window_size.asImVec());
         self.window_size.set(direction, window_size);
     }
 
@@ -56,8 +56,8 @@ pub const View = struct {
     }
 
     fn calculateLookAtMatrix(direction: Direction, player_1: *const Player, player_2: *const Player) math.Mat4 {
-        const p1 = math.Vec3.fromArray(player_1.collision_spheres.lower_torso.position);
-        const p2 = math.Vec3.fromArray(player_2.collision_spheres.lower_torso.position);
+        const p1 = player_1.collision_spheres.lower_torso.position;
+        const p2 = player_2.collision_spheres.lower_torso.position;
         const eye = p1.add(p2).scale(0.5);
         const difference_2d = p2.swizzle("xy").subtract(p1.swizzle("xy"));
         const player_dir = if (!difference_2d.isZero(0)) difference_2d.normalize().extend(0) else math.Vec3.plus_x;
@@ -85,13 +85,13 @@ pub const View = struct {
         var max = math.Vec3.fill(-std.math.inf(f32));
         for ([_](*const Player){ player_1, player_2 }) |player| {
             for (player.collision_spheres.asConstArray()) |*sphere| {
-                const pos = math.Vec3.fromArray(sphere.position).pointTransform(look_at_matrix);
+                const pos = sphere.position.pointTransform(look_at_matrix);
                 const half_size = math.Vec3.fill(sphere.radius);
                 min = math.Vec3.minElements(min, pos.subtract(half_size));
                 max = math.Vec3.maxElements(max, pos.add(half_size));
             }
             for (player.hurt_cylinders.asConstArray()) |*cylinder| {
-                const pos = math.Vec3.fromArray(cylinder.position).pointTransform(look_at_matrix);
+                const pos = cylinder.position.pointTransform(look_at_matrix);
                 const half_size = math.Vec3.fromArray(.{
                     cylinder.radius,
                     cylinder.radius,
@@ -135,9 +135,9 @@ pub const View = struct {
 
     fn calculateWindowMatrix() math.Mat4 {
         var window_pos: math.Vec2 = undefined;
-        imgui.igGetCursorScreenPos(window_pos.asImVecPointer());
+        imgui.igGetCursorScreenPos(window_pos.asImVec());
         var window_size: math.Vec2 = undefined;
-        imgui.igGetContentRegionAvail(window_size.asImVecPointer());
+        imgui.igGetContentRegionAvail(window_size.asImVec());
         return math.Mat4.identity
             .scale(math.Vec3.fromArray(.{ 0.5 * window_size.x(), -0.5 * window_size.y(), 1 }))
             .translate(window_size.scale(0.5).add(window_pos).extend(0));
@@ -152,7 +152,7 @@ pub const View = struct {
 
         const draw_list = imgui.igGetWindowDrawList();
         for (player.collision_spheres.asConstArray()) |*sphere| {
-            const pos = math.Vec3.fromArray(sphere.position).pointTransform(matrix).swizzle("xy");
+            const pos = sphere.position.pointTransform(matrix).swizzle("xy");
             const radius = world_up.add(world_right).scale(sphere.radius).directionTransform(matrix).swizzle("xy");
             imgui.ImDrawList_AddEllipse(draw_list, pos.toImVec(), radius.toImVec(), color, 0, 32, thickness);
         }
@@ -167,7 +167,7 @@ pub const View = struct {
 
         const draw_list = imgui.igGetWindowDrawList();
         for (player.hurt_cylinders.asConstArray()) |*cylinder| {
-            const pos = math.Vec3.fromArray(cylinder.position).pointTransform(matrix).swizzle("xy");
+            const pos = cylinder.position.pointTransform(matrix).swizzle("xy");
             switch (direction) {
                 .front, .side => {
                     const half_size = world_up.scale(cylinder.half_height)
@@ -192,7 +192,7 @@ pub const View = struct {
     fn drawStickFigure(player: *const Player, matrix: math.Mat4) void {
         const transform = struct {
             fn call(body_part: anytype, m: math.Mat4) imgui.ImVec2 {
-                return math.Vec3.fromArray(body_part.position).pointTransform(m).swizzle("xy").toImVec();
+                return body_part.position.pointTransform(m).swizzle("xy").toImVec();
             }
         }.call;
         const cylinders = &player.hurt_cylinders;
@@ -242,8 +242,8 @@ pub const View = struct {
 
         const draw_list = imgui.igGetWindowDrawList();
         for (player.hit_lines_start, player.hit_lines_end) |start_point, end_point| {
-            const start = math.Vec3.fromArray(start_point.position).pointTransform(matrix).swizzle("xy");
-            const end = math.Vec3.fromArray(end_point.position).pointTransform(matrix).swizzle("xy");
+            const start = start_point.position.pointTransform(matrix).swizzle("xy");
+            const end = end_point.position.pointTransform(matrix).swizzle("xy");
             imgui.ImDrawList_AddLine(draw_list, start.toImVec(), end.toImVec(), color, thickness);
         }
     }

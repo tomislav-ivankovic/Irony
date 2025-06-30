@@ -2,14 +2,14 @@ const std = @import("std");
 const imgui = @import("imgui");
 const math = @import("root.zig");
 
+pub const matrix_tag = opaque {};
+
 pub fn Matrix(comptime size: usize, comptime Element: type) type {
     if (@typeInfo(Element) != .int and @typeInfo(Element) != .float) {
         @compileError("Expected a int or float type argument but got type: " ++ @typeName(Element));
     }
-    return extern union {
+    return extern struct {
         array: Array,
-        flat: Flat,
-        coords: Coords,
 
         const Self = @This();
         pub const Array = [size][size]Element;
@@ -50,6 +50,7 @@ pub fn Matrix(comptime size: usize, comptime Element: type) type {
             else => void,
         };
 
+        pub const tag = matrix_tag;
         pub const identity = block: {
             var array: Array = undefined;
             for (0..size) |i| {
@@ -66,20 +67,53 @@ pub fn Matrix(comptime size: usize, comptime Element: type) type {
         }
 
         pub fn fromFlat(flat: Flat) Self {
-            return .{ .flat = flat };
+            return @bitCast(flat);
         }
 
         pub fn fromCoords(coords: Coords) Self {
             if (size > 4) {
-                @compileError("This operation is not defined for vectors larger then 4D.");
+                @compileError("This operation is not defined for matrices larger then 4x4.");
             }
-            return .{ .coords = coords };
+            return @bitCast(coords);
         }
 
         pub fn fill(value: Element) Self {
             const row = [1]Element{value} ** size;
             const array = [1]([size]Element){row} ** size;
             return .{ .array = array };
+        }
+
+        pub fn toFlat(self: Self) Flat {
+            return @bitCast(self);
+        }
+
+        pub fn asFlat(self: *Self) *Flat {
+            return @ptrCast(self);
+        }
+
+        pub fn asConstFlat(self: *const Self) *const Flat {
+            return @ptrCast(self);
+        }
+
+        pub fn toCoords(self: Self) Coords {
+            if (size > 4) {
+                @compileError("This operation is not defined for matrices larger then 4x4.");
+            }
+            return @bitCast(self);
+        }
+
+        pub fn asCoords(self: *Self) *Coords {
+            if (size > 4) {
+                @compileError("This operation is not defined for matrices larger then 4x4.");
+            }
+            return @ptrCast(self);
+        }
+
+        pub fn asConstCoords(self: *const Self) *const Coords {
+            if (size > 4) {
+                @compileError("This operation is not defined for matrices larger then 4x4.");
+            }
+            return @ptrCast(self);
         }
 
         pub fn transpose(self: Self) Self {
@@ -763,6 +797,143 @@ test "fill should return correct value" {
         .{ 5, 5, 5, 5 },
         .{ 5, 5, 5, 5 },
     }, matrix.array);
+}
+
+test "toFlat should return correct value" {
+    const matrix = Matrix(4, f32).fromArray(.{
+        .{ 1, 2, 3, 4 },
+        .{ 5, 6, 7, 8 },
+        .{ 9, 10, 11, 12 },
+        .{ 13, 14, 15, 16 },
+    });
+    try testing.expectEqual(.{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }, matrix.toFlat());
+}
+
+test "asFlat should return correct value" {
+    var matrix = Matrix(4, f32).fromArray(.{
+        .{ 1, 2, 3, 4 },
+        .{ 5, 6, 7, 8 },
+        .{ 9, 10, 11, 12 },
+        .{ 13, 14, 15, 16 },
+    });
+    try testing.expectEqual(&matrix.array[0][0], &matrix.asFlat()[0]);
+    try testing.expectEqual(&matrix.array[0][1], &matrix.asFlat()[1]);
+    try testing.expectEqual(&matrix.array[0][2], &matrix.asFlat()[2]);
+    try testing.expectEqual(&matrix.array[0][3], &matrix.asFlat()[3]);
+    try testing.expectEqual(&matrix.array[1][0], &matrix.asFlat()[4]);
+    try testing.expectEqual(&matrix.array[1][1], &matrix.asFlat()[5]);
+    try testing.expectEqual(&matrix.array[1][2], &matrix.asFlat()[6]);
+    try testing.expectEqual(&matrix.array[1][3], &matrix.asFlat()[7]);
+    try testing.expectEqual(&matrix.array[2][0], &matrix.asFlat()[8]);
+    try testing.expectEqual(&matrix.array[2][1], &matrix.asFlat()[9]);
+    try testing.expectEqual(&matrix.array[2][2], &matrix.asFlat()[10]);
+    try testing.expectEqual(&matrix.array[2][3], &matrix.asFlat()[11]);
+    try testing.expectEqual(&matrix.array[3][0], &matrix.asFlat()[12]);
+    try testing.expectEqual(&matrix.array[3][1], &matrix.asFlat()[13]);
+    try testing.expectEqual(&matrix.array[3][2], &matrix.asFlat()[14]);
+    try testing.expectEqual(&matrix.array[3][3], &matrix.asFlat()[15]);
+}
+
+test "asConstFlat should return correct value" {
+    const matrix = Matrix(4, f32).fromArray(.{
+        .{ 1, 2, 3, 4 },
+        .{ 5, 6, 7, 8 },
+        .{ 9, 10, 11, 12 },
+        .{ 13, 14, 15, 16 },
+    });
+    try testing.expectEqual(&matrix.array[0][0], &matrix.asConstFlat()[0]);
+    try testing.expectEqual(&matrix.array[0][1], &matrix.asConstFlat()[1]);
+    try testing.expectEqual(&matrix.array[0][2], &matrix.asConstFlat()[2]);
+    try testing.expectEqual(&matrix.array[0][3], &matrix.asConstFlat()[3]);
+    try testing.expectEqual(&matrix.array[1][0], &matrix.asConstFlat()[4]);
+    try testing.expectEqual(&matrix.array[1][1], &matrix.asConstFlat()[5]);
+    try testing.expectEqual(&matrix.array[1][2], &matrix.asConstFlat()[6]);
+    try testing.expectEqual(&matrix.array[1][3], &matrix.asConstFlat()[7]);
+    try testing.expectEqual(&matrix.array[2][0], &matrix.asConstFlat()[8]);
+    try testing.expectEqual(&matrix.array[2][1], &matrix.asConstFlat()[9]);
+    try testing.expectEqual(&matrix.array[2][2], &matrix.asConstFlat()[10]);
+    try testing.expectEqual(&matrix.array[2][3], &matrix.asConstFlat()[11]);
+    try testing.expectEqual(&matrix.array[3][0], &matrix.asConstFlat()[12]);
+    try testing.expectEqual(&matrix.array[3][1], &matrix.asConstFlat()[13]);
+    try testing.expectEqual(&matrix.array[3][2], &matrix.asConstFlat()[14]);
+    try testing.expectEqual(&matrix.array[3][3], &matrix.asConstFlat()[15]);
+}
+
+test "toCoords should return correct value" {
+    const matrix = Matrix(4, f32).fromArray(.{
+        .{ 1, 2, 3, 4 },
+        .{ 5, 6, 7, 8 },
+        .{ 9, 10, 11, 12 },
+        .{ 13, 14, 15, 16 },
+    });
+    try testing.expectEqual(Matrix(4, f32).Coords{
+        .xx = 1,
+        .xy = 2,
+        .xz = 3,
+        .xw = 4,
+        .yx = 5,
+        .yy = 6,
+        .yz = 7,
+        .yw = 8,
+        .zx = 9,
+        .zy = 10,
+        .zz = 11,
+        .zw = 12,
+        .wx = 13,
+        .wy = 14,
+        .wz = 15,
+        .ww = 16,
+    }, matrix.toCoords());
+}
+
+test "asCoords should return correct value" {
+    var matrix = Matrix(4, f32).fromArray(.{
+        .{ 1, 2, 3, 4 },
+        .{ 5, 6, 7, 8 },
+        .{ 9, 10, 11, 12 },
+        .{ 13, 14, 15, 16 },
+    });
+    try testing.expectEqual(&matrix.array[0][0], &matrix.asCoords().xx);
+    try testing.expectEqual(&matrix.array[0][1], &matrix.asCoords().xy);
+    try testing.expectEqual(&matrix.array[0][2], &matrix.asCoords().xz);
+    try testing.expectEqual(&matrix.array[0][3], &matrix.asCoords().xw);
+    try testing.expectEqual(&matrix.array[1][0], &matrix.asCoords().yx);
+    try testing.expectEqual(&matrix.array[1][1], &matrix.asCoords().yy);
+    try testing.expectEqual(&matrix.array[1][2], &matrix.asCoords().yz);
+    try testing.expectEqual(&matrix.array[1][3], &matrix.asCoords().yw);
+    try testing.expectEqual(&matrix.array[2][0], &matrix.asCoords().zx);
+    try testing.expectEqual(&matrix.array[2][1], &matrix.asCoords().zy);
+    try testing.expectEqual(&matrix.array[2][2], &matrix.asCoords().zz);
+    try testing.expectEqual(&matrix.array[2][3], &matrix.asCoords().zw);
+    try testing.expectEqual(&matrix.array[3][0], &matrix.asCoords().wx);
+    try testing.expectEqual(&matrix.array[3][1], &matrix.asCoords().wy);
+    try testing.expectEqual(&matrix.array[3][2], &matrix.asCoords().wz);
+    try testing.expectEqual(&matrix.array[3][3], &matrix.asCoords().ww);
+}
+
+test "asConstCoords should return correct value" {
+    const matrix = Matrix(4, f32).fromArray(.{
+        .{ 1, 2, 3, 4 },
+        .{ 5, 6, 7, 8 },
+        .{ 9, 10, 11, 12 },
+        .{ 13, 14, 15, 16 },
+    });
+    try testing.expectEqual(&matrix.array[0][0], &matrix.asConstCoords().xx);
+    try testing.expectEqual(&matrix.array[0][1], &matrix.asConstCoords().xy);
+    try testing.expectEqual(&matrix.array[0][2], &matrix.asConstCoords().xz);
+    try testing.expectEqual(&matrix.array[0][3], &matrix.asConstCoords().xw);
+    try testing.expectEqual(&matrix.array[1][0], &matrix.asConstCoords().yx);
+    try testing.expectEqual(&matrix.array[1][1], &matrix.asConstCoords().yy);
+    try testing.expectEqual(&matrix.array[1][2], &matrix.asConstCoords().yz);
+    try testing.expectEqual(&matrix.array[1][3], &matrix.asConstCoords().yw);
+    try testing.expectEqual(&matrix.array[2][0], &matrix.asConstCoords().zx);
+    try testing.expectEqual(&matrix.array[2][1], &matrix.asConstCoords().zy);
+    try testing.expectEqual(&matrix.array[2][2], &matrix.asConstCoords().zz);
+    try testing.expectEqual(&matrix.array[2][3], &matrix.asConstCoords().zw);
+    try testing.expectEqual(&matrix.array[3][0], &matrix.asConstCoords().wx);
+    try testing.expectEqual(&matrix.array[3][1], &matrix.asConstCoords().wy);
+    try testing.expectEqual(&matrix.array[3][2], &matrix.asConstCoords().wz);
+    try testing.expectEqual(&matrix.array[3][3], &matrix.asConstCoords().ww);
 }
 
 test "transpose should return correct value" {

@@ -2,6 +2,7 @@ const std = @import("std");
 const imgui = @import("imgui");
 const builtin = @import("builtin");
 const memory = @import("../memory/root.zig");
+const math = @import("../math/root.zig");
 const ui = @import("../ui/root.zig");
 
 pub fn drawData(label: [:0]const u8, pointer: anytype) void {
@@ -41,6 +42,8 @@ fn drawAny(ctx: *const Context, pointer: anytype) void {
         drawStructProxy(ctx, pointer);
     } else if (hasTag(Type, memory.self_sortable_array_tag)) {
         drawSelfSortableArray(ctx, pointer);
+    } else if (hasTag(Type, math.vector_tag)) {
+        drawVector(ctx, pointer);
     } else switch (@typeInfo(Type)) {
         .void => drawVoid(ctx),
         .null => drawNull(ctx),
@@ -639,6 +642,14 @@ fn drawSelfSortableArray(ctx: *const Context, pointer: anytype) void {
     drawAny(&sorted_ctx, sorted_pointer);
 }
 
+fn drawVector(ctx: *const Context, pointer: anytype) void {
+    if (pointer.array.len > 4) {
+        drawAny(ctx, &pointer.array);
+    } else {
+        drawAny(ctx, pointer.asConstCoords());
+    }
+}
+
 // Helper data-structures and functions.
 
 const error_string = "display error";
@@ -673,7 +684,8 @@ const Context = struct {
 
 inline fn hasTag(comptime Type: type, comptime tag: type) bool {
     comptime {
-        if (@typeInfo(Type) != .@"struct") return false;
+        const info = @typeInfo(Type);
+        if (info != .@"struct" and info != .@"enum" and info != .@"union") return false;
         if (!@hasDecl(Type, "tag")) return false;
         if (@TypeOf(Type.tag) != type) return false;
         return Type.tag == tag;
@@ -2111,6 +2123,53 @@ test "should draw self sortable array correctly" {
             try ctx.expectItemExists("test/sorted/1/value: 2 (0x2)");
             try ctx.expectItemExistsFmt("test/sorted/2/address: {} (0x{X})", .{ address_of_3, address_of_3 });
             try ctx.expectItemExists("test/sorted/2/value: 3 (0x3)");
+        }
+    };
+    const context = try ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw vector correctly" {
+    const Test = struct {
+        var value_1: math.Vector(4, f32) = .fromArray(.{ 1, 2, 3, 4 });
+        var value_2: math.Vector(5, f32) = .fromArray(.{ 5, 6, 7, 8, 9 });
+
+        fn guiFunction(_: ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            drawData("test_1", &value_1);
+            drawData("test_2", &value_2);
+        }
+
+        fn testFunction(ctx: ui.TestContext) !void {
+            const address_1 = @intFromPtr(&value_1);
+            const size_1 = @sizeOf(@TypeOf(value_1));
+
+            ctx.setRef("Window");
+            try ctx.expectItemExists("test_1");
+            try ctx.expectItemExists("test_2");
+            ctx.itemClick("test_1", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExists("label: test_1");
+            try ctx.expectItemExists("path: test_1");
+            try ctx.expectItemExists("type");
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ address_1, address_1 });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ size_1, size_1 });
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            ctx.setRef("Window");
+            ctx.itemClick("test_1", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("test_2", imgui.ImGuiMouseButton_Left, 0);
+            try ctx.expectItemExists("test_1/x: 1e0");
+            try ctx.expectItemExists("test_1/y: 2e0");
+            try ctx.expectItemExists("test_1/z: 3e0");
+            try ctx.expectItemExists("test_1/w: 4e0");
+            try ctx.expectItemExists("test_2/0: 5e0");
+            try ctx.expectItemExists("test_2/1: 6e0");
+            try ctx.expectItemExists("test_2/2: 7e0");
+            try ctx.expectItemExists("test_2/3: 8e0");
+            try ctx.expectItemExists("test_2/4: 9e0");
         }
     };
     const context = try ui.getTestingContext();

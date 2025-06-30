@@ -1,23 +1,24 @@
 const std = @import("std");
 const game = @import("root.zig");
+const math = @import("../math/root.zig");
 
 const to_unreal_scale = 0.1;
 const from_unreal_scale = 1.0 / to_unreal_scale;
 
-pub fn pointToUnrealSpace(value: [3]f32) [3]f32 {
-    return .{
-        value[2] * to_unreal_scale,
-        -value[0] * to_unreal_scale,
-        value[1] * to_unreal_scale,
-    };
+pub fn pointToUnrealSpace(value: math.Vec3) math.Vec3 {
+    return math.Vec3.fromArray(.{
+        value.z() * to_unreal_scale,
+        -value.x() * to_unreal_scale,
+        value.y() * to_unreal_scale,
+    });
 }
 
-pub fn pointFromUnrealSpace(value: [3]f32) [3]f32 {
-    return .{
-        -value[1] * from_unreal_scale,
-        value[2] * from_unreal_scale,
-        value[0] * from_unreal_scale,
-    };
+pub fn pointFromUnrealSpace(value: math.Vec3) math.Vec3 {
+    return math.Vec3.fromArray(.{
+        -value.y() * from_unreal_scale,
+        value.z() * from_unreal_scale,
+        value.x() * from_unreal_scale,
+    });
 }
 
 pub fn scaleToUnrealSpace(value: f32) f32 {
@@ -123,7 +124,7 @@ pub fn collisionSpheresFromUnrealSpace(value: game.CollisionSpheres) game.Collis
 const testing = std.testing;
 
 test "pointToUnrealSpace and pointFromUnrealSpace should cancel out" {
-    const value = [3]f32{ 1, 2, 3 };
+    const value = math.Vec3.fromArray(.{ 1, 2, 3 });
     try testing.expectEqual(value, pointToUnrealSpace(pointFromUnrealSpace(value)));
     try testing.expectEqual(value, pointFromUnrealSpace(pointToUnrealSpace(value)));
 }
@@ -136,7 +137,7 @@ test "scaleToUnrealSpace and scaleFromUnrealSpace should cancel out" {
 
 test "hitLinePointToUnrealSpace and hitLinePointFromUnrealSpace should cancel out" {
     const value = game.HitLinePoint{
-        .position = .{ 1, 2, 3 },
+        .position = .fromArray(.{ 1, 2, 3 }),
         ._padding = undefined,
     };
     try testing.expectEqual(value, hitLinePointToUnrealSpace(hitLinePointFromUnrealSpace(value)));
@@ -145,7 +146,7 @@ test "hitLinePointToUnrealSpace and hitLinePointFromUnrealSpace should cancel ou
 
 test "hurtCylinderToUnrealSpace and hurtCylinderFromUnrealSpace should cancel out" {
     const value = game.HurtCylinder{
-        .position = .{ 1, 2, 3 },
+        .position = .fromArray(.{ 1, 2, 3 }),
         .multiplier = 4,
         .half_height = 5,
         .squared_radius = 6,
@@ -158,7 +159,7 @@ test "hurtCylinderToUnrealSpace and hurtCylinderFromUnrealSpace should cancel ou
 
 test "collisionSphereToUnrealSpace and collisionSphereFromUnrealSpace should cancel out" {
     const value = game.CollisionSphere{
-        .position = .{ 1, 2, 3 },
+        .position = .fromArray(.{ 1, 2, 3 }),
         .multiplier = 4,
         .radius = 5,
         ._padding = undefined,
@@ -169,9 +170,9 @@ test "collisionSphereToUnrealSpace and collisionSphereFromUnrealSpace should can
 
 test "hitLinePointsToUnrealSpace and hitLinePointsFromUnrealSpace should cancel out" {
     const value = game.HitLinePoints{
-        .{ .position = .{ 1, 2, 3 }, ._padding = undefined },
-        .{ .position = .{ 4, 5, 6 }, ._padding = undefined },
-        .{ .position = .{ 7, 8, 9 }, ._padding = undefined },
+        .{ .position = .fromArray(.{ 1, 2, 3 }), ._padding = undefined },
+        .{ .position = .fromArray(.{ 4, 5, 6 }), ._padding = undefined },
+        .{ .position = .fromArray(.{ 7, 8, 9 }), ._padding = undefined },
     };
     try testing.expectEqual(value, hitLinePointsToUnrealSpace(hitLinePointsFromUnrealSpace(value)));
     try testing.expectEqual(value, hitLinePointsFromUnrealSpace(hitLinePointsToUnrealSpace(value)));
@@ -179,7 +180,7 @@ test "hitLinePointsToUnrealSpace and hitLinePointsFromUnrealSpace should cancel 
 
 test "hurtCylindersToUnrealSpace and hurtCylindersFromUnrealSpace should cancel out" {
     const cylinder = game.HurtCylinder{
-        .position = .{ 1, 2, 3 },
+        .position = .fromArray(.{ 1, 2, 3 }),
         .multiplier = 4,
         .half_height = 5,
         .squared_radius = 6,
@@ -208,7 +209,7 @@ test "hurtCylindersToUnrealSpace and hurtCylindersFromUnrealSpace should cancel 
 
 test "collisionSpheresToUnrealSpace and collisionSpheresFromUnrealSpace should cancel out" {
     const sphere = game.CollisionSphere{
-        .position = .{ 1, 2, 3 },
+        .position = .fromArray(.{ 1, 2, 3 }),
         .multiplier = 4,
         .radius = 5,
         ._padding = undefined,
