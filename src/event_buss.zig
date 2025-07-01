@@ -105,9 +105,8 @@ pub const EventBuss = struct {
     }
 
     pub fn tick(self: *Self, delta_time: f32, game_memory: *const game.Memory) void {
-        _ = self;
         _ = delta_time;
-        _ = game_memory;
+        self.main_window.tick(game_memory);
     }
 
     pub fn draw(

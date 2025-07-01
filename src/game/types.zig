@@ -209,9 +209,18 @@ pub const HitLinePoint = extern struct {
     }
 };
 
-pub const HitLinePoints = [3]HitLinePoint;
+pub const HitLineSet = extern struct {
+    points: [3]HitLinePoint,
+    _padding: [4]f32,
+
+    comptime {
+        std.debug.assert(@sizeOf(@This()) == 64);
+    }
+};
+
+pub const HitLines = [4]HitLineSet;
 comptime {
-    std.debug.assert(@sizeOf(HitLinePoints) == 48);
+    std.debug.assert(@sizeOf(HitLines) == 256);
 }
 
 pub const HurtCylinder = extern struct {
@@ -340,18 +349,12 @@ pub const Player = struct {
     direction_input: u32, // 0x1F74
     used_heat: u32, // 0x2110
     input: Input, // 0x2494
-    hit_lines_start: memory.ConvertedValue(
-        HitLinePoints,
-        HitLinePoints,
-        game.conversions.hitLinePointsToUnrealSpace,
-        game.conversions.hitLinePointsFromUnrealSpace,
+    hit_lines: memory.ConvertedValue(
+        HitLines,
+        HitLines,
+        game.conversions.hitLinesToUnrealSpace,
+        game.conversions.hitLinesFromUnrealSpace,
     ), // 0x2500
-    hit_lines_end: memory.ConvertedValue(
-        HitLinePoints,
-        HitLinePoints,
-        game.conversions.hitLinePointsToUnrealSpace,
-        game.conversions.hitLinePointsFromUnrealSpace,
-    ), // 0x2540
     hurt_cylinders: memory.ConvertedValue(
         HurtCylinders,
         HurtCylinders,

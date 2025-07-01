@@ -73,18 +73,34 @@ pub fn collisionSphereFromUnrealSpace(value: game.CollisionSphere) game.Collisio
     return converted;
 }
 
-pub fn hitLinePointsToUnrealSpace(value: game.HitLinePoints) game.HitLinePoints {
-    var converted: game.HitLinePoints = undefined;
-    for (value, 0..) |element, index| {
-        converted[index] = hitLinePointToUnrealSpace(element);
+pub fn hitLineSetToUnrealSpace(value: game.HitLineSet) game.HitLineSet {
+    var converted: game.HitLineSet = value;
+    for (value.points, 0..) |element, index| {
+        converted.points[index] = hitLinePointToUnrealSpace(element);
     }
     return converted;
 }
 
-pub fn hitLinePointsFromUnrealSpace(value: game.HitLinePoints) game.HitLinePoints {
-    var converted: game.HitLinePoints = undefined;
+pub fn hitLineSetFromUnrealSpace(value: game.HitLineSet) game.HitLineSet {
+    var converted: game.HitLineSet = value;
+    for (value.points, 0..) |element, index| {
+        converted.points[index] = hitLinePointFromUnrealSpace(element);
+    }
+    return converted;
+}
+
+pub fn hitLinesToUnrealSpace(value: game.HitLines) game.HitLines {
+    var converted: game.HitLines = undefined;
     for (value, 0..) |element, index| {
-        converted[index] = hitLinePointFromUnrealSpace(element);
+        converted[index] = hitLineSetToUnrealSpace(element);
+    }
+    return converted;
+}
+
+pub fn hitLinesFromUnrealSpace(value: game.HitLines) game.HitLines {
+    var converted: game.HitLines = undefined;
+    for (value, 0..) |element, index| {
+        converted[index] = hitLineSetFromUnrealSpace(element);
     }
     return converted;
 }
@@ -168,14 +184,31 @@ test "collisionSphereToUnrealSpace and collisionSphereFromUnrealSpace should can
     try testing.expectEqual(value, collisionSphereFromUnrealSpace(collisionSphereToUnrealSpace(value)));
 }
 
-test "hitLinePointsToUnrealSpace and hitLinePointsFromUnrealSpace should cancel out" {
-    const value = game.HitLinePoints{
-        .{ .position = .fromArray(.{ 1, 2, 3 }), ._padding = undefined },
-        .{ .position = .fromArray(.{ 4, 5, 6 }), ._padding = undefined },
-        .{ .position = .fromArray(.{ 7, 8, 9 }), ._padding = undefined },
+test "hitLineSetToUnrealSpace and hitLineSetFromUnrealSpace should cancel out" {
+    const value = game.HitLineSet{
+        .points = .{
+            .{ .position = .fromArray(.{ 1, 2, 3 }), ._padding = undefined },
+            .{ .position = .fromArray(.{ 4, 5, 6 }), ._padding = undefined },
+            .{ .position = .fromArray(.{ 7, 8, 9 }), ._padding = undefined },
+        },
+        ._padding = undefined,
     };
-    try testing.expectEqual(value, hitLinePointsToUnrealSpace(hitLinePointsFromUnrealSpace(value)));
-    try testing.expectEqual(value, hitLinePointsFromUnrealSpace(hitLinePointsToUnrealSpace(value)));
+    try testing.expectEqual(value, hitLineSetToUnrealSpace(hitLineSetFromUnrealSpace(value)));
+    try testing.expectEqual(value, hitLineSetFromUnrealSpace(hitLineSetToUnrealSpace(value)));
+}
+
+test "hitLinesToUnrealSpace and hitLinesFromUnrealSpace should cancel out" {
+    const set = game.HitLineSet{
+        .points = .{
+            .{ .position = .fromArray(.{ 1, 2, 3 }), ._padding = undefined },
+            .{ .position = .fromArray(.{ 4, 5, 6 }), ._padding = undefined },
+            .{ .position = .fromArray(.{ 7, 8, 9 }), ._padding = undefined },
+        },
+        ._padding = undefined,
+    };
+    const value: game.HitLines = [1]game.HitLineSet{set} ** 4;
+    try testing.expectEqual(value, hitLinesToUnrealSpace(hitLinesFromUnrealSpace(value)));
+    try testing.expectEqual(value, hitLinesFromUnrealSpace(hitLinesToUnrealSpace(value)));
 }
 
 test "hurtCylindersToUnrealSpace and hurtCylindersFromUnrealSpace should cancel out" {
