@@ -263,18 +263,18 @@ pub const View = struct {
 
         const draw_list = imgui.igGetWindowDrawList();
         for (previous_frame, current_frame) |previous_player, current_player| {
-            var last_point: ?math.Vec2 = null;
-            for (&previous_player.hit_lines, &current_player.hit_lines) |*previous_set, *current_set| {
-                for (&previous_set.points, &current_set.points) |previous_point, current_point| {
-                    if (std.meta.eql(previous_point.position, current_point.position)) {
-                        continue;
-                    }
-                    const current = current_point.position.pointTransform(matrix).swizzle("xy");
-                    if (last_point) |last| {
-                        imgui.ImDrawList_AddLine(draw_list, last.toImVec(), current.toImVec(), color, thickness);
-                    }
-                    last_point = current;
+            for (&previous_player.hit_lines, &current_player.hit_lines) |*previous_line, *current_line| {
+                if (current_line.ignore) {
+                    continue;
                 }
+                if (std.meta.eql(previous_line.points, current_line.points)) {
+                    continue;
+                }
+                const p1 = current_line.points[0].position.pointTransform(matrix).swizzle("xy");
+                const p2 = current_line.points[1].position.pointTransform(matrix).swizzle("xy");
+                const p3 = current_line.points[2].position.pointTransform(matrix).swizzle("xy");
+                imgui.ImDrawList_AddLine(draw_list, p1.toImVec(), p2.toImVec(), color, thickness);
+                imgui.ImDrawList_AddLine(draw_list, p2.toImVec(), p3.toImVec(), color, thickness);
             }
         }
     }

@@ -19,13 +19,13 @@ pub const GameMemoryWindow = struct {
             return;
         }
         components.drawData("game_memory", game_memory);
-        if (game_memory.player_1.findBaseAddress()) |address| {
-            const array: *const [3000]f32 = @ptrFromInt(address);
-            components.drawData("player_1_array", array);
-        }
-        if (game_memory.player_2.findBaseAddress()) |address| {
-            const array: *const [3000]f32 = @ptrFromInt(address);
-            components.drawData("player_2_array", array);
-        }
+        // if (game_memory.player_1.findBaseAddress()) |address| {
+        //     const array: *const [3000]f32 = @ptrFromInt(address);
+        //     components.drawData("player_1_array", array);
+        // }
+        // if (game_memory.player_2.findBaseAddress()) |address| {
+        //     const array: *const [3000]f32 = @ptrFromInt(address);
+        //     components.drawData("player_2_array", array);
+        // }
     }
 };

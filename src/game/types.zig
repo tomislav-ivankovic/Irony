@@ -209,16 +209,18 @@ pub const HitLinePoint = extern struct {
     }
 };
 
-pub const HitLineSet = extern struct {
+pub const HitLine = extern struct {
     points: [3]HitLinePoint,
-    _padding: [4]f32,
+    _padding_1: [8]u8,
+    ignore: bool,
+    _padding_2: [7]u8,
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 64);
     }
 };
 
-pub const HitLines = [4]HitLineSet;
+pub const HitLines = [4]HitLine;
 comptime {
     std.debug.assert(@sizeOf(HitLines) == 256);
 }
