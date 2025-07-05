@@ -336,14 +336,12 @@ fn onHooksDeinit(
     }
 }
 
-fn onTick(delta_time_64: f64) callconv(.c) void {
+fn onTick(delta_time: f64) callconv(.c) void {
     const task = memory_search_task.?.join();
+    task.tick_hook.?.original(delta_time);
     if (event_buss) |*buss| {
-        const delta_time: f32 = @floatCast(delta_time_64);
-        const game_memory = &task.game_memory;
-        buss.tick(delta_time, game_memory);
+        buss.tick(&task.game_memory);
     }
-    task.tick_hook.?.original(delta_time_64);
 }
 
 fn onHooksUpdate(
