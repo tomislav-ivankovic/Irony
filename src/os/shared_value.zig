@@ -101,8 +101,8 @@ pub fn SharedValue(comptime Value: type) type {
         fn getFullName(buffer: *[os.max_file_path_length]u16, process_id: os.ProcessId, name: []const u8) !usize {
             const pid = process_id.raw;
             var utf8_buffer: [os.max_file_path_length]u8 = undefined;
-            const utf8_name = std.fmt.bufPrint(&utf8_buffer, "Global\\{}-{s}", .{ pid, name }) catch |err| {
-                misc.error_context.new("Failed to construct full name: \"Global\\{}-{s}\"", .{ pid, name });
+            const utf8_name = std.fmt.bufPrint(&utf8_buffer, "{}-{s}", .{ pid, name }) catch |err| {
+                misc.error_context.new("Failed to construct full name: \"{}-{s}\"", .{ pid, name });
                 return err;
             };
             return std.unicode.utf8ToUtf16Le(buffer, utf8_name) catch |err| {
