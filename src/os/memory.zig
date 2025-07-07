@@ -12,15 +12,19 @@ pub fn isMemoryReadable(address: usize, size_in_bytes: usize) bool {
     while (current_address <= address +% size_in_bytes -% 1) {
         var info: w32.MEMORY_BASIC_INFORMATION = undefined;
         const success = w32.VirtualQuery(@ptrFromInt(current_address), &info, @sizeOf(@TypeOf(info)));
+        if (success == 0 or info.State != w32.MEM_COMMIT) {
+            return false;
+        }
         const protect = info.Protect;
-        const is_readable = success != 0 and
-            (protect.PAGE_EXECUTE == 1 or
-            protect.PAGE_EXECUTE_READ == 1 or
+        if (protect.PAGE_GUARD == 1 or protect.PAGE_NOACCESS == 1) {
+            return false;
+        }
+        const is_readable = protect.PAGE_EXECUTE_READ == 1 or
             protect.PAGE_EXECUTE_READWRITE == 1 or
             protect.PAGE_EXECUTE_WRITECOPY == 1 or
             protect.PAGE_READONLY == 1 or
             protect.PAGE_READWRITE == 1 or
-            protect.PAGE_WRITECOPY == 1);
+            protect.PAGE_WRITECOPY == 1;
         if (!is_readable) {
             return false;
         }
@@ -44,12 +48,17 @@ pub fn isMemoryWriteable(address: usize, size_in_bytes: usize) bool {
     while (current_address <= address +% size_in_bytes -% 1) {
         var info: w32.MEMORY_BASIC_INFORMATION = undefined;
         const success = w32.VirtualQuery(@ptrFromInt(current_address), &info, @sizeOf(@TypeOf(info)));
+        if (success == 0 or info.State != w32.MEM_COMMIT) {
+            return false;
+        }
         const protect = info.Protect;
-        const is_writeable = success != 0 and
-            (protect.PAGE_EXECUTE_READWRITE == 1 or
+        if (protect.PAGE_GUARD == 1 or protect.PAGE_NOACCESS == 1) {
+            return false;
+        }
+        const is_writeable = protect.PAGE_EXECUTE_READWRITE == 1 or
             protect.PAGE_EXECUTE_WRITECOPY == 1 or
             protect.PAGE_READWRITE == 1 or
-            protect.PAGE_WRITECOPY == 1);
+            protect.PAGE_WRITECOPY == 1;
         if (!is_writeable) {
             return false;
         }
