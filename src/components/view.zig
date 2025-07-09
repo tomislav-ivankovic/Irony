@@ -109,21 +109,29 @@ pub const View = struct {
                         current_line.points[2].position,
                     };
                     if (math.checkCylinderLineSegmentIntersection(
-                        cylinder.position,
-                        cylinder.radius,
-                        cylinder.half_height,
-                        points[0],
-                        points[1],
+                        .{
+                            .center = cylinder.position,
+                            .radius = cylinder.radius,
+                            .half_height = cylinder.half_height,
+                        },
+                        .{
+                            .point_1 = points[0],
+                            .point_2 = points[1],
+                        },
                     )) {
                         is_hit = true;
                         break;
                     }
                     if (math.checkCylinderLineSegmentIntersection(
-                        cylinder.position,
-                        cylinder.radius,
-                        cylinder.half_height,
-                        points[1],
-                        points[2],
+                        .{
+                            .center = cylinder.position,
+                            .radius = cylinder.radius,
+                            .half_height = cylinder.half_height,
+                        },
+                        .{
+                            .point_1 = points[1],
+                            .point_2 = points[2],
+                        },
                     )) {
                         is_hit = true;
                         break;

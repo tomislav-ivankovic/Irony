@@ -2,54 +2,45 @@ const std = @import("std");
 const math = @import("root.zig");
 
 pub fn checkCylinderLineSegmentIntersection(
-    center: math.Vec3,
-    radius: f32,
-    half_height: f32,
-    point_1: math.Vec3,
-    point_2: math.Vec3,
+    cylinder: math.Cylinder,
+    line: math.LineSegment3,
 ) bool {
     const z_interval_1 = Interval{
-        .min = center.z() - half_height,
-        .max = center.z() + half_height,
+        .min = cylinder.center.z() - cylinder.half_height,
+        .max = cylinder.center.z() + cylinder.half_height,
     };
     const z_interval_2 = Interval{
-        .min = @min(point_1.z(), point_2.z()),
-        .max = @max(point_1.z(), point_2.z()),
+        .min = @min(line.point_1.z(), line.point_2.z()),
+        .max = @max(line.point_1.z(), line.point_2.z()),
     };
     const z_interval = findIntervalIntersection(z_interval_1, z_interval_2) orelse return false;
 
-    const difference = point_2.subtract(point_1);
+    const difference = line.point_2.subtract(line.point_1);
     if (difference.z() == 0) {
         return checkCircleLineSegmentIntersection(
-            center.swizzle("xy"),
-            radius,
-            point_1.swizzle("xy"),
-            point_2.swizzle("xy"),
+            .{ .center = cylinder.center.swizzle("xy"), .radius = cylinder.radius },
+            .{ .point_1 = line.point_1.swizzle("xy"), .point_2 = line.point_2.swizzle("xy") },
         );
     }
 
-    const t1 = (z_interval.min - point_1.z()) / difference.z();
-    const t2 = (z_interval.max - point_1.z()) / difference.z();
-    const p1 = point_1.add(difference.scale(t1));
-    const p2 = point_1.add(difference.scale(t2));
+    const t1 = (z_interval.min - line.point_1.z()) / difference.z();
+    const t2 = (z_interval.max - line.point_1.z()) / difference.z();
+    const p1 = line.point_1.add(difference.scale(t1));
+    const p2 = line.point_1.add(difference.scale(t2));
     return checkCircleLineSegmentIntersection(
-        center.swizzle("xy"),
-        radius,
-        p1.swizzle("xy"),
-        p2.swizzle("xy"),
+        .{ .center = cylinder.center.swizzle("xy"), .radius = cylinder.radius },
+        .{ .point_1 = p1.swizzle("xy"), .point_2 = p2.swizzle("xy") },
     );
 }
 
 pub fn checkCircleLineSegmentIntersection(
-    center: math.Vec2,
-    radius: f32,
-    point_1: math.Vec2,
-    point_2: math.Vec2,
+    circle: math.Circle,
+    line: math.LineSegment2,
 ) bool {
-    const p1 = point_1.subtract(center);
-    const p2 = point_2.subtract(center);
+    const p1 = line.point_1.subtract(circle.center);
+    const p2 = line.point_2.subtract(circle.center);
 
-    const radius_squared = radius * radius;
+    const radius_squared = circle.radius * circle.radius;
     const p1_squared = p1.lengthSquared();
     const p2_squared = p2.lengthSquared();
 
@@ -97,20 +88,31 @@ test "checkCylinderLineSegmentIntersection should return correct value" {
             return math.Vec3.fromArray(.{ x, 0, z });
         }
     }.call;
-    try testing.expectEqual(false, checkCylinderLineSegmentIntersection(vec(6, 12), 2, 4, vec(9, 5), vec(11, 7)));
-    try testing.expectEqual(false, checkCylinderLineSegmentIntersection(vec(6, 12), 2, 4, vec(5, 5), vec(7, 7)));
-    try testing.expectEqual(false, checkCylinderLineSegmentIntersection(vec(6, 12), 2, 4, vec(9, 8), vec(11, 10)));
-    try testing.expectEqual(false, checkCylinderLineSegmentIntersection(vec(6, 12), 2, 4, vec(5, 4), vec(11, 11)));
-    try testing.expectEqual(true, checkCylinderLineSegmentIntersection(vec(6, 12), 2, 4, vec(7, 7), vec(9, 9)));
-    try testing.expectEqual(true, checkCylinderLineSegmentIntersection(vec(6, 12), 2, 4, vec(8, 8), vec(10, 6)));
-    try testing.expectEqual(true, checkCylinderLineSegmentIntersection(vec(6, 12), 2, 4, vec(5, 8), vec(7, 6)));
-    try testing.expectEqual(true, checkCylinderLineSegmentIntersection(vec(6, 12), 2, 4, vec(8, 9), vec(10, 10)));
-    try testing.expectEqual(true, checkCylinderLineSegmentIntersection(vec(6, 12), 2, 4, vec(2, 13), vec(9, 6)));
-    try testing.expectEqual(true, checkCylinderLineSegmentIntersection(vec(6, 12), 2, 4, vec(5, 9), vec(7, 7)));
-    try testing.expectEqual(true, checkCylinderLineSegmentIntersection(vec(6, 12), 2, 4, vec(7, 10), vec(9, 11)));
-    try testing.expectEqual(true, checkCylinderLineSegmentIntersection(vec(6, 12), 2, 4, vec(5, 10), vec(7, 14)));
-    try testing.expectEqual(true, checkCylinderLineSegmentIntersection(vec(6, 12), 2, 4, vec(7, 8), vec(9, 8)));
-    try testing.expectEqual(true, checkCylinderLineSegmentIntersection(vec(6, 12), 2, 4, vec(8, 7), vec(8, 9)));
+    const cylinder = struct {
+        fn call(center: math.Vec3, radius: f32, half_height: f32) math.Cylinder {
+            return .{ .center = center, .radius = radius, .half_height = half_height };
+        }
+    }.call;
+    const line = struct {
+        fn call(point_1: math.Vec3, point_2: math.Vec3) math.LineSegment3 {
+            return .{ .point_1 = point_1, .point_2 = point_2 };
+        }
+    }.call;
+    const intersection = checkCylinderLineSegmentIntersection;
+    try testing.expectEqual(false, intersection(cylinder(vec(6, 12), 2, 4), line(vec(9, 5), vec(11, 7))));
+    try testing.expectEqual(false, intersection(cylinder(vec(6, 12), 2, 4), line(vec(5, 5), vec(7, 7))));
+    try testing.expectEqual(false, intersection(cylinder(vec(6, 12), 2, 4), line(vec(9, 8), vec(11, 10))));
+    try testing.expectEqual(false, intersection(cylinder(vec(6, 12), 2, 4), line(vec(5, 4), vec(11, 11))));
+    try testing.expectEqual(true, intersection(cylinder(vec(6, 12), 2, 4), line(vec(7, 7), vec(9, 9))));
+    try testing.expectEqual(true, intersection(cylinder(vec(6, 12), 2, 4), line(vec(8, 8), vec(10, 6))));
+    try testing.expectEqual(true, intersection(cylinder(vec(6, 12), 2, 4), line(vec(5, 8), vec(7, 6))));
+    try testing.expectEqual(true, intersection(cylinder(vec(6, 12), 2, 4), line(vec(8, 9), vec(10, 10))));
+    try testing.expectEqual(true, intersection(cylinder(vec(6, 12), 2, 4), line(vec(2, 13), vec(9, 6))));
+    try testing.expectEqual(true, intersection(cylinder(vec(6, 12), 2, 4), line(vec(5, 9), vec(7, 7))));
+    try testing.expectEqual(true, intersection(cylinder(vec(6, 12), 2, 4), line(vec(7, 10), vec(9, 11))));
+    try testing.expectEqual(true, intersection(cylinder(vec(6, 12), 2, 4), line(vec(5, 10), vec(7, 14))));
+    try testing.expectEqual(true, intersection(cylinder(vec(6, 12), 2, 4), line(vec(7, 8), vec(9, 8))));
+    try testing.expectEqual(true, intersection(cylinder(vec(6, 12), 2, 4), line(vec(8, 7), vec(8, 9))));
 }
 
 test "checkCircleLineSegmentIntersection should return correct value" {
@@ -119,12 +121,23 @@ test "checkCircleLineSegmentIntersection should return correct value" {
             return math.Vec2.fromArray(.{ x, y });
         }
     }.call;
-    try testing.expectEqual(false, checkCircleLineSegmentIntersection(vec(8, 12), 4, vec(13, 23), vec(18, 17)));
-    try testing.expectEqual(false, checkCircleLineSegmentIntersection(vec(8, 12), 4, vec(10, 7), vec(14, 13)));
-    try testing.expectEqual(true, checkCircleLineSegmentIntersection(vec(8, 12), 4, vec(12, 8), vec(12, 16)));
-    try testing.expectEqual(true, checkCircleLineSegmentIntersection(vec(8, 12), 4, vec(12, 12), vec(16, 13)));
-    try testing.expectEqual(true, checkCircleLineSegmentIntersection(vec(8, 12), 4, vec(10, 11), vec(13, 9)));
-    try testing.expectEqual(true, checkCircleLineSegmentIntersection(vec(8, 12), 4, vec(8, 10), vec(10, 12)));
+    const circle = struct {
+        fn call(center: math.Vec2, radius: f32) math.Circle {
+            return .{ .center = center, .radius = radius };
+        }
+    }.call;
+    const line = struct {
+        fn call(point_1: math.Vec2, point_2: math.Vec2) math.LineSegment2 {
+            return .{ .point_1 = point_1, .point_2 = point_2 };
+        }
+    }.call;
+    const intersection = checkCircleLineSegmentIntersection;
+    try testing.expectEqual(false, intersection(circle(vec(8, 12), 4), line(vec(13, 23), vec(18, 17))));
+    try testing.expectEqual(false, intersection(circle(vec(8, 12), 4), line(vec(10, 7), vec(14, 13))));
+    try testing.expectEqual(true, intersection(circle(vec(8, 12), 4), line(vec(12, 8), vec(12, 16))));
+    try testing.expectEqual(true, intersection(circle(vec(8, 12), 4), line(vec(12, 12), vec(16, 13))));
+    try testing.expectEqual(true, intersection(circle(vec(8, 12), 4), line(vec(10, 11), vec(13, 9))));
+    try testing.expectEqual(true, intersection(circle(vec(8, 12), 4), line(vec(8, 10), vec(10, 12))));
 }
 
 test "findIntervalIntersection should return correct value" {
@@ -133,10 +146,11 @@ test "findIntervalIntersection should return correct value" {
             return .{ .min = min, .max = max };
         }
     }.call;
-    try testing.expectEqual(null, findIntervalIntersection(interval(1, 2), interval(3, 4)));
-    try testing.expectEqual(null, findIntervalIntersection(interval(3, 4), interval(1, 2)));
-    try testing.expectEqual(interval(2, 3), findIntervalIntersection(interval(1, 3), interval(2, 4)));
-    try testing.expectEqual(interval(2, 3), findIntervalIntersection(interval(2, 4), interval(1, 3)));
-    try testing.expectEqual(interval(2, 3), findIntervalIntersection(interval(1, 4), interval(2, 3)));
-    try testing.expectEqual(interval(2, 3), findIntervalIntersection(interval(2, 3), interval(1, 4)));
+    const intersection = findIntervalIntersection;
+    try testing.expectEqual(null, intersection(interval(1, 2), interval(3, 4)));
+    try testing.expectEqual(null, intersection(interval(3, 4), interval(1, 2)));
+    try testing.expectEqual(interval(2, 3), intersection(interval(1, 3), interval(2, 4)));
+    try testing.expectEqual(interval(2, 3), intersection(interval(2, 4), interval(1, 3)));
+    try testing.expectEqual(interval(2, 3), intersection(interval(1, 4), interval(2, 3)));
+    try testing.expectEqual(interval(2, 3), intersection(interval(2, 3), interval(1, 4)));
 }

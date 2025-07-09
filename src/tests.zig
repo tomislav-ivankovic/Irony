@@ -26,6 +26,7 @@ test {
     _ = @import("log/file.zig");
 
     _ = @import("math/intersection.zig");
+    _ = @import("math/shapes.zig");
     _ = @import("math/vector.zig");
     _ = @import("math/matrix.zig");
 
