@@ -49,6 +49,7 @@ test {
     _ = @import("misc/base_dir.zig");
     _ = @import("misc/circular_buffer.zig");
     _ = @import("misc/error_context.zig");
+    _ = @import("misc/meta.zig");
     _ = @import("misc/misc.zig");
     _ = @import("misc/task.zig");
     _ = @import("misc/timer.zig");
