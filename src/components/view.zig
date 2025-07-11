@@ -30,19 +30,19 @@ pub const View = struct {
         life_time: f32,
     };
 
-    const collision_spheres_color = imgui.ImVec4{ .x = 0.0, .y = 0.0, .z = 1.0, .w = 0.5 };
+    const collision_spheres_color = math.Vec4.fromArray(.{ 0.0, 0.0, 1.0, 0.5 });
     const collision_spheres_thickness = 1.0;
-    const hurt_cylinders_color = imgui.ImVec4{ .x = 0.5, .y = 0.5, .z = 0.5, .w = 0.5 };
+    const hurt_cylinders_color = math.Vec4.fromArray(.{ 0.5, 0.5, 0.5, 0.5 });
     const hurt_cylinders_thickness = 1.0;
-    const stick_figure_color = imgui.ImVec4{ .x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0 };
-    const stick_figure_thickness = 2.0;
-    const hit_line_color = imgui.ImVec4{ .x = 1.0, .y = 0.0, .z = 0.0, .w = 1.0 };
+    const skeleton_color = math.Vec4.fromArray(.{ 1.0, 1.0, 1.0, 1.0 });
+    const skeleton_thickness = 2.0;
+    const hit_line_color = math.Vec4.fromArray(.{ 1.0, 0.0, 0.0, 1.0 });
     const hit_line_thickness = 1.0;
     const hit_line_duration = 3.0;
-    const hit_hurt_cylinders_color = imgui.ImVec4{ .x = 1.0, .y = 1.0, .z = 0.0, .w = 0.5 };
+    const hit_hurt_cylinders_color = math.Vec4.fromArray(.{ 1.0, 1.0, 0.0, 0.5 });
     const hit_hurt_cylinders_thickness = 1.0;
     const hit_hurt_cylinders_duration = 1.0;
-    const lingering_hurt_cylinders_color = imgui.ImVec4{ .x = 0.0, .y = 1.0, .z = 0.0, .w = 0.5 };
+    const lingering_hurt_cylinders_color = math.Vec4.fromArray(.{ 0.0, 1.0, 0.0, 0.5 });
     const lingering_hurt_cylinders_thickness = 1.0;
     const lingering_hurt_cylinders_duration = 1.0;
 
@@ -235,69 +235,31 @@ pub const View = struct {
     }
 
     fn drawCollisionSpheres(self: *const Self, matrix: math.Mat4, inverse_matrix: math.Mat4) void {
-        const world_right = math.Vec3.plus_x.directionTransform(inverse_matrix).normalize();
-        const world_up = math.Vec3.plus_y.directionTransform(inverse_matrix).normalize();
-
-        const color = imgui.igGetColorU32_Vec4(collision_spheres_color);
-        const thickness = collision_spheres_thickness;
-
-        const draw_list = imgui.igGetWindowDrawList();
         for (&self.frame.players) |*player| {
             const spheres: *const core.CollisionSpheres = if (player.collision_spheres) |*s| s else continue;
-            for (&spheres.values) |*sphere| {
-                const pos = sphere.center.pointTransform(matrix).swizzle("xy");
-                const radius = world_up.add(world_right).scale(sphere.radius).directionTransform(matrix).swizzle("xy");
-                imgui.ImDrawList_AddEllipse(draw_list, pos.toImVec(), radius.toImVec(), color, 0, 32, thickness);
+            for (spheres.values) |sphere| {
+                drawSphere(sphere, collision_spheres_color, collision_spheres_thickness, matrix, inverse_matrix);
             }
         }
     }
 
     fn drawHurtCylinders(self: *const Self, direction: Direction, matrix: math.Mat4, inverse_matrix: math.Mat4) void {
-        const world_right = math.Vec3.plus_x.directionTransform(inverse_matrix).normalize();
-        const world_up = math.Vec3.plus_y.directionTransform(inverse_matrix).normalize();
-
-        const normal_color = math.Vec4.fromImVec(hurt_cylinders_color);
-        const hit_color = math.Vec4.fromImVec(hit_hurt_cylinders_color);
-        const normal_thickness = hurt_cylinders_thickness;
-        const hit_thickness = hit_hurt_cylinders_thickness;
-
-        const draw_list = imgui.igGetWindowDrawList();
         for (core.PlayerId.all) |player_id| {
             const player = self.frame.getPlayerById(player_id);
             const cylinders: *const core.HurtCylinders = if (player.hurt_cylinders) |*c| c else continue;
-            for (&cylinders.values, 0..) |*hurt_cylinder, index| {
-                const cylinder = &hurt_cylinder.cylinder;
+            for (cylinders.values, 0..) |hurt_cylinder, index| {
+                const cylinder = hurt_cylinder.cylinder;
                 const cylinder_id = core.HurtCylinders.Indexer.keyForIndex(index);
-
-                const pos = cylinder.center.pointTransform(matrix).swizzle("xy");
 
                 const life_time = self.hit_hurt_cylinder_life_time.getPtrConst(player_id).get(cylinder_id);
                 const completion: f32 = if (hurt_cylinder.intersects) 0.0 else block: {
                     break :block std.math.clamp(life_time / hit_hurt_cylinders_duration, 0.0, 1.0);
                 };
                 const t = completion * completion * completion * completion;
-                const color = math.Vec4.lerpElements(hit_color, normal_color, t);
-                const thickness = std.math.lerp(hit_thickness, normal_thickness, t);
-                const u32_color = imgui.igGetColorU32_Vec4(color.toImVec());
+                const color = math.Vec4.lerpElements(hit_hurt_cylinders_color, hurt_cylinders_color, t);
+                const thickness = std.math.lerp(hit_hurt_cylinders_thickness, hurt_cylinders_thickness, t);
 
-                switch (direction) {
-                    .front, .side => {
-                        const half_size = world_up.scale(cylinder.half_height)
-                            .add(world_right.scale(cylinder.radius))
-                            .directionTransform(matrix)
-                            .swizzle("xy");
-                        const min = pos.subtract(half_size);
-                        const max = pos.add(half_size);
-                        imgui.ImDrawList_AddRect(draw_list, min.toImVec(), max.toImVec(), u32_color, 0, 0, thickness);
-                    },
-                    .top => {
-                        const radius = world_up
-                            .add(world_right)
-                            .scale(cylinder.radius)
-                            .directionTransform(matrix).swizzle("xy");
-                        imgui.ImDrawList_AddEllipse(draw_list, pos.toImVec(), radius.toImVec(), u32_color, 0, 32, thickness);
-                    },
-                }
+                drawCylinder(cylinder, color, thickness, direction, matrix, inverse_matrix);
             }
         }
     }
@@ -308,114 +270,139 @@ pub const View = struct {
         matrix: math.Mat4,
         inverse_matrix: math.Mat4,
     ) void {
-        const world_right = math.Vec3.plus_x.directionTransform(inverse_matrix).normalize();
-        const world_up = math.Vec3.plus_y.directionTransform(inverse_matrix).normalize();
-
-        const thickness = lingering_hurt_cylinders_thickness;
-
-        const draw_list = imgui.igGetWindowDrawList();
         for (0..self.lingering_hurt_cylinders.len) |index| {
             const hurt_cylinder = self.lingering_hurt_cylinders.get(index) catch unreachable;
-            const cylinder = &hurt_cylinder.cylinder;
-
-            const pos = cylinder.center.pointTransform(matrix).swizzle("xy");
+            const cylinder = hurt_cylinder.cylinder;
 
             const completion = hurt_cylinder.life_time / lingering_hurt_cylinders_duration;
             var color = lingering_hurt_cylinders_color;
-            color.w *= 1.0 - (completion * completion * completion * completion);
-            const u32_color = imgui.igGetColorU32_Vec4(color);
+            color.asColor().a *= 1.0 - (completion * completion * completion * completion);
 
-            switch (direction) {
-                .front, .side => {
-                    const half_size = world_up.scale(cylinder.half_height)
-                        .add(world_right.scale(cylinder.radius))
-                        .directionTransform(matrix)
-                        .swizzle("xy");
-                    const min = pos.subtract(half_size);
-                    const max = pos.add(half_size);
-                    imgui.ImDrawList_AddRect(draw_list, min.toImVec(), max.toImVec(), u32_color, 0, 0, thickness);
-                },
-                .top => {
-                    const radius = world_up
-                        .add(world_right)
-                        .scale(cylinder.radius)
-                        .directionTransform(matrix).swizzle("xy");
-                    imgui.ImDrawList_AddEllipse(draw_list, pos.toImVec(), radius.toImVec(), u32_color, 0, 32, thickness);
-                },
-            }
+            drawCylinder(cylinder, color, lingering_hurt_cylinders_thickness, direction, matrix, inverse_matrix);
         }
     }
 
     fn drawSkeletons(self: *const Self, matrix: math.Mat4) void {
         const drawBone = struct {
             fn call(
-                list: *imgui.ImDrawList,
                 mat: math.Mat4,
                 skeleton: *const core.Skeleton,
                 point_1: core.SkeletonPointId,
                 point_2: core.SkeletonPointId,
             ) void {
-                const color = imgui.igGetColorU32_Vec4(stick_figure_color);
-                const thickness = stick_figure_thickness;
-
-                const p1 = skeleton.get(point_1).pointTransform(mat).swizzle("xy");
-                const p2 = skeleton.get(point_2).pointTransform(mat).swizzle("xy");
-                imgui.ImDrawList_AddLine(list, p1.toImVec(), p2.toImVec(), color, thickness);
+                const line = math.LineSegment3{ .point_1 = skeleton.get(point_1), .point_2 = skeleton.get(point_2) };
+                drawLine(line, skeleton_color, skeleton_thickness, mat);
             }
         }.call;
-
-        const draw_list = imgui.igGetWindowDrawList();
         for (&self.frame.players) |*player| {
             const skeleton: *const core.Skeleton = if (player.skeleton) |*s| s else continue;
-            drawBone(draw_list, matrix, skeleton, .head, .neck);
-            drawBone(draw_list, matrix, skeleton, .neck, .upper_torso);
-            drawBone(draw_list, matrix, skeleton, .upper_torso, .left_shoulder);
-            drawBone(draw_list, matrix, skeleton, .upper_torso, .right_shoulder);
-            drawBone(draw_list, matrix, skeleton, .left_shoulder, .left_elbow);
-            drawBone(draw_list, matrix, skeleton, .right_shoulder, .right_elbow);
-            drawBone(draw_list, matrix, skeleton, .left_elbow, .left_hand);
-            drawBone(draw_list, matrix, skeleton, .right_elbow, .right_hand);
-            drawBone(draw_list, matrix, skeleton, .upper_torso, .lower_torso);
-            drawBone(draw_list, matrix, skeleton, .lower_torso, .left_pelvis);
-            drawBone(draw_list, matrix, skeleton, .lower_torso, .right_pelvis);
-            drawBone(draw_list, matrix, skeleton, .left_pelvis, .left_knee);
-            drawBone(draw_list, matrix, skeleton, .right_pelvis, .right_knee);
-            drawBone(draw_list, matrix, skeleton, .left_knee, .left_ankle);
-            drawBone(draw_list, matrix, skeleton, .right_knee, .right_ankle);
+            drawBone(matrix, skeleton, .head, .neck);
+            drawBone(matrix, skeleton, .neck, .upper_torso);
+            drawBone(matrix, skeleton, .upper_torso, .left_shoulder);
+            drawBone(matrix, skeleton, .upper_torso, .right_shoulder);
+            drawBone(matrix, skeleton, .left_shoulder, .left_elbow);
+            drawBone(matrix, skeleton, .right_shoulder, .right_elbow);
+            drawBone(matrix, skeleton, .left_elbow, .left_hand);
+            drawBone(matrix, skeleton, .right_elbow, .right_hand);
+            drawBone(matrix, skeleton, .upper_torso, .lower_torso);
+            drawBone(matrix, skeleton, .lower_torso, .left_pelvis);
+            drawBone(matrix, skeleton, .lower_torso, .right_pelvis);
+            drawBone(matrix, skeleton, .left_pelvis, .left_knee);
+            drawBone(matrix, skeleton, .right_pelvis, .right_knee);
+            drawBone(matrix, skeleton, .left_knee, .left_ankle);
+            drawBone(matrix, skeleton, .right_knee, .right_ankle);
         }
     }
 
     fn drawHitLines(self: *const Self, matrix: math.Mat4) void {
-        const color = imgui.igGetColorU32_Vec4(hit_line_color);
-        const thickness = hit_line_thickness;
-
-        const draw_list = imgui.igGetWindowDrawList();
         for (&self.frame.players) |*player| {
-            for (player.hit_lines.asConstSlice()) |*hit_line| {
-                const line = &hit_line.line;
-                const p1 = line.point_1.pointTransform(matrix).swizzle("xy");
-                const p2 = line.point_2.pointTransform(matrix).swizzle("xy");
-                imgui.ImDrawList_AddLine(draw_list, p1.toImVec(), p2.toImVec(), color, thickness);
+            for (player.hit_lines.asConstSlice()) |hit_line| {
+                const line = hit_line.line;
+                drawLine(line, hit_line_color, hit_line_thickness, matrix);
             }
         }
     }
 
     fn drawLingeringHitLines(self: *const Self, matrix: math.Mat4) void {
-        const thickness = hit_line_thickness;
-
-        const draw_list = imgui.igGetWindowDrawList();
         for (0..self.lingering_hit_lines.len) |index| {
             const hit_line = self.lingering_hit_lines.get(index) catch unreachable;
-            const line = &hit_line.line;
+            const line = hit_line.line;
 
             const completion = hit_line.life_time / hit_line_duration;
             var color = hit_line_color;
-            color.w *= 1.0 - (completion * completion * completion * completion);
-            const u32_color = imgui.igGetColorU32_Vec4(color);
+            color.asColor().a *= 1.0 - (completion * completion * completion * completion);
 
-            const p1 = line.point_1.pointTransform(matrix).swizzle("xy");
-            const p2 = line.point_2.pointTransform(matrix).swizzle("xy");
-            imgui.ImDrawList_AddLine(draw_list, p1.toImVec(), p2.toImVec(), u32_color, thickness);
+            drawLine(line, hit_line_color, hit_line_thickness, matrix);
         }
+    }
+
+    fn drawSphere(
+        sphere: math.Sphere,
+        color: math.Vec4,
+        thickness: f32,
+        matrix: math.Mat4,
+        inverse_matrix: math.Mat4,
+    ) void {
+        const world_right = math.Vec3.plus_x.directionTransform(inverse_matrix).normalize();
+        const world_up = math.Vec3.plus_y.directionTransform(inverse_matrix).normalize();
+
+        const draw_list = imgui.igGetWindowDrawList();
+        const center = sphere.center.pointTransform(matrix).swizzle("xy").toImVec();
+        const radius = world_up.add(world_right).scale(sphere.radius).directionTransform(matrix).swizzle("xy").toImVec();
+        const u32_color = imgui.igGetColorU32_Vec4(color.toImVec());
+
+        imgui.ImDrawList_AddEllipse(draw_list, center, radius, u32_color, 0, 32, thickness);
+    }
+
+    fn drawCylinder(
+        cylinder: math.Cylinder,
+        color: math.Vec4,
+        thickness: f32,
+        direction: Direction,
+        matrix: math.Mat4,
+        inverse_matrix: math.Mat4,
+    ) void {
+        const world_right = math.Vec3.plus_x.directionTransform(inverse_matrix).normalize();
+        const world_up = math.Vec3.plus_y.directionTransform(inverse_matrix).normalize();
+
+        const draw_list = imgui.igGetWindowDrawList();
+        const center = cylinder.center.pointTransform(matrix).swizzle("xy");
+        const u32_color = imgui.igGetColorU32_Vec4(color.toImVec());
+
+        switch (direction) {
+            .front, .side => {
+                const half_size = world_up.scale(cylinder.half_height)
+                    .add(world_right.scale(cylinder.radius))
+                    .directionTransform(matrix)
+                    .swizzle("xy");
+                const min = center.subtract(half_size).toImVec();
+                const max = center.add(half_size).toImVec();
+                imgui.ImDrawList_AddRect(draw_list, min, max, u32_color, 0, 0, thickness);
+            },
+            .top => {
+                const im_center = center.toImVec();
+                const radius = world_up
+                    .add(world_right)
+                    .scale(cylinder.radius)
+                    .directionTransform(matrix)
+                    .swizzle("xy")
+                    .toImVec();
+                imgui.ImDrawList_AddEllipse(draw_list, im_center, radius, u32_color, 0, 32, thickness);
+            },
+        }
+    }
+
+    fn drawLine(
+        line: math.LineSegment3,
+        color: math.Vec4,
+        thickness: f32,
+        matrix: math.Mat4,
+    ) void {
+        const draw_list = imgui.igGetWindowDrawList();
+        const point_1 = line.point_1.pointTransform(matrix).swizzle("xy").toImVec();
+        const point_2 = line.point_2.pointTransform(matrix).swizzle("xy").toImVec();
+        const u32_color = imgui.igGetColorU32_Vec4(color.toImVec());
+
+        imgui.ImDrawList_AddLine(draw_list, point_1, point_2, u32_color, thickness);
     }
 };
