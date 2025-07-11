@@ -260,7 +260,7 @@ pub const HurtCylinders = extern struct {
     right_pelvis: Element,
 
     const Self = @This();
-    const Element = memory.ConvertedValue(
+    pub const Element = memory.ConvertedValue(
         HurtCylinder,
         HurtCylinder,
         game.hurtCylinderToUnrealSpace,
@@ -304,7 +304,7 @@ pub const CollisionSpheres = extern struct {
     right_ankle: Element,
 
     const Self = @This();
-    const Element = memory.ConvertedValue(
+    pub const Element = memory.ConvertedValue(
         CollisionSphere,
         CollisionSphere,
         game.collisionSphereToUnrealSpace,

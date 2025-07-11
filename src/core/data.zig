@@ -36,6 +36,7 @@ pub const PlayerId = enum {
     player_2,
 
     const Self = @This();
+    pub const all = [2]Self{ .player_1, .player_2 };
 
     pub fn getOther(self: Self) Self {
         switch (self) {
@@ -50,6 +51,7 @@ pub const PlayerSide = enum {
     right,
 
     const Self = @This();
+    pub const all = [2]Self{ .left, .right };
 
     pub fn getOther(self: Self) Self {
         switch (self) {
@@ -64,6 +66,7 @@ pub const PlayerRole = enum {
     secondary,
 
     const Self = @This();
+    pub const all = [2]Self{ .main, .secondary };
 
     pub fn getOther(self: Self) Self {
         switch (self) {
@@ -75,36 +78,50 @@ pub const PlayerRole = enum {
 
 pub const Player = struct {
     position: ?math.Vec3 = null,
-    skeleton_lines_buffer: [max_skeleton_lines]math.LineSegment3 = undefined,
-    skeleton_lines_len: usize = 0,
-    hurt_cylinders_buffer: [max_hurt_cylinders]HurtCylinder = undefined,
-    hurt_cylinders_len: usize = 0,
-    collision_spheres_buffer: [max_collision_spheres]math.Sphere = undefined,
-    collision_spheres_len: usize = 0,
-    hit_lines_buffer: [max_hit_lines]HitLine = undefined,
-    hit_lines_len: usize = 0,
+    skeleton: ?Skeleton = null,
+    hurt_cylinders: ?HurtCylinders = null,
+    collision_spheres: ?CollisionSpheres = null,
+    hit_lines: HitLines = .{},
+};
 
-    const Self = @This();
-    pub const max_skeleton_lines = 15;
-    pub const max_hurt_cylinders = game.HurtCylinders.len;
-    pub const max_collision_spheres = game.CollisionSpheres.len;
-    pub const max_hit_lines = @typeInfo(game.HitLines).array.len * 2;
+pub const SkeletonPointId = enum {
+    head,
+    neck,
+    upper_torso,
+    left_shoulder,
+    right_shoulder,
+    left_elbow,
+    right_elbow,
+    left_hand,
+    right_hand,
+    lower_torso,
+    left_pelvis,
+    right_pelvis,
+    left_knee,
+    right_knee,
+    left_ankle,
+    right_ankle,
+};
 
-    pub fn getSkeletonLines(self: *const Self) []const math.LineSegment3 {
-        return self.skeleton_lines_buffer[0..self.skeleton_lines_len];
-    }
+pub const SkeletonPoint = math.Vec3;
 
-    pub fn getHurtCylinders(self: *const Self) []const HurtCylinder {
-        return self.hurt_cylinders_buffer[0..self.hurt_cylinders_len];
-    }
+pub const Skeleton = std.EnumArray(SkeletonPointId, SkeletonPoint);
 
-    pub fn getGetCollisionSpheres(self: *const Self) []const math.Sphere {
-        return self.collision_spheres_buffer[0..self.collision_spheres_len];
-    }
-
-    pub fn getHitLines(self: *const Self) []const HitLine {
-        return self.hit_lines_buffer[0..self.hit_lines_len];
-    }
+pub const HurtCylinderId = enum {
+    left_ankle,
+    right_ankle,
+    left_hand,
+    right_hand,
+    left_knee,
+    right_knee,
+    left_elbow,
+    right_elbow,
+    head,
+    left_shoulder,
+    right_shoulder,
+    upper_torso,
+    left_pelvis,
+    right_pelvis,
 };
 
 pub const HurtCylinder = struct {
@@ -112,9 +129,43 @@ pub const HurtCylinder = struct {
     intersects: bool,
 };
 
+pub const HurtCylinders = std.EnumArray(HurtCylinderId, HurtCylinder);
+
+pub const CollisionSphereId = enum {
+    neck,
+    left_elbow,
+    right_elbow,
+    lower_torso,
+    left_knee,
+    right_knee,
+    left_ankle,
+    right_ankle,
+};
+
+pub const CollisionSphere = math.Sphere;
+
+pub const CollisionSpheres = std.EnumArray(CollisionSphereId, CollisionSphere);
+
 pub const HitLine = struct {
     line: math.LineSegment3,
     intersects: bool,
+};
+
+pub const HitLines = struct {
+    buffer: [max_len]HitLine = undefined,
+    len: usize = 0,
+
+    const Self = @This();
+
+    pub const max_len = @typeInfo(game.HitLines).array.len * 2;
+
+    pub fn asConstSlice(self: *const Self) []const HitLine {
+        return self.buffer[0..self.len];
+    }
+
+    pub fn asMutableSlice(self: *Self) []HitLine {
+        return self.buffer[0..self.len];
+    }
 };
 
 const testing = std.testing;
@@ -158,43 +209,7 @@ test "PlayerRole.getOther should return correct value" {
     try testing.expectEqual(PlayerRole.main, PlayerRole.secondary.getOther());
 }
 
-test "Player.getSkeletonLines should return correct value" {
-    const line_1 = math.LineSegment3{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 4, 5, 6 }) };
-    const line_2 = math.LineSegment3{ .point_1 = .fromArray(.{ 7, 8, 9 }), .point_2 = .fromArray(.{ 10, 11, 12 }) };
-    var player = Player{};
-    player.skeleton_lines_buffer[0] = line_1;
-    player.skeleton_lines_buffer[1] = line_2;
-    player.skeleton_lines_len = 2;
-    try testing.expectEqualSlices(math.LineSegment3, &.{ line_1, line_2 }, player.getSkeletonLines());
-}
-
-test "Player.getHurtCylinders should return correct value" {
-    const cylinder_1 = HurtCylinder{
-        .cylinder = .{ .center = .fromArray(.{ 1, 2, 3 }), .radius = 4, .half_height = 5 },
-        .intersects = false,
-    };
-    const cylinder_2 = HurtCylinder{
-        .cylinder = .{ .center = .fromArray(.{ 6, 7, 8 }), .radius = 9, .half_height = 10 },
-        .intersects = true,
-    };
-    var player = Player{};
-    player.hurt_cylinders_buffer[0] = cylinder_1;
-    player.hurt_cylinders_buffer[1] = cylinder_2;
-    player.hurt_cylinders_len = 2;
-    try testing.expectEqualSlices(HurtCylinder, &.{ cylinder_1, cylinder_2 }, player.getHurtCylinders());
-}
-
-test "Player.getGetCollisionSpheres should return correct value" {
-    const sphere_1 = math.Sphere{ .center = .fromArray(.{ 1, 2, 3 }), .radius = 4 };
-    const sphere_2 = math.Sphere{ .center = .fromArray(.{ 6, 7, 8 }), .radius = 9 };
-    var player = Player{};
-    player.collision_spheres_buffer[0] = sphere_1;
-    player.collision_spheres_buffer[1] = sphere_2;
-    player.collision_spheres_len = 2;
-    try testing.expectEqualSlices(math.Sphere, &.{ sphere_1, sphere_2 }, player.getGetCollisionSpheres());
-}
-
-test "Player.getHitLines should return correct value" {
+test "HitLines.asConstSlice,asMutableSlice should return correct value" {
     const line_1 = HitLine{
         .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 4, 5, 6 }) },
         .intersects = false,
@@ -203,9 +218,10 @@ test "Player.getHitLines should return correct value" {
         .line = .{ .point_1 = .fromArray(.{ 7, 8, 9 }), .point_2 = .fromArray(.{ 10, 11, 12 }) },
         .intersects = true,
     };
-    var player = Player{};
-    player.hit_lines_buffer[0] = line_1;
-    player.hit_lines_buffer[1] = line_2;
-    player.hit_lines_len = 2;
-    try testing.expectEqualSlices(HitLine, &.{ line_1, line_2 }, player.getHitLines());
+    var lines = HitLines{};
+    lines.buffer[0] = line_1;
+    lines.buffer[1] = line_2;
+    lines.len = 2;
+    try testing.expectEqualSlices(HitLine, &.{ line_1, line_2 }, lines.asConstSlice());
+    try testing.expectEqualSlices(HitLine, &.{ line_1, line_2 }, lines.asMutableSlice());
 }

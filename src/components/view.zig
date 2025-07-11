@@ -7,8 +7,8 @@ const core = @import("../core/root.zig");
 pub const View = struct {
     window_size: std.EnumArray(Direction, math.Vec2) = .initFill(math.Vec2.zero),
     frame: core.Frame = .{},
-    hit_hurt_cylinder_life_time: std.EnumArray(core.PlayerId, [core.Player.max_hurt_cylinders]f32) = .initFill(
-        [1]f32{std.math.inf(f32)} ** core.Player.max_hurt_cylinders,
+    hit_hurt_cylinder_life_time: std.EnumArray(core.PlayerId, std.EnumArray(core.HurtCylinderId, f32)) = .initFill(
+        .initFill(std.math.inf(f32)),
     ),
     lingering_hurt_cylinders: misc.CircularBuffer(32, LingeringCylinder) = .{},
     lingering_hit_lines: misc.CircularBuffer(32, LingeringLine) = .{},
@@ -56,13 +56,15 @@ pub const View = struct {
 
     fn processHurtCylinders(self: *Self, player_id: core.PlayerId, frame: *const core.Frame) void {
         const player = frame.getPlayerById(player_id);
-        for (player.getHurtCylinders(), 0..) |*element, index| {
-            if (!element.intersects) {
+        const cylinders: *const core.HurtCylinders = if (player.hurt_cylinders) |*c| c else return;
+        for (&cylinders.values, 0..) |*hurt_cylinder, index| {
+            if (!hurt_cylinder.intersects) {
                 continue;
             }
-            self.hit_hurt_cylinder_life_time.getPtr(player_id)[index] = 0;
+            const cylinder_id = core.HurtCylinders.Indexer.keyForIndex(index);
+            self.hit_hurt_cylinder_life_time.getPtr(player_id).getPtr(cylinder_id).* = 0;
             _ = self.lingering_hurt_cylinders.addToBack(.{
-                .cylinder = element.cylinder,
+                .cylinder = hurt_cylinder.cylinder,
                 .player_id = player_id,
                 .life_time = 0,
             });
@@ -71,9 +73,9 @@ pub const View = struct {
 
     fn processHitLines(self: *Self, player_id: core.PlayerId, frame: *const core.Frame) void {
         const player = frame.getPlayerById(player_id);
-        for (player.getHitLines()) |*element| {
+        for (player.hit_lines.asConstSlice()) |*hit_line| {
             _ = self.lingering_hit_lines.addToBack(.{
-                .line = element.line,
+                .line = hit_line.line,
                 .player_id = player_id,
                 .life_time = 0,
             });
@@ -88,7 +90,7 @@ pub const View = struct {
 
     fn updateHitHurtCylinders(self: *Self, delta_time: f32) void {
         for (&self.hit_hurt_cylinder_life_time.values) |*player_cylinders| {
-            for (player_cylinders) |*life_time| {
+            for (&player_cylinders.values) |*life_time| {
                 life_time.* += delta_time;
             }
         }
@@ -168,22 +170,26 @@ pub const View = struct {
         var min = math.Vec3.fill(std.math.inf(f32));
         var max = math.Vec3.fill(-std.math.inf(f32));
         for (&self.frame.players) |*player| {
-            for (player.getGetCollisionSpheres()) |*sphere| {
-                const pos = sphere.center.pointTransform(look_at_matrix);
-                const half_size = math.Vec3.fill(sphere.radius);
-                min = math.Vec3.minElements(min, pos.subtract(half_size));
-                max = math.Vec3.maxElements(max, pos.add(half_size));
+            if (player.collision_spheres) |*spheres| {
+                for (&spheres.values) |*sphere| {
+                    const pos = sphere.center.pointTransform(look_at_matrix);
+                    const half_size = math.Vec3.fill(sphere.radius);
+                    min = math.Vec3.minElements(min, pos.subtract(half_size));
+                    max = math.Vec3.maxElements(max, pos.add(half_size));
+                }
             }
-            for (player.getHurtCylinders()) |*element| {
-                const cylinder = &element.cylinder;
-                const pos = cylinder.center.pointTransform(look_at_matrix);
-                const half_size = math.Vec3.fromArray(.{
-                    cylinder.radius,
-                    cylinder.radius,
-                    cylinder.half_height,
-                });
-                min = math.Vec3.minElements(min, pos.subtract(half_size));
-                max = math.Vec3.maxElements(max, pos.add(half_size));
+            if (player.hurt_cylinders) |*cylinders| {
+                for (&cylinders.values) |*hurt_cylinder| {
+                    const cylinder = &hurt_cylinder.cylinder;
+                    const pos = cylinder.center.pointTransform(look_at_matrix);
+                    const half_size = math.Vec3.fromArray(.{
+                        cylinder.radius,
+                        cylinder.radius,
+                        cylinder.half_height,
+                    });
+                    min = math.Vec3.minElements(min, pos.subtract(half_size));
+                    max = math.Vec3.maxElements(max, pos.add(half_size));
+                }
             }
         }
         const padding = math.Vec3.fill(50);
@@ -237,7 +243,8 @@ pub const View = struct {
 
         const draw_list = imgui.igGetWindowDrawList();
         for (&self.frame.players) |*player| {
-            for (player.getGetCollisionSpheres()) |*sphere| {
+            const spheres: *const core.CollisionSpheres = if (player.collision_spheres) |*s| s else continue;
+            for (&spheres.values) |*sphere| {
                 const pos = sphere.center.pointTransform(matrix).swizzle("xy");
                 const radius = world_up.add(world_right).scale(sphere.radius).directionTransform(matrix).swizzle("xy");
                 imgui.ImDrawList_AddEllipse(draw_list, pos.toImVec(), radius.toImVec(), color, 0, 32, thickness);
@@ -255,15 +262,17 @@ pub const View = struct {
         const hit_thickness = hit_hurt_cylinders_thickness;
 
         const draw_list = imgui.igGetWindowDrawList();
-        for ([2]core.PlayerId{ .player_1, .player_2 }) |player_id| {
+        for (core.PlayerId.all) |player_id| {
             const player = self.frame.getPlayerById(player_id);
-            for (player.getHurtCylinders(), 0..) |*element, index| {
-                const cylinder = &element.cylinder;
+            const cylinders: *const core.HurtCylinders = if (player.hurt_cylinders) |*c| c else continue;
+            for (&cylinders.values, 0..) |*hurt_cylinder, index| {
+                const cylinder = &hurt_cylinder.cylinder;
+                const cylinder_id = core.HurtCylinders.Indexer.keyForIndex(index);
 
                 const pos = cylinder.center.pointTransform(matrix).swizzle("xy");
 
-                const life_time = self.hit_hurt_cylinder_life_time.get(player_id)[index];
-                const completion: f32 = if (element.intersects) 0.0 else block: {
+                const life_time = self.hit_hurt_cylinder_life_time.getPtrConst(player_id).get(cylinder_id);
+                const completion: f32 = if (hurt_cylinder.intersects) 0.0 else block: {
                     break :block std.math.clamp(life_time / hit_hurt_cylinders_duration, 0.0, 1.0);
                 };
                 const t = completion * completion * completion * completion;
@@ -306,12 +315,12 @@ pub const View = struct {
 
         const draw_list = imgui.igGetWindowDrawList();
         for (0..self.lingering_hurt_cylinders.len) |index| {
-            const element = self.lingering_hurt_cylinders.get(index) catch unreachable;
-            const cylinder = &element.cylinder;
+            const hurt_cylinder = self.lingering_hurt_cylinders.get(index) catch unreachable;
+            const cylinder = &hurt_cylinder.cylinder;
 
             const pos = cylinder.center.pointTransform(matrix).swizzle("xy");
 
-            const completion = element.life_time / lingering_hurt_cylinders_duration;
+            const completion = hurt_cylinder.life_time / lingering_hurt_cylinders_duration;
             var color = lingering_hurt_cylinders_color;
             color.w *= 1.0 - (completion * completion * completion * completion);
             const u32_color = imgui.igGetColorU32_Vec4(color);
@@ -338,16 +347,41 @@ pub const View = struct {
     }
 
     fn drawSkeletons(self: *const Self, matrix: math.Mat4) void {
-        const color = imgui.igGetColorU32_Vec4(stick_figure_color);
-        const thickness = stick_figure_thickness;
+        const drawBone = struct {
+            fn call(
+                list: *imgui.ImDrawList,
+                mat: math.Mat4,
+                skeleton: *const core.Skeleton,
+                point_1: core.SkeletonPointId,
+                point_2: core.SkeletonPointId,
+            ) void {
+                const color = imgui.igGetColorU32_Vec4(stick_figure_color);
+                const thickness = stick_figure_thickness;
+
+                const p1 = skeleton.get(point_1).pointTransform(mat).swizzle("xy");
+                const p2 = skeleton.get(point_2).pointTransform(mat).swizzle("xy");
+                imgui.ImDrawList_AddLine(list, p1.toImVec(), p2.toImVec(), color, thickness);
+            }
+        }.call;
 
         const draw_list = imgui.igGetWindowDrawList();
         for (&self.frame.players) |*player| {
-            for (player.getSkeletonLines()) |*line| {
-                const p1 = line.point_1.pointTransform(matrix).swizzle("xy");
-                const p2 = line.point_2.pointTransform(matrix).swizzle("xy");
-                imgui.ImDrawList_AddLine(draw_list, p1.toImVec(), p2.toImVec(), color, thickness);
-            }
+            const skeleton: *const core.Skeleton = if (player.skeleton) |*s| s else continue;
+            drawBone(draw_list, matrix, skeleton, .head, .neck);
+            drawBone(draw_list, matrix, skeleton, .neck, .upper_torso);
+            drawBone(draw_list, matrix, skeleton, .upper_torso, .left_shoulder);
+            drawBone(draw_list, matrix, skeleton, .upper_torso, .right_shoulder);
+            drawBone(draw_list, matrix, skeleton, .left_shoulder, .left_elbow);
+            drawBone(draw_list, matrix, skeleton, .right_shoulder, .right_elbow);
+            drawBone(draw_list, matrix, skeleton, .left_elbow, .left_hand);
+            drawBone(draw_list, matrix, skeleton, .right_elbow, .right_hand);
+            drawBone(draw_list, matrix, skeleton, .upper_torso, .lower_torso);
+            drawBone(draw_list, matrix, skeleton, .lower_torso, .left_pelvis);
+            drawBone(draw_list, matrix, skeleton, .lower_torso, .right_pelvis);
+            drawBone(draw_list, matrix, skeleton, .left_pelvis, .left_knee);
+            drawBone(draw_list, matrix, skeleton, .right_pelvis, .right_knee);
+            drawBone(draw_list, matrix, skeleton, .left_knee, .left_ankle);
+            drawBone(draw_list, matrix, skeleton, .right_knee, .right_ankle);
         }
     }
 
@@ -357,8 +391,8 @@ pub const View = struct {
 
         const draw_list = imgui.igGetWindowDrawList();
         for (&self.frame.players) |*player| {
-            for (player.getHitLines()) |*element| {
-                const line = &element.line;
+            for (player.hit_lines.asConstSlice()) |*hit_line| {
+                const line = &hit_line.line;
                 const p1 = line.point_1.pointTransform(matrix).swizzle("xy");
                 const p2 = line.point_2.pointTransform(matrix).swizzle("xy");
                 imgui.ImDrawList_AddLine(draw_list, p1.toImVec(), p2.toImVec(), color, thickness);
@@ -371,10 +405,10 @@ pub const View = struct {
 
         const draw_list = imgui.igGetWindowDrawList();
         for (0..self.lingering_hit_lines.len) |index| {
-            const element = self.lingering_hit_lines.get(index) catch unreachable;
-            const line = &element.line;
+            const hit_line = self.lingering_hit_lines.get(index) catch unreachable;
+            const line = &hit_line.line;
 
-            const completion = element.life_time / hit_line_duration;
+            const completion = hit_line.life_time / hit_line_duration;
             var color = hit_line_color;
             color.w *= 1.0 - (completion * completion * completion * completion);
             const u32_color = imgui.igGetColorU32_Vec4(color);
