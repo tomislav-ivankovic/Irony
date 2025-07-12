@@ -332,7 +332,7 @@ pub const View = struct {
             var color = hit_line_color;
             color.asColor().a *= 1.0 - (completion * completion * completion * completion);
 
-            drawLine(line, hit_line_color, hit_line_thickness, matrix);
+            drawLine(line, color, hit_line_thickness, matrix);
         }
     }
 

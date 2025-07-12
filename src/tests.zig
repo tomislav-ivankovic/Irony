@@ -5,6 +5,7 @@ test {
 
     _ = @import("core/capturer.zig");
     _ = @import("core/data.zig");
+    _ = @import("core/pause_detector.zig");
 
     _ = @import("dx12/context.zig");
     _ = @import("dx12/descriptor_heap_allocator.zig");

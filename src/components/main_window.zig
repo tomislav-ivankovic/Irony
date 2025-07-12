@@ -14,20 +14,24 @@ pub const MainWindow = struct {
     quadrant_layout: components.QuadrantLayout = .{},
     view: components.View = .{},
     controls_height: f32 = 0,
+    pause_detector: core.PauseDetector(.{}) = .{},
     capturer: core.Capturer = .{},
 
     const Self = @This();
 
     pub fn tick(self: *Self, game_memory: *const game.Memory) void {
-        const capture_game_memory = core.Capturer.GameMemory{
-            .player_1 = game_memory.player_1.takePartialCopy(),
-            .player_2 = game_memory.player_2.takePartialCopy(),
-        };
+        const player_1 = game_memory.player_1.takePartialCopy();
+        const player_2 = game_memory.player_2.takePartialCopy();
+        self.pause_detector.update(player_1.current_frame_number, player_1.current_frame_number);
+        const capture_game_memory = core.Capturer.GameMemory{ .player_1 = player_1, .player_2 = player_2 };
         const frame = self.capturer.captureFrame(&capture_game_memory);
         self.view.processFrame(&frame);
     }
 
     pub fn update(self: *Self, delta_time: f32) void {
+        if (self.pause_detector.isPaused()) {
+            return;
+        }
         self.view.update(delta_time);
     }
 
