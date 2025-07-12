@@ -154,7 +154,18 @@ pub const Context = struct {
     ) ?w32.LRESULT {
         imgui.igSetCurrentContext(self.imgui_context);
         const result = ui.backend.ImGui_ImplWin32_WndProcHandler(window, u_msg, w_param, l_param);
-        return if (result != 0) result else null;
+        if (result != 0) {
+            return result;
+        }
+        const is_mouse_event = u_msg >= w32.WM_MOUSEFIRST and u_msg <= w32.WM_MOUSELAST;
+        if (is_mouse_event and imgui.igGetIO().*.WantCaptureMouse) {
+            return 1;
+        }
+        const is_keyboard_event = u_msg >= w32.WM_KEYFIRST and u_msg <= w32.WM_KEYLAST;
+        if (is_keyboard_event and imgui.igGetIO().*.WantCaptureKeyboard) {
+            return 1;
+        }
+        return null;
     }
 };
 
