@@ -94,6 +94,7 @@ pub const Memory = struct {
             //     "48 C7 86 ?? ?? 00 00 01 00 00 00 44 89 BE ?? ?? 00 00",
             // ))),
             // .input = 0x2494,
+            .input_side = 0x252C,
             .hit_lines = 0x25C0,
             .hurt_cylinders = 0x29C0,
             .collision_spheres = 0x2E00,

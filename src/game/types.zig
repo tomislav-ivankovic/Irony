@@ -3,6 +3,12 @@ const memory = @import("../memory/root.zig");
 const math = @import("../math/root.zig");
 const game = @import("root.zig");
 
+pub const PlayerSide = enum(u8) {
+    left = 0,
+    right = 1,
+    _,
+};
+
 pub const AttackType = enum(u32) {
     not_attack = 0xC000001D,
     high = 0xA000050F,
@@ -368,6 +374,7 @@ pub const Player = struct {
     // direction_input: u32, // 0x1F74
     // used_heat: u32, // 0x2110
     // input: Input, // 0x2494
+    input_side: PlayerSide, // 0x252C
     hit_lines: HitLines, // 0x2500
     hurt_cylinders: HurtCylinders, // 0x2900
     collision_spheres: CollisionSpheres, // 0x2D40

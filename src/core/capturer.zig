@@ -20,28 +20,19 @@ pub const Capturer = struct {
         var player_2 = self.capturePlayer(&game_memory.player_2, .player_2);
         detectIntersections(&player_1.hurt_cylinders, &player_2.hit_lines);
         detectIntersections(&player_2.hurt_cylinders, &player_1.hit_lines);
-        const frame = core.Frame{
-            .players = .{ player_1, player_2 },
-            .left_player_id = captureLeftPlayerId(game_memory),
-            .main_player_id = captureMainPlayerId(game_memory),
-        };
+        const main_player_id = captureMainPlayerId(game_memory);
+        const left_player_id = captureLeftPlayerId(game_memory, main_player_id);
         self.updatePreviousHitLines(game_memory);
-        return frame;
+        return .{
+            .players = .{ player_1, player_2 },
+            .left_player_id = left_player_id,
+            .main_player_id = main_player_id,
+        };
     }
 
     fn updatePreviousHitLines(self: *Self, game_memory: *const GameMemory) void {
         self.previous_player_1_hit_lines = game_memory.player_1.hit_lines;
         self.previous_player_2_hit_lines = game_memory.player_2.hit_lines;
-    }
-
-    fn captureLeftPlayerId(game_memory: *const GameMemory) core.PlayerId {
-        if (game_memory.player_1.player_id) |player_id| {
-            return if (player_id == 0) .player_1 else .player_2;
-        }
-        if (game_memory.player_2.player_id) |player_id| {
-            return if (player_id == 0) .player_2 else .player_1;
-        }
-        return .player_1;
     }
 
     fn captureMainPlayerId(game_memory: *const GameMemory) core.PlayerId {
@@ -52,6 +43,15 @@ pub const Capturer = struct {
             return if (is_main) .player_2 else .player_1;
         }
         return .player_1;
+    }
+
+    fn captureLeftPlayerId(game_memory: *const GameMemory, main_player_id: core.PlayerId) core.PlayerId {
+        const main_player = if (main_player_id == .player_1) &game_memory.player_1 else &game_memory.player_2;
+        if (main_player.input_side) |side| {
+            return if (side == .left) main_player_id else main_player_id.getOther();
+        } else {
+            return .player_1;
+        }
     }
 
     fn capturePlayer(self: *Self, player: *const misc.Partial(game.Player), player_id: core.PlayerId) core.Player {

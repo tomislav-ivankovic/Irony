@@ -9,6 +9,7 @@ pub const hurtCylinderFromUnrealSpace = @import("conversions.zig").hurtCylinderF
 pub const collisionSphereToUnrealSpace = @import("conversions.zig").collisionSphereToUnrealSpace;
 pub const collisionSphereFromUnrealSpace = @import("conversions.zig").collisionSphereFromUnrealSpace;
 pub const Memory = @import("memory.zig").Memory;
+pub const PlayerSide = @import("types.zig").PlayerSide;
 pub const AttackType = @import("types.zig").AttackType;
 pub const HitOutcome = @import("types.zig").HitOutcome;
 pub const Stun = @import("types.zig").Stun;
