@@ -11,7 +11,7 @@ pub const View = struct {
         .initFill(std.math.inf(f32)),
     ),
     lingering_hurt_cylinders: misc.CircularBuffer(32, LingeringCylinder) = .{},
-    lingering_hit_lines: misc.CircularBuffer(32, LingeringLine) = .{},
+    lingering_hit_lines: misc.CircularBuffer(128, LingeringLine) = .{},
 
     const Self = @This();
     pub const Direction = enum {
@@ -42,7 +42,7 @@ pub const View = struct {
     const hit_hurt_cylinders_color = math.Vec4.fromArray(.{ 1.0, 1.0, 0.0, 0.5 });
     const hit_hurt_cylinders_thickness = 1.0;
     const hit_hurt_cylinders_duration = 1.0;
-    const lingering_hurt_cylinders_color = math.Vec4.fromArray(.{ 0.0, 1.0, 0.0, 0.5 });
+    const lingering_hurt_cylinders_color = math.Vec4.fromArray(.{ 0.0, 0.75, 0.75, 0.5 });
     const lingering_hurt_cylinders_thickness = 1.0;
     const lingering_hurt_cylinders_duration = 1.0;
 
@@ -127,11 +127,11 @@ pub const View = struct {
         const matrix = self.calculateFinalMatrix(direction) orelse return;
         const inverse_matrix = matrix.inverse() orelse math.Mat4.identity;
         self.drawCollisionSpheres(matrix, inverse_matrix);
-        self.drawHurtCylinders(direction, matrix, inverse_matrix);
         self.drawLingeringHurtCylinders(direction, matrix, inverse_matrix);
+        self.drawHurtCylinders(direction, matrix, inverse_matrix);
         self.drawSkeletons(matrix);
-        self.drawHitLines(matrix);
         self.drawLingeringHitLines(matrix);
+        self.drawHitLines(matrix);
     }
 
     fn updateWindowSize(self: *Self, direction: Direction) void {
