@@ -15,4 +15,5 @@ pub const CollisionSphere = @import("data.zig").CollisionSphere;
 pub const CollisionSpheres = @import("data.zig").CollisionSpheres;
 pub const HitLine = @import("data.zig").HitLine;
 pub const HitLines = @import("data.zig").HitLines;
+pub const FrameDetector = @import("frame_detector.zig").FrameDetector;
 pub const PauseDetector = @import("pause_detector.zig").PauseDetector;

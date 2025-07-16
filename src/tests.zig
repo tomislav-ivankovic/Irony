@@ -4,6 +4,7 @@ test {
     _ = @import("injector.zig");
 
     _ = @import("core/capturer.zig");
+    _ = @import("core/frame_detector.zig");
     _ = @import("core/data.zig");
     _ = @import("core/pause_detector.zig");
 

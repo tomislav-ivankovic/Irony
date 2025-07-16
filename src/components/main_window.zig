@@ -14,6 +14,7 @@ pub const MainWindow = struct {
     quadrant_layout: components.QuadrantLayout = .{},
     view: components.View = .{},
     controls_height: f32 = 0,
+    frame_detector: core.FrameDetector = .{},
     pause_detector: core.PauseDetector(.{}) = .{},
     capturer: core.Capturer = .{},
 
@@ -22,9 +23,11 @@ pub const MainWindow = struct {
     pub fn tick(self: *Self, game_memory: *const game.Memory) void {
         const player_1 = game_memory.player_1.takePartialCopy();
         const player_2 = game_memory.player_2.takePartialCopy();
-        const capture_game_memory = core.Capturer.GameMemory{ .player_1 = player_1, .player_2 = player_2 };
-        const frame = self.capturer.captureFrame(&capture_game_memory);
-        self.pause_detector.update(&frame);
+        if (!self.frame_detector.detect(&player_1, &player_2)) {
+            return;
+        }
+        self.pause_detector.update();
+        const frame = self.capturer.captureFrame(&.{ .player_1 = player_1, .player_2 = player_2 });
         self.view.processFrame(&frame);
     }
 
