@@ -49,6 +49,32 @@ pub fn matrixFromUnrealSpace(value: math.Mat4) math.Mat4 {
     return value.multiply(conversion_matrix);
 }
 
+pub fn u16ToRadians(value: u16) f32 {
+    const u16_max: comptime_float = comptime @floatFromInt(std.math.maxInt(u16));
+    const two_pi = comptime 2.0 * std.math.pi;
+    const conversion_factor = comptime two_pi / (u16_max + 1.0);
+    const float_value: f32 = @floatFromInt(value);
+    var converted = float_value * conversion_factor;
+    if (converted > std.math.pi) {
+        converted -= two_pi;
+    }
+    return converted;
+}
+
+pub fn u16FromRadians(value: f32) u16 {
+    const u16_max: comptime_float = comptime @floatFromInt(std.math.maxInt(u16));
+    const two_pi = comptime 2.0 * std.math.pi;
+    const conversion_factor = comptime (u16_max + 1.0) / two_pi;
+    var normalized = value;
+    while (normalized < 0) {
+        normalized += two_pi;
+    }
+    while (normalized >= two_pi) {
+        normalized -= two_pi;
+    }
+    return @intFromFloat(normalized * conversion_factor);
+}
+
 pub fn hitLineToUnrealSpace(value: game.HitLine) game.HitLine {
     var converted: game.HitLine = value;
     for (value.points, 0..) |element, index| {
@@ -126,6 +152,11 @@ test "matrixToUnrealSpace and matrixFromUnrealSpace should cancel out" {
             try testing.expectApproxEqAbs(value.array[i][j], result_2.array[i][j], 0.0001);
         }
     }
+}
+
+test "u16ToRadians and u16FromRadians should cancel out" {
+    try testing.expectApproxEqAbs(-0.5 * std.math.pi, u16ToRadians(u16FromRadians(-0.5 * std.math.pi)), 0.000001);
+    try testing.expectEqual(0xAAAA, u16FromRadians(u16ToRadians(0xAAAA)));
 }
 
 test "hitLineToUnrealSpace and hitLineFromUnrealSpace should cancel out" {
