@@ -359,10 +359,8 @@ pub const Player = struct {
         game.u16ToRadians,
         game.u16FromRadians,
     ), // 0x376
-    current_frame_number: u32, // 0x0390
-    current_frame_float: f32, // 0x03BC
+    current_move_frame: u32, // 0x0390
     current_move_pointer: usize, // 0x03D8
-    current_move_pointer_2: usize, // 0x03E0
     previous_move_pointer: usize, // 0x03E8
     attack_damage: i32, // 0x0504
     attack_type: AttackType, // 0x0510
@@ -371,7 +369,6 @@ pub const Player = struct {
     current_move_total_frames: u32, // 0x05D4
     hit_outcome: u32, // 0x0610
     already_attacked: u32, // 0x066C
-    already_attacked_2: u32, // 0x0674
     // stun: Stun, // 0x0774
     cancel_flags: CancelFlags, // 0x0C80
     // rage: bool, // 0x0D71

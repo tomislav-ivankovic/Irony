@@ -79,7 +79,7 @@ pub const PlayerRole = enum {
 };
 
 pub const Player = struct {
-    current_frame_number: ?u32 = null,
+    current_move_frame: ?u32 = null,
     position: ?math.Vec3 = null,
     rotation: ?f32 = null,
     skeleton: ?Skeleton = null,

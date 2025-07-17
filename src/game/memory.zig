@@ -34,13 +34,11 @@ pub const Memory = struct {
             .transform_matrix = 0x200,
             .floor_z = 0x0354,
             .rotation = 0x376,
-            .current_frame_number = deref(u32, add(8, pattern(
+            .current_move_frame = deref(u32, add(8, pattern(
                 &cache,
                 "8B 81 ?? ?? 00 00 39 81 ?? ?? 00 00 0F 84 ?? ?? 00 00 48 C7 81",
             ))),
-            .current_frame_float = 0x03BC,
             .current_move_pointer = 0x03D8,
-            .current_move_pointer_2 = 0x03E0,
             .previous_move_pointer = 0x03E8,
             .attack_damage = 0x0504,
             .attack_type = deref(u32, add(2, pattern(
@@ -67,7 +65,6 @@ pub const Memory = struct {
                 &cache,
                 "40 53 48 83 EC ?? 80 B9 ?? ?? ?? ?? ?? 48 8B D9 0F 85 ?? ?? ?? ?? 80 B9 ?? ?? ?? ?? ?? 0F 84",
             )))),
-            .already_attacked_2 = 0x0674,
             // .stun = 0x0774,
             .cancel_flags = 0x0C80,
             // .rage = 0x0D71,

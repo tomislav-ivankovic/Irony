@@ -87,7 +87,7 @@ pub const Capturer = struct {
 
     fn capturePlayer(self: *Self, player: *const misc.Partial(game.Player), player_id: core.PlayerId) core.Player {
         return .{
-            .current_frame_number = player.current_frame_number,
+            .current_move_frame = player.current_move_frame,
             .position = capturePlayerPosition(player),
             .rotation = capturePlayerRotation(player),
             .skeleton = captureSkeleton(player),
