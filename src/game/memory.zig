@@ -23,14 +23,8 @@ pub const Memory = struct {
             deinitPatternCache(pattern_cache, base_dir);
         };
         const player_offsets = structOffsets(game.Player, .{
-            .player_id = 0x0004,
             .is_picked_by_main_player = 0x0009,
             .character_id = 0x0168,
-            .position_x_base = 0x0170,
-            .position_y_base = 0x0178,
-            .position_y_relative_to_floor = 0x0184,
-            .position_x_relative_to_floor = 0x018C,
-            .position_z_relative_to_floor = 0x01A4,
             .transform_matrix = 0x200,
             .floor_z = 0x0354,
             .rotation = 0x376,
@@ -38,8 +32,6 @@ pub const Memory = struct {
                 &cache,
                 "8B 81 ?? ?? 00 00 39 81 ?? ?? 00 00 0F 84 ?? ?? 00 00 48 C7 81",
             ))),
-            .current_move_pointer = 0x03D8,
-            .previous_move_pointer = 0x03E8,
             .attack_damage = 0x0504,
             .attack_type = deref(u32, add(2, pattern(
                 &cache,
@@ -47,58 +39,19 @@ pub const Memory = struct {
             ))),
             .current_move_id = 0x0548,
             .can_move = 0x05C8,
-            // .can_move = deref(u32, add(3, pattern(
-            //     &cache,
-            //     "48 C7 86 ?? ?? ?? ?? ?? ?? ?? ?? 66 C7 86 ?? ?? ?? ?? ?? ?? 44 89 AE",
-            // ))),
             .current_move_total_frames = 0x05D4,
-            // .current_move_total_frames = deref(u32, relativeOffset(u32, add(2, pattern(
-            //     &cache,
-            //     "89 86 ?? ?? ?? ?? 48 C7 86 ?? ?? ?? ?? ?? ?? ?? ?? 89 BE",
-            // )))),
             .hit_outcome = 0x0610,
-            // .hit_outcome = deref(u32, add(3, pattern(
-            //     &cache,
-            //     "44 89 A6 ?? ?? ?? ?? 8B 86 ?? ?? ?? ?? 25",
-            // ))),
-            .already_attacked = add(-1, deref(u32, add(24, pattern(
-                &cache,
-                "40 53 48 83 EC ?? 80 B9 ?? ?? ?? ?? ?? 48 8B D9 0F 85 ?? ?? ?? ?? 80 B9 ?? ?? ?? ?? ?? 0F 84",
-            )))),
-            // .stun = 0x0774,
-            .cancel_flags = 0x0C80,
-            // .rage = 0x0D71,
-            // .rage = deref(u32, add(2, pattern(
-            //     &cache,
-            //     "88 9E ?? ?? ?? 00 48 8D 8E ?? ?? 00 00 45 33 FF",
-            // ))),
-            // .floor_number_1 = deref(u32, add(3, pattern(
-            //     &cache,
-            //     "44 8B 80 ?? ?? ?? ?? 48 8B CB",
-            // ))),
-            // .floor_number_2 = 0x1774,
-            // .floor_number_3 = 0x1778,
+            .in_rage = 0x0DD1,
             .frames_since_round_start = 0x1410,
-            .frame_data_flags = deref(u32, add(3, pattern(
-                &cache,
-                "0F 11 87 ?? ?? ?? ?? 0F 10 86 ?? ?? ?? ?? 0F 11 86 ?? ?? ?? ?? 41 0F 10 04 24",
-            ))),
-            // .next_move_pointer = 0x1F30,
-            // .next_move_id = 0x1F4C,
-            // .reaction_to_have = 0x1F50,
-            // .attack_input = 0x1F70,
-            // .direction_input = 0x1F74,
-            // .used_heat = 0x2110,
-            // .used_heat = deref(u32, add(3, pattern(
-            //     &cache,
-            //     "48 C7 86 ?? ?? 00 00 01 00 00 00 44 89 BE ?? ?? 00 00",
-            // ))),
-            // .input = 0x2494,
+            .used_heat = 0x21C0,
+            .heat_gauge = 0x21B0,
+            .in_heat = 0x21E1,
             .input_side = 0x252C,
+            .input = 0x2554,
             .hit_lines = 0x25C0,
             .hurt_cylinders = 0x29C0,
             .collision_spheres = 0x2E00,
-            // .health = 0x2EE4,
+            .health = 0x3588,
         });
         return .{
             .player_1 = structProxy("player_1", game.Player, .{

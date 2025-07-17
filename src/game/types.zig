@@ -48,105 +48,6 @@ pub const HitOutcome = enum(u32) {
     _,
 };
 
-pub const Stun = packed struct(u32) {
-    _0: bool = false,
-    _1: bool = false,
-    _2: bool = false,
-    _3: bool = false,
-    _4: bool = false,
-    _5: bool = false,
-    _6: bool = false,
-    _7: bool = false,
-    _8: bool = false,
-    _9: bool = false,
-    _10: bool = false,
-    _11: bool = false,
-    _12: bool = false,
-    _13: bool = false,
-    _14: bool = false,
-    _15: bool = false,
-    any_stun: bool = false,
-    _17: bool = false,
-    _18: bool = false,
-    _19: bool = false,
-    _20: bool = false,
-    _21: bool = false,
-    _22: bool = false,
-    _23: bool = false,
-    attacking: bool = false,
-    _25: bool = false,
-    _26: bool = false,
-    _27: bool = false,
-    _28: bool = false,
-    _29: bool = false,
-    _30: bool = false,
-    _31: bool = false,
-
-    const Self = @This();
-
-    fn fromInt(int: u32) Self {
-        return @bitCast(int);
-    }
-
-    fn toInt(self: Self) u32 {
-        return @bitCast(self);
-    }
-
-    comptime {
-        std.debug.assert((Self{ .any_stun = true }).toInt() == 65536);
-        std.debug.assert((Self{ .attacking = true }).toInt() == 16777216);
-    }
-};
-
-pub const CancelFlags = packed struct(u32) {
-    _0: bool = false,
-    _1: bool = false,
-    _2: bool = false,
-    _3: bool = false,
-    _4: bool = false,
-    _5: bool = false,
-    _6: bool = false,
-    _7: bool = false,
-    _8: bool = false,
-    _9: bool = false,
-    _10: bool = false,
-    _11: bool = false,
-    _12: bool = false,
-    _13: bool = false,
-    _14: bool = false,
-    _15: bool = false,
-    cancellable: bool = false,
-    _17: bool = false,
-    _18: bool = false,
-    _19: bool = false,
-    _20: bool = false,
-    _21: bool = false,
-    _22: bool = false,
-    _23: bool = false,
-    _24: bool = false,
-    _25: bool = false,
-    _26: bool = false,
-    _27: bool = false,
-    _28: bool = false,
-    _29: bool = false,
-    _30: bool = false,
-    _31: bool = false,
-
-    const Self = @This();
-
-    fn fromInt(int: u32) Self {
-        return @bitCast(int);
-    }
-
-    fn toInt(self: Self) u32 {
-        return @bitCast(self);
-    }
-
-    comptime {
-        std.debug.assert((Self{ .cancellable = true }).toInt() == 65536);
-    }
-};
-
 pub const Input = packed struct(u32) {
     up: bool = false,
     down: bool = false,
@@ -333,14 +234,8 @@ pub const CollisionSpheres = extern struct {
 };
 
 pub const Player = struct {
-    player_id: i32, // 0x0004
     is_picked_by_main_player: bool, // 0x0009
-    character_id: i32, // 0x0168
-    position_x_base: f32, // 0x0170
-    position_y_base: f32, // 0x0178
-    position_y_relative_to_floor: f32, // 0x0184
-    position_x_relative_to_floor: f32, // 0x018C
-    position_z_relative_to_floor: f32, // 0x01A4
+    character_id: u32, // 0x0168
     transform_matrix: memory.ConvertedValue(
         math.Mat4,
         math.Mat4,
@@ -360,35 +255,23 @@ pub const Player = struct {
         game.u16FromRadians,
     ), // 0x376
     current_move_frame: u32, // 0x0390
-    current_move_pointer: usize, // 0x03D8
-    previous_move_pointer: usize, // 0x03E8
     attack_damage: i32, // 0x0504
     attack_type: AttackType, // 0x0510
     current_move_id: u32, // 0x0548
     can_move: u32, // 0x05C8
     current_move_total_frames: u32, // 0x05D4
-    hit_outcome: u32, // 0x0610
-    already_attacked: u32, // 0x066C
-    // stun: Stun, // 0x0774
-    cancel_flags: CancelFlags, // 0x0C80
-    // rage: bool, // 0x0D71
+    hit_outcome: HitOutcome, // 0x0610
+    in_rage: bool, // 0x0DD1
     frames_since_round_start: u32, // 0x1410
-    // floor_number_1: i32, // 0x1770
-    // floor_number_2: i32, // 0x1774
-    // floor_number_3: i32, // 0x1778
-    frame_data_flags: u32, // 0x19E0
-    // next_move_pointer: usize, // 0x1F30
-    // next_move_id: u32, // 0x1F4C
-    // reaction_to_have: u32, // 0x1F50
-    // attack_input: u32, // 0x1F70
-    // direction_input: u32, // 0x1F74
-    // used_heat: u32, // 0x2110
-    // input: Input, // 0x2494
+    used_heat: bool, // 0x21C0
+    heat_gauge: i32, // 0x21B0
+    in_heat: bool, // 0x21E1
     input_side: PlayerSide, // 0x252C
+    input: Input, // 0x2554
     hit_lines: HitLines, // 0x2500
     hurt_cylinders: HurtCylinders, // 0x2900
     collision_spheres: CollisionSpheres, // 0x2D40
-    // health: i32, // 0x2EE4
+    health: i32, // 0x3588
 };
 
 pub const TickFunction = fn (delta_time: f64) callconv(.c) void;

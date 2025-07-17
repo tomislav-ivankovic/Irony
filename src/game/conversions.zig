@@ -55,8 +55,8 @@ pub fn u16ToRadians(value: u16) f32 {
     const conversion_factor = comptime -1.0 * two_pi / (u16_max + 1.0);
     const float_value: f32 = @floatFromInt(value);
     var converted = float_value * conversion_factor;
-    if (converted > std.math.pi) {
-        converted -= two_pi;
+    if (converted < -std.math.pi) {
+        converted += two_pi;
     }
     return converted;
 }
