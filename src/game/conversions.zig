@@ -123,12 +123,18 @@ pub fn collisionSphereFromUnrealSpace(value: game.CollisionSphere) game.Collisio
     return converted;
 }
 
-pub fn decryptHeatGauge(value: u32) u32 {
-    return std.math.rotl(u32, value, @as(usize, 8));
+const max_int_heat_gauge = 23039456;
+
+pub fn decryptHeatGauge(value: u32) f32 {
+    const int_value = std.math.rotl(u32, value, @as(usize, 8));
+    const float_value: f32 = @floatFromInt(int_value);
+    return float_value / max_int_heat_gauge;
 }
 
-pub fn encryptHeatGauge(value: u32) u32 {
-    return std.math.rotr(u32, value, @as(usize, 8));
+pub fn encryptHeatGauge(value: f32) u32 {
+    const float_value = value * max_int_heat_gauge;
+    const int_value: u32 = @intFromFloat(float_value);
+    return std.math.rotr(u32, int_value, @as(usize, 8));
 }
 
 const testing = std.testing;
@@ -207,7 +213,6 @@ test "collisionSphereToUnrealSpace and collisionSphereFromUnrealSpace should can
 }
 
 test "decryptHeatGauge and encryptHeatGauge should cancel out" {
-    const value = 0x12345678;
-    try testing.expectEqual(value, decryptHeatGauge(encryptHeatGauge(value)));
-    try testing.expectEqual(value, encryptHeatGauge(decryptHeatGauge(value)));
+    try testing.expectEqual(0.12345, decryptHeatGauge(encryptHeatGauge(0.12345)));
+    try testing.expectEqual(12345, encryptHeatGauge(decryptHeatGauge(12345)));
 }

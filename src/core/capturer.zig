@@ -85,7 +85,17 @@ pub const Capturer = struct {
 
     fn capturePlayer(self: *Self, player: *const misc.Partial(game.Player), player_id: core.PlayerId) core.Player {
         return .{
+            .character_id = player.character_id,
+            .current_move_id = player.current_move_id,
             .current_move_frame = player.current_move_frame,
+            .current_move_total_frames = player.current_move_total_frames,
+            .attack_type = captureAttackType(player),
+            .attack_damage = player.attack_damage,
+            .hit_outcome = captureHitOutcome(player),
+            .input = captureInput(player),
+            // .health = player.health, // TODO make it work after decrypting health
+            .rage = captureRage(player),
+            .heat = captureHeat(player),
             .position = capturePlayerPosition(player),
             .rotation = capturePlayerRotation(player),
             .skeleton = captureSkeleton(player),
@@ -93,6 +103,90 @@ pub const Capturer = struct {
             .collision_spheres = captureCollisionSpheres(player),
             .hit_lines = self.captureHitLines(player, player_id),
         };
+    }
+
+    fn captureAttackType(player: *const misc.Partial(game.Player)) ?core.AttackType {
+        const attack_type: game.AttackType = player.attack_type orelse return null;
+        return switch (attack_type) {
+            .not_attack => .not_attack,
+            .high => .high,
+            .mid => .mid,
+            .low => .low,
+            .special_mid => .special_mid,
+            .high_unblockable => .high_unblockable,
+            .mid_unblockable => .mid_unblockable,
+            .low_unblockable => .low_unblockable,
+            .throw => .throw,
+            .projectile => .projectile,
+            .antiair_only => .antiair_only,
+            else => null,
+        };
+    }
+
+    fn captureHitOutcome(player: *const misc.Partial(game.Player)) ?core.HitOutcome {
+        const hit_outcome: game.HitOutcome = player.hit_outcome orelse return null;
+        return switch (hit_outcome) {
+            .none => .none,
+            .blocked_standing => .blocked_standing,
+            .blocked_crouching => .blocked_crouching,
+            .juggle => .juggle,
+            .screw => .screw,
+            .grounded_face_down => .grounded_face_down,
+            .grounded_face_up => .grounded_face_up,
+            .counter_hit_standing => .counter_hit_standing,
+            .counter_hit_crouching => .counter_hit_crouching,
+            .normal_hit_standing => .normal_hit_standing,
+            .normal_hit_crouching => .normal_hit_crouching,
+            .normal_hit_standing_left => .normal_hit_standing_left,
+            .normal_hit_crouching_left => .normal_hit_crouching_left,
+            .normal_hit_standing_back => .normal_hit_standing_back,
+            .normal_hit_crouching_back => .normal_hit_crouching_back,
+            .normal_hit_standing_right => .normal_hit_standing_right,
+            .normal_hit_crouching_right => .normal_hit_crouching_right,
+            else => null,
+        };
+    }
+
+    fn captureInput(player: *const misc.Partial(game.Player)) ?core.Input {
+        const input: game.Input = player.input orelse return null;
+        return .{
+            .up = input.up,
+            .down = input.down,
+            .left = input.left,
+            .right = input.right,
+            .special_style = input.special_style,
+            .heat = input.heat,
+            .rage = input.rage,
+            .button_1 = input.button_1,
+            .button_2 = input.button_2,
+            .button_3 = input.button_3,
+            .button_4 = input.button_4,
+        };
+    }
+
+    fn captureRage(player: *const misc.Partial(game.Player)) ?core.Rage {
+        const in_rage = player.in_heat orelse return null;
+        const used_rage = player.used_heat orelse return null;
+        if (in_rage) {
+            return .activated;
+        } else if (used_rage) {
+            return .used_up;
+        } else {
+            return .available;
+        }
+    }
+
+    fn captureHeat(player: *const misc.Partial(game.Player)) ?core.Heat {
+        const in_heat = player.in_heat orelse return null;
+        const used_heat = player.used_heat orelse return null;
+        const heat_gauge = player.heat_gauge orelse return null;
+        if (in_heat) {
+            return .{ .activated = .{ .gauge = heat_gauge.convert() } };
+        } else if (used_heat) {
+            return .used_up;
+        } else {
+            return .available;
+        }
     }
 
     fn capturePlayerPosition(player: *const misc.Partial(game.Player)) ?math.Vec3 {

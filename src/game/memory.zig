@@ -42,6 +42,7 @@ pub const Memory = struct {
             .current_move_total_frames = 0x05D4,
             .hit_outcome = 0x0610,
             .in_rage = 0x0DD1,
+            .used_rage = 0x0E08,
             .frames_since_round_start = 0x1410,
             .used_heat = 0x21C0,
             .heat_gauge = 0x21B0,

@@ -133,8 +133,6 @@ pub const HitOutcome = enum {
 };
 
 pub const Input = packed struct {
-    forward: bool = false,
-    back: bool = false,
     up: bool = false,
     down: bool = false,
     left: bool = false,

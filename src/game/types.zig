@@ -262,11 +262,12 @@ pub const Player = struct {
     current_move_total_frames: u32, // 0x05D4
     hit_outcome: HitOutcome, // 0x0610
     in_rage: bool, // 0x0DD1
+    used_rage: bool, // 0x0E08
     frames_since_round_start: u32, // 0x1410
     used_heat: bool, // 0x21C0
     heat_gauge: memory.ConvertedValue(
         u32,
-        u32,
+        f32,
         game.decryptHeatGauge,
         game.encryptHeatGauge,
     ), // 0x21B0
