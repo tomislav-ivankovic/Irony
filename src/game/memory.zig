@@ -9,6 +9,7 @@ pub const Memory = struct {
     player_1: memory.StructProxy(game.Player),
     player_2: memory.StructProxy(game.Player),
     tick_function: ?*const game.TickFunction,
+    decrypt_health_function: ?*const game.DecryptHealthFunction,
 
     const Self = @This();
     const pattern_cache_file_name = "pattern_cache.json";
@@ -52,9 +53,9 @@ pub const Memory = struct {
             .hit_lines = 0x25C0,
             .hurt_cylinders = 0x29C0,
             .collision_spheres = 0x2E00,
-            .health = 0x3588,
+            .health = 0x3580,
         });
-        return .{
+        const self = Self{
             .player_1 = structProxy("player_1", game.Player, .{
                 relativeOffset(u32, add(3, pattern(&cache, "4C 89 35 ?? ?? ?? ?? 41 88 5E 28"))),
                 0x30,
@@ -70,7 +71,14 @@ pub const Memory = struct {
                 game.TickFunction,
                 pattern(&cache, "48 8B 0D ?? ?? ?? ?? 48 85 C9 74 0A 48 8B 01 0F 28 C8"),
             ),
+            .decrypt_health_function = functionPointer(
+                "decrypt_health_function",
+                game.DecryptHealthFunction,
+                pattern(&cache, "48 89 5c 24 08 57 48 83 EC ?? 48 8b d9 48 83 c1 08 e8 ?? ?? ?? ?? 85 c0"),
+            ),
         };
+        game.conversion_globals.decrypt_health_function = self.decrypt_health_function;
+        return self;
     }
 
     fn initPatternCache(allocator: std.mem.Allocator, base_dir: ?*const misc.BaseDir) !memory.PatternCache {

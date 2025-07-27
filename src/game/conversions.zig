@@ -5,6 +5,10 @@ const math = @import("../math/root.zig");
 const to_unreal_scale = 0.1;
 const from_unreal_scale = 1.0 / to_unreal_scale;
 
+pub const conversion_globals = struct {
+    pub var decrypt_health_function: ?*const game.DecryptHealthFunction = null;
+};
+
 pub fn scaleToUnrealSpace(value: f32) f32 {
     return value * to_unreal_scale;
 }
@@ -135,6 +139,12 @@ pub fn encryptHeatGauge(value: f32) u32 {
     const float_value = value * max_int_heat_gauge;
     const int_value: u32 = @intFromFloat(float_value);
     return std.math.rotr(u32, int_value, @as(usize, 8));
+}
+
+pub fn decryptHealth(value: game.EncryptedHealth) ?i32 {
+    const decrypt = conversion_globals.decrypt_health_function orelse return null;
+    const shifted = decrypt(&value);
+    return @intCast(shifted >> 16);
 }
 
 const testing = std.testing;

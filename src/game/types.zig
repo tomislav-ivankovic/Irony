@@ -233,6 +233,8 @@ pub const CollisionSpheres = extern struct {
     }
 };
 
+pub const EncryptedHealth = [16]u64;
+
 pub const Player = struct {
     is_picked_by_main_player: bool, // 0x0009
     character_id: u32, // 0x0168
@@ -277,7 +279,14 @@ pub const Player = struct {
     hit_lines: HitLines, // 0x2500
     hurt_cylinders: HurtCylinders, // 0x2900
     collision_spheres: CollisionSpheres, // 0x2D40
-    health: i64, // 0x3588
+    health: memory.ConvertedValue(
+        EncryptedHealth,
+        ?i32,
+        game.decryptHealth,
+        null,
+    ), // 0x3580
 };
 
 pub const TickFunction = fn (delta_time: f64) callconv(.c) void;
+
+pub const DecryptHealthFunction = fn (encrypted_health: *const EncryptedHealth) callconv(.c) i64;
