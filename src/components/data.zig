@@ -1,9 +1,7 @@
 const std = @import("std");
 const imgui = @import("imgui");
 const builtin = @import("builtin");
-const memory = @import("../memory/root.zig");
-const math = @import("../math/root.zig");
-const ui = @import("../ui/root.zig");
+const sdk = @import("../sdk/root.zig");
 
 pub fn drawData(label: [:0]const u8, pointer: anytype) void {
     if (@typeInfo(@TypeOf(pointer)) != .pointer or @typeInfo(@TypeOf(pointer)).pointer.size != .one) {
@@ -30,19 +28,19 @@ fn drawAny(ctx: *const Context, pointer: anytype) void {
         );
     }
     const Type = @typeInfo(@TypeOf(pointer)).pointer.child;
-    if (Type == memory.PointerTrail) {
+    if (Type == sdk.memory.PointerTrail) {
         drawPointerTrail(ctx, pointer);
-    } else if (hasTag(Type, memory.converted_value_tag)) {
+    } else if (hasTag(Type, sdk.memory.converted_value_tag)) {
         drawConvertedValue(ctx, pointer);
-    } else if (hasTag(Type, memory.pointer_tag)) {
+    } else if (hasTag(Type, sdk.memory.pointer_tag)) {
         drawCustomPointer(ctx, pointer);
-    } else if (hasTag(Type, memory.proxy_tag)) {
+    } else if (hasTag(Type, sdk.memory.proxy_tag)) {
         drawProxy(ctx, pointer);
-    } else if (hasTag(Type, memory.struct_proxy_tag)) {
+    } else if (hasTag(Type, sdk.memory.struct_proxy_tag)) {
         drawStructProxy(ctx, pointer);
-    } else if (hasTag(Type, memory.self_sortable_array_tag)) {
+    } else if (hasTag(Type, sdk.memory.self_sortable_array_tag)) {
         drawSelfSortableArray(ctx, pointer);
-    } else if (hasTag(Type, math.vector_tag)) {
+    } else if (hasTag(Type, sdk.math.vector_tag)) {
         drawVector(ctx, pointer);
     } else switch (@typeInfo(Type)) {
         .void => drawVoid(ctx),
@@ -801,7 +799,7 @@ fn drawText(label: [:0]const u8, text: [:0]const u8) void {
 
     if (imgui.igIsItemClicked(imgui.ImGuiMouseButton_Left)) {
         imgui.igSetClipboardText(text);
-        ui.toasts.send(.info, null, "Copied to clipboard: {s}", .{text});
+        sdk.ui.toasts.send(.info, null, "Copied to clipboard: {s}", .{text});
     }
 
     if (builtin.is_test) {
@@ -824,13 +822,13 @@ test "should draw void correctly" {
     const Test = struct {
         var value: void = {};
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&value);
 
             ctx.setRef("Window");
@@ -846,7 +844,7 @@ test "should draw void correctly" {
             try ctx.expectItemExists("value: {} (void instance)");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -854,13 +852,13 @@ test "should draw null correctly" {
     const Test = struct {
         var value: ?void = null;
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&value);
             const size = @sizeOf(@TypeOf(value));
 
@@ -877,7 +875,7 @@ test "should draw null correctly" {
             try ctx.expectItemExists("value: null");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -885,13 +883,13 @@ test "should draw bool correctly" {
     const Test = struct {
         var value: bool = false;
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&value);
 
             ctx.setRef("Window");
@@ -916,7 +914,7 @@ test "should draw bool correctly" {
             try ctx.expectItemExists("value: true");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -924,13 +922,13 @@ test "should draw int correctly" {
     const Test = struct {
         var value: u8 = 0;
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&value);
 
             value = 97;
@@ -960,7 +958,7 @@ test "should draw int correctly" {
             try ctx.expectItemExists("character: not printable");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -968,13 +966,13 @@ test "should draw float correctly" {
     const Test = struct {
         var value: f32 = -1.0;
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&value);
 
             ctx.setRef("Window");
@@ -993,7 +991,7 @@ test "should draw float correctly" {
             try ctx.expectItemExists("f32: -1e0");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -1002,13 +1000,13 @@ test "should draw enum correctly" {
     const Test = struct {
         var value: Enum = @enumFromInt(0);
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&value);
 
             value = .test_value;
@@ -1042,7 +1040,7 @@ test "should draw enum correctly" {
             try ctx.expectItemExists("character: a");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -1050,13 +1048,13 @@ test "should draw error correctly" {
     const Test = struct {
         var value: anyerror = error.TestError;
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&value);
             const size = @sizeOf(@TypeOf(value));
 
@@ -1073,7 +1071,7 @@ test "should draw error correctly" {
             try ctx.expectItemExists("value: error.TestError");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -1081,13 +1079,13 @@ test "should draw optional correctly" {
     const Test = struct {
         var value: ?bool = null;
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&value);
             const size = @sizeOf(@TypeOf(value));
 
@@ -1116,7 +1114,7 @@ test "should draw optional correctly" {
             try ctx.expectItemExists("value: true");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -1124,13 +1122,13 @@ test "should draw error union correctly" {
     const Test = struct {
         var value: anyerror!bool = false;
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&value);
             const size = @sizeOf(@TypeOf(value));
 
@@ -1159,7 +1157,7 @@ test "should draw error union correctly" {
             try ctx.expectItemExists("value: error.TestError");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -1171,13 +1169,13 @@ test "should draw function correctly" {
             return a + b;
         }
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&value);
             const int_value = @intFromPtr(value);
             const size = @sizeOf(@TypeOf(value));
@@ -1195,7 +1193,7 @@ test "should draw function correctly" {
             try ctx.expectItemExistsFmt("value: {} (0x{X})", .{ int_value, int_value });
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -1203,13 +1201,13 @@ test "should draw opaque correctly" {
     const Test = struct {
         var value: *const opaque {} = @ptrFromInt(1234);
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&value);
             const size = @sizeOf(@TypeOf(value));
 
@@ -1228,7 +1226,7 @@ test "should draw opaque correctly" {
             try ctx.expectItemExists("i64: 1234 (0x4D2)");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -1236,13 +1234,13 @@ test "should draw array correctly" {
     const Test = struct {
         var value: [3]u32 = .{ 1, 2, 3 };
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const array_address = @intFromPtr(&value);
             const element_address = @intFromPtr(&value[2]);
 
@@ -1275,7 +1273,7 @@ test "should draw array correctly" {
             try ctx.expectItemExists("value: 3 (0x3)");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -1289,13 +1287,13 @@ test "should draw struct correctly" {
     const Test = struct {
         var value: Struct = .{};
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const struct_address = @intFromPtr(&value);
             const field_address = @intFromPtr(&value.field_2);
 
@@ -1342,7 +1340,7 @@ test "should draw struct correctly" {
             try ctx.expectItemExists("test/_field_3: 4 (0x4)");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -1356,13 +1354,13 @@ test "should draw packed struct correctly" {
     const Test = struct {
         var value: Struct = .{};
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const struct_address = @intFromPtr(&value);
             const field_address = @intFromPtr(&value.field_2);
 
@@ -1411,7 +1409,7 @@ test "should draw packed struct correctly" {
             try ctx.expectItemExists("test/_field_3: 3 (0x3)");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -1423,13 +1421,13 @@ test "should draw union correctly" {
     const Test = struct {
         var value: Int8 = .{ .unsigned = 255 };
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&value);
 
             ctx.setRef("Window");
@@ -1459,7 +1457,7 @@ test "should draw union correctly" {
             try ctx.expectItemExists("value: -1 (0x-1)");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -1471,13 +1469,13 @@ test "should draw tagged union correctly" {
     const Test = struct {
         var value: Int8 = .{ .unsigned = 0 };
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const tag_address = @intFromPtr(&value);
             const value_address = tag_address + 1;
 
@@ -1543,7 +1541,7 @@ test "should draw tagged union correctly" {
             try ctx.expectItemExists("value: -1 (0x-1)");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -1551,13 +1549,13 @@ test "should draw pointer correctly" {
     const Test = struct {
         var value: *const i32 = &123;
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const pointer_address = @intFromPtr(&value);
             const value_address = @intFromPtr(value);
             const pointer_size = @sizeOf(usize);
@@ -1601,7 +1599,7 @@ test "should draw pointer correctly" {
             try ctx.expectItemExists("value: 123 (0x7B)");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -1610,13 +1608,13 @@ test "should draw slice correctly" {
         var array: [3]u32 = .{ 1, 2, 3 };
         var slice: []u32 = &array;
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &slice);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const slice_address = @intFromPtr(&slice);
             const len_address = @intFromPtr(&slice.len);
             const array_address = @intFromPtr(&array);
@@ -1678,7 +1676,7 @@ test "should draw slice correctly" {
             try ctx.expectItemExists("value: 3 (0x3)");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -1686,15 +1684,15 @@ test "should draw slice correctly" {
 
 test "should draw pointer trail correctly" {
     const Test = struct {
-        var trail: memory.PointerTrail = .fromArray(.{});
+        var trail: sdk.memory.PointerTrail = .fromArray(.{});
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &trail);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&trail);
             const size = @sizeOf(@TypeOf(trail));
 
@@ -1755,25 +1753,25 @@ test "should draw pointer trail correctly" {
             try ctx.expectItemExists("test/resolved: null");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
 test "should draw converted value correctly" {
     const Test = struct {
-        var converted: memory.ConvertedValue(i32, i64, rawToValue, null) = .{ .raw = 123 };
+        var converted: sdk.memory.ConvertedValue(i32, i64, rawToValue, null) = .{ .raw = 123 };
 
         fn rawToValue(raw: i32) i64 {
             return raw * 2;
         }
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &converted);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&converted);
 
             ctx.setRef("Window");
@@ -1815,22 +1813,22 @@ test "should draw converted value correctly" {
             try ctx.expectItemExists("value: 246 (0xF6)");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
 test "should draw custom pointer correctly" {
     const Test = struct {
-        var pointer: memory.Pointer(i32) = .{ .address = 0 };
+        var pointer: sdk.memory.Pointer(i32) = .{ .address = 0 };
         var value: i32 = 123;
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &pointer);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const pointer_address = @intFromPtr(&pointer);
             const value_address = @intFromPtr(&value);
             const pointer_size = @sizeOf(usize);
@@ -1845,7 +1843,7 @@ test "should draw custom pointer correctly" {
             ctx.setRef("//$FOCUSED");
             try ctx.expectItemExists("label: test");
             try ctx.expectItemExists("path: test");
-            try ctx.expectItemExists("type: " ++ @typeName(memory.Pointer(i32)));
+            try ctx.expectItemExists("type: " ++ @typeName(sdk.memory.Pointer(i32)));
             try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ pointer_address, pointer_address });
             try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ pointer_size, pointer_size });
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
@@ -1885,22 +1883,22 @@ test "should draw custom pointer correctly" {
             try ctx.expectItemExists("test/value: not readable");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
 test "should draw proxy correctly" {
     const Test = struct {
-        var proxy: memory.Proxy(i32) = .fromArray(.{});
+        var proxy: sdk.memory.Proxy(i32) = .fromArray(.{});
         var value: i32 = 123;
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &proxy);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const proxy_address = @intFromPtr(&proxy);
             const value_address = @intFromPtr(&value);
             const proxy_size = @sizeOf(@TypeOf(proxy));
@@ -1954,14 +1952,14 @@ test "should draw proxy correctly" {
             try ctx.expectItemExists("test/value: not readable");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
 test "should draw struct proxy correctly" {
     const Struct = extern struct { field_1: u8, field_2: u16, field_3: u32 };
     const Test = struct {
-        var proxy: memory.StructProxy(Struct) = .{
+        var proxy: sdk.memory.StructProxy(Struct) = .{
             .base_trail = .fromArray(.{}),
             .field_offsets = .{
                 .field_1 = @offsetOf(Struct, "field_1"),
@@ -1971,13 +1969,13 @@ test "should draw struct proxy correctly" {
         };
         var value: Struct = .{ .field_1 = 1, .field_2 = 2, .field_3 = 3 };
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &proxy);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const proxy_address = @intFromPtr(&proxy);
             const value_address = @intFromPtr(&value);
             const field_2_address = @intFromPtr(&value.field_2);
@@ -2066,13 +2064,13 @@ test "should draw struct proxy correctly" {
             try ctx.expectItemExists("test/value/field_3: not readable");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
 test "should draw self sortable array correctly" {
     const Test = struct {
-        var value: memory.SelfSortableArray(3, i32, isLessThan) = .{
+        var value: sdk.memory.SelfSortableArray(3, i32, isLessThan) = .{
             .raw = .{ 2, 1, 3 },
         };
 
@@ -2080,13 +2078,13 @@ test "should draw self sortable array correctly" {
             return lhs.* < rhs.*;
         }
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test", &value);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&value);
             const address_of_1 = @intFromPtr(&value.raw[1]);
             const address_of_2 = @intFromPtr(&value.raw[0]);
@@ -2125,23 +2123,23 @@ test "should draw self sortable array correctly" {
             try ctx.expectItemExists("test/sorted/2/value: 3 (0x3)");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
 test "should draw vector correctly" {
     const Test = struct {
-        var value_1: math.Vector(4, f32) = .fromArray(.{ 1, 2, 3, 4 });
-        var value_2: math.Vector(5, f32) = .fromArray(.{ 5, 6, 7, 8, 9 });
+        var value_1: sdk.math.Vector(4, f32) = .fromArray(.{ 1, 2, 3, 4 });
+        var value_2: sdk.math.Vector(5, f32) = .fromArray(.{ 5, 6, 7, 8, 9 });
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             drawData("test_1", &value_1);
             drawData("test_2", &value_2);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address_1 = @intFromPtr(&value_1);
             const size_1 = @sizeOf(@TypeOf(value_1));
 
@@ -2172,7 +2170,7 @@ test "should draw vector correctly" {
             try ctx.expectItemExists("test_2/4: 9e0");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -2180,16 +2178,16 @@ test "should copy correct text to clipboard when left clicking text" {
     const Test = struct {
         var value: u8 = 97;
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             {
                 _ = imgui.igBegin("Window", null, 0);
                 defer imgui.igEnd();
                 drawData("test", &value);
             }
-            ui.toasts.draw();
+            sdk.ui.toasts.draw();
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             const address = @intFromPtr(&value);
 
             ctx.setRef("Window");
@@ -2197,7 +2195,7 @@ test "should copy correct text to clipboard when left clicking text" {
             ctx.itemClick("test", imgui.ImGuiMouseButton_Left, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
             try ctx.expectClipboardText("97 (0x61) 'a'");
             try ctx.expectItemExists("//toast-0/Copied to clipboard: 97 (0x61) 'a'");
-            ui.toasts.update(100);
+            sdk.ui.toasts.update(100);
 
             ctx.itemClick("test", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
             ctx.setRef("//$FOCUSED");
@@ -2205,49 +2203,49 @@ test "should copy correct text to clipboard when left clicking text" {
             ctx.itemClick("label", imgui.ImGuiMouseButton_Left, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
             try ctx.expectClipboardText("test");
             try ctx.expectItemExists("//toast-0/Copied to clipboard: test");
-            ui.toasts.update(100);
+            sdk.ui.toasts.update(100);
 
             ctx.itemClick("path", imgui.ImGuiMouseButton_Left, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
             try ctx.expectClipboardText("test");
             try ctx.expectItemExists("//toast-0/Copied to clipboard: test");
-            ui.toasts.update(100);
+            sdk.ui.toasts.update(100);
 
             ctx.itemClick("type", imgui.ImGuiMouseButton_Left, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
             try ctx.expectClipboardText("u8");
             try ctx.expectItemExists("//toast-0/Copied to clipboard: u8");
-            ui.toasts.update(100);
+            sdk.ui.toasts.update(100);
 
             ctx.itemClick("address", imgui.ImGuiMouseButton_Left, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
             try ctx.expectClipboardTextFmt("{} (0x{X})", .{ address, address });
             try ctx.expectItemExistsFmt("//toast-0/Copied to clipboard: {} (0x{X})", .{ address, address });
-            ui.toasts.update(100);
+            sdk.ui.toasts.update(100);
 
             ctx.itemClick("size", imgui.ImGuiMouseButton_Left, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
             try ctx.expectClipboardText("1 (0x1) bytes");
             try ctx.expectItemExists("//toast-0/Copied to clipboard: 1 (0x1) bytes");
-            ui.toasts.update(100);
+            sdk.ui.toasts.update(100);
 
             ctx.itemClick("value", imgui.ImGuiMouseButton_Left, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
             try ctx.expectClipboardText("97 (0x61) 'a'");
             try ctx.expectItemExists("//toast-0/Copied to clipboard: 97 (0x61) 'a'");
-            ui.toasts.update(100);
+            sdk.ui.toasts.update(100);
 
             ctx.itemClick("u8", imgui.ImGuiMouseButton_Left, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
             try ctx.expectClipboardText("97 (0x61)");
             try ctx.expectItemExists("//toast-0/Copied to clipboard: 97 (0x61)");
-            ui.toasts.update(100);
+            sdk.ui.toasts.update(100);
 
             ctx.itemClick("i8", imgui.ImGuiMouseButton_Left, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
             try ctx.expectClipboardText("97 (0x61)");
             try ctx.expectItemExists("//toast-0/Copied to clipboard: 97 (0x61)");
-            ui.toasts.update(100);
+            sdk.ui.toasts.update(100);
 
             ctx.itemClick("character", imgui.ImGuiMouseButton_Left, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
             try ctx.expectClipboardText("a");
             try ctx.expectItemExists("//toast-0/Copied to clipboard: a");
-            ui.toasts.update(100);
+            sdk.ui.toasts.update(100);
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }

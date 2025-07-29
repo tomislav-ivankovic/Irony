@@ -1,18 +1,14 @@
 const std = @import("std");
 const w32 = @import("win32").everything;
 const imgui = @import("imgui");
-
-const misc = @import("misc/root.zig");
-const dx12 = @import("dx12/root.zig");
-const ui = @import("ui/root.zig");
-const hooking = @import("hooking/root.zig");
+const sdk = @import("sdk/root.zig");
 const components = @import("components/root.zig");
 const game = @import("game/root.zig");
 
 pub const EventBuss = struct {
-    timer: misc.Timer(.{}),
-    dx12_context: ?dx12.Context(buffer_count, srv_heap_size),
-    ui_context: ?ui.Context,
+    timer: sdk.misc.Timer(.{}),
+    dx12_context: ?sdk.dx12.Context(buffer_count, srv_heap_size),
+    ui_context: ?sdk.ui.Context,
     main_window: components.MainWindow,
 
     const Self = @This();
@@ -21,14 +17,14 @@ pub const EventBuss = struct {
 
     pub fn init(
         allocator: std.mem.Allocator,
-        base_dir: *const misc.BaseDir,
+        base_dir: *const sdk.misc.BaseDir,
         window: w32.HWND,
         device: *const w32.ID3D12Device,
         command_queue: *const w32.ID3D12CommandQueue,
         swap_chain: *const w32.IDXGISwapChain,
     ) Self {
         std.log.debug("Initializing DX12 context...", .{});
-        const dx12_context = if (dx12.Context(buffer_count, srv_heap_size).init(
+        const dx12_context = if (sdk.dx12.Context(buffer_count, srv_heap_size).init(
             allocator,
             device,
             swap_chain,
@@ -36,14 +32,14 @@ pub const EventBuss = struct {
             std.log.info("DX12 context initialized.", .{});
             break :block context;
         } else |err| block: {
-            misc.error_context.append("Failed to initialize DX12 context.", .{});
-            misc.error_context.logError(err);
+            sdk.misc.error_context.append("Failed to initialize DX12 context.", .{});
+            sdk.misc.error_context.logError(err);
             break :block null;
         };
 
         const ui_context = if (dx12_context) |*dxc| block: {
             std.log.debug("Initializing UI context...", .{});
-            if (ui.Context.init(
+            if (sdk.ui.Context.init(
                 buffer_count,
                 srv_heap_size,
                 allocator,
@@ -57,8 +53,8 @@ pub const EventBuss = struct {
                 std.log.info("UI context initialized.", .{});
                 break :block context;
             } else |err| {
-                misc.error_context.append("Failed to initialize UI context.", .{});
-                misc.error_context.logError(err);
+                sdk.misc.error_context.append("Failed to initialize UI context.", .{});
+                sdk.misc.error_context.logError(err);
                 break :block null;
             }
         } else null;
@@ -73,7 +69,7 @@ pub const EventBuss = struct {
 
     pub fn deinit(
         self: *Self,
-        base_dir: *const misc.BaseDir,
+        base_dir: *const sdk.misc.BaseDir,
         window: w32.HWND,
         device: *const w32.ID3D12Device,
         command_queue: *const w32.ID3D12CommandQueue,
@@ -110,7 +106,7 @@ pub const EventBuss = struct {
 
     pub fn draw(
         self: *Self,
-        base_dir: *const misc.BaseDir,
+        base_dir: *const sdk.misc.BaseDir,
         window: w32.HWND,
         device: *const w32.ID3D12Device,
         command_queue: *const w32.ID3D12CommandQueue,
@@ -122,7 +118,7 @@ pub const EventBuss = struct {
         _ = device;
 
         const delta_time = self.timer.measureDeltaTime();
-        ui.toasts.update(delta_time);
+        sdk.ui.toasts.update(delta_time);
         self.main_window.update(delta_time);
 
         const dx12_context = if (self.dx12_context) |*context| context else return;
@@ -130,7 +126,7 @@ pub const EventBuss = struct {
 
         ui_context.newFrame();
         imgui.igGetIO().*.MouseDrawCursor = true;
-        ui.toasts.draw();
+        sdk.ui.toasts.draw();
         if (game_memory) |memory| {
             self.main_window.draw(memory);
         } else {
@@ -138,22 +134,22 @@ pub const EventBuss = struct {
         }
         ui_context.endFrame();
 
-        const buffer_context = dx12.beforeRender(buffer_count, srv_heap_size, dx12_context, swap_chain) catch |err| {
-            misc.error_context.append("Failed to execute DX12 before render code.", .{});
-            misc.error_context.logError(err);
+        const buffer_context = sdk.dx12.beforeRender(buffer_count, srv_heap_size, dx12_context, swap_chain) catch |err| {
+            sdk.misc.error_context.append("Failed to execute DX12 before render code.", .{});
+            sdk.misc.error_context.logError(err);
             return;
         };
         ui_context.render(buffer_context.command_list);
-        dx12.afterRender(buffer_context, command_queue) catch |err| {
-            misc.error_context.append("Failed to execute DX12 after render code.", .{});
-            misc.error_context.logError(err);
+        sdk.dx12.afterRender(buffer_context, command_queue) catch |err| {
+            sdk.misc.error_context.append("Failed to execute DX12 after render code.", .{});
+            sdk.misc.error_context.logError(err);
             return;
         };
     }
 
     pub fn beforeResize(
         self: *Self,
-        base_dir: *const misc.BaseDir,
+        base_dir: *const sdk.misc.BaseDir,
         window: w32.HWND,
         device: *const w32.ID3D12Device,
         command_queue: *const w32.ID3D12CommandQueue,
@@ -175,7 +171,7 @@ pub const EventBuss = struct {
 
     pub fn afterResize(
         self: *Self,
-        base_dir: *const misc.BaseDir,
+        base_dir: *const sdk.misc.BaseDir,
         window: w32.HWND,
         device: *const w32.ID3D12Device,
         command_queue: *const w32.ID3D12CommandQueue,
@@ -189,8 +185,8 @@ pub const EventBuss = struct {
             if (context.reinitBufferContexts(device, swap_chain)) {
                 std.log.info("DX12 buffer contexts re-initialized.", .{});
             } else |err| {
-                misc.error_context.append("Failed to re-initialize DX12 buffer contexts.", .{});
-                misc.error_context.logError(err);
+                sdk.misc.error_context.append("Failed to re-initialize DX12 buffer contexts.", .{});
+                sdk.misc.error_context.logError(err);
             }
         } else {
             std.log.debug("Nothing to re-initialize.", .{});
@@ -199,7 +195,7 @@ pub const EventBuss = struct {
 
     pub fn processWindowMessage(
         self: *Self,
-        base_dir: *const misc.BaseDir,
+        base_dir: *const sdk.misc.BaseDir,
         window: w32.HWND,
         u_msg: u32,
         w_param: w32.WPARAM,

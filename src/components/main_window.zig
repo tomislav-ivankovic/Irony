@@ -1,10 +1,10 @@
 const std = @import("std");
 const imgui = @import("imgui");
 const dll = @import("../dll.zig");
+const sdk = @import("../sdk/root.zig");
 const components = @import("root.zig");
-const ui = @import("../ui/root.zig");
-const game = @import("../game/root.zig");
 const core = @import("../core/root.zig");
+const game = @import("../game/root.zig");
 
 pub const MainWindow = struct {
     is_first_draw: bool = true,
@@ -74,7 +74,7 @@ pub const MainWindow = struct {
         if (!self.is_first_draw) {
             return;
         }
-        ui.toasts.send(.success, null, "Irony initialized. Press F2 to open the Irony window.", .{});
+        sdk.ui.toasts.send(.success, null, "Irony initialized. Press F2 to open the Irony window.", .{});
         self.is_first_draw = false;
     }
 

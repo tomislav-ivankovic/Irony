@@ -1,6 +1,6 @@
 const std = @import("std");
 const imgui = @import("imgui");
-const ui = @import("../ui/root.zig");
+const sdk = @import("../sdk/root.zig");
 
 pub const QuadrantLayout = struct {
     division: imgui.ImVec2 = .{ .x = 0.5, .y = 0.5 },
@@ -182,7 +182,7 @@ test "should render correct content under correct id" {
     const Test = struct {
         var layout = QuadrantLayout{};
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             layout.draw({}, &.{
@@ -209,7 +209,7 @@ test "should render correct content under correct id" {
             _ = imgui.igButton("Bottom Right", .{});
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             ctx.setRef(ctx.windowInfo("//Window/top-left", 0).ID);
             try ctx.expectItemExists("Top Left");
             ctx.setRef(ctx.windowInfo("//Window/top-right", 0).ID);
@@ -220,7 +220,7 @@ test "should render correct content under correct id" {
             try ctx.expectItemExists("Bottom Right");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -232,7 +232,7 @@ test "should pass the context to draw functions" {
         var bottom_left_context: ?i32 = null;
         var bottom_right_context: ?i32 = null;
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             const context: i32 = 123;
@@ -260,14 +260,14 @@ test "should pass the context to draw functions" {
             bottom_right_context = context;
         }
 
-        fn testFunction(_: ui.TestContext) !void {
+        fn testFunction(_: sdk.ui.TestContext) !void {
             try testing.expectEqual(123, top_left_context);
             try testing.expectEqual(123, top_right_context);
             try testing.expectEqual(123, bottom_left_context);
             try testing.expectEqual(123, bottom_right_context);
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -309,7 +309,7 @@ test "should resize child windows correctly when mouse dragging the handles" {
         };
         var current = Sizes{};
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             imgui.igSetNextWindowSize(.{ .x = 400, .y = 200 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
@@ -337,7 +337,7 @@ test "should resize child windows correctly when mouse dragging the handles" {
             imgui.igGetContentRegionAvail(&current.bottom_right);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             var last = Sizes{};
             var delta = Sizes{};
             ctx.setRef("Window");
@@ -421,6 +421,6 @@ test "should resize child windows correctly when mouse dragging the handles" {
             try testing.expectApproxEqAbs(20, delta.bottom_right.y, 1);
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }

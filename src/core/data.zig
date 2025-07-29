@@ -1,5 +1,5 @@
 const std = @import("std");
-const math = @import("../math/root.zig");
+const sdk = @import("../sdk/root.zig");
 const game = @import("../game/root.zig");
 
 pub const Frame = struct {
@@ -90,7 +90,7 @@ pub const Player = struct {
     health: ?i32 = null,
     rage: ?Rage = null,
     heat: ?Heat = null,
-    position: ?math.Vec3 = null,
+    position: ?sdk.math.Vec3 = null,
     rotation: ?f32 = null,
     skeleton: ?Skeleton = null,
     hurt_cylinders: ?HurtCylinders = null,
@@ -179,7 +179,7 @@ pub const SkeletonPointId = enum {
     right_ankle,
 };
 
-pub const SkeletonPoint = math.Vec3;
+pub const SkeletonPoint = sdk.math.Vec3;
 
 pub const Skeleton = std.EnumArray(SkeletonPointId, SkeletonPoint);
 
@@ -201,7 +201,7 @@ pub const HurtCylinderId = enum {
 };
 
 pub const HurtCylinder = struct {
-    cylinder: math.Cylinder,
+    cylinder: sdk.math.Cylinder,
     intersects: bool = false,
 };
 
@@ -218,12 +218,12 @@ pub const CollisionSphereId = enum {
     right_ankle,
 };
 
-pub const CollisionSphere = math.Sphere;
+pub const CollisionSphere = sdk.math.Sphere;
 
 pub const CollisionSpheres = std.EnumArray(CollisionSphereId, CollisionSphere);
 
 pub const HitLine = struct {
-    line: math.LineSegment3,
+    line: sdk.math.LineSegment3,
     intersects: bool = false,
 };
 

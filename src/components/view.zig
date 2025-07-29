@@ -1,17 +1,16 @@
 const std = @import("std");
 const imgui = @import("imgui");
-const misc = @import("../misc/root.zig");
-const math = @import("../math/root.zig");
+const sdk = @import("../sdk/root.zig");
 const core = @import("../core/root.zig");
 
 pub const View = struct {
-    window_size: std.EnumArray(Direction, math.Vec2) = .initFill(math.Vec2.zero),
+    window_size: std.EnumArray(Direction, sdk.math.Vec2) = .initFill(sdk.math.Vec2.zero),
     frame: core.Frame = .{},
     hit_hurt_cylinder_life_time: std.EnumArray(core.PlayerId, std.EnumArray(core.HurtCylinderId, f32)) = .initFill(
         .initFill(std.math.inf(f32)),
     ),
-    lingering_hurt_cylinders: misc.CircularBuffer(32, LingeringCylinder) = .{},
-    lingering_hit_lines: misc.CircularBuffer(128, LingeringLine) = .{},
+    lingering_hurt_cylinders: sdk.misc.CircularBuffer(32, LingeringCylinder) = .{},
+    lingering_hit_lines: sdk.misc.CircularBuffer(128, LingeringLine) = .{},
 
     const Self = @This();
     pub const Direction = enum {
@@ -20,34 +19,34 @@ pub const View = struct {
         top,
     };
     const LingeringLine = struct {
-        line: math.LineSegment3,
+        line: sdk.math.LineSegment3,
         player_id: core.PlayerId,
         life_time: f32,
     };
     const LingeringCylinder = struct {
-        cylinder: math.Cylinder,
+        cylinder: sdk.math.Cylinder,
         player_id: core.PlayerId,
         life_time: f32,
     };
 
-    const floor_color = math.Vec4.fromArray(.{ 0.0, 1.0, 0.0, 1.0 });
+    const floor_color = sdk.math.Vec4.fromArray(.{ 0.0, 1.0, 0.0, 1.0 });
     const floor_thickness = 1.0;
-    const collision_spheres_color = math.Vec4.fromArray(.{ 0.0, 0.0, 1.0, 0.5 });
+    const collision_spheres_color = sdk.math.Vec4.fromArray(.{ 0.0, 0.0, 1.0, 0.5 });
     const collision_spheres_thickness = 1.0;
-    const hurt_cylinders_color = math.Vec4.fromArray(.{ 0.5, 0.5, 0.5, 0.5 });
+    const hurt_cylinders_color = sdk.math.Vec4.fromArray(.{ 0.5, 0.5, 0.5, 0.5 });
     const hurt_cylinders_thickness = 1.0;
-    const skeleton_color = math.Vec4.fromArray(.{ 1.0, 1.0, 1.0, 1.0 });
+    const skeleton_color = sdk.math.Vec4.fromArray(.{ 1.0, 1.0, 1.0, 1.0 });
     const skeleton_thickness = 2.0;
-    const hit_line_color = math.Vec4.fromArray(.{ 1.0, 0.0, 0.0, 1.0 });
+    const hit_line_color = sdk.math.Vec4.fromArray(.{ 1.0, 0.0, 0.0, 1.0 });
     const hit_line_thickness = 1.0;
     const hit_line_duration = 3.0;
-    const hit_hurt_cylinders_color = math.Vec4.fromArray(.{ 1.0, 1.0, 0.0, 0.5 });
+    const hit_hurt_cylinders_color = sdk.math.Vec4.fromArray(.{ 1.0, 1.0, 0.0, 0.5 });
     const hit_hurt_cylinders_thickness = 1.0;
     const hit_hurt_cylinders_duration = 1.0;
-    const lingering_hurt_cylinders_color = math.Vec4.fromArray(.{ 0.0, 0.75, 0.75, 0.5 });
+    const lingering_hurt_cylinders_color = sdk.math.Vec4.fromArray(.{ 0.0, 0.75, 0.75, 0.5 });
     const lingering_hurt_cylinders_thickness = 1.0;
     const lingering_hurt_cylinders_duration = 1.0;
-    const look_at_color = math.Vec4.fromArray(.{ 1.0, 0.0, 1.0, 1.0 });
+    const look_at_color = sdk.math.Vec4.fromArray(.{ 1.0, 0.0, 1.0, 1.0 });
     const look_at_length = 100.0;
     const look_at_thickness = 1.0;
 
@@ -130,7 +129,7 @@ pub const View = struct {
     pub fn draw(self: *Self, direction: Direction) void {
         self.updateWindowSize(direction);
         const matrix = self.calculateFinalMatrix(direction) orelse return;
-        const inverse_matrix = matrix.inverse() orelse math.Mat4.identity;
+        const inverse_matrix = matrix.inverse() orelse sdk.math.Mat4.identity;
         self.drawCollisionSpheres(matrix, inverse_matrix);
         self.drawLingeringHurtCylinders(direction, matrix, inverse_matrix);
         self.drawHurtCylinders(direction, matrix, inverse_matrix);
@@ -142,77 +141,81 @@ pub const View = struct {
     }
 
     fn updateWindowSize(self: *Self, direction: Direction) void {
-        var window_size: math.Vec2 = undefined;
+        var window_size: sdk.math.Vec2 = undefined;
         imgui.igGetContentRegionAvail(window_size.asImVec());
         self.window_size.set(direction, window_size);
     }
 
-    fn calculateFinalMatrix(self: *const Self, direction: Direction) ?math.Mat4 {
+    fn calculateFinalMatrix(self: *const Self, direction: Direction) ?sdk.math.Mat4 {
         const look_at_matrix = self.calculateLookAtMatrix(direction) orelse return null;
         const orthographic_matrix = self.calculateOrthographicMatrix(direction, look_at_matrix) orelse return null;
         const window_matrix = calculateWindowMatrix();
         return look_at_matrix.multiply(orthographic_matrix).multiply(window_matrix);
     }
 
-    fn calculateLookAtMatrix(self: *const Self, direction: Direction) ?math.Mat4 {
+    fn calculateLookAtMatrix(self: *const Self, direction: Direction) ?sdk.math.Mat4 {
         const left_player = self.frame.getPlayerBySide(.left).position orelse return null;
         const right_player = self.frame.getPlayerBySide(.right).position orelse return null;
         const eye = left_player.add(right_player).scale(0.5);
         const difference_2d = right_player.swizzle("xy").subtract(left_player.swizzle("xy"));
-        const player_dir = if (!difference_2d.isZero(0)) difference_2d.normalize().extend(0) else math.Vec3.plus_x;
+        const player_dir = if (!difference_2d.isZero(0)) difference_2d.normalize().extend(0) else sdk.math.Vec3.plus_x;
         const look_direction = switch (direction) {
-            .front => player_dir.cross(math.Vec3.minus_z),
+            .front => player_dir.cross(sdk.math.Vec3.minus_z),
             .side => player_dir.negate(),
-            .top => math.Vec3.plus_z,
+            .top => sdk.math.Vec3.plus_z,
         };
         const target = eye.add(look_direction);
         const up = switch (direction) {
-            .front, .side => math.Vec3.plus_z,
-            .top => player_dir.cross(math.Vec3.plus_z),
+            .front, .side => sdk.math.Vec3.plus_z,
+            .top => player_dir.cross(sdk.math.Vec3.plus_z),
         };
-        return math.Mat4.fromLookAt(eye, target, up);
+        return sdk.math.Mat4.fromLookAt(eye, target, up);
     }
 
-    fn calculateOrthographicMatrix(self: *const Self, direction: Direction, look_at_matrix: math.Mat4) ?math.Mat4 {
-        var min = math.Vec3.fill(std.math.inf(f32));
-        var max = math.Vec3.fill(-std.math.inf(f32));
+    fn calculateOrthographicMatrix(
+        self: *const Self,
+        direction: Direction,
+        look_at_matrix: sdk.math.Mat4,
+    ) ?sdk.math.Mat4 {
+        var min = sdk.math.Vec3.fill(std.math.inf(f32));
+        var max = sdk.math.Vec3.fill(-std.math.inf(f32));
         for (&self.frame.players) |*player| {
             if (player.collision_spheres) |*spheres| {
                 for (&spheres.values) |*sphere| {
                     const pos = sphere.center.pointTransform(look_at_matrix);
-                    const half_size = math.Vec3.fill(sphere.radius);
-                    min = math.Vec3.minElements(min, pos.subtract(half_size));
-                    max = math.Vec3.maxElements(max, pos.add(half_size));
+                    const half_size = sdk.math.Vec3.fill(sphere.radius);
+                    min = sdk.math.Vec3.minElements(min, pos.subtract(half_size));
+                    max = sdk.math.Vec3.maxElements(max, pos.add(half_size));
                 }
             }
             if (player.hurt_cylinders) |*cylinders| {
                 for (&cylinders.values) |*hurt_cylinder| {
                     const cylinder = &hurt_cylinder.cylinder;
                     const pos = cylinder.center.pointTransform(look_at_matrix);
-                    const half_size = math.Vec3.fromArray(.{
+                    const half_size = sdk.math.Vec3.fromArray(.{
                         cylinder.radius,
                         cylinder.radius,
                         cylinder.half_height,
                     });
-                    min = math.Vec3.minElements(min, pos.subtract(half_size));
-                    max = math.Vec3.maxElements(max, pos.add(half_size));
+                    min = sdk.math.Vec3.minElements(min, pos.subtract(half_size));
+                    max = sdk.math.Vec3.maxElements(max, pos.add(half_size));
                 }
             }
         }
-        const padding = math.Vec3.fill(50);
-        const world_box = math.Vec3.maxElements(min.negate(), max).add(padding).scale(2);
+        const padding = sdk.math.Vec3.fill(50);
+        const world_box = sdk.math.Vec3.maxElements(min.negate(), max).add(padding).scale(2);
         const screen_box = switch (direction) {
-            .front => math.Vec3.fromArray(.{
+            .front => sdk.math.Vec3.fromArray(.{
                 @min(self.window_size.get(.front).x(), self.window_size.get(.top).x()),
                 @min(self.window_size.get(.front).y(), self.window_size.get(.side).y()),
                 @min(self.window_size.get(.top).y(), self.window_size.get(.side).x()),
             }),
-            .side => math.Vec3.fromArray(.{
+            .side => sdk.math.Vec3.fromArray(.{
                 @min(self.window_size.get(.side).x(), self.window_size.get(.top).y()),
                 @min(self.window_size.get(.side).y(), self.window_size.get(.front).y()),
                 @min(self.window_size.get(.front).x(), self.window_size.get(.top).x()),
             }),
-            .top => math.Vec3.fromArray(.{
+            .top => sdk.math.Vec3.fromArray(.{
                 @min(self.window_size.get(.top).x(), self.window_size.get(.front).x()),
                 @min(self.window_size.get(.top).y(), self.window_size.get(.side).x()),
                 @min(self.window_size.get(.front).y(), self.window_size.get(.side).y()),
@@ -221,7 +224,7 @@ pub const View = struct {
         const scale_factors = world_box.divideElements(screen_box);
         const max_factor = @max(scale_factors.x(), scale_factors.y(), scale_factors.z());
         const viewport_size = self.window_size.get(direction).extend(screen_box.z()).scale(max_factor);
-        return math.Mat4.fromOrthographic(
+        return sdk.math.Mat4.fromOrthographic(
             -0.5 * viewport_size.x(),
             0.5 * viewport_size.x(),
             -0.5 * viewport_size.y(),
@@ -231,17 +234,17 @@ pub const View = struct {
         );
     }
 
-    fn calculateWindowMatrix() math.Mat4 {
-        var window_pos: math.Vec2 = undefined;
+    fn calculateWindowMatrix() sdk.math.Mat4 {
+        var window_pos: sdk.math.Vec2 = undefined;
         imgui.igGetCursorScreenPos(window_pos.asImVec());
-        var window_size: math.Vec2 = undefined;
+        var window_size: sdk.math.Vec2 = undefined;
         imgui.igGetContentRegionAvail(window_size.asImVec());
-        return math.Mat4.identity
-            .scale(math.Vec3.fromArray(.{ 0.5 * window_size.x(), -0.5 * window_size.y(), 1 }))
+        return sdk.math.Mat4.identity
+            .scale(sdk.math.Vec3.fromArray(.{ 0.5 * window_size.x(), -0.5 * window_size.y(), 1 }))
             .translate(window_size.scale(0.5).add(window_pos).extend(0));
     }
 
-    fn drawCollisionSpheres(self: *const Self, matrix: math.Mat4, inverse_matrix: math.Mat4) void {
+    fn drawCollisionSpheres(self: *const Self, matrix: sdk.math.Mat4, inverse_matrix: sdk.math.Mat4) void {
         for (&self.frame.players) |*player| {
             const spheres: *const core.CollisionSpheres = if (player.collision_spheres) |*s| s else continue;
             for (spheres.values) |sphere| {
@@ -250,7 +253,12 @@ pub const View = struct {
         }
     }
 
-    fn drawHurtCylinders(self: *const Self, direction: Direction, matrix: math.Mat4, inverse_matrix: math.Mat4) void {
+    fn drawHurtCylinders(
+        self: *const Self,
+        direction: Direction,
+        matrix: sdk.math.Mat4,
+        inverse_matrix: sdk.math.Mat4,
+    ) void {
         for (core.PlayerId.all) |player_id| {
             const player = self.frame.getPlayerById(player_id);
             const cylinders: *const core.HurtCylinders = if (player.hurt_cylinders) |*c| c else continue;
@@ -263,7 +271,7 @@ pub const View = struct {
                     break :block std.math.clamp(life_time / hit_hurt_cylinders_duration, 0.0, 1.0);
                 };
                 const t = completion * completion * completion * completion;
-                const color = math.Vec4.lerpElements(hit_hurt_cylinders_color, hurt_cylinders_color, t);
+                const color = sdk.math.Vec4.lerpElements(hit_hurt_cylinders_color, hurt_cylinders_color, t);
                 const thickness = std.math.lerp(hit_hurt_cylinders_thickness, hurt_cylinders_thickness, t);
 
                 drawCylinder(cylinder, color, thickness, direction, matrix, inverse_matrix);
@@ -274,8 +282,8 @@ pub const View = struct {
     fn drawLingeringHurtCylinders(
         self: *const Self,
         direction: Direction,
-        matrix: math.Mat4,
-        inverse_matrix: math.Mat4,
+        matrix: sdk.math.Mat4,
+        inverse_matrix: sdk.math.Mat4,
     ) void {
         for (0..self.lingering_hurt_cylinders.len) |index| {
             const hurt_cylinder = self.lingering_hurt_cylinders.get(index) catch unreachable;
@@ -289,15 +297,15 @@ pub const View = struct {
         }
     }
 
-    fn drawSkeletons(self: *const Self, matrix: math.Mat4) void {
+    fn drawSkeletons(self: *const Self, matrix: sdk.math.Mat4) void {
         const drawBone = struct {
             fn call(
-                mat: math.Mat4,
+                mat: sdk.math.Mat4,
                 skeleton: *const core.Skeleton,
                 point_1: core.SkeletonPointId,
                 point_2: core.SkeletonPointId,
             ) void {
-                const line = math.LineSegment3{ .point_1 = skeleton.get(point_1), .point_2 = skeleton.get(point_2) };
+                const line = sdk.math.LineSegment3{ .point_1 = skeleton.get(point_1), .point_2 = skeleton.get(point_2) };
                 drawLine(line, skeleton_color, skeleton_thickness, mat);
             }
         }.call;
@@ -321,7 +329,7 @@ pub const View = struct {
         }
     }
 
-    fn drawHitLines(self: *const Self, matrix: math.Mat4) void {
+    fn drawHitLines(self: *const Self, matrix: sdk.math.Mat4) void {
         for (&self.frame.players) |*player| {
             for (player.hit_lines.asConstSlice()) |hit_line| {
                 const line = hit_line.line;
@@ -330,7 +338,7 @@ pub const View = struct {
         }
     }
 
-    fn drawLingeringHitLines(self: *const Self, matrix: math.Mat4) void {
+    fn drawLingeringHitLines(self: *const Self, matrix: sdk.math.Mat4) void {
         for (0..self.lingering_hit_lines.len) |index| {
             const hit_line = self.lingering_hit_lines.get(index) catch unreachable;
             const line = hit_line.line;
@@ -343,15 +351,15 @@ pub const View = struct {
         }
     }
 
-    fn drawLookAtLines(self: *const Self, direction: Direction, matrix: math.Mat4) void {
+    fn drawLookAtLines(self: *const Self, direction: Direction, matrix: sdk.math.Mat4) void {
         if (direction != .top) {
             return;
         }
         for (&self.frame.players) |*player| {
             const position = player.position orelse continue;
             const rotation = player.rotation orelse continue;
-            const delta = math.Vec3.plus_x.scale(look_at_length).rotateZ(rotation);
-            const line = math.LineSegment3{
+            const delta = sdk.math.Vec3.plus_x.scale(look_at_length).rotateZ(rotation);
+            const line = sdk.math.LineSegment3{
                 .point_1 = position,
                 .point_2 = position.add(delta),
             };
@@ -359,38 +367,38 @@ pub const View = struct {
         }
     }
 
-    fn drawFloor(self: *const Self, direction: Direction, matrix: math.Mat4) void {
+    fn drawFloor(self: *const Self, direction: Direction, matrix: sdk.math.Mat4) void {
         if (direction == .top) {
             return;
         }
 
-        var window_pos: math.Vec2 = undefined;
+        var window_pos: sdk.math.Vec2 = undefined;
         imgui.igGetCursorScreenPos(window_pos.asImVec());
-        var window_size: math.Vec2 = undefined;
+        var window_size: sdk.math.Vec2 = undefined;
         imgui.igGetContentRegionAvail(window_size.asImVec());
         const world_z = self.frame.floor_z orelse return;
 
         const screen_x = window_pos.toCoords().x;
         const screen_w = window_size.toCoords().x;
-        const screen_y = math.Vec3.plus_z.scale(world_z).pointTransform(matrix).toCoords().y;
+        const screen_y = sdk.math.Vec3.plus_z.scale(world_z).pointTransform(matrix).toCoords().y;
 
         const draw_list = imgui.igGetWindowDrawList();
-        const point_1 = math.Vec2.fromArray(.{ screen_x, screen_y }).toImVec();
-        const point_2 = math.Vec2.fromArray(.{ screen_x + screen_w, screen_y }).toImVec();
+        const point_1 = sdk.math.Vec2.fromArray(.{ screen_x, screen_y }).toImVec();
+        const point_2 = sdk.math.Vec2.fromArray(.{ screen_x + screen_w, screen_y }).toImVec();
         const u32_color = imgui.igGetColorU32_Vec4(floor_color.toImVec());
 
         imgui.ImDrawList_AddLine(draw_list, point_1, point_2, u32_color, floor_thickness);
     }
 
     fn drawSphere(
-        sphere: math.Sphere,
-        color: math.Vec4,
+        sphere: sdk.math.Sphere,
+        color: sdk.math.Vec4,
         thickness: f32,
-        matrix: math.Mat4,
-        inverse_matrix: math.Mat4,
+        matrix: sdk.math.Mat4,
+        inverse_matrix: sdk.math.Mat4,
     ) void {
-        const world_right = math.Vec3.plus_x.directionTransform(inverse_matrix).normalize();
-        const world_up = math.Vec3.plus_y.directionTransform(inverse_matrix).normalize();
+        const world_right = sdk.math.Vec3.plus_x.directionTransform(inverse_matrix).normalize();
+        const world_up = sdk.math.Vec3.plus_y.directionTransform(inverse_matrix).normalize();
 
         const draw_list = imgui.igGetWindowDrawList();
         const center = sphere.center.pointTransform(matrix).swizzle("xy").toImVec();
@@ -401,15 +409,15 @@ pub const View = struct {
     }
 
     fn drawCylinder(
-        cylinder: math.Cylinder,
-        color: math.Vec4,
+        cylinder: sdk.math.Cylinder,
+        color: sdk.math.Vec4,
         thickness: f32,
         direction: Direction,
-        matrix: math.Mat4,
-        inverse_matrix: math.Mat4,
+        matrix: sdk.math.Mat4,
+        inverse_matrix: sdk.math.Mat4,
     ) void {
-        const world_right = math.Vec3.plus_x.directionTransform(inverse_matrix).normalize();
-        const world_up = math.Vec3.plus_y.directionTransform(inverse_matrix).normalize();
+        const world_right = sdk.math.Vec3.plus_x.directionTransform(inverse_matrix).normalize();
+        const world_up = sdk.math.Vec3.plus_y.directionTransform(inverse_matrix).normalize();
 
         const draw_list = imgui.igGetWindowDrawList();
         const center = cylinder.center.pointTransform(matrix).swizzle("xy");
@@ -439,10 +447,10 @@ pub const View = struct {
     }
 
     fn drawLine(
-        line: math.LineSegment3,
-        color: math.Vec4,
+        line: sdk.math.LineSegment3,
+        color: sdk.math.Vec4,
         thickness: f32,
-        matrix: math.Mat4,
+        matrix: sdk.math.Mat4,
     ) void {
         const draw_list = imgui.igGetWindowDrawList();
         const point_1 = line.point_1.pointTransform(matrix).swizzle("xy").toImVec();

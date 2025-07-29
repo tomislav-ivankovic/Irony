@@ -1,5 +1,5 @@
 const std = @import("std");
-const misc = @import("../misc/root.zig");
+const sdk = @import("../sdk/root.zig");
 const game = @import("../game/root.zig");
 
 pub const FrameDetector = struct {
@@ -14,8 +14,8 @@ pub const FrameDetector = struct {
 
     pub fn detect(
         self: *Self,
-        player_1: *const misc.Partial(game.Player),
-        player_2: *const misc.Partial(game.Player),
+        player_1: *const sdk.misc.Partial(game.Player),
+        player_2: *const sdk.misc.Partial(game.Player),
     ) bool {
         const is_new_frame = player_1.frames_since_round_start != self.last_player_1.frames_since_round_start or
             player_2.frames_since_round_start != self.last_player_2.frames_since_round_start or

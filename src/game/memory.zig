@@ -1,23 +1,21 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const os = @import("../os/root.zig");
-const misc = @import("../misc/root.zig");
-const memory = @import("../memory/root.zig");
+const sdk = @import("../sdk/root.zig");
 const game = @import("root.zig");
 
 pub const Memory = struct {
-    player_1: memory.StructProxy(game.Player),
-    player_2: memory.StructProxy(game.Player),
+    player_1: sdk.memory.StructProxy(game.Player),
+    player_2: sdk.memory.StructProxy(game.Player),
     tick_function: ?*const game.TickFunction,
     decrypt_health_function: ?*const game.DecryptHealthFunction,
 
     const Self = @This();
     const pattern_cache_file_name = "pattern_cache.json";
 
-    pub fn init(allocator: std.mem.Allocator, base_dir: ?*const misc.BaseDir) Self {
+    pub fn init(allocator: std.mem.Allocator, base_dir: ?*const sdk.misc.BaseDir) Self {
         var cache = initPatternCache(allocator, base_dir) catch |err| block: {
-            misc.error_context.append("Failed to initialize pattern cache.", .{});
-            misc.error_context.logError(err);
+            sdk.misc.error_context.append("Failed to initialize pattern cache.", .{});
+            sdk.misc.error_context.logError(err);
             break :block null;
         };
         defer if (cache) |*pattern_cache| {
@@ -81,61 +79,61 @@ pub const Memory = struct {
         return self;
     }
 
-    fn initPatternCache(allocator: std.mem.Allocator, base_dir: ?*const misc.BaseDir) !memory.PatternCache {
-        const main_module = os.Module.getMain() catch |err| {
-            misc.error_context.append("Failed to get main module.", .{});
+    fn initPatternCache(allocator: std.mem.Allocator, base_dir: ?*const sdk.misc.BaseDir) !sdk.memory.PatternCache {
+        const main_module = sdk.os.Module.getMain() catch |err| {
+            sdk.misc.error_context.append("Failed to get main module.", .{});
             return err;
         };
         const range = main_module.getMemoryRange() catch |err| {
-            misc.error_context.append("Failed to get main module memory range.", .{});
+            sdk.misc.error_context.append("Failed to get main module memory range.", .{});
             return err;
         };
-        var cache = memory.PatternCache.init(allocator, range);
+        var cache = sdk.memory.PatternCache.init(allocator, range);
         if (base_dir) |dir| {
             loadPatternCache(&cache, dir) catch |err| {
-                misc.error_context.append("Failed to load memory pattern cache. Using empty cache.", .{});
-                misc.error_context.logWarning(err);
+                sdk.misc.error_context.append("Failed to load memory pattern cache. Using empty cache.", .{});
+                sdk.misc.error_context.logWarning(err);
             };
         }
         return cache;
     }
 
-    fn deinitPatternCache(cache: *memory.PatternCache, base_dir: ?*const misc.BaseDir) void {
+    fn deinitPatternCache(cache: *sdk.memory.PatternCache, base_dir: ?*const sdk.misc.BaseDir) void {
         if (base_dir) |dir| {
             savePatternCache(cache, dir) catch |err| {
-                misc.error_context.append("Failed to save memory pattern cache.", .{});
-                misc.error_context.logWarning(err);
+                sdk.misc.error_context.append("Failed to save memory pattern cache.", .{});
+                sdk.misc.error_context.logWarning(err);
             };
         }
         cache.deinit();
     }
 
-    fn loadPatternCache(cache: *memory.PatternCache, base_dir: *const misc.BaseDir) !void {
-        var buffer: [os.max_file_path_length]u8 = undefined;
+    fn loadPatternCache(cache: *sdk.memory.PatternCache, base_dir: *const sdk.misc.BaseDir) !void {
+        var buffer: [sdk.os.max_file_path_length]u8 = undefined;
         const size = base_dir.getPath(&buffer, pattern_cache_file_name) catch |err| {
-            misc.error_context.append("Failed to construct file path.", .{});
+            sdk.misc.error_context.append("Failed to construct file path.", .{});
             return err;
         };
         const file_path = buffer[0..size];
 
-        const executable_timestamp = os.getExecutableTimestamp() catch |err| {
-            misc.error_context.append("Failed to get executable timestamp.", .{});
+        const executable_timestamp = sdk.os.getExecutableTimestamp() catch |err| {
+            sdk.misc.error_context.append("Failed to get executable timestamp.", .{});
             return err;
         };
 
         return cache.load(file_path, executable_timestamp);
     }
 
-    fn savePatternCache(cache: *memory.PatternCache, base_dir: *const misc.BaseDir) !void {
-        var buffer: [os.max_file_path_length]u8 = undefined;
+    fn savePatternCache(cache: *sdk.memory.PatternCache, base_dir: *const sdk.misc.BaseDir) !void {
+        var buffer: [sdk.os.max_file_path_length]u8 = undefined;
         const size = base_dir.getPath(&buffer, pattern_cache_file_name) catch |err| {
-            misc.error_context.append("Failed to construct file path.", .{});
+            sdk.misc.error_context.append("Failed to construct file path.", .{});
             return err;
         };
         const file_path = buffer[0..size];
 
-        const executable_timestamp = os.getExecutableTimestamp() catch |err| {
-            misc.error_context.append("Failed to get executable timestamp.", .{});
+        const executable_timestamp = sdk.os.getExecutableTimestamp() catch |err| {
+            sdk.misc.error_context.append("Failed to get executable timestamp.", .{});
             return err;
         };
 
@@ -145,10 +143,10 @@ pub const Memory = struct {
 
 fn structOffsets(
     comptime Struct: type,
-    offsets: misc.FieldMap(Struct, anyerror!usize),
-) misc.FieldMap(Struct, ?usize) {
+    offsets: sdk.misc.FieldMap(Struct, anyerror!usize),
+) sdk.misc.FieldMap(Struct, ?usize) {
     var last_error: ?struct { err: anyerror, field_name: []const u8 } = null;
-    var mapped_offsets: misc.FieldMap(Struct, ?usize) = undefined;
+    var mapped_offsets: sdk.misc.FieldMap(Struct, ?usize) = undefined;
     inline for (@typeInfo(Struct).@"struct".fields) |*field| {
         const offset = @field(offsets, field.name);
         if (offset) |o| {
@@ -160,9 +158,9 @@ fn structOffsets(
     }
     if (last_error) |err| {
         if (!builtin.is_test) {
-            misc.error_context.append("Failed to resolve offset for field: {s}", .{err.field_name});
-            misc.error_context.append("Failed to resolve field offsets for struct: {s}", .{@typeName(Struct)});
-            misc.error_context.logError(err.err);
+            sdk.misc.error_context.append("Failed to resolve offset for field: {s}", .{err.field_name});
+            sdk.misc.error_context.append("Failed to resolve field offsets for struct: {s}", .{@typeName(Struct)});
+            sdk.misc.error_context.logError(err.err);
         }
     }
     return mapped_offsets;
@@ -172,7 +170,7 @@ fn proxy(
     name: []const u8,
     comptime Type: type,
     offsets: anytype,
-) memory.Proxy(Type) {
+) sdk.memory.Proxy(Type) {
     if (@typeInfo(@TypeOf(offsets)) != .array) {
         const coerced: [offsets.len]anyerror!usize = offsets;
         return proxy(name, Type, coerced);
@@ -189,8 +187,8 @@ fn proxy(
     }
     if (last_error) |err| {
         if (!builtin.is_test) {
-            misc.error_context.append("Failed to resolve proxy: {s}", .{name});
-            misc.error_context.logError(err);
+            sdk.misc.error_context.append("Failed to resolve proxy: {s}", .{name});
+            sdk.misc.error_context.logError(err);
         }
     }
     return .fromArray(mapped_offsets);
@@ -200,8 +198,8 @@ fn structProxy(
     name: []const u8,
     comptime Struct: type,
     base_offsets: anytype,
-    field_offsets: misc.FieldMap(Struct, ?usize),
-) memory.StructProxy(Struct) {
+    field_offsets: sdk.misc.FieldMap(Struct, ?usize),
+) sdk.memory.StructProxy(Struct) {
     if (@typeInfo(@TypeOf(base_offsets)) != .array) {
         const coerced: [base_offsets.len]anyerror!usize = base_offsets;
         return structProxy(name, Struct, coerced, field_offsets);
@@ -218,8 +216,8 @@ fn structProxy(
     }
     if (last_error) |err| {
         if (!builtin.is_test) {
-            misc.error_context.append("Failed to resolve struct proxy: {s}", .{name});
-            misc.error_context.logError(err);
+            sdk.misc.error_context.append("Failed to resolve struct proxy: {s}", .{name});
+            sdk.misc.error_context.logError(err);
         }
     }
     return .{
@@ -235,30 +233,30 @@ fn functionPointer(
 ) ?*const Function {
     const addr = address catch |err| {
         if (!builtin.is_test) {
-            misc.error_context.append("Failed to resolve function pointer: {s}", .{name});
-            misc.error_context.logError(err);
+            sdk.misc.error_context.append("Failed to resolve function pointer: {s}", .{name});
+            sdk.misc.error_context.logError(err);
         }
         return null;
     };
-    if (!os.isMemoryReadable(addr, 6)) {
+    if (!sdk.os.isMemoryReadable(addr, 6)) {
         if (!builtin.is_test) {
-            misc.error_context.new("The memory address is not readable: 0x{X}", .{addr});
-            misc.error_context.append("Failed to resolve function pointer: {s}", .{name});
-            misc.error_context.logError(error.NotReadable);
+            sdk.misc.error_context.new("The memory address is not readable: 0x{X}", .{addr});
+            sdk.misc.error_context.append("Failed to resolve function pointer: {s}", .{name});
+            sdk.misc.error_context.logError(error.NotReadable);
         }
         return null;
     }
     return @ptrFromInt(addr);
 }
 
-fn pattern(pattern_cache: *?memory.PatternCache, comptime pattern_string: []const u8) !usize {
+fn pattern(pattern_cache: *?sdk.memory.PatternCache, comptime pattern_string: []const u8) !usize {
     const cache = if (pattern_cache.*) |*c| c else {
-        misc.error_context.new("No memory pattern cache to find the memory pattern in.", .{});
+        sdk.misc.error_context.new("No memory pattern cache to find the memory pattern in.", .{});
         return error.NoPatternCache;
     };
-    const memory_pattern = memory.Pattern.fromComptime(pattern_string);
+    const memory_pattern = sdk.memory.Pattern.fromComptime(pattern_string);
     const address = cache.findAddress(&memory_pattern) catch |err| {
-        misc.error_context.append("Failed to find address of memory pattern: {}", .{memory_pattern});
+        sdk.misc.error_context.append("Failed to find address of memory pattern: {}", .{memory_pattern});
         return err;
     };
     return address;
@@ -269,8 +267,8 @@ fn deref(comptime Type: type, address: anyerror!usize) !usize {
         @compileError("Unsupported deref type: " ++ @typeName(Type));
     }
     const addr = try address;
-    const value = memory.dereferenceMisaligned(Type, addr) catch |err| {
-        misc.error_context.append("Failed to dereference {s} on memory address: 0x{X}", .{ @typeName(Type), addr });
+    const value = sdk.memory.dereferenceMisaligned(Type, addr) catch |err| {
+        sdk.misc.error_context.append("Failed to dereference {s} on memory address: 0x{X}", .{ @typeName(Type), addr });
         return err;
     };
     return @intCast(value);
@@ -278,8 +276,8 @@ fn deref(comptime Type: type, address: anyerror!usize) !usize {
 
 fn relativeOffset(comptime Offset: type, address: anyerror!usize) !usize {
     const addr = try address;
-    const offset_address = memory.resolveRelativeOffset(Offset, addr) catch |err| {
-        misc.error_context.append(
+    const offset_address = sdk.memory.resolveRelativeOffset(Offset, addr) catch |err| {
+        sdk.misc.error_context.append(
             "Failed to resolve {s} relative memory offset at address: 0x{X}",
             .{ @typeName(Offset), addr },
         );
@@ -292,7 +290,7 @@ fn add(comptime addition: comptime_int, address: anyerror!usize) !usize {
     const addr = try address;
     const result = if (addition >= 0) @addWithOverflow(addr, addition) else @subWithOverflow(addr, -addition);
     if (result[1] == 1) {
-        misc.error_context.new("Adding 0x{X} to address 0x{X} resulted in a overflow.", .{ addr, addition });
+        sdk.misc.error_context.new("Adding 0x{X} to address 0x{X} resulted in a overflow.", .{ addr, addition });
         return error.Overflow;
     }
     return result[0];
@@ -325,7 +323,7 @@ test "proxy should construct a proxy from offsets" {
 }
 
 test "proxy should map errors to null values" {
-    misc.error_context.new("Test error.", .{});
+    sdk.misc.error_context.new("Test error.", .{});
     const byte_proxy = proxy("byte_proxy", u8, .{ 1, error.Test, 2, error.Test, 3, error.Test });
     try testing.expectEqualSlices(?usize, &.{ 1, null, 2, null, 3, null }, byte_proxy.trail.getOffsets());
 }
@@ -345,7 +343,7 @@ test "structProxy should construct a proxy from offsets" {
 
 test "structProxy should map errors to null values in base offsets" {
     const Struct = struct { field_1: u8, field_2: u16 };
-    misc.error_context.new("Test error.", .{});
+    sdk.misc.error_context.new("Test error.", .{});
     const struct_proxy = structProxy(
         "pointer",
         Struct,
@@ -377,21 +375,21 @@ test "functionPointer should return null when address is not readable" {
 
 test "pattern should return correct value when pattern exists" {
     const data = [_]u8{ 0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9 };
-    const range = memory.Range.fromPointer(&data);
-    var cache: ?memory.PatternCache = memory.PatternCache.init(testing.allocator, range);
+    const range = sdk.memory.Range.fromPointer(&data);
+    var cache: ?sdk.memory.PatternCache = sdk.memory.PatternCache.init(testing.allocator, range);
     defer if (cache) |*c| c.deinit();
     try testing.expectEqual(@intFromPtr(&data[4]), pattern(&cache, "04 ?? ?? 07"));
 }
 
 test "pattern should error when no cache" {
-    var cache: ?memory.PatternCache = null;
+    var cache: ?sdk.memory.PatternCache = null;
     try testing.expectError(error.NoPatternCache, pattern(&cache, "04 ?? ?? 07"));
 }
 
 test "pattern should error when pattern does not exist" {
     const data = [_]u8{ 0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x9 };
-    const range = memory.Range.fromPointer(&data);
-    var cache: ?memory.PatternCache = memory.PatternCache.init(testing.allocator, range);
+    const range = sdk.memory.Range.fromPointer(&data);
+    var cache: ?sdk.memory.PatternCache = sdk.memory.PatternCache.init(testing.allocator, range);
     defer if (cache) |*c| c.deinit();
     try testing.expectError(error.NotFound, pattern(&cache, "05 ?? ?? 02"));
 }

@@ -1,6 +1,6 @@
 const std = @import("std");
+const sdk = @import("../sdk/root.zig");
 const game = @import("root.zig");
-const math = @import("../math/root.zig");
 
 const to_unreal_scale = 0.1;
 const from_unreal_scale = 1.0 / to_unreal_scale;
@@ -17,37 +17,37 @@ pub fn scaleFromUnrealSpace(value: f32) f32 {
     return value * from_unreal_scale;
 }
 
-pub fn pointToUnrealSpace(value: math.Vec3) math.Vec3 {
-    return math.Vec3.fromArray(.{
+pub fn pointToUnrealSpace(value: sdk.math.Vec3) sdk.math.Vec3 {
+    return sdk.math.Vec3.fromArray(.{
         value.z() * to_unreal_scale,
         -value.x() * to_unreal_scale,
         value.y() * to_unreal_scale,
     });
 }
 
-pub fn pointFromUnrealSpace(value: math.Vec3) math.Vec3 {
-    return math.Vec3.fromArray(.{
+pub fn pointFromUnrealSpace(value: sdk.math.Vec3) sdk.math.Vec3 {
+    return sdk.math.Vec3.fromArray(.{
         -value.y() * from_unreal_scale,
         value.z() * from_unreal_scale,
         value.x() * from_unreal_scale,
     });
 }
 
-pub fn matrixToUnrealSpace(value: math.Mat4) math.Mat4 {
-    const conversion_matrix = comptime math.Mat4.fromArray(.{
-        pointToUnrealSpace(math.Vec3.plus_x).extend(0).array,
-        pointToUnrealSpace(math.Vec3.plus_y).extend(0).array,
-        pointToUnrealSpace(math.Vec3.plus_z).extend(0).array,
+pub fn matrixToUnrealSpace(value: sdk.math.Mat4) sdk.math.Mat4 {
+    const conversion_matrix = comptime sdk.math.Mat4.fromArray(.{
+        pointToUnrealSpace(sdk.math.Vec3.plus_x).extend(0).array,
+        pointToUnrealSpace(sdk.math.Vec3.plus_y).extend(0).array,
+        pointToUnrealSpace(sdk.math.Vec3.plus_z).extend(0).array,
         .{ 0, 0, 0, 1 },
     });
     return value.multiply(conversion_matrix);
 }
 
-pub fn matrixFromUnrealSpace(value: math.Mat4) math.Mat4 {
-    const conversion_matrix = comptime math.Mat4.fromArray(.{
-        pointFromUnrealSpace(math.Vec3.plus_x).extend(0).array,
-        pointFromUnrealSpace(math.Vec3.plus_y).extend(0).array,
-        pointFromUnrealSpace(math.Vec3.plus_z).extend(0).array,
+pub fn matrixFromUnrealSpace(value: sdk.math.Mat4) sdk.math.Mat4 {
+    const conversion_matrix = comptime sdk.math.Mat4.fromArray(.{
+        pointFromUnrealSpace(sdk.math.Vec3.plus_x).extend(0).array,
+        pointFromUnrealSpace(sdk.math.Vec3.plus_y).extend(0).array,
+        pointFromUnrealSpace(sdk.math.Vec3.plus_z).extend(0).array,
         .{ 0, 0, 0, 1 },
     });
     return value.multiply(conversion_matrix);
@@ -156,13 +156,13 @@ test "scaleToUnrealSpace and scaleFromUnrealSpace should cancel out" {
 }
 
 test "pointToUnrealSpace and pointFromUnrealSpace should cancel out" {
-    const value = math.Vec3.fromArray(.{ 1, 2, 3 });
+    const value = sdk.math.Vec3.fromArray(.{ 1, 2, 3 });
     try testing.expectEqual(value, pointToUnrealSpace(pointFromUnrealSpace(value)));
     try testing.expectEqual(value, pointFromUnrealSpace(pointToUnrealSpace(value)));
 }
 
 test "matrixToUnrealSpace and matrixFromUnrealSpace should cancel out" {
-    const value = math.Mat4.fromArray(.{
+    const value = sdk.math.Mat4.fromArray(.{
         .{ 1, 2, 3, 4 },
         .{ 5, 6, 7, 8 },
         .{ 8, 10, 11, 12 },

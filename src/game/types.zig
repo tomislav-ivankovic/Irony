@@ -1,6 +1,5 @@
 const std = @import("std");
-const memory = @import("../memory/root.zig");
-const math = @import("../math/root.zig");
+const sdk = @import("../sdk/root.zig");
 const game = @import("root.zig");
 
 pub const PlayerSide = enum(u8) {
@@ -108,7 +107,7 @@ pub const Input = packed struct(u32) {
 };
 
 pub const HitLinePoint = extern struct {
-    position: math.Vec3,
+    position: sdk.math.Vec3,
     _padding: f32,
 
     comptime {
@@ -127,7 +126,7 @@ pub const HitLine = extern struct {
     }
 };
 
-pub const HitLines = [4]memory.ConvertedValue(
+pub const HitLines = [4]sdk.memory.ConvertedValue(
     HitLine,
     HitLine,
     game.hitLineToUnrealSpace,
@@ -138,7 +137,7 @@ comptime {
 }
 
 pub const HurtCylinder = extern struct {
-    center: math.Vec3,
+    center: sdk.math.Vec3,
     multiplier: f32,
     half_height: f32,
     squared_radius: f32,
@@ -167,7 +166,7 @@ pub const HurtCylinders = extern struct {
     right_pelvis: Element,
 
     const Self = @This();
-    pub const Element = memory.ConvertedValue(
+    pub const Element = sdk.memory.ConvertedValue(
         HurtCylinder,
         HurtCylinder,
         game.hurtCylinderToUnrealSpace,
@@ -190,7 +189,7 @@ pub const HurtCylinders = extern struct {
 };
 
 pub const CollisionSphere = extern struct {
-    center: math.Vec3,
+    center: sdk.math.Vec3,
     multiplier: f32,
     radius: f32,
     _padding: [3]f32,
@@ -211,7 +210,7 @@ pub const CollisionSpheres = extern struct {
     right_ankle: Element,
 
     const Self = @This();
-    pub const Element = memory.ConvertedValue(
+    pub const Element = sdk.memory.ConvertedValue(
         CollisionSphere,
         CollisionSphere,
         game.collisionSphereToUnrealSpace,
@@ -238,19 +237,19 @@ pub const EncryptedHealth = [16]u64;
 pub const Player = struct {
     is_picked_by_main_player: bool, // 0x0009
     character_id: u32, // 0x0168
-    transform_matrix: memory.ConvertedValue(
-        math.Mat4,
-        math.Mat4,
+    transform_matrix: sdk.memory.ConvertedValue(
+        sdk.math.Mat4,
+        sdk.math.Mat4,
         game.matrixToUnrealSpace,
         game.matrixFromUnrealSpace,
     ), // 0x1F4
-    floor_z: memory.ConvertedValue(
+    floor_z: sdk.memory.ConvertedValue(
         f32,
         f32,
         game.scaleToUnrealSpace,
         game.scaleFromUnrealSpace,
     ), // 0x0354
-    rotation: memory.ConvertedValue(
+    rotation: sdk.memory.ConvertedValue(
         u16,
         f32,
         game.u16ToRadians,
@@ -267,7 +266,7 @@ pub const Player = struct {
     used_rage: bool, // 0x0E08
     frames_since_round_start: u32, // 0x1410
     used_heat: bool, // 0x21C0
-    heat_gauge: memory.ConvertedValue(
+    heat_gauge: sdk.memory.ConvertedValue(
         u32,
         f32,
         game.decryptHeatGauge,
@@ -279,7 +278,7 @@ pub const Player = struct {
     hit_lines: HitLines, // 0x2500
     hurt_cylinders: HurtCylinders, // 0x2900
     collision_spheres: CollisionSpheres, // 0x2D40
-    health: memory.ConvertedValue(
+    health: sdk.memory.ConvertedValue(
         EncryptedHealth,
         ?i32,
         game.decryptHealth,

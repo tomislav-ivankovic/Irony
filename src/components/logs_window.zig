@@ -1,8 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const imgui = @import("imgui");
-const log = @import("../log/root.zig");
-const ui = @import("../ui/root.zig");
+const sdk = @import("../sdk/root.zig");
 
 pub const LogsWindow = struct {
     is_open: bool = false,
@@ -71,7 +70,7 @@ test "should render every log message" {
             return 1577934245123456789;
         }
     }.call;
-    const logger = log.BufferLogger(.{
+    const logger = sdk.log.BufferLogger(.{
         .level = .debug,
         .time_zone = .utc,
         .buffer_size = 4096,
@@ -87,11 +86,11 @@ test "should render every log message" {
     const Test = struct {
         var window = LogsWindow{ .is_open = true };
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             window.draw(logger);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             ctx.setRef("Logs");
             try ctx.expectItemExists("2020-01-02T03:04:05.123456789 [debug] Message: 1");
             try ctx.expectItemExists("2020-01-02T03:04:05.123456789 [info] Message: 2");
@@ -99,7 +98,7 @@ test "should render every log message" {
             try ctx.expectItemExists("2020-01-02T03:04:05.123456789 [error] Message: 4");
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
@@ -109,7 +108,7 @@ test "should scroll to the bottom by default and still be able to scroll up" {
             return 1577934245123456789;
         }
     }.call;
-    const logger = log.BufferLogger(.{
+    const logger = sdk.log.BufferLogger(.{
         .level = .info,
         .time_zone = .utc,
         .buffer_size = 4096,
@@ -124,17 +123,17 @@ test "should scroll to the bottom by default and still be able to scroll up" {
     const Test = struct {
         var window = LogsWindow{ .is_open = true };
 
-        fn guiFunction(_: ui.TestContext) !void {
+        fn guiFunction(_: sdk.ui.TestContext) !void {
             window.draw(logger);
         }
 
-        fn testFunction(ctx: ui.TestContext) !void {
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
             try testing.expectEqual(ctx.getScrollMaxY("Logs"), ctx.getScrollY("Logs"));
             ctx.scrollToTop("Logs");
             ctx.yield(1);
             try testing.expectEqual(0, ctx.getScrollY("Logs"));
         }
     };
-    const context = try ui.getTestingContext();
+    const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }

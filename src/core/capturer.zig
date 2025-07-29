@@ -1,8 +1,6 @@
 const std = @import("std");
-const misc = @import("../misc/root.zig");
-const math = @import("../math/root.zig");
+const sdk = @import("../sdk/root.zig");
 const game = @import("../game/root.zig");
-const memory = @import("../memory/root.zig");
 const core = @import("root.zig");
 
 pub const Capturer = struct {
@@ -11,8 +9,8 @@ pub const Capturer = struct {
 
     const Self = @This();
     pub const GameMemory = struct {
-        player_1: misc.Partial(game.Player),
-        player_2: misc.Partial(game.Player),
+        player_1: sdk.misc.Partial(game.Player),
+        player_2: sdk.misc.Partial(game.Player),
     };
 
     pub fn captureFrame(self: *Self, game_memory: *const GameMemory) core.Frame {
@@ -83,7 +81,7 @@ pub const Capturer = struct {
         }
     }
 
-    fn capturePlayer(self: *Self, player: *const misc.Partial(game.Player), player_id: core.PlayerId) core.Player {
+    fn capturePlayer(self: *Self, player: *const sdk.misc.Partial(game.Player), player_id: core.PlayerId) core.Player {
         return .{
             .character_id = player.character_id,
             .current_move_id = player.current_move_id,
@@ -105,7 +103,7 @@ pub const Capturer = struct {
         };
     }
 
-    fn captureAttackType(player: *const misc.Partial(game.Player)) ?core.AttackType {
+    fn captureAttackType(player: *const sdk.misc.Partial(game.Player)) ?core.AttackType {
         const attack_type: game.AttackType = player.attack_type orelse return null;
         return switch (attack_type) {
             .not_attack => .not_attack,
@@ -123,7 +121,7 @@ pub const Capturer = struct {
         };
     }
 
-    fn captureHitOutcome(player: *const misc.Partial(game.Player)) ?core.HitOutcome {
+    fn captureHitOutcome(player: *const sdk.misc.Partial(game.Player)) ?core.HitOutcome {
         const hit_outcome: game.HitOutcome = player.hit_outcome orelse return null;
         return switch (hit_outcome) {
             .none => .none,
@@ -147,7 +145,7 @@ pub const Capturer = struct {
         };
     }
 
-    fn captureInput(player: *const misc.Partial(game.Player), player_id: core.PlayerId) ?core.Input {
+    fn captureInput(player: *const sdk.misc.Partial(game.Player), player_id: core.PlayerId) ?core.Input {
         const input: game.Input = player.input orelse return null;
         const input_side: game.PlayerSide = player.input_side orelse (if (player_id == .player_1) .left else .right);
         return .{
@@ -167,7 +165,7 @@ pub const Capturer = struct {
         };
     }
 
-    fn captureRage(player: *const misc.Partial(game.Player)) ?core.Rage {
+    fn captureRage(player: *const sdk.misc.Partial(game.Player)) ?core.Rage {
         const in_rage = player.in_rage orelse return null;
         const used_rage = player.used_rage orelse return null;
         if (in_rage) {
@@ -179,7 +177,7 @@ pub const Capturer = struct {
         }
     }
 
-    fn captureHeat(player: *const misc.Partial(game.Player)) ?core.Heat {
+    fn captureHeat(player: *const sdk.misc.Partial(game.Player)) ?core.Heat {
         const in_heat = player.in_heat orelse return null;
         const used_heat = player.used_heat orelse return null;
         const heat_gauge = player.heat_gauge orelse return null;
@@ -192,7 +190,7 @@ pub const Capturer = struct {
         }
     }
 
-    fn capturePlayerPosition(player: *const misc.Partial(game.Player)) ?math.Vec3 {
+    fn capturePlayerPosition(player: *const sdk.misc.Partial(game.Player)) ?sdk.math.Vec3 {
         if (player.collision_spheres) |*spheres| {
             return spheres.lower_torso.convert().center;
         }
@@ -202,13 +200,13 @@ pub const Capturer = struct {
         return null;
     }
 
-    fn capturePlayerRotation(player: *const misc.Partial(game.Player)) ?f32 {
+    fn capturePlayerRotation(player: *const sdk.misc.Partial(game.Player)) ?f32 {
         const raw_matrix = player.transform_matrix orelse {
             const raw_rotation = player.rotation orelse return null;
             return raw_rotation.convert();
         };
-        const matrix: math.Mat4 = raw_matrix.convert();
-        const transformed = math.Vec3.plus_x.directionTransform(matrix);
+        const matrix: sdk.math.Mat4 = raw_matrix.convert();
+        const transformed = sdk.math.Vec3.plus_x.directionTransform(matrix);
         var angle = std.math.atan2(transformed.y(), transformed.x());
         angle += 0.5 * std.math.pi; // Since model's forward direction is +Y the look at direction differs for 90 deg.
         if (angle >= std.math.pi) {
@@ -217,7 +215,7 @@ pub const Capturer = struct {
         return angle;
     }
 
-    fn captureSkeleton(player: *const misc.Partial(game.Player)) ?core.Skeleton {
+    fn captureSkeleton(player: *const sdk.misc.Partial(game.Player)) ?core.Skeleton {
         const cylinders: *const game.HurtCylinders = if (player.hurt_cylinders) |*c| c else return null;
         const spheres: *const game.CollisionSpheres = if (player.collision_spheres) |*s| s else return null;
         return .init(.{
@@ -240,12 +238,12 @@ pub const Capturer = struct {
         });
     }
 
-    fn captureHurtCylinders(player: *const misc.Partial(game.Player)) ?core.HurtCylinders {
+    fn captureHurtCylinders(player: *const sdk.misc.Partial(game.Player)) ?core.HurtCylinders {
         const cylinders: *const game.HurtCylinders = if (player.hurt_cylinders) |*c| c else return null;
         const convert = struct {
             fn call(input: *const game.HurtCylinders.Element) core.HurtCylinder {
                 const converted = input.convert();
-                const cylinder = math.Cylinder{
+                const cylinder = sdk.math.Cylinder{
                     .center = converted.center,
                     .radius = converted.radius,
                     .half_height = converted.half_height,
@@ -271,7 +269,7 @@ pub const Capturer = struct {
         });
     }
 
-    fn captureCollisionSpheres(player: *const misc.Partial(game.Player)) ?core.CollisionSpheres {
+    fn captureCollisionSpheres(player: *const sdk.misc.Partial(game.Player)) ?core.CollisionSpheres {
         const spheres: *const game.CollisionSpheres = if (player.collision_spheres) |*s| s else return null;
         const convert = struct {
             fn call(input: *const game.CollisionSpheres.Element) core.CollisionSphere {
@@ -293,7 +291,7 @@ pub const Capturer = struct {
 
     fn captureHitLines(
         self: *const Self,
-        player: *const misc.Partial(game.Player),
+        player: *const sdk.misc.Partial(game.Player),
         player_id: core.PlayerId,
     ) core.HitLines {
         var result: core.HitLines = .{};
@@ -311,11 +309,11 @@ pub const Capturer = struct {
             if (std.meta.eql(previous_line.points, current_line.points)) {
                 continue;
             }
-            const line_1 = math.LineSegment3{
+            const line_1 = sdk.math.LineSegment3{
                 .point_1 = current_line.points[0].position,
                 .point_2 = current_line.points[1].position,
             };
-            const line_2 = math.LineSegment3{
+            const line_2 = sdk.math.LineSegment3{
                 .point_1 = current_line.points[1].position,
                 .point_2 = current_line.points[2].position,
             };
@@ -721,7 +719,7 @@ test "should capture heat correctly" {
 
 test "should capture player position correctly" {
     const zero_cylinder = game.HurtCylinders.Element.fromConverted(.{
-        .center = math.Vec3.zero,
+        .center = sdk.math.Vec3.zero,
         .multiplier = 1.0,
         .half_height = 0.0,
         .radius = 0.0,
@@ -729,7 +727,7 @@ test "should capture player position correctly" {
         ._padding = undefined,
     });
     const zero_sphere = game.CollisionSpheres.Element.fromConverted(.{
-        .center = math.Vec3.zero,
+        .center = sdk.math.Vec3.zero,
         .multiplier = 1.0,
         .radius = 0.0,
         ._padding = undefined,
@@ -813,7 +811,7 @@ test "should capture player rotation correctly" {
     var capturer = Capturer{};
     const frame = capturer.captureFrame(&.{
         .player_1 = .{
-            .transform_matrix = .fromConverted(math.Mat4.fromZRotation(std.math.pi)),
+            .transform_matrix = .fromConverted(sdk.math.Mat4.fromZRotation(std.math.pi)),
             .rotation = .fromConverted(0.5 * std.math.pi),
         },
         .player_2 = .{
@@ -920,7 +918,7 @@ test "should capture hurt cylinders correctly" {
         }
     }.call;
     const cylinder = struct {
-        fn call(x: f32, y: f32, z: f32, r: f32, h: f32) math.Cylinder {
+        fn call(x: f32, y: f32, z: f32, r: f32, h: f32) sdk.math.Cylinder {
             return .{
                 .center = .fromArray(.{ x, y, z }),
                 .radius = r,
@@ -983,7 +981,7 @@ test "should capture collision spheres correctly" {
         }
     }.call;
     const sphere = struct {
-        fn call(x: f32, y: f32, z: f32, r: f32) math.Sphere {
+        fn call(x: f32, y: f32, z: f32, r: f32) sdk.math.Sphere {
             return .{
                 .center = .fromArray(.{ x, y, z }),
                 .radius = r,

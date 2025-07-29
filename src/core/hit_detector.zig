@@ -1,5 +1,5 @@
 const std = @import("std");
-const math = @import("../math/root.zig");
+const sdk = @import("../sdk/root.zig");
 const core = @import("root.zig");
 
 pub const HitDetector = struct {
@@ -15,7 +15,7 @@ pub const HitDetector = struct {
         const cylinders: *core.HurtCylinders = if (hurt_cylinders.*) |*c| c else return;
         for (&cylinders.values) |*cylinder| {
             for (hit_lines.asMutableSlice()) |*line| {
-                const intersects = math.checkCylinderLineSegmentIntersection(cylinder.cylinder, line.line);
+                const intersects = sdk.math.checkCylinderLineSegmentIntersection(cylinder.cylinder, line.line);
                 cylinder.intersects = intersects;
                 line.intersects = intersects;
             }
