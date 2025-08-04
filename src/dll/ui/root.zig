@@ -1,3 +1,4 @@
+pub const Controls = @import("controls.zig").Controls;
 pub const drawData = @import("data.zig").drawData;
 pub const GameMemoryWindow = @import("game_memory_window.zig").GameMemoryWindow;
 pub const drawLoadingWindow = @import("loading_window.zig").drawLoadingWindow;

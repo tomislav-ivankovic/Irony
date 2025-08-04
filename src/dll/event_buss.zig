@@ -142,7 +142,7 @@ pub const EventBuss = struct {
         imgui.igGetIO().*.MouseDrawCursor = true;
         sdk.ui.toasts.draw();
         if (game_memory) |memory| {
-            self.main_window.draw(memory);
+            self.main_window.draw(memory, &self.core.controller);
         } else {
             ui.drawLoadingWindow("Searching for memory addresses and offsets...");
         }

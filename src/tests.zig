@@ -82,6 +82,7 @@ test {
     _ = @import("dll/model/player.zig");
     _ = @import("dll/model/skeleton.zig");
 
+    _ = @import("dll/ui/controls.zig");
     _ = @import("dll/ui/data.zig");
     _ = @import("dll/ui/game_memory_window.zig");
     _ = @import("dll/ui/loading_window.zig");

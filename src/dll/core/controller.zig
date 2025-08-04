@@ -94,19 +94,21 @@ pub const Controller = struct {
         switch (self.mode) {
             .pause => |*state| state.frame_index = index,
             .playback => |*state| state.frame_index = index,
-            else => null,
+            else => self.mode = .{ .pause = .{ .frame_index = index } },
         }
     }
 
     pub fn getCurrentFrameIndex(self: *const Self) ?usize {
         const index = switch (self.mode) {
             .live => return null,
-            .record => return self.recording.items.len - 1,
+            .record => std.math.maxInt(usize),
             .pause => |*state| state.frame_index,
             .playback => |*state| state.frame_index,
         };
         if (index < self.recording.items.len) {
             return index;
+        } else if (self.recording.items.len == 0) {
+            return null;
         } else {
             return self.recording.items.len - 1;
         }
@@ -116,14 +118,11 @@ pub const Controller = struct {
         switch (self.mode) {
             .live => |*state| return &state.frame,
             .record, .pause, .playback => {
-                const frames = self.recording.items;
-                if (frames.len == 0) {
+                if (self.getCurrentFrameIndex()) |index| {
+                    return &self.recording.items[index];
+                } else {
                     return &empty_frame;
                 }
-                if (self.getCurrentFrameIndex()) |index| {
-                    return &frames[index];
-                }
-                return &empty_frame;
             },
         }
     }

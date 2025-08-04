@@ -14,6 +14,7 @@ pub const MainWindow = struct {
     game_memory_window: ui.GameMemoryWindow = .{},
     quadrant_layout: ui.QuadrantLayout = .{},
     view: ui.View = .{},
+    controls: ui.Controls = .{},
     controls_height: f32 = 0,
 
     const Self = @This();
@@ -28,7 +29,7 @@ pub const MainWindow = struct {
         }
     }
 
-    pub fn draw(self: *Self, game_memory: *const game.Memory) void {
+    pub fn draw(self: *Self, game_memory: *const game.Memory, controller: *core.Controller) void {
         self.handleFirstDraw();
         self.handleOpenKey();
         if (!self.is_open) {
@@ -52,7 +53,7 @@ pub const MainWindow = struct {
         imgui.igEndChild();
         if (imgui.igBeginChild_Str("controls", .{ .x = 0, .y = 0 }, 0, 0)) {
             const controls_start_y = imgui.igGetCursorPosY();
-            self.drawControls();
+            self.controls.draw(controller);
             self.controls_height = imgui.igGetCursorPosY() - controls_start_y;
         }
         imgui.igEndChild();
@@ -110,9 +111,5 @@ pub const MainWindow = struct {
 
     fn drawDetails(_: *Self) void {
         imgui.igText("Details");
-    }
-
-    fn drawControls(_: *Self) void {
-        imgui.igText("Controls");
     }
 };
