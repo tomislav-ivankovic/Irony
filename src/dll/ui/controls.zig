@@ -89,8 +89,11 @@ pub const Controls = struct {
         const disabled = controller.mode == .playback or controller.getTotalFrames() == 0;
         if (disabled) imgui.igBeginDisabled(true);
         defer if (disabled) imgui.igEndDisabled();
-        if (imgui.igButton("Play", .{})) {
+        if (imgui.igButton(" ▶ ##play", .{})) {
             controller.play();
+        }
+        if (imgui.igIsItemHovered(0)) {
+            imgui.igSetTooltip("Play");
         }
     }
 
@@ -98,8 +101,11 @@ pub const Controls = struct {
         const disabled = controller.mode == .pause or controller.getTotalFrames() == 0;
         if (disabled) imgui.igBeginDisabled(true);
         defer if (disabled) imgui.igEndDisabled();
-        if (imgui.igButton("Pause", .{})) {
+        if (imgui.igButton(" ⏸ ##pause", .{})) {
             controller.pause();
+        }
+        if (imgui.igIsItemHovered(0)) {
+            imgui.igSetTooltip("Pause");
         }
     }
 
@@ -107,8 +113,11 @@ pub const Controls = struct {
         const disabled = controller.mode == .live;
         if (disabled) imgui.igBeginDisabled(true);
         defer if (disabled) imgui.igEndDisabled();
-        if (imgui.igButton("Stop", .{})) {
+        if (imgui.igButton(" ⏹ ##stop", .{})) {
             controller.stop();
+        }
+        if (imgui.igIsItemHovered(0)) {
+            imgui.igSetTooltip("Stop");
         }
     }
 
@@ -116,8 +125,11 @@ pub const Controls = struct {
         const disabled = controller.mode == .record;
         if (disabled) imgui.igBeginDisabled(true);
         defer if (disabled) imgui.igEndDisabled();
-        if (imgui.igButton("Record", .{})) {
+        if (imgui.igButton(" ⏺ ##record", .{})) {
             controller.record();
+        }
+        if (imgui.igIsItemHovered(0)) {
+            imgui.igSetTooltip("Record");
         }
     }
 
@@ -126,8 +138,11 @@ pub const Controls = struct {
         const disabled = total == 0;
         if (disabled) imgui.igBeginDisabled(true);
         defer if (disabled) imgui.igEndDisabled();
-        if (imgui.igButton("First Frame", .{})) {
+        if (imgui.igButton(" ⏮ ##first_frame", .{})) {
             controller.setCurrentFrameIndex(0);
+        }
+        if (imgui.igIsItemHovered(0)) {
+            imgui.igSetTooltip("First Frame");
         }
     }
 
@@ -136,8 +151,11 @@ pub const Controls = struct {
         const disabled = total == 0;
         if (disabled) imgui.igBeginDisabled(true);
         defer if (disabled) imgui.igEndDisabled();
-        if (imgui.igButton("Last Frame", .{})) {
+        if (imgui.igButton(" ⏭ ##last_frame", .{})) {
             controller.setCurrentFrameIndex(total - 1);
+        }
+        if (imgui.igIsItemHovered(0)) {
+            imgui.igSetTooltip("Last Frame");
         }
     }
 
@@ -146,8 +164,11 @@ pub const Controls = struct {
         const disabled = current == null or current == 0;
         if (disabled) imgui.igBeginDisabled(true);
         defer if (disabled) imgui.igEndDisabled();
-        if (imgui.igButton("Previous Frame", .{})) {
+        if (imgui.igButton(" ⏪ ##previous_frame", .{})) {
             controller.setCurrentFrameIndex(current.? - 1);
+        }
+        if (imgui.igIsItemHovered(0)) {
+            imgui.igSetTooltip("Previous Frame");
         }
     }
 
@@ -157,8 +178,11 @@ pub const Controls = struct {
         const disabled = total == 0 or current == null or current.? >= total - 1;
         if (disabled) imgui.igBeginDisabled(true);
         defer if (disabled) imgui.igEndDisabled();
-        if (imgui.igButton("Next Frame", .{})) {
+        if (imgui.igButton(" ⏩ ##next_frame", .{})) {
             controller.setCurrentFrameIndex(current.? + 1);
+        }
+        if (imgui.igIsItemHovered(0)) {
+            imgui.igSetTooltip("Next Frame");
         }
     }
 
@@ -166,8 +190,11 @@ pub const Controls = struct {
         const disabled = controller.getTotalFrames() == 0;
         if (disabled) imgui.igBeginDisabled(true);
         defer if (disabled) imgui.igEndDisabled();
-        if (imgui.igButton("Clear", .{})) {
+        if (imgui.igButton(" 🗑 ##clear", .{})) {
             controller.clear();
+        }
+        if (imgui.igIsItemHovered(0)) {
+            imgui.igSetTooltip("Clear Recording");
         }
     }
 };

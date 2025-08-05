@@ -65,7 +65,17 @@ pub const Context = struct {
                 .RasterizerMultiply = 1.0,
                 .RasterizerDensity = 1.0,
             },
-            null,
+            &[_]imgui.ImWchar{
+                0x20, 0x7E,
+                0xA0, 0xFF,
+                0x25B6, 0x25B6, // ▶
+                0x23F8, 0x23FA, // ⏸, ⏹, ⏺
+                0x23ED, 0x23EE, // ⏭, ⏮
+                0x23E9, 0x23EA, // ⏩, ⏪
+                0x23F2, 0x23F2, // ⏲
+                0xF5D1, 0xF5D1, // 🗑 // TODO Not working. Fix it.
+                0,
+            },
         )) |font| {
             imgui.igGetIO().*.FontDefault = font;
         } else {
