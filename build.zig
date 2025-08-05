@@ -257,6 +257,7 @@ fn imguiDependency(
     library.root_module.addCMacro("IMGUI_IMPL_API", "extern \"C\"");
     library.root_module.addCMacro("IMGUI_DISABLE_OBSOLETE_FUNCTIONS", "1");
     library.root_module.addCMacro("IMGUI_IMPL_WIN32_DISABLE_GAMEPAD", "1");
+    library.root_module.addCMacro("IMGUI_USE_WCHAR32", "1");
     if (use_test_engine) {
         library.root_module.addCMacro("IMGUI_ENABLE_TEST_ENGINE", "");
         library.root_module.addCMacro("IMGUI_TEST_ENGINE_ENABLE_IMPLOT", "0");
