@@ -2,7 +2,7 @@ const std = @import("std");
 const imgui = @import("imgui");
 
 pub fn drawLoadingWindow(text: [:0]const u8) void {
-    const display_size = imgui.igGetIO().*.DisplaySize;
+    const display_size = imgui.igGetIO_Nil().*.DisplaySize;
     var text_size: imgui.ImVec2 = undefined;
     imgui.igCalcTextSize(&text_size, text, null, false, -1.0);
     const window_size = imgui.ImVec2{

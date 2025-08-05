@@ -76,13 +76,9 @@ pub const TestingContext = struct {
         test_io.*.ConfigVerboseLevel = imgui.ImGuiTestVerboseLevel_Info;
         test_io.*.ConfigVerboseLevelOnError = imgui.ImGuiTestVerboseLevel_Debug;
 
-        const imgui_io = imgui.igGetIO();
+        const imgui_io = imgui.igGetIO_Nil();
         imgui_io.*.IniFilename = null;
-        var pixels: [*c]u8 = undefined;
-        var width: c_int = undefined;
-        var height: c_int = undefined;
-        var bytes_per_pixel: c_int = undefined;
-        _ = imgui.ImFontAtlas_GetTexDataAsRGBA32(imgui_io.*.Fonts, &pixels, &width, &height, &bytes_per_pixel);
+        imgui_io.*.BackendFlags |= imgui.ImGuiBackendFlags_RendererHasTextures;
 
         imgui.teStart(engine, imgui_context);
         errdefer imgui.teStop(engine);
@@ -155,7 +151,7 @@ pub const TestingContext = struct {
         while (!imgui.teIsTestQueueEmpty(self.engine)) {
             misc.error_context.clear();
 
-            const imgui_io = imgui.igGetIO();
+            const imgui_io = imgui.igGetIO_Nil();
             imgui_io.*.DisplaySize = .{ .x = 1280, .y = 720 };
             imgui_io.*.DeltaTime = 1.0 / 60.00;
 

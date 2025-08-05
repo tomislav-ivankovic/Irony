@@ -120,6 +120,7 @@ typedef struct ImGuiTestActionFilter ImGuiTestActionFilter;
 typedef struct ImGuiTestGenericItemStatus ImGuiTestGenericItemStatus;
 typedef struct ImGuiTestGenericVars ImGuiTestGenericVars;
 typedef struct ImGuiTestContext ImGuiTestContext;
+typedef struct ImGuiTestEngineResultSummary ImGuiTestEngineResultSummary;
 
 typedef struct ImVector_ImGuiTestPtr {
     int Size;
@@ -147,6 +148,11 @@ typedef struct ImPool_ImGuiTestItemInfo {
     ImPoolIdx FreeIdx;
     ImPoolIdx AliveCount;
 } ImPool_ImGuiTestItemInfo;
+typedef struct ImGuiTestEngineResultSummary {
+    int CountTested;
+    int CountSuccess;
+    int CountInQueue;
+} ImGuiTestEngineResultSummary;
 
 typedef void(ImGuiTestEngineSrcFileOpenFunc)(const char* filename, int line_no, void* user_data);
 typedef void(ImGuiTestGuiFunc)(ImGuiTestContext* ctx);
@@ -406,7 +412,7 @@ CIMGUI_API void teAbortCurrentTest(ImGuiTestEngine* engine);
 CIMGUI_API ImGuiTest* teFindTestByName(ImGuiTestEngine* engine, const char* category, const char* name);
 CIMGUI_API bool teIsTestQueueEmpty(ImGuiTestEngine* engine);
 CIMGUI_API bool teIsUsingSimulatedInputs(ImGuiTestEngine* engine);
-CIMGUI_API void teGetResult(ImGuiTestEngine* engine, int* count_tested, int* success_count);
+CIMGUI_API void teGetResultSummary(ImGuiTestEngine* engine, ImGuiTestEngineResultSummary* out_results);
 CIMGUI_API void teGetTestList(ImGuiTestEngine* engine, ImVector_ImGuiTestPtr* out_tests);
 CIMGUI_API void teGetTestQueue(ImGuiTestEngine* engine, ImVector_ImGuiTestRunTask* out_tests);
 CIMGUI_API void teInstallDefaultCrashHandler();

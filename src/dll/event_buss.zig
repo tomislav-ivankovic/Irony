@@ -138,7 +138,7 @@ pub const EventBuss = struct {
         const ui_context = if (self.ui_context) |*context| context else return;
 
         ui_context.newFrame();
-        imgui.igGetIO().*.MouseDrawCursor = true;
+        imgui.igGetIO_Nil().*.MouseDrawCursor = true;
         sdk.ui.toasts.draw();
         if (game_memory) |memory| {
             self.main_window.draw(memory, &self.core.controller);

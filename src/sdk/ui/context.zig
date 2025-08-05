@@ -47,13 +47,13 @@ pub const Context = struct {
             allocator.free(path);
         };
 
-        imgui.igGetIO().*.IniFilename = ini_file_path orelse null;
-        errdefer imgui.igGetIO().*.IniFilename = null;
+        imgui.igGetIO_Nil().*.IniFilename = ini_file_path orelse null;
+        errdefer imgui.igGetIO_Nil().*.IniFilename = null;
 
         imgui.igStyleColorsDark(null);
 
         if (imgui.ImFontAtlas_AddFontFromMemoryTTF(
-            imgui.igGetIO().*.Fonts,
+            imgui.igGetIO_Nil().*.Fonts,
             @constCast(font_file.ptr),
             font_file.len,
             18.0,
@@ -77,7 +77,7 @@ pub const Context = struct {
                 0,
             },
         )) |font| {
-            imgui.igGetIO().*.FontDefault = font;
+            imgui.igGetIO_Nil().*.FontDefault = font;
         } else {
             misc.error_context.new("ImFontAtlas_AddFontFromMemoryTTF returned null.", .{});
             misc.error_context.append("Failed to load UI font. Falling back to default font.", .{});
@@ -149,7 +149,7 @@ pub const Context = struct {
         imgui.igSetCurrentContext(self.imgui_context);
         ui.backend.ImGui_ImplDX12_Shutdown();
         ui.backend.ImGui_ImplWin32_Shutdown();
-        imgui.igGetIO().*.IniFilename = null;
+        imgui.igGetIO_Nil().*.IniFilename = null;
         if (self.ini_file_path) |path| {
             self.allocator.free(path);
         }
@@ -192,11 +192,11 @@ pub const Context = struct {
             return result;
         }
         const is_mouse_event = u_msg >= w32.WM_MOUSEFIRST and u_msg <= w32.WM_MOUSELAST;
-        if (is_mouse_event and imgui.igGetIO().*.WantCaptureMouse) {
+        if (is_mouse_event and imgui.igGetIO_Nil().*.WantCaptureMouse) {
             return 1;
         }
         const is_keyboard_event = u_msg >= w32.WM_KEYFIRST and u_msg <= w32.WM_KEYLAST;
-        if (is_keyboard_event and imgui.igGetIO().*.WantCaptureKeyboard) {
+        if (is_keyboard_event and imgui.igGetIO_Nil().*.WantCaptureKeyboard) {
             return 1;
         }
         return null;

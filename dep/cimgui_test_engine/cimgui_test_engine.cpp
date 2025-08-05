@@ -97,8 +97,8 @@ CIMGUI_API bool teIsUsingSimulatedInputs(ImGuiTestEngine* engine) {
     return ImGuiTestEngine_IsUsingSimulatedInputs(engine);
 }
 
-CIMGUI_API void teGetResult(ImGuiTestEngine* engine, int* count_tested, int* success_count) {
-    return ImGuiTestEngine_GetResult(engine, *count_tested, *success_count);
+CIMGUI_API void teGetResultSummary(ImGuiTestEngine* engine, ImGuiTestEngineResultSummary* out_results) {
+    return ImGuiTestEngine_GetResultSummary(engine, out_results);
 }
 
 CIMGUI_API void teGetTestList(ImGuiTestEngine* engine, ImVector_ImGuiTestPtr* out_tests) {

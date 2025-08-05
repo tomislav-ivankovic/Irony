@@ -123,7 +123,7 @@ pub const QuadrantLayout = struct {
             }
             if (imgui.igIsItemActive()) {
                 x_color = active_color;
-                self.division.x += imgui.igGetIO().*.MouseDelta.x / available_size.x;
+                self.division.x += imgui.igGetIO_Nil().*.MouseDelta.x / available_size.x;
                 self.division.x = std.math.clamp(self.division.x, 0.0, 1.0);
             }
         }
@@ -139,7 +139,7 @@ pub const QuadrantLayout = struct {
             }
             if (imgui.igIsItemActive()) {
                 y_color = active_color;
-                self.division.y += imgui.igGetIO().*.MouseDelta.y / available_size.y;
+                self.division.y += imgui.igGetIO_Nil().*.MouseDelta.y / available_size.y;
                 self.division.y = std.math.clamp(self.division.y, 0.0, 1.0);
             }
         }
@@ -156,8 +156,8 @@ pub const QuadrantLayout = struct {
             if (imgui.igIsItemActive()) {
                 x_color = active_color;
                 y_color = active_color;
-                self.division.x += imgui.igGetIO().*.MouseDelta.x / available_size.x;
-                self.division.y += imgui.igGetIO().*.MouseDelta.y / available_size.y;
+                self.division.x += imgui.igGetIO_Nil().*.MouseDelta.x / available_size.x;
+                self.division.y += imgui.igGetIO_Nil().*.MouseDelta.y / available_size.y;
                 self.division.x = std.math.clamp(self.division.x, 0.0, 1.0);
                 self.division.y = std.math.clamp(self.division.y, 0.0, 1.0);
             }
