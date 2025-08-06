@@ -8,6 +8,7 @@ pub const Controller = struct {
     allocator: std.mem.Allocator,
     recording: Recording,
     mode: Mode,
+    playback_speed: f32,
 
     const Self = @This();
     pub const Recording = std.ArrayList(model.Frame);
@@ -31,13 +32,14 @@ pub const Controller = struct {
         frame_index: usize = 0,
         time_since_last_frame: f32 = 0.0,
     };
-    const frame_time = 1.0 / 60.0;
+    const normal_speed_frame_time = 1.0 / 60.0;
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return .{
             .allocator = allocator,
             .recording = Recording.init(allocator),
             .mode = .{ .live = .{} },
+            .playback_speed = 1.0,
         };
     }
 
@@ -63,12 +65,24 @@ pub const Controller = struct {
             else => return,
         };
         state.time_since_last_frame += delta_time;
-        while (state.time_since_last_frame >= frame_time) {
-            state.frame_index += 1;
-            state.time_since_last_frame -= frame_time;
-            if (state.frame_index >= self.recording.items.len) {
-                self.pause();
-                return;
+        const frame_time = normal_speed_frame_time / @abs(self.playback_speed);
+        if (self.playback_speed >= 0) {
+            while (state.time_since_last_frame >= frame_time) {
+                if (state.frame_index >= self.recording.items.len - 1) {
+                    self.pause();
+                    return;
+                }
+                state.frame_index += 1;
+                state.time_since_last_frame -= frame_time;
+            }
+        } else {
+            while (state.time_since_last_frame >= frame_time) {
+                if (state.frame_index <= 0) {
+                    self.pause();
+                    return;
+                }
+                state.frame_index -= 1;
+                state.time_since_last_frame -= frame_time;
             }
         }
     }

@@ -6,6 +6,7 @@ const sdk = @import("../../sdk/root.zig");
 
 pub const Controls = struct {
     total_frames_width: f32 = 0.0,
+    speed_button_width: f32 = 0.0,
 
     const Self = @This();
 
@@ -17,9 +18,10 @@ pub const Controls = struct {
 
         imgui.igSameLine(0, spacing);
 
-        var content_size: imgui.ImVec2 = undefined;
-        imgui.igGetContentRegionAvail(&content_size);
-        imgui.igPushItemWidth(content_size.x - self.total_frames_width - spacing);
+        const seekbar_x = imgui.igGetCursorPosX();
+        var available_size: imgui.ImVec2 = undefined;
+        imgui.igGetContentRegionAvail(&available_size);
+        imgui.igPushItemWidth(available_size.x - self.total_frames_width - spacing);
         drawSeekbar(controller);
         imgui.igPopItemWidth();
 
@@ -29,6 +31,10 @@ pub const Controls = struct {
         var total_frames_size: imgui.ImVec2 = undefined;
         imgui.igGetItemRectSize(&total_frames_size);
         self.total_frames_width = total_frames_size.x;
+
+        imgui.igGetContentRegionAvail(&available_size);
+        const window_width = available_size.x;
+        imgui.igSetCursorPosX(seekbar_x);
 
         drawPlayButton(controller);
         imgui.igSameLine(0, spacing);
@@ -47,6 +53,19 @@ pub const Controls = struct {
         drawLastFrameButton(controller);
         imgui.igSameLine(0, 2 * spacing);
         drawClearButton(controller);
+
+        imgui.igSameLine(0, 2 * spacing);
+        const speed_button_x = @max(
+            imgui.igGetCursorPosX(),
+            window_width - self.total_frames_width - spacing - self.speed_button_width,
+        );
+        imgui.igSetCursorPosX(speed_button_x);
+
+        drawSpeedButton(controller);
+
+        var speed_button_size: imgui.ImVec2 = undefined;
+        imgui.igGetItemRectSize(&speed_button_size);
+        self.speed_button_width = speed_button_size.x;
     }
 
     fn drawCurrentFrame(controller: *core.Controller) void {
@@ -198,6 +217,32 @@ pub const Controls = struct {
         }
         if (imgui.igIsItemHovered(0)) {
             imgui.igSetTooltip("Clear Recording");
+        }
+    }
+
+    fn drawSpeedButton(controller: *core.Controller) void {
+        const speed = &controller.playback_speed;
+        var buffer: [32]u8 = undefined;
+        const button_text = std.fmt.bufPrintZ(
+            &buffer,
+            " ⏲ {d:.2}x ##speed",
+            .{controller.playback_speed},
+        ) catch " ⏲ ##speed";
+        if (imgui.igButton(button_text, .{})) {
+            imgui.igOpenPopup_Str("speed_popup", 0);
+        }
+        if (imgui.igIsItemHovered(0)) {
+            imgui.igSetTooltip("Playback Speed");
+        }
+        if (imgui.igBeginPopup("speed_popup", 0)) {
+            defer imgui.igEndPopup();
+            _ = imgui.igSliderFloat("##speed_slider", speed, -4.0, 4.0, "%.2fx", 0);
+            inline for ([_]f32{ 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0 }) |option| {
+                const text = std.fmt.comptimePrint("{d:.2}x", .{option});
+                if (imgui.igSelectable_Bool(text, speed.* == option, 0, .{})) {
+                    speed.* = option;
+                }
+            }
         }
     }
 };
