@@ -32,7 +32,7 @@ pub const Controller = struct {
         frame_index: usize = 0,
         time_since_last_frame: f32 = 0.0,
     };
-    const normal_speed_frame_time = 1.0 / 60.0;
+    pub const normal_speed_frame_time = 1.0 / 60.0;
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return .{
@@ -88,10 +88,17 @@ pub const Controller = struct {
     }
 
     pub fn play(self: *Self) void {
-        if (self.mode == .playback) {
-            return;
-        }
-        const index = self.getCurrentFrameIndex() orelse 0;
+        const total_frames = self.getTotalFrames();
+        const index = switch (self.mode) {
+            .live => 0,
+            .record => |*state| state.segment_start_index,
+            .pause => |*state| if (total_frames != 0 and state.frame_index < total_frames - 1) block: {
+                break :block state.frame_index;
+            } else block: {
+                break :block 0;
+            },
+            .playback => return,
+        };
         self.flushSegment();
         self.mode = .{ .playback = .{ .frame_index = index } };
     }
@@ -199,7 +206,7 @@ pub const Controller = struct {
                 } else if (index < segment_start + segment_len) {
                     return &state.segment.items[index - segment_start];
                 } else if (index < recording_len + segment_len) {
-                    return &self.recording.items[index - segment_start];
+                    return &self.recording.items[index - segment_len];
                 } else {
                     return null;
                 }
@@ -223,3 +230,384 @@ pub const Controller = struct {
         }
     }
 };
+
+const testing = std.testing;
+
+test "should present last processed frame as current when stopped" {
+    var controller = Controller.init(testing.allocator);
+    defer controller.deinit();
+    controller.stop();
+
+    const frame_1 = model.Frame{ .frames_since_round_start = 1 };
+    controller.processFrame(&frame_1);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_1, controller.getCurrentFrame().?.*);
+
+    const frame_2 = model.Frame{ .frames_since_round_start = 2 };
+    controller.processFrame(&frame_2);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_2, controller.getCurrentFrame().?.*);
+}
+
+test "should present last processed frame as current when recording" {
+    var controller = Controller.init(testing.allocator);
+    defer controller.deinit();
+    controller.record();
+
+    const frame_1 = model.Frame{ .frames_since_round_start = 1 };
+    controller.processFrame(&frame_1);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_1, controller.getCurrentFrame().?.*);
+
+    const frame_2 = model.Frame{ .frames_since_round_start = 2 };
+    controller.processFrame(&frame_2);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_2, controller.getCurrentFrame().?.*);
+}
+
+test "should store processed frames while recording" {
+    var controller = Controller.init(testing.allocator);
+    defer controller.deinit();
+
+    const frame_1 = model.Frame{ .frames_since_round_start = 1 };
+    const frame_2 = model.Frame{ .frames_since_round_start = 2 };
+    const frame_3 = model.Frame{ .frames_since_round_start = 3 };
+    const frame_4 = model.Frame{ .frames_since_round_start = 4 };
+
+    controller.record();
+    controller.processFrame(&frame_1);
+    controller.processFrame(&frame_2);
+    controller.stop();
+    controller.record();
+    controller.processFrame(&frame_3);
+    controller.processFrame(&frame_4);
+
+    try testing.expectEqual(4, controller.getTotalFrames());
+    try testing.expect(controller.getFrameAt(0) != null);
+    try testing.expect(controller.getFrameAt(1) != null);
+    try testing.expect(controller.getFrameAt(2) != null);
+    try testing.expect(controller.getFrameAt(3) != null);
+    try testing.expectEqual(frame_1, controller.getFrameAt(0).?.*);
+    try testing.expectEqual(frame_2, controller.getFrameAt(1).?.*);
+    try testing.expectEqual(frame_3, controller.getFrameAt(2).?.*);
+    try testing.expectEqual(frame_4, controller.getFrameAt(3).?.*);
+
+    controller.stop();
+
+    try testing.expectEqual(4, controller.getTotalFrames());
+    try testing.expect(controller.getFrameAt(0) != null);
+    try testing.expect(controller.getFrameAt(1) != null);
+    try testing.expect(controller.getFrameAt(2) != null);
+    try testing.expect(controller.getFrameAt(3) != null);
+    try testing.expectEqual(frame_1, controller.getFrameAt(0).?.*);
+    try testing.expectEqual(frame_2, controller.getFrameAt(1).?.*);
+    try testing.expectEqual(frame_3, controller.getFrameAt(2).?.*);
+    try testing.expectEqual(frame_4, controller.getFrameAt(3).?.*);
+}
+
+test "should store frames in correct order when recording in the beginning of the recording" {
+    var controller = Controller.init(testing.allocator);
+    defer controller.deinit();
+
+    const frame_1 = model.Frame{ .frames_since_round_start = 1 };
+    const frame_2 = model.Frame{ .frames_since_round_start = 2 };
+    const frame_3 = model.Frame{ .frames_since_round_start = 3 };
+    const frame_4 = model.Frame{ .frames_since_round_start = 4 };
+
+    controller.record();
+    controller.processFrame(&frame_1);
+    controller.processFrame(&frame_2);
+    controller.stop();
+    controller.setCurrentFrameIndex(0);
+    controller.record();
+    controller.processFrame(&frame_3);
+    controller.processFrame(&frame_4);
+
+    try testing.expectEqual(4, controller.getTotalFrames());
+    try testing.expect(controller.getFrameAt(0) != null);
+    try testing.expect(controller.getFrameAt(1) != null);
+    try testing.expect(controller.getFrameAt(2) != null);
+    try testing.expect(controller.getFrameAt(3) != null);
+    try testing.expectEqual(frame_3, controller.getFrameAt(0).?.*);
+    try testing.expectEqual(frame_4, controller.getFrameAt(1).?.*);
+    try testing.expectEqual(frame_1, controller.getFrameAt(2).?.*);
+    try testing.expectEqual(frame_2, controller.getFrameAt(3).?.*);
+
+    controller.stop();
+
+    try testing.expectEqual(4, controller.getTotalFrames());
+    try testing.expect(controller.getFrameAt(0) != null);
+    try testing.expect(controller.getFrameAt(1) != null);
+    try testing.expect(controller.getFrameAt(2) != null);
+    try testing.expect(controller.getFrameAt(3) != null);
+    try testing.expectEqual(frame_3, controller.getFrameAt(0).?.*);
+    try testing.expectEqual(frame_4, controller.getFrameAt(1).?.*);
+    try testing.expectEqual(frame_1, controller.getFrameAt(2).?.*);
+    try testing.expectEqual(frame_2, controller.getFrameAt(3).?.*);
+}
+
+test "should store frames in correct order when recording in the middle of the recording" {
+    var controller = Controller.init(testing.allocator);
+    defer controller.deinit();
+
+    const frame_1 = model.Frame{ .frames_since_round_start = 1 };
+    const frame_2 = model.Frame{ .frames_since_round_start = 2 };
+    const frame_3 = model.Frame{ .frames_since_round_start = 3 };
+    const frame_4 = model.Frame{ .frames_since_round_start = 4 };
+    const frame_5 = model.Frame{ .frames_since_round_start = 5 };
+
+    controller.record();
+    controller.processFrame(&frame_1);
+    controller.processFrame(&frame_2);
+    controller.processFrame(&frame_3);
+    controller.stop();
+    controller.setCurrentFrameIndex(1);
+    controller.record();
+    controller.processFrame(&frame_4);
+    controller.processFrame(&frame_5);
+
+    try testing.expectEqual(5, controller.getTotalFrames());
+    try testing.expect(controller.getFrameAt(0) != null);
+    try testing.expect(controller.getFrameAt(1) != null);
+    try testing.expect(controller.getFrameAt(2) != null);
+    try testing.expect(controller.getFrameAt(3) != null);
+    try testing.expect(controller.getFrameAt(4) != null);
+    try testing.expectEqual(frame_1, controller.getFrameAt(0).?.*);
+    try testing.expectEqual(frame_2, controller.getFrameAt(1).?.*);
+    try testing.expectEqual(frame_4, controller.getFrameAt(2).?.*);
+    try testing.expectEqual(frame_5, controller.getFrameAt(3).?.*);
+    try testing.expectEqual(frame_3, controller.getFrameAt(4).?.*);
+
+    controller.stop();
+
+    try testing.expectEqual(5, controller.getTotalFrames());
+    try testing.expect(controller.getFrameAt(0) != null);
+    try testing.expect(controller.getFrameAt(1) != null);
+    try testing.expect(controller.getFrameAt(2) != null);
+    try testing.expect(controller.getFrameAt(3) != null);
+    try testing.expect(controller.getFrameAt(4) != null);
+    try testing.expectEqual(frame_1, controller.getFrameAt(0).?.*);
+    try testing.expectEqual(frame_2, controller.getFrameAt(1).?.*);
+    try testing.expectEqual(frame_4, controller.getFrameAt(2).?.*);
+    try testing.expectEqual(frame_5, controller.getFrameAt(3).?.*);
+    try testing.expectEqual(frame_3, controller.getFrameAt(4).?.*);
+}
+
+test "should present the last frame as current when pausing the recording" {
+    var controller = Controller.init(testing.allocator);
+    defer controller.deinit();
+
+    const frame_1 = model.Frame{ .frames_since_round_start = 1 };
+    const frame_2 = model.Frame{ .frames_since_round_start = 2 };
+
+    controller.record();
+    controller.processFrame(&frame_1);
+    controller.processFrame(&frame_2);
+    controller.pause();
+
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_2, controller.getCurrentFrame().?.*);
+}
+
+test "should pause at the set frame when setting current frame while recording" {
+    var controller = Controller.init(testing.allocator);
+    defer controller.deinit();
+
+    const frame_1 = model.Frame{ .frames_since_round_start = 1 };
+    const frame_2 = model.Frame{ .frames_since_round_start = 2 };
+    const frame_3 = model.Frame{ .frames_since_round_start = 3 };
+
+    controller.record();
+    controller.processFrame(&frame_1);
+    controller.processFrame(&frame_2);
+    controller.processFrame(&frame_3);
+    controller.setCurrentFrameIndex(1);
+    controller.update(123.0);
+
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_2, controller.getCurrentFrame().?.*);
+}
+
+test "should pause at the set frame when setting current frame while paused" {
+    var controller = Controller.init(testing.allocator);
+    defer controller.deinit();
+
+    const frame_1 = model.Frame{ .frames_since_round_start = 1 };
+    const frame_2 = model.Frame{ .frames_since_round_start = 2 };
+    const frame_3 = model.Frame{ .frames_since_round_start = 3 };
+
+    controller.record();
+    controller.processFrame(&frame_1);
+    controller.processFrame(&frame_2);
+    controller.processFrame(&frame_3);
+    controller.pause();
+    controller.setCurrentFrameIndex(1);
+    controller.update(123.0);
+
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_2, controller.getCurrentFrame().?.*);
+}
+
+test "should play recording beginning when playing after recording" {
+    var controller = Controller.init(testing.allocator);
+    defer controller.deinit();
+
+    const frame_1 = model.Frame{ .frames_since_round_start = 1 };
+    const frame_2 = model.Frame{ .frames_since_round_start = 2 };
+    const frame_3 = model.Frame{ .frames_since_round_start = 3 };
+    const frame_4 = model.Frame{ .frames_since_round_start = 4 };
+
+    controller.record();
+    controller.processFrame(&frame_1);
+    controller.processFrame(&frame_2);
+    controller.processFrame(&frame_3);
+    controller.processFrame(&frame_4);
+    controller.play();
+
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_1, controller.getCurrentFrame().?.*);
+    controller.update(0.5 * Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_1, controller.getCurrentFrame().?.*);
+    controller.update(Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_2, controller.getCurrentFrame().?.*);
+    controller.update(2.0 * Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
+    controller.update(Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
+}
+
+test "should play recording from current frame when playing after paused in the middle of the recording" {
+    var controller = Controller.init(testing.allocator);
+    defer controller.deinit();
+
+    const frame_1 = model.Frame{ .frames_since_round_start = 1 };
+    const frame_2 = model.Frame{ .frames_since_round_start = 2 };
+    const frame_3 = model.Frame{ .frames_since_round_start = 3 };
+    const frame_4 = model.Frame{ .frames_since_round_start = 4 };
+
+    controller.record();
+    controller.processFrame(&frame_1);
+    controller.processFrame(&frame_2);
+    controller.processFrame(&frame_3);
+    controller.processFrame(&frame_4);
+    controller.pause();
+    controller.setCurrentFrameIndex(1);
+    controller.play();
+
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_2, controller.getCurrentFrame().?.*);
+    controller.update(0.5 * Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_2, controller.getCurrentFrame().?.*);
+    controller.update(Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_3, controller.getCurrentFrame().?.*);
+    controller.update(Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
+    controller.update(Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
+}
+
+test "should play recording from beginning when playing after paused on the end of the recording" {
+    var controller = Controller.init(testing.allocator);
+    defer controller.deinit();
+
+    const frame_1 = model.Frame{ .frames_since_round_start = 1 };
+    const frame_2 = model.Frame{ .frames_since_round_start = 2 };
+    const frame_3 = model.Frame{ .frames_since_round_start = 3 };
+    const frame_4 = model.Frame{ .frames_since_round_start = 4 };
+
+    controller.record();
+    controller.processFrame(&frame_1);
+    controller.processFrame(&frame_2);
+    controller.processFrame(&frame_3);
+    controller.processFrame(&frame_4);
+    controller.pause();
+    controller.setCurrentFrameIndex(3);
+    controller.play();
+
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_1, controller.getCurrentFrame().?.*);
+    controller.update(0.5 * Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_1, controller.getCurrentFrame().?.*);
+    controller.update(Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_2, controller.getCurrentFrame().?.*);
+    controller.update(2.0 * Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
+    controller.update(Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
+
+    controller.play();
+
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_1, controller.getCurrentFrame().?.*);
+    controller.update(0.5 * Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_1, controller.getCurrentFrame().?.*);
+    controller.update(Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_2, controller.getCurrentFrame().?.*);
+    controller.update(2.0 * Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
+    controller.update(Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
+}
+
+test "should pause at the current frame when pausing while playing" {
+    var controller = Controller.init(testing.allocator);
+    defer controller.deinit();
+
+    const frame_1 = model.Frame{ .frames_since_round_start = 1 };
+    const frame_2 = model.Frame{ .frames_since_round_start = 2 };
+    const frame_3 = model.Frame{ .frames_since_round_start = 3 };
+    const frame_4 = model.Frame{ .frames_since_round_start = 4 };
+
+    controller.record();
+    controller.processFrame(&frame_1);
+    controller.processFrame(&frame_2);
+    controller.processFrame(&frame_3);
+    controller.processFrame(&frame_4);
+    controller.play();
+
+    controller.update(0.9 * Controller.normal_speed_frame_time);
+
+    controller.pause();
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_1, controller.getCurrentFrame().?.*);
+    controller.update(10 * Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_1, controller.getCurrentFrame().?.*);
+    controller.play();
+
+    controller.update(1.9 * Controller.normal_speed_frame_time);
+
+    controller.pause();
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_2, controller.getCurrentFrame().?.*);
+    controller.update(10 * Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_2, controller.getCurrentFrame().?.*);
+    controller.play();
+
+    controller.update(2.9 * Controller.normal_speed_frame_time);
+
+    controller.pause();
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
+    controller.update(10 * Controller.normal_speed_frame_time);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
+    controller.play();
+}
