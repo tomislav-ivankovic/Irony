@@ -89,6 +89,9 @@ pub const Controller = struct {
 
     pub fn play(self: *Self) void {
         const total_frames = self.getTotalFrames();
+        if (total_frames == 0) {
+            return;
+        }
         const index = switch (self.mode) {
             .live => 0,
             .record => |*state| state.segment_start_index,
@@ -104,7 +107,7 @@ pub const Controller = struct {
     }
 
     pub fn pause(self: *Self) void {
-        if (self.mode == .pause) {
+        if (self.mode == .pause or self.getTotalFrames() == 0) {
             return;
         }
         const index = self.getCurrentFrameIndex() orelse 0;
@@ -136,6 +139,9 @@ pub const Controller = struct {
     }
 
     pub fn clear(self: *Self) void {
+        if (self.getTotalFrames() == 0) {
+            return;
+        }
         self.flushSegment();
         self.recording.clearAndFree();
         self.mode = .{ .live = .{} };

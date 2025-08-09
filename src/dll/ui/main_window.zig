@@ -10,6 +10,7 @@ const ui = @import("root.zig");
 pub const MainWindow = struct {
     is_first_draw: bool = true,
     is_open: bool = false,
+    keybinds: ui.Keybinds(.{}) = .{},
     logs_window: ui.LogsWindow = .{},
     game_memory_window: ui.GameMemoryWindow = .{},
     quadrant_layout: ui.QuadrantLayout = .{},
@@ -31,7 +32,7 @@ pub const MainWindow = struct {
 
     pub fn draw(self: *Self, game_memory: *const game.Memory, controller: *core.Controller) void {
         self.handleFirstDraw();
-        self.handleOpenKey();
+        self.keybinds.handle(&self.is_open, controller);
         if (!self.is_open) {
             return;
         }
@@ -63,14 +64,8 @@ pub const MainWindow = struct {
         if (!self.is_first_draw) {
             return;
         }
-        sdk.ui.toasts.send(.success, null, "Irony initialized. Press F2 to open the Irony window.", .{});
+        sdk.ui.toasts.send(.success, null, "Irony initialized. Press [Tab] to open the Irony window.", .{});
         self.is_first_draw = false;
-    }
-
-    fn handleOpenKey(self: *Self) void {
-        if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F2, false)) {
-            self.is_open = !self.is_open;
-        }
     }
 
     fn drawSecondaryWindows(self: *Self, game_memory: *const game.Memory) void {

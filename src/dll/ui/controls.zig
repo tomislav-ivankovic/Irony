@@ -132,7 +132,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
                 controller.play();
             }
             if (imgui.igIsItemHovered(0)) {
-                imgui.igSetTooltip("Play");
+                imgui.igSetTooltip("Play [F1]");
             }
         }
 
@@ -144,7 +144,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
                 controller.pause();
             }
             if (imgui.igIsItemHovered(0)) {
-                imgui.igSetTooltip("Pause");
+                imgui.igSetTooltip("Pause [F2]");
             }
         }
 
@@ -156,7 +156,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
                 controller.stop();
             }
             if (imgui.igIsItemHovered(0)) {
-                imgui.igSetTooltip("Stop");
+                imgui.igSetTooltip("Stop [F3]");
             }
         }
 
@@ -168,7 +168,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
                 controller.record();
             }
             if (imgui.igIsItemHovered(0)) {
-                imgui.igSetTooltip("Start Recording");
+                imgui.igSetTooltip("Start Recording [F4]");
             }
         }
 
@@ -182,7 +182,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
                 controller.setCurrentFrameIndex(0);
             }
             if (imgui.igIsItemHovered(0)) {
-                imgui.igSetTooltip("Go To First Frame");
+                imgui.igSetTooltip("Go To First Frame [F5]");
             }
         }
 
@@ -196,7 +196,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
                 controller.setCurrentFrameIndex(total - 1);
             }
             if (imgui.igIsItemHovered(0)) {
-                imgui.igSetTooltip("Go To Last Frame");
+                imgui.igSetTooltip("Go To Last Frame [F7]");
             }
         }
 
@@ -213,7 +213,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
                 controller.setCurrentFrameIndex(next);
             }
             if (imgui.igIsItemHovered(0)) {
-                imgui.igSetTooltip("Go To Previous Frame");
+                imgui.igSetTooltip("Go To Previous Frame [F6]");
             }
         }
 
@@ -230,7 +230,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
                 controller.setCurrentFrameIndex(next);
             }
             if (imgui.igIsItemHovered(0)) {
-                imgui.igSetTooltip("Go To Next Frame");
+                imgui.igSetTooltip("Go To Next Frame [F7]");
             }
         }
 
@@ -242,7 +242,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
                 controller.clear();
             }
             if (imgui.igIsItemHovered(0)) {
-                imgui.igSetTooltip("Clear Recording");
+                imgui.igSetTooltip("Clear Recording [F9]");
             }
         }
 
@@ -258,11 +258,11 @@ pub fn Controls(comptime config: ControlsConfig) type {
                 imgui.igOpenPopup_Str("speed_popup", 0);
             }
             if (imgui.igIsItemHovered(0)) {
-                imgui.igSetTooltip("Playback Speed");
+                imgui.igSetTooltip("Playback Speed [F10 and F11]");
             }
             if (imgui.igBeginPopup("speed_popup", 0)) {
                 defer imgui.igEndPopup();
-                _ = imgui.igSliderFloat("###speed_slider", speed, -4.0, 4.0, "%.2fx", 0);
+                _ = imgui.igSliderFloat("###speed_slider", speed, 0.1, 4.0, "%.2fx", 0);
                 inline for ([_]f32{ 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0 }) |option| {
                     const text = std.fmt.comptimePrint("{d:.2}x", .{option});
                     if (imgui.igSelectable_Bool(text, speed.* == option, 0, .{})) {
