@@ -13,57 +13,113 @@ pub fn Keybinds(comptime config: KeybindsConfig) type {
 
         pub fn handle(self: *Self, is_main_window_open: *bool, controller: *config.Controller) void {
             _ = self;
+            handleMainWindowKey(is_main_window_open);
+            handlePlayKey(controller);
+            handlePauseKey(controller);
+            handleStopKey(controller);
+            handleRecordKey(controller);
+            handleFirstFrameKey(controller);
+            handlePreviousFrameKey(controller);
+            handleNextFrameKey(controller);
+            handleLastFrameKey(controller);
+            handleClearKey(controller);
+            handleDecreaseSpeedKey(controller);
+            handleIncreaseSpeedKey(controller);
+        }
+
+        fn handleMainWindowKey(is_main_window_open: *bool) void {
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_Tab, false)) {
                 is_main_window_open.* = !is_main_window_open.*;
             }
+        }
+
+        fn handlePlayKey(controller: *config.Controller) void {
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F1, false)) {
                 controller.play();
             }
+        }
+
+        fn handlePauseKey(controller: *config.Controller) void {
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F2, false)) {
                 controller.pause();
             }
+        }
+
+        fn handleStopKey(controller: *config.Controller) void {
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F3, false)) {
                 controller.stop();
             }
+        }
+
+        fn handleRecordKey(controller: *config.Controller) void {
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F4, false)) {
                 controller.record();
             }
-            if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F5, false)) {
-                const current = controller.getCurrentFrameIndex();
-                const total = controller.getTotalFrames();
-                if (total != 0 and current != 0) {
-                    controller.setCurrentFrameIndex(0);
-                }
+        }
+
+        fn handleFirstFrameKey(controller: *config.Controller) void {
+            if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F5, false)) {
+                return;
             }
-            if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F6, true)) {
-                const current = controller.getCurrentFrameIndex();
-                const total = controller.getTotalFrames();
-                if (total != 0 and current != 0) {
-                    const next = if (current != null and current != 0) current.? - 1 else 0;
-                    controller.setCurrentFrameIndex(next);
-                }
+            const current = controller.getCurrentFrameIndex();
+            const total = controller.getTotalFrames();
+            if (total == 0 or current == 0) {
+                return;
             }
-            if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F7, true)) {
-                const current = controller.getCurrentFrameIndex();
-                const total = controller.getTotalFrames();
-                if (total != 0 and (current == null or current.? < total - 1)) {
-                    const next = if (current != null) current.? + 1 else 0;
-                    controller.setCurrentFrameIndex(next);
-                }
+            controller.setCurrentFrameIndex(0);
+        }
+
+        fn handleLastFrameKey(controller: *config.Controller) void {
+            if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F8, false)) {
+                return;
             }
-            if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F8, false)) {
-                const current = controller.getCurrentFrameIndex();
-                const total = controller.getTotalFrames();
-                if (total != 0 and (current == null or current.? < total - 1)) {
-                    controller.setCurrentFrameIndex(total - 1);
-                }
+            const current = controller.getCurrentFrameIndex();
+            const total = controller.getTotalFrames();
+            if (total == 0 or (current != null and current.? >= total - 1)) {
+                return;
             }
+            controller.setCurrentFrameIndex(total - 1);
+        }
+
+        fn handlePreviousFrameKey(controller: *config.Controller) void {
+            if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F6, true)) {
+                return;
+            }
+            const current = controller.getCurrentFrameIndex();
+            const total = controller.getTotalFrames();
+            if (total == 0 or current == 0) {
+                return;
+            }
+            const next = if (current != null and current != 0) current.? - 1 else 0;
+            controller.setCurrentFrameIndex(next);
+        }
+
+        fn handleNextFrameKey(controller: *config.Controller) void {
+            if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F7, true)) {
+                return;
+            }
+            const current = controller.getCurrentFrameIndex();
+            const total = controller.getTotalFrames();
+            if (total == 0 or (current != null and current.? >= total - 1)) {
+                return;
+            }
+            const next = if (current != null) current.? + 1 else 0;
+            controller.setCurrentFrameIndex(next);
+        }
+
+        fn handleClearKey(controller: *config.Controller) void {
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F9, false)) {
                 controller.clear();
             }
+        }
+
+        fn handleDecreaseSpeedKey(controller: *config.Controller) void {
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F10, true)) {
                 controller.playback_speed = @max(controller.playback_speed - 0.1, 0.1);
             }
+        }
+
+        fn handleIncreaseSpeedKey(controller: *config.Controller) void {
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F11, true)) {
                 controller.playback_speed = @min(controller.playback_speed + 0.1, 4.0);
             }
