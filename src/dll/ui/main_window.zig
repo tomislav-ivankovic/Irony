@@ -20,10 +20,8 @@ pub const MainWindow = struct {
 
     const Self = @This();
 
-    pub fn tick(self: *Self, frame: ?*const model.Frame) void {
-        if (frame) |f| {
-            self.view.processFrame(f);
-        }
+    pub fn processFrame(self: *Self, frame: *const model.Frame) void {
+        self.view.processFrame(frame);
     }
 
     pub fn update(self: *Self, delta_time: f32) void {

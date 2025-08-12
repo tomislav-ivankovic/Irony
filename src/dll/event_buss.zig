@@ -3,6 +3,7 @@ const w32 = @import("win32").everything;
 const imgui = @import("imgui");
 const sdk = @import("../sdk/root.zig");
 const core = @import("core/root.zig");
+const model = @import("model/root.zig");
 const ui = @import("ui/root.zig");
 const game = @import("game/root.zig");
 
@@ -111,9 +112,12 @@ pub const EventBuss = struct {
         }
     }
 
+    fn processFrame(self: *Self, frame: *const model.Frame) void {
+        self.main_window.processFrame(frame);
+    }
+
     pub fn tick(self: *Self, game_memory: *const game.Memory) void {
-        self.core.tick(game_memory);
-        self.main_window.tick(self.core.controller.getCurrentFrame());
+        self.core.tick(game_memory, self, processFrame);
     }
 
     pub fn draw(
@@ -130,7 +134,7 @@ pub const EventBuss = struct {
         _ = device;
 
         const delta_time = self.timer.measureDeltaTime();
-        self.core.update(delta_time);
+        self.core.update(delta_time, self, processFrame);
         sdk.ui.toasts.update(delta_time);
         self.main_window.update(delta_time);
 
