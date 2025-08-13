@@ -85,7 +85,6 @@ test {
     _ = @import("dll/ui/controls.zig");
     _ = @import("dll/ui/data.zig");
     _ = @import("dll/ui/game_memory_window.zig");
-    _ = @import("dll/ui/keybinds.zig");
     _ = @import("dll/ui/main_window.zig");
     _ = @import("dll/ui/message_window.zig");
     _ = @import("dll/ui/quadrant-layout.zig");
