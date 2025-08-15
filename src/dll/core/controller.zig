@@ -1276,4 +1276,172 @@ test "should pause at the current frame when pausing while playing" {
     try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
 }
 
-// TODO Scrubbing tests.
+test "should scrub recording from beginning to end when scrubbing in forward direction after recording" {
+    const Callback = struct {
+        var times_called: usize = 0;
+        var last_frame: ?model.Frame = null;
+
+        fn call(_: void, frame: *const model.Frame) void {
+            times_called += 1;
+            last_frame = frame.*;
+        }
+    };
+
+    var controller = Controller.init(testing.allocator);
+    defer controller.deinit();
+
+    var frames: [100]model.Frame = undefined;
+    for (0..frames.len) |index| {
+        frames[index] = model.Frame{ .frames_since_round_start = @intCast(index) };
+    }
+
+    controller.record();
+    for (&frames) |*frame| {
+        controller.processFrame(frame, {}, Callback.call);
+    }
+    controller.scrub(.forward);
+
+    try testing.expectEqual(frames.len, Callback.times_called);
+    try testing.expectEqual(frames[frames.len - 1], Callback.last_frame);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frames[0], controller.getCurrentFrame().?.*);
+
+    controller.update(0.0, {}, Callback.call);
+
+    var scrubbing_time: f32 = 0.0;
+    var frame_index: usize = 0;
+    var frame_progress: f32 = 0.5;
+    while (frame_index < frames.len) {
+        try testing.expectEqual(frames.len + 1 + frame_index, Callback.times_called);
+        try testing.expectEqual(frames[frame_index], Callback.last_frame);
+        try testing.expect(controller.getCurrentFrame() != null);
+        try testing.expectEqual(frames[frame_index], controller.getCurrentFrame().?.*);
+
+        controller.update(Controller.frame_time, {}, Callback.call);
+
+        const speed = std.math.lerp(
+            Controller.min_scrub_speed,
+            Controller.max_scrub_speed,
+            sdk.math.smoothStep(0, Controller.scrub_ramp_up_time, scrubbing_time),
+        );
+        frame_progress += speed;
+        frame_index += @intFromFloat(frame_progress);
+        frame_progress -= @floor(frame_progress);
+        scrubbing_time += Controller.frame_time;
+    }
+
+    controller.update(100 * Controller.frame_time, {}, Callback.call);
+
+    try testing.expectEqual(2 * frames.len, Callback.times_called);
+    try testing.expectEqual(frames[frames.len - 1], Callback.last_frame);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frames[frames.len - 1], controller.getCurrentFrame().?.*);
+}
+
+test "should scrub recording from end to beginning when scrubbing in backward direction after recording" {
+    const Callback = struct {
+        var times_called: usize = 0;
+        var last_frame: ?model.Frame = null;
+
+        fn call(_: void, frame: *const model.Frame) void {
+            times_called += 1;
+            last_frame = frame.*;
+        }
+    };
+
+    var controller = Controller.init(testing.allocator);
+    defer controller.deinit();
+
+    var frames: [100]model.Frame = undefined;
+    for (0..frames.len) |index| {
+        frames[index] = model.Frame{ .frames_since_round_start = @intCast(index) };
+    }
+
+    controller.record();
+    for (&frames) |*frame| {
+        controller.processFrame(frame, {}, Callback.call);
+    }
+    controller.scrub(.backward);
+
+    try testing.expectEqual(frames.len, Callback.times_called);
+    try testing.expectEqual(frames[frames.len - 1], Callback.last_frame);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frames[frames.len - 1], controller.getCurrentFrame().?.*);
+
+    var scrubbing_time: f32 = 0.0;
+    var frame_index: usize = 0;
+    var frame_progress: f32 = 0.5;
+    while (frame_index < frames.len) {
+        try testing.expectEqual(frames.len + frame_index, Callback.times_called);
+        try testing.expectEqual(frames[frames.len - 1 - frame_index], Callback.last_frame);
+        try testing.expect(controller.getCurrentFrame() != null);
+        try testing.expectEqual(frames[frames.len - 1 - frame_index], controller.getCurrentFrame().?.*);
+
+        controller.update(Controller.frame_time, {}, Callback.call);
+
+        const speed = std.math.lerp(
+            Controller.min_scrub_speed,
+            Controller.max_scrub_speed,
+            sdk.math.smoothStep(0, Controller.scrub_ramp_up_time, scrubbing_time),
+        );
+        frame_progress += speed;
+        frame_index += @intFromFloat(frame_progress);
+        frame_progress -= @floor(frame_progress);
+        scrubbing_time += Controller.frame_time;
+    }
+
+    controller.update(100 * Controller.frame_time, {}, Callback.call);
+
+    try testing.expectEqual(2 * frames.len - 1, Callback.times_called);
+    try testing.expectEqual(frames[0], Callback.last_frame);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frames[0], controller.getCurrentFrame().?.*);
+}
+
+test "should scrub staying on the same place when scrubbing in neutral direction" {
+    const Callback = struct {
+        var times_called: usize = 0;
+        var last_frame: ?model.Frame = null;
+
+        fn call(_: void, frame: *const model.Frame) void {
+            times_called += 1;
+            last_frame = frame.*;
+        }
+    };
+
+    var controller = Controller.init(testing.allocator);
+    defer controller.deinit();
+
+    const frame_1 = model.Frame{ .frames_since_round_start = 1 };
+    const frame_2 = model.Frame{ .frames_since_round_start = 2 };
+    const frame_3 = model.Frame{ .frames_since_round_start = 3 };
+    const frame_4 = model.Frame{ .frames_since_round_start = 4 };
+
+    controller.record();
+    controller.processFrame(&frame_1, {}, Callback.call);
+    controller.processFrame(&frame_2, {}, Callback.call);
+    controller.processFrame(&frame_3, {}, Callback.call);
+    controller.processFrame(&frame_4, {}, Callback.call);
+    controller.pause();
+    controller.setCurrentFrameIndex(2);
+    controller.scrub(.neutral);
+
+    try testing.expectEqual(4, Callback.times_called);
+    try testing.expectEqual(frame_4, Callback.last_frame);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_3, controller.getCurrentFrame().?.*);
+
+    controller.update(Controller.frame_time, {}, Callback.call);
+
+    try testing.expectEqual(5, Callback.times_called);
+    try testing.expectEqual(frame_3, Callback.last_frame);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_3, controller.getCurrentFrame().?.*);
+
+    controller.update(10 * Controller.frame_time, {}, Callback.call);
+
+    try testing.expectEqual(5, Callback.times_called);
+    try testing.expectEqual(frame_3, Callback.last_frame);
+    try testing.expect(controller.getCurrentFrame() != null);
+    try testing.expectEqual(frame_3, controller.getCurrentFrame().?.*);
+}
