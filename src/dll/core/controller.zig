@@ -39,7 +39,7 @@ pub const Controller = struct {
         direction: ScrubDirection,
         frame_index: usize,
         frame_progress: f32,
-        current_speed: f32,
+        scrubbing_time: f32,
         is_frame_processed: bool,
     };
     pub const ScrubDirection = enum {
@@ -151,14 +151,18 @@ pub const Controller = struct {
                     }
                     state.is_frame_processed = true;
                 }
-                const k = comptime -std.math.log(f32, std.math.e, 0.1) / scrub_ramp_up_time;
-                state.current_speed += (max_scrub_speed - state.current_speed) * (1 - std.math.exp(-k * delta_time));
+                const abs_speed = std.math.lerp(
+                    min_scrub_speed,
+                    max_scrub_speed,
+                    sdk.math.smoothStep(0, scrub_ramp_up_time, state.scrubbing_time),
+                );
                 const speed = switch (state.direction) {
-                    .forward => state.current_speed,
-                    .backward => -state.current_speed,
+                    .forward => abs_speed,
+                    .backward => -abs_speed,
                     .neutral => 0.0,
                 };
                 state.frame_progress += speed * delta_time / frame_time;
+                state.scrubbing_time += delta_time;
                 while (state.frame_progress < 0.0) {
                     if (state.frame_index <= 0) {
                         self.pause();
@@ -302,7 +306,7 @@ pub const Controller = struct {
             .direction = direction,
             .frame_index = index,
             .frame_progress = 0.5,
-            .current_speed = min_scrub_speed,
+            .scrubbing_time = 0.0,
             .is_frame_processed = is_frame_processed,
         } };
     }

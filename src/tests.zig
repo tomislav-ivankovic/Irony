@@ -14,6 +14,7 @@ test {
     _ = @import("sdk/log/console.zig");
     _ = @import("sdk/log/file.zig");
 
+    _ = @import("sdk/math/easing.zig");
     _ = @import("sdk/math/intersection.zig");
     _ = @import("sdk/math/shapes.zig");
     _ = @import("sdk/math/vector.zig");

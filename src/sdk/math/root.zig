@@ -1,3 +1,9 @@
+pub const step = @import("easing.zig").step;
+pub const smoothStep = @import("easing.zig").smoothStep;
+pub const checkCylinderLineSegmentIntersection = @import("intersection.zig").checkCylinderLineSegmentIntersection;
+pub const checkCircleLineSegmentIntersection = @import("intersection.zig").checkCircleLineSegmentIntersection;
+pub const findIntervalIntersection = @import("intersection.zig").findIntervalIntersection;
+pub const doSlicesIntersect = @import("intersection.zig").doSlicesIntersect;
 pub const vector_tag = @import("vector.zig").vector_tag;
 pub const Vector = @import("vector.zig").Vector;
 pub const Vec2 = Vector(2, f32);
@@ -13,7 +19,3 @@ pub const LineSegment3 = @import("shapes.zig").LineSegment3;
 pub const Circle = @import("shapes.zig").Circle;
 pub const Sphere = @import("shapes.zig").Sphere;
 pub const Cylinder = @import("shapes.zig").Cylinder;
-pub const checkCylinderLineSegmentIntersection = @import("intersection.zig").checkCylinderLineSegmentIntersection;
-pub const checkCircleLineSegmentIntersection = @import("intersection.zig").checkCircleLineSegmentIntersection;
-pub const findIntervalIntersection = @import("intersection.zig").findIntervalIntersection;
-pub const doSlicesIntersect = @import("intersection.zig").doSlicesIntersect;
