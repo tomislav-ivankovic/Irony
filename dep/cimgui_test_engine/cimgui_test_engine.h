@@ -81,7 +81,7 @@ typedef enum {
     ImGuiTestOpFlags_MoveToEdgeU = 1 << 10,
     ImGuiTestOpFlags_MoveToEdgeD = 1 << 11,
 } ImGuiTestOpFlags_;
-typedef char ImGuiTestAction;
+typedef int ImGuiTestAction;
 typedef enum {
     ImGuiTestAction_Unknown = 0,
     ImGuiTestAction_Hover,

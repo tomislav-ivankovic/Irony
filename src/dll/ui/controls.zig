@@ -11,36 +11,24 @@ pub const ControlsConfig = struct {
 
 pub fn Controls(comptime config: ControlsConfig) type {
     return struct {
-        scrubbing_mode: ScrubbingMode = .not_scrubbing,
-        playback_speed: f32 = 1.0,
+        was_playing_before_scrubbing: bool = false,
         total_frames_width: f32 = 0.0,
         speed_button_width: f32 = 0.0,
 
         const Self = @This();
-        pub const ScrubbingMode = union(enum) {
-            not_scrubbing: void,
-            rewinding: ScrubbingState,
-            fast_forwarding: ScrubbingState,
-            neutral_scrubbing: ScrubbingState,
-        };
-        pub const ScrubbingState = struct {
-            was_playing_before_scrubbing: bool,
-        };
-        pub const rewind_speed = -2.0;
-        pub const fast_forward_speed = 2.0;
 
         pub fn handleKeybinds(self: *Self, controller: *config.Controller) void {
-            self.handlePlayKey(controller);
-            self.handlePauseKey(controller);
-            self.handleStopKey(controller);
-            self.handleRecordKey(controller);
+            handlePlayKey(controller);
+            handlePauseKey(controller);
+            handleStopKey(controller);
+            handleRecordKey(controller);
             self.handleRewindKey(controller);
-            self.handlePreviousFrameKey(controller);
-            self.handleNextFrameKey(controller);
+            handlePreviousFrameKey(controller);
+            handleNextFrameKey(controller);
             self.handleFastForwardKey(controller);
-            self.handleClearKey(controller);
-            self.handleDecreaseSpeedKey(controller);
-            self.handleIncreaseSpeedKey(controller);
+            handleClearKey(controller);
+            handleDecreaseSpeedKey(controller);
+            handleIncreaseSpeedKey(controller);
         }
 
         pub fn draw(self: *Self, controller: *config.Controller) void {
@@ -69,27 +57,27 @@ pub fn Controls(comptime config: ControlsConfig) type {
             const window_width = available_size.x;
             imgui.igSetCursorPosX(seekbar_x);
 
-            self.drawPlayButton(controller);
+            drawPlayButton(controller);
             imgui.igSameLine(0, spacing);
-            self.drawPauseButton(controller);
+            drawPauseButton(controller);
             imgui.igSameLine(0, spacing);
-            self.drawStopButton(controller);
+            drawStopButton(controller);
             imgui.igSameLine(0, spacing);
-            self.drawRecordButton(controller);
+            drawRecordButton(controller);
 
             imgui.igSameLine(0, 2 * spacing);
 
             self.drawRewindButton(controller);
             imgui.igSameLine(0, spacing);
-            self.drawPreviousFrameButton(controller);
+            drawPreviousFrameButton(controller);
             imgui.igSameLine(0, spacing);
-            self.drawNextFrameButton(controller);
+            drawNextFrameButton(controller);
             imgui.igSameLine(0, spacing);
             self.drawFastForwardButton(controller);
 
             imgui.igSameLine(0, 2 * spacing);
 
-            self.drawClearButton(controller);
+            drawClearButton(controller);
 
             imgui.igSameLine(0, 2 * spacing);
             const speed_button_x = @max(
@@ -98,7 +86,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
             );
             imgui.igSetCursorPosX(speed_button_x);
 
-            self.drawSpeedButton(controller);
+            drawSpeedButton(controller);
 
             var speed_button_size: imgui.ImVec2 = undefined;
             imgui.igGetItemRectSize(&speed_button_size);
@@ -155,35 +143,35 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn drawPlayButton(self: *const Self, controller: *config.Controller) void {
-            const disabled = self.isPlayDisabled(controller);
+        fn drawPlayButton(controller: *config.Controller) void {
+            const disabled = isPlayDisabled(controller);
             if (disabled) imgui.igBeginDisabled(true);
             defer if (disabled) imgui.igEndDisabled();
             if (imgui.igButton(" ▶ ###play", .{})) {
-                controller.play(self.playback_speed);
+                controller.play();
             }
             if (imgui.igIsItemHovered(0)) {
                 imgui.igSetTooltip("Play [F1]");
             }
         }
 
-        fn handlePlayKey(self: *const Self, controller: *config.Controller) void {
-            if (self.isPlayDisabled(controller)) {
+        fn handlePlayKey(controller: *config.Controller) void {
+            if (isPlayDisabled(controller)) {
                 return;
             }
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F1, false)) {
-                controller.play(self.playback_speed);
+                controller.play();
             }
         }
 
-        fn isPlayDisabled(self: *const Self, controller: *const config.Controller) bool {
-            return self.scrubbing_mode != .not_scrubbing or
+        fn isPlayDisabled(controller: *const config.Controller) bool {
+            return controller.mode == .scrub or
                 controller.mode == .playback or
                 controller.getTotalFrames() == 0;
         }
 
-        fn drawPauseButton(self: *const Self, controller: *config.Controller) void {
-            const disabled = self.isPauseDisabled(controller);
+        fn drawPauseButton(controller: *config.Controller) void {
+            const disabled = isPauseDisabled(controller);
             if (disabled) imgui.igBeginDisabled(true);
             defer if (disabled) imgui.igEndDisabled();
             if (imgui.igButton(" ⏸ ###pause", .{})) {
@@ -194,8 +182,8 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn handlePauseKey(self: *const Self, controller: *config.Controller) void {
-            if (self.isPauseDisabled(controller)) {
+        fn handlePauseKey(controller: *config.Controller) void {
+            if (isPauseDisabled(controller)) {
                 return;
             }
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F2, false)) {
@@ -203,14 +191,14 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn isPauseDisabled(self: *const Self, controller: *const config.Controller) bool {
-            return self.scrubbing_mode != .not_scrubbing or
+        fn isPauseDisabled(controller: *const config.Controller) bool {
+            return controller.mode == .scrub or
                 controller.mode == .pause or
                 controller.getTotalFrames() == 0;
         }
 
-        fn drawStopButton(self: *const Self, controller: *config.Controller) void {
-            const disabled = self.isStopDisabled(controller);
+        fn drawStopButton(controller: *config.Controller) void {
+            const disabled = isStopDisabled(controller);
             if (disabled) imgui.igBeginDisabled(true);
             defer if (disabled) imgui.igEndDisabled();
             if (imgui.igButton(" ⏹ ###stop", .{})) {
@@ -221,8 +209,8 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn handleStopKey(self: *const Self, controller: *config.Controller) void {
-            if (self.isStopDisabled(controller)) {
+        fn handleStopKey(controller: *config.Controller) void {
+            if (isStopDisabled(controller)) {
                 return;
             }
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F3, false)) {
@@ -230,13 +218,12 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn isStopDisabled(self: *const Self, controller: *const config.Controller) bool {
-            return self.scrubbing_mode != .not_scrubbing or
-                controller.mode == .live;
+        fn isStopDisabled(controller: *const config.Controller) bool {
+            return controller.mode == .scrub or controller.mode == .live;
         }
 
-        fn drawRecordButton(self: *const Self, controller: *config.Controller) void {
-            const disabled = self.isRecordDisabled(controller);
+        fn drawRecordButton(controller: *config.Controller) void {
+            const disabled = isRecordDisabled(controller);
             if (disabled) imgui.igBeginDisabled(true);
             defer if (disabled) imgui.igEndDisabled();
             if (imgui.igButton(" ⏺ ###record", .{})) {
@@ -247,8 +234,8 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn handleRecordKey(self: *const Self, controller: *config.Controller) void {
-            if (self.isRecordDisabled(controller)) {
+        fn handleRecordKey(controller: *config.Controller) void {
+            if (isRecordDisabled(controller)) {
                 return;
             }
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F4, false)) {
@@ -256,9 +243,8 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn isRecordDisabled(self: *const Self, controller: *const config.Controller) bool {
-            return self.scrubbing_mode != .not_scrubbing or
-                controller.mode == .record;
+        fn isRecordDisabled(controller: *const config.Controller) bool {
+            return controller.mode == .scrub or controller.mode == .record;
         }
 
         fn drawRewindButton(self: *Self, controller: *config.Controller) void {
@@ -294,37 +280,20 @@ pub fn Controls(comptime config: ControlsConfig) type {
         }
 
         fn startRewind(self: *Self, controller: *config.Controller) void {
-            switch (self.scrubbing_mode) {
-                .not_scrubbing => {
-                    const was_playing = controller.mode == .playback;
-                    self.scrubbing_mode = .{ .rewinding = .{
-                        .was_playing_before_scrubbing = was_playing,
-                    } };
-                    controller.play(rewind_speed);
-                },
-                .fast_forwarding => |*state| {
-                    self.scrubbing_mode = .{ .neutral_scrubbing = state.* };
-                    controller.play(0.0);
-                },
-                else => {},
+            const direction = controller.getScrubDirection();
+            if (direction == null) {
+                self.was_playing_before_scrubbing = controller.mode == .playback;
+                controller.scrub(.backward);
+            } else if (direction == .forward) {
+                controller.scrub(.neutral);
             }
         }
 
         fn stopRewind(self: *Self, controller: *config.Controller) void {
-            switch (self.scrubbing_mode) {
-                .rewinding => |*state| {
-                    const was_playing = state.was_playing_before_scrubbing;
-                    self.scrubbing_mode = .not_scrubbing;
-                    if (was_playing) {
-                        controller.play(self.playback_speed);
-                    } else {
-                        controller.pause();
-                    }
-                },
-                .neutral_scrubbing => |*state| {
-                    self.scrubbing_mode = .{ .fast_forwarding = state.* };
-                    controller.play(fast_forward_speed);
-                },
+            const direction = controller.getScrubDirection() orelse return;
+            switch (direction) {
+                .backward => if (self.was_playing_before_scrubbing) controller.play() else controller.pause(),
+                .neutral => controller.scrub(.forward),
                 else => {},
             }
         }
@@ -362,43 +331,26 @@ pub fn Controls(comptime config: ControlsConfig) type {
         }
 
         fn startFastForward(self: *Self, controller: *config.Controller) void {
-            switch (self.scrubbing_mode) {
-                .not_scrubbing => {
-                    const was_playing = controller.mode == .playback;
-                    self.scrubbing_mode = .{ .fast_forwarding = .{
-                        .was_playing_before_scrubbing = was_playing,
-                    } };
-                    controller.play(fast_forward_speed);
-                },
-                .rewinding => |*state| {
-                    self.scrubbing_mode = .{ .neutral_scrubbing = state.* };
-                    controller.play(0.0);
-                },
-                else => {},
+            const direction = controller.getScrubDirection();
+            if (direction == null) {
+                self.was_playing_before_scrubbing = controller.mode == .playback;
+                controller.scrub(.forward);
+            } else if (direction == .backward) {
+                controller.scrub(.neutral);
             }
         }
 
         fn stopFastForward(self: *Self, controller: *config.Controller) void {
-            switch (self.scrubbing_mode) {
-                .fast_forwarding => |*state| {
-                    const was_playing = state.was_playing_before_scrubbing;
-                    self.scrubbing_mode = .not_scrubbing;
-                    if (was_playing) {
-                        controller.play(self.playback_speed);
-                    } else {
-                        controller.pause();
-                    }
-                },
-                .neutral_scrubbing => |*state| {
-                    self.scrubbing_mode = .{ .rewinding = state.* };
-                    controller.play(rewind_speed);
-                },
+            const direction = controller.getScrubDirection() orelse return;
+            switch (direction) {
+                .forward => if (self.was_playing_before_scrubbing) controller.play() else controller.pause(),
+                .neutral => controller.scrub(.backward),
                 else => {},
             }
         }
 
-        fn drawPreviousFrameButton(self: *const Self, controller: *config.Controller) void {
-            const disabled = self.isPreviousFrameDisabled(controller);
+        fn drawPreviousFrameButton(controller: *config.Controller) void {
+            const disabled = isPreviousFrameDisabled(controller);
             if (disabled) imgui.igBeginDisabled(true);
             defer if (disabled) imgui.igEndDisabled();
             imgui.igPushItemFlag(imgui.ImGuiItemFlags_ButtonRepeat, true);
@@ -411,8 +363,8 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn handlePreviousFrameKey(self: *const Self, controller: *config.Controller) void {
-            if (self.isPreviousFrameDisabled(controller)) {
+        fn handlePreviousFrameKey(controller: *config.Controller) void {
+            if (isPreviousFrameDisabled(controller)) {
                 return;
             }
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F6, true)) {
@@ -420,8 +372,8 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn isPreviousFrameDisabled(self: *const Self, controller: *const config.Controller) bool {
-            if (self.scrubbing_mode != .not_scrubbing) {
+        fn isPreviousFrameDisabled(controller: *const config.Controller) bool {
+            if (controller.mode == .scrub) {
                 return true;
             }
             const current = controller.getCurrentFrameIndex();
@@ -438,8 +390,8 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn drawNextFrameButton(self: *const Self, controller: *config.Controller) void {
-            const disabled = self.isNextFrameDisabled(controller);
+        fn drawNextFrameButton(controller: *config.Controller) void {
+            const disabled = isNextFrameDisabled(controller);
             if (disabled) imgui.igBeginDisabled(true);
             defer if (disabled) imgui.igEndDisabled();
             imgui.igPushItemFlag(imgui.ImGuiItemFlags_ButtonRepeat, true);
@@ -452,8 +404,8 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn handleNextFrameKey(self: *const Self, controller: *config.Controller) void {
-            if (self.isNextFrameDisabled(controller)) {
+        fn handleNextFrameKey(controller: *config.Controller) void {
+            if (isNextFrameDisabled(controller)) {
                 return;
             }
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F7, true)) {
@@ -461,8 +413,8 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn isNextFrameDisabled(self: *const Self, controller: *const config.Controller) bool {
-            if (self.scrubbing_mode != .not_scrubbing) {
+        fn isNextFrameDisabled(controller: *const config.Controller) bool {
+            if (controller.mode == .scrub) {
                 return true;
             }
             const current = controller.getCurrentFrameIndex();
@@ -479,8 +431,8 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn drawClearButton(self: *const Self, controller: *config.Controller) void {
-            const disabled = self.isClearDisabled(controller);
+        fn drawClearButton(controller: *config.Controller) void {
+            const disabled = isClearDisabled(controller);
             if (disabled) imgui.igBeginDisabled(true);
             defer if (disabled) imgui.igEndDisabled();
             if (imgui.igButton(" 🗑 ###clear", .{})) {
@@ -491,8 +443,8 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn handleClearKey(self: *const Self, controller: *config.Controller) void {
-            if (self.isClearDisabled(controller)) {
+        fn handleClearKey(controller: *config.Controller) void {
+            if (isClearDisabled(controller)) {
                 return;
             }
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F9, false)) {
@@ -500,17 +452,16 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn isClearDisabled(self: *const Self, controller: *const config.Controller) bool {
-            return self.scrubbing_mode != .not_scrubbing or
-                controller.getTotalFrames() == 0;
+        fn isClearDisabled(controller: *const config.Controller) bool {
+            return controller.mode == .scrub or controller.getTotalFrames() == 0;
         }
 
-        fn drawSpeedButton(self: *Self, controller: *config.Controller) void {
+        fn drawSpeedButton(controller: *config.Controller) void {
             var buffer: [32]u8 = undefined;
             const button_text = std.fmt.bufPrintZ(
                 &buffer,
                 " ⏲ {d:.2}x ###speed",
-                .{self.playback_speed},
+                .{controller.playback_speed},
             ) catch " ⏲ ###speed";
             if (imgui.igButton(button_text, .{})) {
                 imgui.igOpenPopup_Str("speed_popup", 0);
@@ -520,40 +471,28 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
             if (imgui.igBeginPopup("speed_popup", 0)) {
                 defer imgui.igEndPopup();
-                const changed = imgui.igSliderFloat("###speed_slider", &self.playback_speed, 0.1, 4.0, "%.2fx", 0);
-                if (changed and controller.mode == .playback) {
-                    controller.play(self.playback_speed);
-                }
+                _ = imgui.igSliderFloat("###speed_slider", &controller.playback_speed, 0.1, 4.0, "%.2fx", 0);
                 inline for ([_]f32{ 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0 }) |option| {
                     const text = std.fmt.comptimePrint("{d:.2}x", .{option});
-                    if (imgui.igSelectable_Bool(text, self.playback_speed == option, 0, .{})) {
-                        self.playback_speed = option;
-                        if (controller.mode == .playback) {
-                            controller.play(self.playback_speed);
-                        }
+                    if (imgui.igSelectable_Bool(text, controller.playback_speed == option, 0, .{})) {
+                        controller.playback_speed = option;
                     }
                 }
             }
         }
 
-        fn handleDecreaseSpeedKey(self: *Self, controller: *config.Controller) void {
+        fn handleDecreaseSpeedKey(controller: *config.Controller) void {
             if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F10, true)) {
                 return;
             }
-            self.playback_speed = @max(self.playback_speed - 0.1, 0.1);
-            if (self.scrubbing_mode == .not_scrubbing and controller.mode == .playback) {
-                controller.play(self.playback_speed);
-            }
+            controller.playback_speed = @max(controller.playback_speed - 0.1, 0.1);
         }
 
-        fn handleIncreaseSpeedKey(self: *Self, controller: *config.Controller) void {
+        fn handleIncreaseSpeedKey(controller: *config.Controller) void {
             if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F11, true)) {
                 return;
             }
-            self.playback_speed = @min(self.playback_speed + 0.1, 4.0);
-            if (self.scrubbing_mode == .not_scrubbing and controller.mode == .playback) {
-                controller.play(self.playback_speed);
-            }
+            controller.playback_speed = @min(controller.playback_speed + 0.1, 4.0);
         }
     };
 }
@@ -562,13 +501,16 @@ const testing = std.testing;
 
 const MockController = struct {
     mode: Mode,
+    playback_speed: f32 = 1.0,
     total_frames: usize = 100,
     current_frame_index: ?usize = null,
+    scrub_direction: ?ScrubDirection = null,
     play_call_count: usize = 0,
-    last_play_speed: ?f32 = null,
     pause_call_count: usize = 0,
     stop_call_count: usize = 0,
     record_call_count: usize = 0,
+    scrub_call_count: usize = 0,
+    last_scrub_direction: ?ScrubDirection = null,
     clear_call_count: usize = 0,
     set_current_index_call_count: usize = 0,
     set_current_index_argument: ?usize = null,
@@ -579,11 +521,16 @@ const MockController = struct {
         record,
         pause,
         playback,
+        scrub,
+    };
+    pub const ScrubDirection = enum {
+        forward,
+        backward,
+        neutral,
     };
 
-    pub fn play(self: *Self, speed: f32) void {
+    pub fn play(self: *Self) void {
         self.play_call_count += 1;
-        self.last_play_speed = speed;
     }
 
     pub fn pause(self: *Self) void {
@@ -602,6 +549,11 @@ const MockController = struct {
         self.clear_call_count += 1;
     }
 
+    pub fn scrub(self: *Self, direction: ScrubDirection) void {
+        self.scrub_call_count += 1;
+        self.last_scrub_direction = direction;
+    }
+
     pub fn getTotalFrames(self: *const Self) usize {
         return self.total_frames;
     }
@@ -613,6 +565,10 @@ const MockController = struct {
 
     pub fn getCurrentFrameIndex(self: *const Self) ?usize {
         return self.current_frame_index;
+    }
+
+    pub fn getScrubDirection(self: *const Self) ?ScrubDirection {
+        return self.scrub_direction;
     }
 };
 
@@ -750,14 +706,10 @@ test "should call play when play button is clicked or F1 key is pressed" {
         fn testFunction(ctx: sdk.ui.TestContext) !void {
             ctx.setRef("Window");
             try testing.expectEqual(0, controller.play_call_count);
-            controls.playback_speed = 1.23;
             ctx.itemClick("###play", 0, 0);
             try testing.expectEqual(1, controller.play_call_count);
-            try testing.expectEqual(1.23, controller.last_play_speed);
-            controls.playback_speed = 4.56;
             ctx.keyPress(imgui.ImGuiKey_F1, 1);
             try testing.expectEqual(2, controller.play_call_count);
-            try testing.expectEqual(4.56, controller.last_play_speed);
         }
     };
     const context = try sdk.ui.getTestingContext();
@@ -939,10 +891,219 @@ test "should disable record when already recording" {
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should call play(rewind_speed) and pause when rewind button is clicked or F5 key is pressed and controller is not in playback" {
+test "should call scrub(.backward) and pause when rewind button is clicked or F5 key is pressed and controller is not in playback" {
+    const Test = struct {
+        var controller = MockController{ .mode = .record };
+        var controls = Controls(.{ .Controller = MockController }){};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            controls.handleKeybinds(&controller);
+            controls.draw(&controller);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window");
+            ctx.itemAction(imgui.ImGuiTestAction_Hover, "###rewind", 0, null);
+
+            try testing.expectEqual(0, controller.scrub_call_count);
+            try testing.expectEqual(0, controller.pause_call_count);
+
+            ctx.mouseDown(imgui.ImGuiMouseButton_Left);
+
+            try testing.expectEqual(1, controller.scrub_call_count);
+            try testing.expectEqual(.backward, controller.last_scrub_direction);
+            try testing.expectEqual(0, controller.pause_call_count);
+            controller.mode = .scrub;
+            controller.scrub_direction = .backward;
+
+            ctx.mouseUp(imgui.ImGuiMouseButton_Left);
+
+            try testing.expectEqual(1, controller.scrub_call_count);
+            try testing.expectEqual(1, controller.pause_call_count);
+            controller.mode = .pause;
+            controller.scrub_direction = null;
+
+            ctx.keyDown(imgui.ImGuiKey_F5);
+
+            try testing.expectEqual(2, controller.scrub_call_count);
+            try testing.expectEqual(.backward, controller.last_scrub_direction);
+            try testing.expectEqual(1, controller.pause_call_count);
+            controller.mode = .scrub;
+            controller.scrub_direction = .backward;
+
+            ctx.keyUp(imgui.ImGuiKey_F5);
+
+            try testing.expectEqual(2, controller.scrub_call_count);
+            try testing.expectEqual(2, controller.pause_call_count);
+            controller.mode = .pause;
+            controller.scrub_direction = null;
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should call scrub(.backward) and play when rewind button is clicked or F5 key is pressed and controller is in playback" {
+    const Test = struct {
+        var controller = MockController{ .mode = .playback };
+        var controls = Controls(.{ .Controller = MockController }){};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            controls.handleKeybinds(&controller);
+            controls.draw(&controller);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window");
+            ctx.itemAction(imgui.ImGuiTestAction_Hover, "###rewind", 0, null);
+
+            try testing.expectEqual(0, controller.scrub_call_count);
+            try testing.expectEqual(0, controller.play_call_count);
+
+            ctx.mouseDown(imgui.ImGuiMouseButton_Left);
+
+            try testing.expectEqual(1, controller.scrub_call_count);
+            try testing.expectEqual(.backward, controller.last_scrub_direction);
+            try testing.expectEqual(0, controller.play_call_count);
+            controller.mode = .scrub;
+            controller.scrub_direction = .backward;
+
+            ctx.mouseUp(imgui.ImGuiMouseButton_Left);
+
+            try testing.expectEqual(1, controller.scrub_call_count);
+            try testing.expectEqual(1, controller.play_call_count);
+            controller.mode = .playback;
+            controller.scrub_direction = null;
+
+            ctx.keyDown(imgui.ImGuiKey_F5);
+
+            try testing.expectEqual(2, controller.scrub_call_count);
+            try testing.expectEqual(.backward, controller.last_scrub_direction);
+            try testing.expectEqual(1, controller.play_call_count);
+            controller.mode = .scrub;
+            controller.scrub_direction = .backward;
+
+            ctx.keyUp(imgui.ImGuiKey_F5);
+
+            try testing.expectEqual(2, controller.scrub_call_count);
+            try testing.expectEqual(2, controller.play_call_count);
+            controller.mode = .playback;
+            controller.scrub_direction = null;
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should call scrub(.neutral) and scrub(.forward) when rewind button is clicked or F5 key is pressed and controller scrubbing forward" {
+    const Test = struct {
+        var controller = MockController{ .mode = .scrub, .scrub_direction = .forward };
+        var controls = Controls(.{ .Controller = MockController }){};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            controls.handleKeybinds(&controller);
+            controls.draw(&controller);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window");
+            ctx.itemAction(imgui.ImGuiTestAction_Hover, "###rewind", 0, null);
+
+            try testing.expectEqual(0, controller.scrub_call_count);
+
+            ctx.mouseDown(imgui.ImGuiMouseButton_Left);
+
+            try testing.expectEqual(1, controller.scrub_call_count);
+            try testing.expectEqual(.neutral, controller.last_scrub_direction);
+            controller.scrub_direction = .neutral;
+
+            ctx.mouseUp(imgui.ImGuiMouseButton_Left);
+
+            try testing.expectEqual(2, controller.scrub_call_count);
+            try testing.expectEqual(.forward, controller.last_scrub_direction);
+            controller.scrub_direction = .forward;
+
+            ctx.keyDown(imgui.ImGuiKey_F5);
+
+            try testing.expectEqual(3, controller.scrub_call_count);
+            try testing.expectEqual(.neutral, controller.last_scrub_direction);
+            controller.scrub_direction = .neutral;
+
+            ctx.keyUp(imgui.ImGuiKey_F5);
+
+            try testing.expectEqual(4, controller.scrub_call_count);
+            try testing.expectEqual(.forward, controller.last_scrub_direction);
+            controller.scrub_direction = .forward;
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should call scrub(.forward) and pause when fast forward button is clicked or F8 key is pressed and controller is not in playback" {
+    const Test = struct {
+        var controller = MockController{ .mode = .record };
+        var controls = Controls(.{ .Controller = MockController }){};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            controls.handleKeybinds(&controller);
+            controls.draw(&controller);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window");
+            ctx.itemAction(imgui.ImGuiTestAction_Hover, "###fast_forward", 0, null);
+
+            try testing.expectEqual(0, controller.scrub_call_count);
+            try testing.expectEqual(0, controller.pause_call_count);
+
+            ctx.mouseDown(imgui.ImGuiMouseButton_Left);
+
+            try testing.expectEqual(1, controller.scrub_call_count);
+            try testing.expectEqual(.forward, controller.last_scrub_direction);
+            try testing.expectEqual(0, controller.pause_call_count);
+            controller.mode = .scrub;
+            controller.scrub_direction = .forward;
+
+            ctx.mouseUp(imgui.ImGuiMouseButton_Left);
+
+            try testing.expectEqual(1, controller.scrub_call_count);
+            try testing.expectEqual(1, controller.pause_call_count);
+            controller.mode = .pause;
+            controller.scrub_direction = null;
+
+            ctx.keyDown(imgui.ImGuiKey_F8);
+
+            try testing.expectEqual(2, controller.scrub_call_count);
+            try testing.expectEqual(.forward, controller.last_scrub_direction);
+            try testing.expectEqual(1, controller.pause_call_count);
+            controller.mode = .scrub;
+            controller.scrub_direction = .forward;
+
+            ctx.keyUp(imgui.ImGuiKey_F8);
+
+            try testing.expectEqual(2, controller.scrub_call_count);
+            try testing.expectEqual(2, controller.pause_call_count);
+            controller.mode = .pause;
+            controller.scrub_direction = null;
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should call scrub(.forward) and play when fast forward button is clicked or F8 key is pressed and controller is in playback" {
     const Test = struct {
         var controller = MockController{
-            .mode = .record,
+            .mode = .playback,
             .current_frame_index = 50,
             .total_frames = 100,
         };
@@ -957,84 +1118,49 @@ test "should call play(rewind_speed) and pause when rewind button is clicked or 
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
             ctx.setRef("Window");
+            ctx.itemAction(imgui.ImGuiTestAction_Hover, "###fast_forward", 0, null);
 
+            try testing.expectEqual(0, controller.scrub_call_count);
             try testing.expectEqual(0, controller.play_call_count);
-            try testing.expectEqual(0, controller.pause_call_count);
 
-            ctx.itemClick("###rewind", 0, 0);
+            ctx.mouseDown(imgui.ImGuiMouseButton_Left);
 
+            try testing.expectEqual(1, controller.scrub_call_count);
+            try testing.expectEqual(.forward, controller.last_scrub_direction);
+            try testing.expectEqual(0, controller.play_call_count);
+            controller.mode = .scrub;
+            controller.scrub_direction = .forward;
+
+            ctx.mouseUp(imgui.ImGuiMouseButton_Left);
+
+            try testing.expectEqual(1, controller.scrub_call_count);
             try testing.expectEqual(1, controller.play_call_count);
-            try testing.expectEqual(@TypeOf(controls).rewind_speed, controller.last_play_speed);
-            try testing.expectEqual(1, controller.pause_call_count);
+            controller.mode = .playback;
+            controller.scrub_direction = null;
 
-            ctx.keyDown(imgui.ImGuiKey_F5);
+            ctx.keyDown(imgui.ImGuiKey_F8);
 
+            try testing.expectEqual(2, controller.scrub_call_count);
+            try testing.expectEqual(.forward, controller.last_scrub_direction);
+            try testing.expectEqual(1, controller.play_call_count);
+            controller.mode = .scrub;
+            controller.scrub_direction = .forward;
+
+            ctx.keyUp(imgui.ImGuiKey_F8);
+
+            try testing.expectEqual(2, controller.scrub_call_count);
             try testing.expectEqual(2, controller.play_call_count);
-            try testing.expectEqual(@TypeOf(controls).rewind_speed, controller.last_play_speed);
-            try testing.expectEqual(1, controller.pause_call_count);
-
-            ctx.keyUp(imgui.ImGuiKey_F5);
-
-            try testing.expectEqual(2, controller.play_call_count);
-            try testing.expectEqual(2, controller.pause_call_count);
+            controller.mode = .playback;
+            controller.scrub_direction = null;
         }
     };
     const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should call play(rewind_speed) and play(playback_speed) when rewind button is clicked or F5 key is pressed and controller is in playback" {
+test "should call scrub(.neutral) and scrub(.backward) when fast forward button is clicked or F8 key is pressed and controller scrubbing backward" {
     const Test = struct {
-        var controller = MockController{
-            .mode = .playback,
-            .current_frame_index = 50,
-            .total_frames = 100,
-        };
-        var controls = Controls(.{ .Controller = MockController }){ .playback_speed = 123.456 };
-
-        fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, 0);
-            defer imgui.igEnd();
-            controls.handleKeybinds(&controller);
-            controls.draw(&controller);
-        }
-
-        fn testFunction(ctx: sdk.ui.TestContext) !void {
-            ctx.setRef("Window");
-
-            try testing.expectEqual(0, controller.play_call_count);
-            try testing.expectEqual(0, controller.pause_call_count);
-
-            ctx.itemClick("###rewind", 0, 0);
-
-            try testing.expectEqual(2, controller.play_call_count);
-            try testing.expectEqual(123.456, controller.last_play_speed);
-            try testing.expectEqual(0, controller.pause_call_count);
-
-            ctx.keyDown(imgui.ImGuiKey_F5);
-
-            try testing.expectEqual(3, controller.play_call_count);
-            try testing.expectEqual(@TypeOf(controls).rewind_speed, controller.last_play_speed);
-            try testing.expectEqual(0, controller.pause_call_count);
-
-            ctx.keyUp(imgui.ImGuiKey_F5);
-
-            try testing.expectEqual(4, controller.play_call_count);
-            try testing.expectEqual(123.456, controller.last_play_speed);
-            try testing.expectEqual(0, controller.pause_call_count);
-        }
-    };
-    const context = try sdk.ui.getTestingContext();
-    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
-}
-
-test "should call play(fast_forward_speed) and pause when fast forward button is clicked or F8 key is pressed and controller is not in playback" {
-    const Test = struct {
-        var controller = MockController{
-            .mode = .record,
-            .current_frame_index = 50,
-            .total_frames = 100,
-        };
+        var controller = MockController{ .mode = .scrub, .scrub_direction = .backward };
         var controls = Controls(.{ .Controller = MockController }){};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
@@ -1046,71 +1172,33 @@ test "should call play(fast_forward_speed) and pause when fast forward button is
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
             ctx.setRef("Window");
+            ctx.itemAction(imgui.ImGuiTestAction_Hover, "###fast_forward", 0, null);
 
-            try testing.expectEqual(0, controller.play_call_count);
-            try testing.expectEqual(0, controller.pause_call_count);
+            try testing.expectEqual(0, controller.scrub_call_count);
 
-            ctx.itemClick("###fast_forward", 0, 0);
+            ctx.mouseDown(imgui.ImGuiMouseButton_Left);
 
-            try testing.expectEqual(1, controller.play_call_count);
-            try testing.expectEqual(@TypeOf(controls).fast_forward_speed, controller.last_play_speed);
-            try testing.expectEqual(1, controller.pause_call_count);
+            try testing.expectEqual(1, controller.scrub_call_count);
+            try testing.expectEqual(.neutral, controller.last_scrub_direction);
+            controller.scrub_direction = .neutral;
 
-            ctx.keyDown(imgui.ImGuiKey_F8);
+            ctx.mouseUp(imgui.ImGuiMouseButton_Left);
 
-            try testing.expectEqual(2, controller.play_call_count);
-            try testing.expectEqual(@TypeOf(controls).fast_forward_speed, controller.last_play_speed);
-            try testing.expectEqual(1, controller.pause_call_count);
-
-            ctx.keyUp(imgui.ImGuiKey_F8);
-
-            try testing.expectEqual(2, controller.play_call_count);
-            try testing.expectEqual(2, controller.pause_call_count);
-        }
-    };
-    const context = try sdk.ui.getTestingContext();
-    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
-}
-
-test "should call play(fast_forward_speed) and play(playback_speed) when fast forward button is clicked or F8 key is pressed and controller is in playback" {
-    const Test = struct {
-        var controller = MockController{
-            .mode = .playback,
-            .current_frame_index = 50,
-            .total_frames = 100,
-        };
-        var controls = Controls(.{ .Controller = MockController }){ .playback_speed = 123.456 };
-
-        fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, 0);
-            defer imgui.igEnd();
-            controls.handleKeybinds(&controller);
-            controls.draw(&controller);
-        }
-
-        fn testFunction(ctx: sdk.ui.TestContext) !void {
-            ctx.setRef("Window");
-
-            try testing.expectEqual(0, controller.play_call_count);
-            try testing.expectEqual(0, controller.pause_call_count);
-
-            ctx.itemClick("###fast_forward", 0, 0);
-
-            try testing.expectEqual(2, controller.play_call_count);
-            try testing.expectEqual(123.456, controller.last_play_speed);
-            try testing.expectEqual(0, controller.pause_call_count);
+            try testing.expectEqual(2, controller.scrub_call_count);
+            try testing.expectEqual(.backward, controller.last_scrub_direction);
+            controller.scrub_direction = .backward;
 
             ctx.keyDown(imgui.ImGuiKey_F8);
 
-            try testing.expectEqual(3, controller.play_call_count);
-            try testing.expectEqual(@TypeOf(controls).fast_forward_speed, controller.last_play_speed);
-            try testing.expectEqual(0, controller.pause_call_count);
+            try testing.expectEqual(3, controller.scrub_call_count);
+            try testing.expectEqual(.neutral, controller.last_scrub_direction);
+            controller.scrub_direction = .neutral;
 
             ctx.keyUp(imgui.ImGuiKey_F8);
 
-            try testing.expectEqual(4, controller.play_call_count);
-            try testing.expectEqual(123.456, controller.last_play_speed);
-            try testing.expectEqual(0, controller.pause_call_count);
+            try testing.expectEqual(4, controller.scrub_call_count);
+            try testing.expectEqual(.backward, controller.last_scrub_direction);
+            controller.scrub_direction = .backward;
         }
     };
     const context = try sdk.ui.getTestingContext();
@@ -1342,9 +1430,9 @@ test "should disable all buttons/keys except record when nothing is recorded" {
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should disable all buttons/keys except rewind and fast forward while rewinding" {
+test "should disable all buttons/keys except rewind and fast forward while scrubbing" {
     const Test = struct {
-        var controller = MockController{ .mode = .live };
+        var controller = MockController{ .mode = .scrub };
         var controls = Controls(.{ .Controller = MockController }){};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
@@ -1357,14 +1445,11 @@ test "should disable all buttons/keys except rewind and fast forward while rewin
         fn testFunction(ctx: sdk.ui.TestContext) !void {
             ctx.setRef("Window");
 
-            ctx.keyDown(imgui.ImGuiKey_F5);
-            defer ctx.keyUp(imgui.ImGuiKey_F5);
-
-            try testing.expectEqual(1, controller.play_call_count);
+            try testing.expectEqual(0, controller.play_call_count);
             ctx.itemClick("###play", 0, 0);
-            try testing.expectEqual(1, controller.play_call_count);
+            try testing.expectEqual(0, controller.play_call_count);
             ctx.keyPress(imgui.ImGuiKey_F1, 1);
-            try testing.expectEqual(1, controller.play_call_count);
+            try testing.expectEqual(0, controller.play_call_count);
 
             try testing.expectEqual(0, controller.pause_call_count);
             ctx.itemClick("###pause", 0, 0);
@@ -1383,6 +1468,16 @@ test "should disable all buttons/keys except rewind and fast forward while rewin
             try testing.expectEqual(0, controller.record_call_count);
             ctx.keyPress(imgui.ImGuiKey_F4, 1);
             try testing.expectEqual(0, controller.record_call_count);
+
+            try testing.expectEqual(0, controller.scrub_call_count);
+            ctx.itemClick("###rewind", 0, 0);
+            try testing.expectEqual(1, controller.scrub_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F5, 1);
+            try testing.expectEqual(2, controller.scrub_call_count);
+            ctx.itemClick("###fast_forward", 0, 0);
+            try testing.expectEqual(3, controller.scrub_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F8, 1);
+            try testing.expectEqual(4, controller.scrub_call_count);
 
             try testing.expectEqual(0, controller.set_current_index_call_count);
             ctx.itemClick("###previous_frame", 0, 0);
@@ -1405,70 +1500,7 @@ test "should disable all buttons/keys except rewind and fast forward while rewin
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should disable all buttons/keys except rewind and fast forward while fast-forwarding" {
-    const Test = struct {
-        var controller = MockController{ .mode = .live };
-        var controls = Controls(.{ .Controller = MockController }){};
-
-        fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, 0);
-            defer imgui.igEnd();
-            controls.handleKeybinds(&controller);
-            controls.draw(&controller);
-        }
-
-        fn testFunction(ctx: sdk.ui.TestContext) !void {
-            ctx.setRef("Window");
-
-            ctx.keyDown(imgui.ImGuiKey_F8);
-            defer ctx.keyUp(imgui.ImGuiKey_F8);
-
-            try testing.expectEqual(1, controller.play_call_count);
-            ctx.itemClick("###play", 0, 0);
-            try testing.expectEqual(1, controller.play_call_count);
-            ctx.keyPress(imgui.ImGuiKey_F1, 1);
-            try testing.expectEqual(1, controller.play_call_count);
-
-            try testing.expectEqual(0, controller.pause_call_count);
-            ctx.itemClick("###pause", 0, 0);
-            try testing.expectEqual(0, controller.pause_call_count);
-            ctx.keyPress(imgui.ImGuiKey_F2, 1);
-            try testing.expectEqual(0, controller.pause_call_count);
-
-            try testing.expectEqual(0, controller.stop_call_count);
-            ctx.itemClick("###stop", 0, 0);
-            try testing.expectEqual(0, controller.stop_call_count);
-            ctx.keyPress(imgui.ImGuiKey_F3, 1);
-            try testing.expectEqual(0, controller.stop_call_count);
-
-            try testing.expectEqual(0, controller.record_call_count);
-            ctx.itemClick("###record", 0, 0);
-            try testing.expectEqual(0, controller.record_call_count);
-            ctx.keyPress(imgui.ImGuiKey_F4, 1);
-            try testing.expectEqual(0, controller.record_call_count);
-
-            try testing.expectEqual(0, controller.set_current_index_call_count);
-            ctx.itemClick("###previous_frame", 0, 0);
-            try testing.expectEqual(0, controller.set_current_index_call_count);
-            ctx.keyPress(imgui.ImGuiKey_F6, 1);
-            try testing.expectEqual(0, controller.set_current_index_call_count);
-            ctx.itemClick("###next_frame", 0, 0);
-            try testing.expectEqual(0, controller.set_current_index_call_count);
-            ctx.keyPress(imgui.ImGuiKey_F7, 1);
-            try testing.expectEqual(0, controller.set_current_index_call_count);
-
-            try testing.expectEqual(0, controller.clear_call_count);
-            ctx.itemClick("###clear", 0, 0);
-            try testing.expectEqual(0, controller.clear_call_count);
-            ctx.keyPress(imgui.ImGuiKey_F9, 1);
-            try testing.expectEqual(0, controller.clear_call_count);
-        }
-    };
-    const context = try sdk.ui.getTestingContext();
-    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
-}
-
-test "should call play and change playback speed when speed UI and F10,F11 keys are used and controller is in playback mode" {
+test "should change playback speed when speed UI and F10,F11 keys are used" {
     const Test = struct {
         var controller = MockController{ .mode = .playback };
         var controls = Controls(.{ .Controller = MockController }){};
@@ -1481,122 +1513,35 @@ test "should call play and change playback speed when speed UI and F10,F11 keys 
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
-            try testing.expectEqual(1.0, controls.playback_speed);
-            try testing.expectEqual(0, controller.play_call_count);
-
             ctx.setRef("Window");
             ctx.itemClick("###speed", 0, 0);
             ctx.setRef("//$FOCUSED");
             ctx.itemClick("0.50x", 0, 0);
-
-            try testing.expectEqual(0.5, controls.playback_speed);
-            try testing.expectEqual(1, controller.play_call_count);
-            try testing.expectEqual(0.5, controller.last_play_speed);
+            try testing.expectEqual(0.5, controller.playback_speed);
 
             ctx.setRef("Window");
             ctx.itemClick("###speed", 0, 0);
             ctx.setRef("//$FOCUSED");
             ctx.itemClick("2.00x", 0, 0);
-
-            try testing.expectEqual(2.0, controls.playback_speed);
-            try testing.expectEqual(2, controller.play_call_count);
-            try testing.expectEqual(2.0, controller.last_play_speed);
+            try testing.expectEqual(2.0, controller.playback_speed);
 
             ctx.setRef("Window");
             ctx.itemClick("###speed", 0, 0);
             ctx.setRef("//$FOCUSED");
             ctx.itemInputValueFloat("###speed_slider", 1.23);
-
-            try testing.expectEqual(1.23, controls.playback_speed);
-            try testing.expectEqual(3, controller.play_call_count);
-            try testing.expectEqual(1.23, controller.last_play_speed);
+            try testing.expectEqual(1.23, controller.playback_speed);
 
             ctx.keyPress(imgui.ImGuiKey_F10, 1);
-
-            try testing.expectEqual(1.13, controls.playback_speed);
-            try testing.expectEqual(4, controller.play_call_count);
-            try testing.expectEqual(1.13, controller.last_play_speed);
+            try testing.expectEqual(1.13, controller.playback_speed);
 
             ctx.keyPress(imgui.ImGuiKey_F11, 1);
-
-            try testing.expectEqual(1.23, controls.playback_speed);
-            try testing.expectEqual(5, controller.play_call_count);
-            try testing.expectEqual(1.23, controller.last_play_speed);
+            try testing.expectEqual(1.23, controller.playback_speed);
 
             ctx.keyPress(imgui.ImGuiKey_F10, 100);
-
-            try testing.expectEqual(0.1, controls.playback_speed);
-            try testing.expectEqual(0.1, controller.last_play_speed);
+            try testing.expectEqual(0.1, controller.playback_speed);
 
             ctx.keyPress(imgui.ImGuiKey_F11, 100);
-
-            try testing.expectEqual(4.0, controls.playback_speed);
-            try testing.expectEqual(4.0, controller.last_play_speed);
-        }
-    };
-    const context = try sdk.ui.getTestingContext();
-    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
-}
-
-test "should just change playback speed when speed UI and F10,F11 keys are used and controller is not in playback mode" {
-    const Test = struct {
-        var controller = MockController{ .mode = .pause };
-        var controls = Controls(.{ .Controller = MockController }){};
-
-        fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, 0);
-            defer imgui.igEnd();
-            controls.handleKeybinds(&controller);
-            controls.draw(&controller);
-        }
-
-        fn testFunction(ctx: sdk.ui.TestContext) !void {
-            try testing.expectEqual(1.0, controls.playback_speed);
-            try testing.expectEqual(0, controller.play_call_count);
-
-            ctx.setRef("Window");
-            ctx.itemClick("###speed", 0, 0);
-            ctx.setRef("//$FOCUSED");
-            ctx.itemClick("0.50x", 0, 0);
-
-            try testing.expectEqual(0.5, controls.playback_speed);
-            try testing.expectEqual(0, controller.play_call_count);
-
-            ctx.setRef("Window");
-            ctx.itemClick("###speed", 0, 0);
-            ctx.setRef("//$FOCUSED");
-            ctx.itemClick("2.00x", 0, 0);
-
-            try testing.expectEqual(2.0, controls.playback_speed);
-            try testing.expectEqual(0, controller.play_call_count);
-
-            ctx.setRef("Window");
-            ctx.itemClick("###speed", 0, 0);
-            ctx.setRef("//$FOCUSED");
-            ctx.itemInputValueFloat("###speed_slider", 1.23);
-
-            try testing.expectEqual(1.23, controls.playback_speed);
-            try testing.expectEqual(0, controller.play_call_count);
-
-            ctx.keyPress(imgui.ImGuiKey_F10, 1);
-
-            try testing.expectEqual(1.13, controls.playback_speed);
-            try testing.expectEqual(0, controller.play_call_count);
-
-            ctx.keyPress(imgui.ImGuiKey_F11, 1);
-
-            try testing.expectEqual(1.23, controls.playback_speed);
-            try testing.expectEqual(0, controller.play_call_count);
-
-            ctx.keyPress(imgui.ImGuiKey_F10, 100);
-
-            try testing.expectEqual(0.1, controls.playback_speed);
-            try testing.expectEqual(0, controller.play_call_count);
-
-            ctx.keyPress(imgui.ImGuiKey_F11, 100);
-
-            try testing.expectEqual(4.0, controls.playback_speed);
-            try testing.expectEqual(0, controller.play_call_count);
+            try testing.expectEqual(4.0, controller.playback_speed);
         }
     };
     const context = try sdk.ui.getTestingContext();
