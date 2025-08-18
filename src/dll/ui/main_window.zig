@@ -12,6 +12,7 @@ pub const MainWindow = struct {
     is_open: bool = false,
     logs_window: ui.LogsWindow = .{},
     game_memory_window: ui.GameMemoryWindow = .{},
+    frame_window: ui.FrameWindow = .{},
     quadrant_layout: ui.QuadrantLayout = .{},
     view: ui.View = .{},
     controls: ui.Controls(.{}) = .{},
@@ -34,7 +35,7 @@ pub const MainWindow = struct {
         if (!self.is_open) {
             return;
         }
-        self.drawSecondaryWindows(game_memory);
+        self.drawSecondaryWindows(game_memory, controller);
         const render_content = imgui.igBegin("Irony", &self.is_open, imgui.ImGuiWindowFlags_MenuBar);
         defer imgui.igEnd();
         if (!render_content) {
@@ -72,9 +73,10 @@ pub const MainWindow = struct {
         }
     }
 
-    fn drawSecondaryWindows(self: *Self, game_memory: *const game.Memory) void {
+    fn drawSecondaryWindows(self: *Self, game_memory: *const game.Memory, controller: *const core.Controller) void {
         self.logs_window.draw(dll.buffer_logger);
         self.game_memory_window.draw(game_memory);
+        self.frame_window.draw(controller.getCurrentFrame());
     }
 
     fn drawMenuBar(self: *Self) void {
@@ -85,13 +87,17 @@ pub const MainWindow = struct {
 
         if (imgui.igBeginMenu("Help", true)) {
             defer imgui.igEndMenu();
-            if (imgui.igMenuItem_Bool("Logs", null, false, true)) {
+            if (imgui.igMenuItem_Bool(ui.LogsWindow.name, null, false, true)) {
                 self.logs_window.is_open = true;
                 imgui.igSetWindowFocus_Str(ui.LogsWindow.name);
             }
-            if (imgui.igMenuItem_Bool("Game Memory", null, false, true)) {
+            if (imgui.igMenuItem_Bool(ui.GameMemoryWindow.name, null, false, true)) {
                 self.game_memory_window.is_open = true;
                 imgui.igSetWindowFocus_Str(ui.GameMemoryWindow.name);
+            }
+            if (imgui.igMenuItem_Bool(ui.FrameWindow.name, null, false, true)) {
+                self.frame_window.is_open = true;
+                imgui.igSetWindowFocus_Str(ui.FrameWindow.name);
             }
         }
     }

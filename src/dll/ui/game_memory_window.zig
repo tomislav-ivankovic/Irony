@@ -1,5 +1,6 @@
 const std = @import("std");
 const imgui = @import("imgui");
+const sdk = @import("../../sdk/root.zig");
 const game = @import("../game/root.zig");
 const ui = @import("root.zig");
 
@@ -18,7 +19,9 @@ pub const GameMemoryWindow = struct {
         if (!render_content) {
             return;
         }
-        ui.drawData("game_memory", game_memory);
+        inline for (@typeInfo(game.Memory).@"struct".fields) |*field| {
+            ui.drawData(field.name, &@field(game_memory, field.name));
+        }
         // if (game_memory.player_1.findBaseAddress()) |address| {
         //     const array: *const [3000]f32 = @ptrFromInt(address);
         //     ui.drawData("player_1_array", array);
@@ -29,3 +32,42 @@ pub const GameMemoryWindow = struct {
         // }
     }
 };
+
+const testing = std.testing;
+
+test "should not draw anything when window is closed" {
+    const Test = struct {
+        var window: GameMemoryWindow = .{ .is_open = false };
+        const memory = std.mem.zeroes(game.Memory);
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(&memory);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            try ctx.expectItemNotExists("//" ++ GameMemoryWindow.name);
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw game memory struct fields when window is opened" {
+    const Test = struct {
+        var window: GameMemoryWindow = .{ .is_open = true };
+        const memory = std.mem.zeroes(game.Memory);
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(&memory);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef(GameMemoryWindow.name);
+            inline for (@typeInfo(game.Memory).@"struct".fields) |*field| {
+                try ctx.expectItemExists(field.name);
+            }
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
