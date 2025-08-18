@@ -52,6 +52,16 @@ pub const Memory = struct {
             .hurt_cylinders = 0x29C0,
             .collision_spheres = 0x2E00,
             .health = 0x3580,
+            .flags_1 = 0x434,
+            .flags_2 = 0x440,
+            .flags_3 = 0x520,
+            .flags_4 = 0x5D4,
+            .flags_5 = 0x660,
+            .flags_6 = 0x6E8,
+            .flags_7 = 0xD9C,
+            .flags_8 = 0xDD8,
+            .flags_9 = 0x2054,
+            .flags_10 = 0x2058,
         });
         const self = Self{
             .player_1 = structProxy("player_1", game.Player, .{

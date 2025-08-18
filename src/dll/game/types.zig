@@ -313,8 +313,72 @@ pub const Player = struct {
         game.decryptHealth,
         null,
     ), // 0x3580
+    flags_1: Flags1, //0x434
+    flags_2: Flags32, // 0x440
+    flags_3: Flags32, // 0x520
+    flags_4: Flags32, // 0x5D4
+    flags_5: Flags32, // 0x660
+    flags_6: Flags32, // 0x6E8
+    flags_7: Flags32, // 0xD9C
+    flags_8: Flags32, // 0xDD8
+    flags_9: Flags32, // 0x2054
+    flags_10: Flags32, // 0x2058
 };
 
 pub const TickFunction = fn (delta_time: f64) callconv(.c) void;
 
 pub const DecryptHealthFunction = fn (encrypted_health: *const EncryptedHealth) callconv(.c) i64;
+
+pub const Flags1 = packed struct(u16) {
+    crouching: u1,
+    standing: u1,
+    being_juggled_or_downed: u1,
+    blocking_lows: u1,
+    blocking_mids: u1,
+    crouching_1: u1,
+    not_high_crushing: u1,
+    downed: u1,
+    neutral_blocking: u1,
+    face_down: u1,
+    being_juggled: u1,
+    neutral_blocking_1: u1,
+    blocking: u1,
+    high_crushing: u1,
+    airborne_juggled_or_downed: u1, // Not to be trusted.
+    airborne_not_juggled: u1, // Not to be trusted.
+};
+
+pub const Flags32 = packed struct(u32) {
+    b0: u1,
+    b1: u1,
+    b2: u1,
+    b3: u1,
+    b4: u1,
+    b5: u1,
+    b6: u1,
+    b7: u1,
+    b8: u1,
+    b9: u1,
+    b10: u1,
+    b11: u1,
+    b12: u1,
+    b13: u1,
+    b14: u1,
+    b15: u1,
+    b16: u1,
+    b17: u1,
+    b18: u1,
+    b19: u1,
+    b20: u1,
+    b21: u1,
+    b22: u1,
+    b23: u1,
+    b24: u1,
+    b25: u1,
+    b26: u1,
+    b27: u1,
+    b28: u1,
+    b29: u1,
+    b30: u1,
+    b31: u1,
+};
