@@ -94,6 +94,9 @@ pub const Capturer = struct {
             .attack_type = captureAttackType(player),
             .attack_damage = player.attack_damage,
             .hit_outcome = captureHitOutcome(player),
+            .posture = capturePosture(player),
+            .blocking = captureBlocking(player),
+            .crushing = captureCrushing(player),
             .can_move = if (player.can_move) |can_move| can_move.toBool() else null,
             .input = captureInput(player, player_id),
             .health = if (player.health) |*health| health.convert() else null,
@@ -147,6 +150,58 @@ pub const Capturer = struct {
             .normal_hit_standing_right => .normal_hit_standing_right,
             .normal_hit_crouching_right => .normal_hit_crouching_right,
             else => null,
+        };
+    }
+
+    fn capturePosture(player: *const sdk.misc.Partial(game.Player)) ?model.Posture {
+        const state: game.StateFlags = player.state_flags orelse return null;
+        const airborne: game.AirborneFlags = player.airborne_flags orelse return null;
+        if (state.crouching) {
+            return .crouching;
+        } else if (state.downed and !state.face_down) {
+            return .downed_face_up;
+        } else if (state.downed and state.face_down) {
+            return .downed_face_down;
+        } else if (state.standing_or_airborne and
+            state.airborne_move_or_downed and
+            !state.downed and
+            !airborne.not_airborne_and_not_downed)
+        {
+            return .airborne; // TODO fix: Airborne state on attacks lasts too long.
+        } else {
+            return .standing;
+        }
+    }
+
+    fn captureBlocking(player: *const sdk.misc.Partial(game.Player)) ?model.Blocking {
+        const state: game.StateFlags = player.state_flags orelse return null;
+        if (state.blocking_mids) {
+            if (state.neutral_blocking) {
+                return .neutral_blocking_mids;
+            } else {
+                return .fully_blocking_mids;
+            }
+        } else if (state.blocking_lows) {
+            if (state.neutral_blocking) {
+                return .neutral_blocking_lows;
+            } else {
+                return .fully_blocking_lows;
+            }
+        } else {
+            return .not_blocking;
+        }
+    }
+
+    fn captureCrushing(player: *const sdk.misc.Partial(game.Player)) ?model.Crushing {
+        const state: game.StateFlags = player.state_flags orelse return null;
+        const airborne: game.AirborneFlags = player.airborne_flags orelse return null;
+        const power_crushing: game.Boolean(.{}) = player.power_crushing orelse return null;
+        const invincible: game.Boolean(.{}) = player.invincible orelse return null;
+        return .{
+            .high_crushing = state.crouching or state.downed,
+            .low_crushing = airborne.probably_low_crushing, // TODO: Improve this detection.
+            .power_crushing = power_crushing.toBool() orelse return null,
+            .invincibility = invincible.toBool() orelse return null,
         };
     }
 
@@ -547,6 +602,8 @@ test "should capture hit outcome correctly" {
     try testing.expectEqual(.normal_hit_standing, frame.getPlayerById(.player_1).hit_outcome);
     try testing.expectEqual(null, frame.getPlayerById(.player_2).hit_outcome);
 }
+
+// TODO test: posture, blocking and crushing
 
 test "should capture can move correctly" {
     var capturer = Capturer{};

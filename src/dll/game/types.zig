@@ -64,7 +64,7 @@ pub const StateFlags = packed struct(u16) {
     being_juggled: bool = false,
     not_blocking_or_neutral_blocking: bool = false,
     blocking: bool = false,
-    high_crushing: bool = false,
+    crouching_or_downed_or_being_juggled: bool = false,
     airborne_move_or_downed: bool = false,
     airborne_move_and_not_juggled: bool = false,
 
@@ -92,7 +92,7 @@ pub const StateFlags = packed struct(u16) {
         std.debug.assert((Self{ .being_juggled = true }).toInt() == 1024);
         std.debug.assert((Self{ .not_blocking_or_neutral_blocking = true }).toInt() == 2048);
         std.debug.assert((Self{ .blocking = true }).toInt() == 4096);
-        std.debug.assert((Self{ .high_crushing = true }).toInt() == 8192);
+        std.debug.assert((Self{ .crouching_or_downed_or_being_juggled = true }).toInt() == 8192);
         std.debug.assert((Self{ .airborne_move_or_downed = true }).toInt() == 16384);
         std.debug.assert((Self{ .airborne_move_and_not_juggled = true }).toInt() == 32768);
     }
