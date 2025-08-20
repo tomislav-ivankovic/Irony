@@ -298,6 +298,7 @@ pub const Player = struct {
         game.u16FromRadians,
     ), // 0x376
     current_move_frame: u32, // 0x0390
+    state_flags: StateFlags, //0x0434
     attack_damage: i32, // 0x0504
     attack_type: AttackType, // 0x0510
     current_move_id: u32, // 0x0548
@@ -306,6 +307,7 @@ pub const Player = struct {
     hit_outcome: HitOutcome, // 0x0610
     is_a_parry_move: Boolean(.{ .true_value = 2 }), // 0xA2C
     power_crushing: Boolean(.{}), // 0x0A70
+    airborne_flags: AirborneFlags, // 0x0D9C
     in_rage: Boolean(.{}), // 0x0DD1
     used_rage: Boolean(.{}), // 0x0E08
     frames_since_round_start: u32, // 0x1410
@@ -328,72 +330,62 @@ pub const Player = struct {
         game.decryptHealth,
         null,
     ), // 0x3580
-    flags_1: Flags1, //0x434
-    flags_2: Flags32, // 0x440
-    flags_3: Flags32, // 0x520
-    flags_4: Flags32, // 0x5D4
-    flags_5: Flags32, // 0x660
-    flags_6: Flags32, // 0x6E8
-    flags_7: Flags32, // 0xD9C
-    flags_8: Flags32, // 0xDD8
-    flags_9: Flags32, // 0x2054
-    flags_10: Flags32, // 0x2058
 };
 
 pub const TickFunction = fn (delta_time: f64) callconv(.c) void;
 
 pub const DecryptHealthFunction = fn (encrypted_health: *const EncryptedHealth) callconv(.c) i64;
 
-pub const Flags1 = packed struct(u16) {
-    crouching: u1,
-    standing: u1,
-    being_juggled_or_downed: u1,
-    blocking_lows: u1,
-    blocking_mids: u1,
-    crouching_1: u1,
-    not_high_crushing: u1,
-    downed: u1,
-    neutral_blocking: u1,
-    face_down: u1,
-    being_juggled: u1,
-    neutral_blocking_1: u1,
-    blocking: u1,
-    high_crushing: u1,
-    airborne_juggled_or_downed: u1, // Not to be trusted.
-    airborne_not_juggled: u1, // Not to be trusted.
+pub const StateFlags = packed struct(u16) {
+    crouching: bool,
+    standing_or_airborne: bool,
+    being_juggled_or_downed: bool,
+    blocking_lows: bool,
+    blocking_mids: bool,
+    wants_to_crouch: bool,
+    not_high_crushing: bool,
+    downed: bool,
+    neutral_blocking: bool,
+    face_down: bool,
+    being_juggled: bool,
+    not_blocking_or_neutral_blocking: bool,
+    blocking: bool,
+    high_crushing: bool,
+    airborne_move_or_downed: bool,
+    airborne_move_and_not_juggled: bool,
 };
 
-pub const Flags32 = packed struct(u32) {
-    b0: u1,
-    b1: u1,
-    b2: u1,
-    b3: u1,
-    b4: u1,
-    b5: u1,
-    b6: u1,
-    b7: u1,
-    b8: u1,
-    b9: u1,
-    b10: u1,
-    b11: u1,
-    b12: u1,
-    b13: u1,
-    b14: u1,
-    b15: u1,
-    b16: u1,
-    b17: u1,
-    b18: u1,
-    b19: u1,
-    b20: u1,
-    b21: u1,
-    b22: u1,
-    b23: u1,
-    b24: u1,
-    b25: u1,
-    b26: u1,
-    b27: u1,
-    b28: u1,
-    b29: u1,
-    b30: u1,
-    b31: u1,
+pub const AirborneFlags = packed struct(u32) {
+    _0: bool,
+    _1: bool,
+    _2: bool,
+    _3: bool,
+    _4: bool,
+    _5: bool,
+    _6: bool,
+    _7: bool,
+    _8: bool,
+    low_crushing_end: bool,
+    _10: bool,
+    _11: bool,
+    _12: bool,
+    _13: bool,
+    _14: bool,
+    _15: bool,
+    _16: bool,
+    _17: bool,
+    _18: bool,
+    _19: bool,
+    _20: bool,
+    probably_low_crushing: bool,
+    low_crushing_start: bool,
+    airborne_end: bool,
+    _24: bool,
+    _25: bool,
+    _26: bool,
+    _27: bool,
+    _28: bool,
+    _29: bool,
+    not_airborne_and_not_downed: bool,
+    _31: bool,
 };
