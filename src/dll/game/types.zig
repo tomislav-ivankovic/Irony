@@ -50,14 +50,14 @@ pub const PlayerSide = enum(u8) {
     _,
 };
 
-pub const StateFlags = packed struct(u16) {
+pub const StateFlags = packed struct(u32) {
     crouching: bool = false,
     standing_or_airborne: bool = false,
     being_juggled_or_downed: bool = false,
     blocking_lows: bool = false,
     blocking_mids: bool = false,
     wants_to_crouch: bool = false,
-    not_high_crushing: bool = false,
+    standing_or_airborne_and_not_juggled: bool = false,
     downed: bool = false,
     neutral_blocking: bool = false,
     face_down: bool = false,
@@ -67,14 +67,30 @@ pub const StateFlags = packed struct(u16) {
     crouching_or_downed_or_being_juggled: bool = false,
     airborne_move_or_downed: bool = false,
     airborne_move_and_not_juggled: bool = false,
+    forward_move_modifier: bool = false,
+    backward_move_modifier: bool = false,
+    _18: bool = false,
+    crouched_but_not_fully: bool = false,
+    _20: bool = false,
+    _21: bool = false,
+    _22: bool = false,
+    _23: bool = false,
+    _24: bool = false,
+    _25: bool = false,
+    _26: bool = false,
+    _27: bool = false,
+    _28: bool = false,
+    _29: bool = false,
+    _30: bool = false,
+    _31: bool = false,
 
     const Self = @This();
 
-    pub fn fromInt(int: u16) Self {
+    pub fn fromInt(int: u32) Self {
         return @bitCast(int);
     }
 
-    pub fn toInt(self: Self) u16 {
+    pub fn toInt(self: Self) u32 {
         return @bitCast(self);
     }
 
@@ -85,7 +101,7 @@ pub const StateFlags = packed struct(u16) {
         std.debug.assert((Self{ .blocking_lows = true }).toInt() == 8);
         std.debug.assert((Self{ .blocking_mids = true }).toInt() == 16);
         std.debug.assert((Self{ .wants_to_crouch = true }).toInt() == 32);
-        std.debug.assert((Self{ .not_high_crushing = true }).toInt() == 64);
+        std.debug.assert((Self{ .standing_or_airborne_and_not_juggled = true }).toInt() == 64);
         std.debug.assert((Self{ .downed = true }).toInt() == 128);
         std.debug.assert((Self{ .neutral_blocking = true }).toInt() == 256);
         std.debug.assert((Self{ .face_down = true }).toInt() == 512);
@@ -399,7 +415,7 @@ pub const Player = struct {
         game.u16FromRadians,
     ), // 0x376
     current_move_frame: u32, // 0x0390
-    state_flags: StateFlags, //0x0434
+    state_flags: StateFlags, //0x043C
     attack_damage: i32, // 0x0504
     attack_type: AttackType, // 0x0510
     current_move_id: u32, // 0x0548
