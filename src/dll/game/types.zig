@@ -136,7 +136,7 @@ pub const AirborneFlags = packed struct(u32) {
     _18: bool = false,
     _19: bool = false,
     _20: bool = false,
-    probably_low_crushing: bool = false,
+    probably_airborne: bool = false,
     low_crushing_start: bool = false,
     airborne_end: bool = false,
     _24: bool = false,
@@ -160,7 +160,7 @@ pub const AirborneFlags = packed struct(u32) {
 
     comptime {
         std.debug.assert((Self{ .low_crushing_end = true }).toInt() == 512);
-        std.debug.assert((Self{ .probably_low_crushing = true }).toInt() == 2097152);
+        std.debug.assert((Self{ .probably_airborne = true }).toInt() == 2097152);
         std.debug.assert((Self{ .low_crushing_start = true }).toInt() == 4194304);
         std.debug.assert((Self{ .airborne_end = true }).toInt() == 8388608);
         std.debug.assert((Self{ .not_airborne_and_not_downed = true }).toInt() == 1073741824);

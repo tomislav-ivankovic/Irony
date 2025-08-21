@@ -4,23 +4,35 @@ const model = @import("../model/root.zig");
 const game = @import("../game/root.zig");
 
 pub const Capturer = struct {
-    previous_player_1_hit_lines: ?game.HitLines = null,
-    previous_player_2_hit_lines: ?game.HitLines = null,
+    airborne_state: std.EnumArray(model.PlayerId, AirborneState) = .initFill(.{}),
+    previous_hit_lines: std.EnumArray(model.PlayerId, ?game.HitLines) = .initFill(null),
 
     const Self = @This();
     pub const GameMemory = struct {
         player_1: sdk.misc.Partial(game.Player),
         player_2: sdk.misc.Partial(game.Player),
     };
+    const AirborneState = packed struct {
+        airborne_started: bool = false,
+        airborne_ended: bool = false,
+        low_crushing_started: bool = false,
+        low_crushing_ended: bool = false,
+    };
 
     pub fn captureFrame(self: *Self, game_memory: *const GameMemory) model.Frame {
+        self.updateAirborneState(&game_memory.player_1, .player_1);
+        self.updateAirborneState(&game_memory.player_2, .player_2);
+
         const frames_since_round_start = captureFramesSinceRoundStart(game_memory);
         const floor_z = captureFloorZ(game_memory);
         const player_1 = self.capturePlayer(&game_memory.player_1, .player_1);
         const player_2 = self.capturePlayer(&game_memory.player_2, .player_2);
         const main_player_id = captureMainPlayerId(game_memory);
         const left_player_id = captureLeftPlayerId(game_memory, main_player_id);
-        self.updatePreviousHitLines(game_memory);
+
+        self.updatePreviousHitLines(&game_memory.player_1, .player_1);
+        self.updatePreviousHitLines(&game_memory.player_2, .player_2);
+
         return .{
             .frames_since_round_start = frames_since_round_start,
             .floor_z = floor_z,
@@ -30,9 +42,31 @@ pub const Capturer = struct {
         };
     }
 
-    fn updatePreviousHitLines(self: *Self, game_memory: *const GameMemory) void {
-        self.previous_player_1_hit_lines = game_memory.player_1.hit_lines;
-        self.previous_player_2_hit_lines = game_memory.player_2.hit_lines;
+    fn updateAirborneState(self: *Self, player: *const sdk.misc.Partial(game.Player), player_id: model.PlayerId) void {
+        const current_move_frame: u32 = player.current_move_frame orelse return;
+        const airborne_flags: game.AirborneFlags = player.airborne_flags orelse return;
+        const airborne_state: *AirborneState = self.airborne_state.getPtr(player_id);
+        if (current_move_frame == 1) {
+            airborne_state.* = .{};
+        }
+        if (airborne_flags.probably_airborne or !airborne_flags.not_airborne_and_not_downed) {
+            airborne_state.airborne_started = true;
+        }
+        if (airborne_flags.low_crushing_start) {
+            airborne_state.airborne_started = true;
+            airborne_state.low_crushing_started = true;
+        }
+        if (airborne_flags.low_crushing_end) {
+            airborne_state.low_crushing_ended = true;
+        }
+        if (airborne_flags.airborne_end) {
+            airborne_state.low_crushing_ended = true;
+            airborne_state.airborne_ended = true;
+        }
+    }
+
+    fn updatePreviousHitLines(self: *Self, player: *const sdk.misc.Partial(game.Player), player_id: model.PlayerId) void {
+        self.previous_hit_lines.set(player_id, player.hit_lines);
     }
 
     fn captureFramesSinceRoundStart(game_memory: *const GameMemory) ?u32 {
@@ -94,9 +128,9 @@ pub const Capturer = struct {
             .attack_type = captureAttackType(player),
             .attack_damage = player.attack_damage,
             .hit_outcome = captureHitOutcome(player),
-            .posture = capturePosture(player),
+            .posture = self.capturePosture(player, player_id),
             .blocking = captureBlocking(player),
-            .crushing = captureCrushing(player),
+            .crushing = self.captureCrushing(player, player_id),
             .can_move = if (player.can_move) |can_move| can_move.toBool() else null,
             .input = captureInput(player, player_id),
             .health = if (player.health) |*health| health.convert() else null,
@@ -153,36 +187,40 @@ pub const Capturer = struct {
         };
     }
 
-    fn capturePosture(player: *const sdk.misc.Partial(game.Player)) ?model.Posture {
-        const state: game.StateFlags = player.state_flags orelse return null;
-        const airborne: game.AirborneFlags = player.airborne_flags orelse return null;
-        if (state.crouching) {
+    fn capturePosture(
+        self: *const Self,
+        player: *const sdk.misc.Partial(game.Player),
+        player_id: model.PlayerId,
+    ) ?model.Posture {
+        const state_flags: game.StateFlags = player.state_flags orelse return null;
+        const airborne_state = self.airborne_state.get(player_id);
+        if (state_flags.crouching) {
             return .crouching;
-        } else if (state.downed and !state.face_down) {
-            return .downed_face_up;
-        } else if (state.downed and state.face_down) {
-            return .downed_face_down;
-        } else if (state.standing_or_airborne and
-            state.airborne_move_or_downed and
-            !state.downed and
-            !airborne.not_airborne_and_not_downed)
+        } else if (state_flags.downed) {
+            if (state_flags.face_down) {
+                return .downed_face_down;
+            } else {
+                return .downed_face_up;
+            }
+        } else if (state_flags.being_juggled or
+            (airborne_state.airborne_started and !airborne_state.airborne_ended))
         {
-            return .airborne; // TODO fix: Airborne state on attacks lasts too long.
+            return .airborne;
         } else {
             return .standing;
         }
     }
 
     fn captureBlocking(player: *const sdk.misc.Partial(game.Player)) ?model.Blocking {
-        const state: game.StateFlags = player.state_flags orelse return null;
-        if (state.blocking_mids) {
-            if (state.neutral_blocking) {
+        const state_flags: game.StateFlags = player.state_flags orelse return null;
+        if (state_flags.blocking_mids) {
+            if (state_flags.neutral_blocking) {
                 return .neutral_blocking_mids;
             } else {
                 return .fully_blocking_mids;
             }
-        } else if (state.blocking_lows) {
-            if (state.neutral_blocking) {
+        } else if (state_flags.blocking_lows) {
+            if (state_flags.neutral_blocking) {
                 return .neutral_blocking_lows;
             } else {
                 return .fully_blocking_lows;
@@ -192,14 +230,20 @@ pub const Capturer = struct {
         }
     }
 
-    fn captureCrushing(player: *const sdk.misc.Partial(game.Player)) ?model.Crushing {
-        const state: game.StateFlags = player.state_flags orelse return null;
-        const airborne: game.AirborneFlags = player.airborne_flags orelse return null;
+    fn captureCrushing(
+        self: *Self,
+        player: *const sdk.misc.Partial(game.Player),
+        player_id: model.PlayerId,
+    ) ?model.Crushing {
+        const state_flabs: game.StateFlags = player.state_flags orelse return null;
+        const airborne_state = self.airborne_state.get(player_id);
         const power_crushing: game.Boolean(.{}) = player.power_crushing orelse return null;
         const invincible: game.Boolean(.{}) = player.invincible orelse return null;
         return .{
-            .high_crushing = state.crouching or state.downed,
-            .low_crushing = airborne.probably_low_crushing, // TODO: Improve this detection.
+            .high_crushing = state_flabs.crouching or state_flabs.downed,
+            .low_crushing = airborne_state.airborne_started and
+                !airborne_state.low_crushing_ended and
+                !state_flabs.being_juggled,
             .power_crushing = power_crushing.toBool() orelse return null,
             .invincibility = invincible.toBool() orelse return null,
         };
@@ -355,10 +399,8 @@ pub const Capturer = struct {
         player_id: model.PlayerId,
     ) model.HitLines {
         var result: model.HitLines = .{};
-        const previous_lines: *const game.HitLines = switch (player_id) {
-            .player_1 => &(self.previous_player_1_hit_lines orelse return result),
-            .player_2 => &(self.previous_player_2_hit_lines orelse return result),
-        };
+        const maybe_previous_lines = self.previous_hit_lines.getPtrConst(player_id);
+        const previous_lines: *const game.HitLines = if (maybe_previous_lines.*) |*l| l else return result;
         const current_lines: *const game.HitLines = if (player.hit_lines) |*l| l else return result;
         for (previous_lines, current_lines) |*raw_previous_line, *raw_current_line| {
             const previous_line = raw_previous_line.convert();
