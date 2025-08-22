@@ -645,7 +645,31 @@ test "should capture hit outcome correctly" {
     try testing.expectEqual(null, frame.getPlayerById(.player_2).hit_outcome);
 }
 
-// TODO test: posture, blocking and crushing
+// TODO test posture
+
+test "should capture blocking correctly" {
+    var capturer = Capturer{};
+    const frame_1 = capturer.captureFrame(&.{
+        .player_1 = .{ .state_flags = null },
+        .player_2 = .{ .state_flags = .{} },
+    });
+    const frame_2 = capturer.captureFrame(&.{
+        .player_1 = .{ .state_flags = .{ .blocking_mids = true, .blocking_lows = false, .neutral_blocking = true } },
+        .player_2 = .{ .state_flags = .{ .blocking_mids = true, .blocking_lows = false, .neutral_blocking = false } },
+    });
+    const frame_3 = capturer.captureFrame(&.{
+        .player_1 = .{ .state_flags = .{ .blocking_mids = false, .blocking_lows = true, .neutral_blocking = true } },
+        .player_2 = .{ .state_flags = .{ .blocking_mids = false, .blocking_lows = true, .neutral_blocking = false } },
+    });
+    try testing.expectEqual(null, frame_1.getPlayerById(.player_1).blocking);
+    try testing.expectEqual(.not_blocking, frame_1.getPlayerById(.player_2).blocking);
+    try testing.expectEqual(.neutral_blocking_mids, frame_2.getPlayerById(.player_1).blocking);
+    try testing.expectEqual(.fully_blocking_mids, frame_2.getPlayerById(.player_2).blocking);
+    try testing.expectEqual(.neutral_blocking_lows, frame_3.getPlayerById(.player_1).blocking);
+    try testing.expectEqual(.fully_blocking_lows, frame_3.getPlayerById(.player_2).blocking);
+}
+
+// TODO test crushing
 
 test "should capture can move correctly" {
     var capturer = Capturer{};
