@@ -152,7 +152,7 @@ pub const Capturer = struct {
             .high => .high,
             .mid => .mid,
             .low => .low,
-            .special_mid => .special_mid,
+            .special_low => .special_low,
             .high_unblockable => .high_unblockable,
             .mid_unblockable => .mid_unblockable,
             .low_unblockable => .low_unblockable,
@@ -628,10 +628,10 @@ test "should capture current move total frames correctly" {
 test "should capture attack type correctly" {
     var capturer = Capturer{};
     const frame = capturer.captureFrame(&.{
-        .player_1 = .{ .attack_type = .special_mid },
+        .player_1 = .{ .attack_type = .special_low },
         .player_2 = .{ .attack_type = null },
     });
-    try testing.expectEqual(.special_mid, frame.getPlayerById(.player_1).attack_type);
+    try testing.expectEqual(.special_low, frame.getPlayerById(.player_1).attack_type);
     try testing.expectEqual(null, frame.getPlayerById(.player_2).attack_type);
 }
 

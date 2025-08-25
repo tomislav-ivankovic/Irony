@@ -22,14 +22,14 @@ pub const GameMemoryWindow = struct {
         inline for (@typeInfo(game.Memory).@"struct".fields) |*field| {
             ui.drawData(field.name, &@field(game_memory, field.name));
         }
-        if (game_memory.player_1.findBaseAddress()) |address| {
-            const array: *const [3000]u32 = @ptrFromInt(address);
-            ui.drawData("player_1_array", array);
-        }
-        if (game_memory.player_2.findBaseAddress()) |address| {
-            const array: *const [3000]u32 = @ptrFromInt(address);
-            ui.drawData("player_2_array", array);
-        }
+        // if (game_memory.player_1.findBaseAddress()) |address| {
+        //     const array: *const [3000]u32 = @ptrFromInt(address);
+        //     ui.drawData("player_1_array", array);
+        // }
+        // if (game_memory.player_2.findBaseAddress()) |address| {
+        //     const array: *const [3000]u32 = @ptrFromInt(address);
+        //     ui.drawData("player_2_array", array);
+        // }
     }
 };
 

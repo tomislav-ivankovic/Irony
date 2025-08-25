@@ -3,7 +3,7 @@ pub const AttackType = enum {
     high,
     mid,
     low,
-    special_mid,
+    special_low,
     high_unblockable,
     mid_unblockable,
     low_unblockable,

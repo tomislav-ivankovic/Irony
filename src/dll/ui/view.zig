@@ -22,6 +22,7 @@ pub const View = struct {
         line: sdk.math.LineSegment3,
         player_id: model.PlayerId,
         life_time: f32,
+        attack_type: ?model.AttackType,
     };
     const LingeringCylinder = struct {
         cylinder: sdk.math.Cylinder,
@@ -29,28 +30,113 @@ pub const View = struct {
         life_time: f32,
     };
 
-    const floor_color = sdk.math.Vec4.fromArray(.{ 0.0, 1.0, 0.0, 1.0 });
-    const floor_thickness = 1.0;
-    const collision_spheres_color = sdk.math.Vec4.fromArray(.{ 0.0, 0.0, 1.0, 0.5 });
-    const collision_spheres_thickness = 1.0;
-    const hurt_cylinders_color = sdk.math.Vec4.fromArray(.{ 0.5, 0.5, 0.5, 0.5 });
-    const hurt_cylinders_thickness = 1.0;
-    const skeleton_color = sdk.math.Vec4.fromArray(.{ 1.0, 1.0, 1.0, 1.0 });
-    const skeleton_thickness = 2.0;
-    const cant_move_skeleton_color = sdk.math.Vec4.fromArray(.{ 1.0, 1.0, 1.0, 0.5 });
-    const cant_move_skeleton_thickness = 2.0;
-    const hit_line_color = sdk.math.Vec4.fromArray(.{ 1.0, 0.0, 0.0, 1.0 });
-    const hit_line_thickness = 1.0;
-    const hit_line_duration = 1.0;
-    const hit_hurt_cylinders_color = sdk.math.Vec4.fromArray(.{ 1.0, 1.0, 0.0, 0.5 });
-    const hit_hurt_cylinders_thickness = 1.0;
-    const hit_hurt_cylinders_duration = 1.0;
-    const lingering_hurt_cylinders_color = sdk.math.Vec4.fromArray(.{ 0.0, 0.75, 0.75, 0.5 });
-    const lingering_hurt_cylinders_thickness = 1.0;
-    const lingering_hurt_cylinders_duration = 1.0;
-    const look_at_color = sdk.math.Vec4.fromArray(.{ 1.0, 0.0, 1.0, 1.0 });
-    const look_at_length = 100.0;
-    const look_at_thickness = 1.0;
+    const config = .{
+        .floor = .{
+            .color = sdk.math.Vec4.fromArray(.{ 0.0, 1.0, 0.0, 1.0 }),
+            .thickness = 1.0,
+        },
+        .collision_spheres = .{
+            .color = sdk.math.Vec4.fromArray(.{ 0.0, 0.0, 1.0, 0.5 }),
+            .thickness = 1.0,
+        },
+        .skeleton = .{
+            .colors = std.EnumArray(model.Blocking, sdk.math.Vec4).init(.{
+                .not_blocking = .fromArray(.{ 1.0, 1.0, 1.0, 1.0 }),
+                .neutral_blocking_mids = .fromArray(.{ 1.0, 1.0, 0.75, 1.0 }),
+                .fully_blocking_mids = .fromArray(.{ 1.0, 1.0, 0.5, 1.0 }),
+                .neutral_blocking_lows = .fromArray(.{ 0.75, 0.875, 1.0, 1.0 }),
+                .fully_blocking_lows = .fromArray(.{ 0.5, 0.75, 1.0, 1.0 }),
+            }),
+            .thickness = 2.0,
+            .cant_move_alpha = 0.5,
+        },
+        .hit_lines = .{
+            .fill = .{
+                .colors = std.EnumArray(model.AttackType, sdk.math.Vec4).init(.{
+                    .not_attack = .fromArray(.{ 0.5, 0.5, 0.5, 1.0 }),
+                    .high = .fromArray(.{ 1.0, 0.0, 0.0, 1.0 }),
+                    .mid = .fromArray(.{ 1.0, 1.0, 0.0, 1.0 }),
+                    .low = .fromArray(.{ 0.0, 0.5, 1.0, 1.0 }),
+                    .special_low = .fromArray(.{ 0.0, 1.0, 1.0, 1.0 }),
+                    .high_unblockable = .fromArray(.{ 1.0, 0.0, 0.0, 1.0 }),
+                    .mid_unblockable = .fromArray(.{ 1.0, 1.0, 0.0, 1.0 }),
+                    .low_unblockable = .fromArray(.{ 0.0, 0.5, 1.0, 1.0 }),
+                    .throw = .fromArray(.{ 1.0, 1.0, 1.0, 1.0 }),
+                    .projectile = .fromArray(.{ 0.5, 1.0, 0.5, 1.0 }),
+                    .antiair_only = .fromArray(.{ 1.0, 0.5, 0.0, 1.0 }),
+                }),
+                .thickness = 1.0,
+            },
+            .outline = .{
+                .colors = std.EnumArray(model.AttackType, sdk.math.Vec4).init(.{
+                    .not_attack = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                    .high = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                    .mid = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                    .low = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                    .special_low = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                    .high_unblockable = .fromArray(.{ 0.75, 0.0, 0.75, 1.0 }),
+                    .mid_unblockable = .fromArray(.{ 0.75, 0.0, 0.75, 1.0 }),
+                    .low_unblockable = .fromArray(.{ 0.75, 0.0, 0.75, 1.0 }),
+                    .throw = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                    .projectile = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                    .antiair_only = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                }),
+                .thickness = 1.0,
+            },
+            .duration = 1.0,
+        },
+        .hurt_cylinders = .{
+            .normal = .{
+                .color = sdk.math.Vec4.fromArray(.{ 0.5, 0.5, 0.5, 0.5 }),
+                .thickness = 1.0,
+            },
+            .high_crushing = .{
+                .color = sdk.math.Vec4.fromArray(.{ 0.75, 0.0, 0.0, 0.5 }),
+                .thickness = 1.0,
+            },
+            .low_crushing = .{
+                .color = sdk.math.Vec4.fromArray(.{ 0.0, 0.375, 0.75, 0.5 }),
+                .thickness = 1.0,
+            },
+            .invincible = .{
+                .color = sdk.math.Vec4.fromArray(.{ 0.75, 0.0, 0.75, 0.5 }),
+                .thickness = 1.0,
+            },
+            .power_crushing = .{
+                .normal = .{
+                    .color = sdk.math.Vec4.fromArray(.{ 1.0, 1.0, 1.0, 1.0 }),
+                    .thickness = 1.0,
+                },
+                .high_crushing = .{
+                    .color = sdk.math.Vec4.fromArray(.{ 1.0, 0.25, 0.25, 1.0 }),
+                    .thickness = 1.0,
+                },
+                .low_crushing = .{
+                    .color = sdk.math.Vec4.fromArray(.{ 0.0, 0.25, 1.0, 1.0 }),
+                    .thickness = 1.0,
+                },
+                .invincible = .{
+                    .color = sdk.math.Vec4.fromArray(.{ 1.0, 0.0, 1.0, 1.0 }),
+                    .thickness = 1.0,
+                },
+            },
+            .hit = .{
+                .color = sdk.math.Vec4.fromArray(.{ 1.0, 0.75, 0.25, 0.5 }),
+                .thickness = 1.0,
+                .duration = 1.0,
+            },
+            .lingering = .{
+                .color = sdk.math.Vec4.fromArray(.{ 0.0, 0.75, 0.75, 0.5 }),
+                .thickness = 1.0,
+                .duration = 1.0,
+            },
+        },
+        .look_direction = .{
+            .color = sdk.math.Vec4.fromArray(.{ 1.0, 0.0, 1.0, 1.0 }),
+            .length = 100.0,
+            .thickness = 1.0,
+        },
+    };
 
     pub fn processFrame(self: *Self, frame: *const model.Frame) void {
         self.processHurtCylinders(.player_1, frame);
@@ -84,6 +170,7 @@ pub const View = struct {
                 .line = hit_line.line,
                 .player_id = player_id,
                 .life_time = 0,
+                .attack_type = player.attack_type,
             });
         }
     }
@@ -108,7 +195,7 @@ pub const View = struct {
             line.life_time += delta_time;
         }
         while (self.lingering_hurt_cylinders.getFirst() catch null) |line| {
-            if (line.life_time <= hit_line_duration) {
+            if (line.life_time <= config.hurt_cylinders.lingering.duration) {
                 break;
             }
             _ = self.lingering_hurt_cylinders.removeFirst() catch unreachable;
@@ -121,7 +208,7 @@ pub const View = struct {
             cylinder.life_time += delta_time;
         }
         while (self.lingering_hit_lines.getFirst() catch null) |cylinder| {
-            if (cylinder.life_time <= hit_line_duration) {
+            if (cylinder.life_time <= config.hit_lines.duration) {
                 break;
             }
             _ = self.lingering_hit_lines.removeFirst() catch unreachable;
@@ -250,7 +337,9 @@ pub const View = struct {
         for (&self.frame.players) |*player| {
             const spheres: *const model.CollisionSpheres = if (player.collision_spheres) |*s| s else continue;
             for (spheres.values) |sphere| {
-                drawSphere(sphere, collision_spheres_color, collision_spheres_thickness, matrix, inverse_matrix);
+                const color = config.collision_spheres.color;
+                const thickness = config.collision_spheres.thickness;
+                drawSphere(sphere, color, thickness, matrix, inverse_matrix);
             }
         }
     }
@@ -263,18 +352,69 @@ pub const View = struct {
     ) void {
         for (model.PlayerId.all) |player_id| {
             const player = self.frame.getPlayerById(player_id);
+
+            const crushing = player.crushing orelse model.Crushing{};
+            const base_color: sdk.math.Vec4, const base_thickness: f32 = if (crushing.power_crushing) block: {
+                if (crushing.invincibility) {
+                    break :block .{
+                        config.hurt_cylinders.power_crushing.invincible.color,
+                        config.hurt_cylinders.power_crushing.invincible.thickness,
+                    };
+                } else if (crushing.high_crushing) {
+                    break :block .{
+                        config.hurt_cylinders.power_crushing.high_crushing.color,
+                        config.hurt_cylinders.power_crushing.high_crushing.thickness,
+                    };
+                } else if (crushing.low_crushing) {
+                    break :block .{
+                        config.hurt_cylinders.power_crushing.low_crushing.color,
+                        config.hurt_cylinders.power_crushing.low_crushing.thickness,
+                    };
+                } else {
+                    break :block .{
+                        config.hurt_cylinders.power_crushing.normal.color,
+                        config.hurt_cylinders.power_crushing.normal.thickness,
+                    };
+                }
+            } else block: {
+                if (crushing.invincibility) {
+                    break :block .{
+                        config.hurt_cylinders.invincible.color,
+                        config.hurt_cylinders.invincible.thickness,
+                    };
+                } else if (crushing.high_crushing) {
+                    break :block .{
+                        config.hurt_cylinders.high_crushing.color,
+                        config.hurt_cylinders.high_crushing.thickness,
+                    };
+                } else if (crushing.low_crushing) {
+                    break :block .{
+                        config.hurt_cylinders.low_crushing.color,
+                        config.hurt_cylinders.low_crushing.thickness,
+                    };
+                } else {
+                    break :block .{
+                        config.hurt_cylinders.normal.color,
+                        config.hurt_cylinders.normal.thickness,
+                    };
+                }
+            };
+
             const cylinders: *const model.HurtCylinders = if (player.hurt_cylinders) |*c| c else continue;
             for (cylinders.values, 0..) |hurt_cylinder, index| {
                 const cylinder = hurt_cylinder.cylinder;
                 const cylinder_id = model.HurtCylinders.Indexer.keyForIndex(index);
 
                 const life_time = self.hit_hurt_cylinder_life_time.getPtrConst(player_id).get(cylinder_id);
+                const duration = config.hurt_cylinders.hit.duration;
                 const completion: f32 = if (hurt_cylinder.intersects) 0.0 else block: {
-                    break :block std.math.clamp(life_time / hit_hurt_cylinders_duration, 0.0, 1.0);
+                    break :block std.math.clamp(life_time / duration, 0.0, 1.0);
                 };
                 const t = completion * completion * completion * completion;
-                const color = sdk.math.Vec4.lerpElements(hit_hurt_cylinders_color, hurt_cylinders_color, t);
-                const thickness = std.math.lerp(hit_hurt_cylinders_thickness, hurt_cylinders_thickness, t);
+                const hit_color = config.hurt_cylinders.hit.color;
+                const color = sdk.math.Vec4.lerpElements(hit_color, base_color, t);
+                const hit_thickness = config.hurt_cylinders.hit.thickness;
+                const thickness = std.math.lerp(hit_thickness, base_thickness, t);
 
                 drawCylinder(cylinder, color, thickness, direction, matrix, inverse_matrix);
             }
@@ -291,11 +431,13 @@ pub const View = struct {
             const hurt_cylinder = self.lingering_hurt_cylinders.get(index) catch unreachable;
             const cylinder = hurt_cylinder.cylinder;
 
-            const completion = hurt_cylinder.life_time / lingering_hurt_cylinders_duration;
-            var color = lingering_hurt_cylinders_color;
+            const duration = config.hurt_cylinders.lingering.duration;
+            const completion = hurt_cylinder.life_time / duration;
+            var color = config.hurt_cylinders.lingering.color;
             color.asColor().a *= 1.0 - (completion * completion * completion * completion);
+            const thickness = config.hurt_cylinders.lingering.thickness;
 
-            drawCylinder(cylinder, color, lingering_hurt_cylinders_thickness, direction, matrix, inverse_matrix);
+            drawCylinder(cylinder, color, thickness, direction, matrix, inverse_matrix);
         }
     }
 
@@ -304,42 +446,60 @@ pub const View = struct {
             fn call(
                 mat: sdk.math.Mat4,
                 skeleton: *const model.Skeleton,
+                blocking: model.Blocking,
                 can_move: bool,
                 point_1: model.SkeletonPointId,
                 point_2: model.SkeletonPointId,
             ) void {
-                const line = sdk.math.LineSegment3{ .point_1 = skeleton.get(point_1), .point_2 = skeleton.get(point_2) };
-                const color = if (can_move) skeleton_color else cant_move_skeleton_color;
-                const thickness: f32 = if (can_move) skeleton_thickness else cant_move_skeleton_thickness;
+                const line = sdk.math.LineSegment3{
+                    .point_1 = skeleton.get(point_1),
+                    .point_2 = skeleton.get(point_2),
+                };
+                var color = config.skeleton.colors.get(blocking);
+                if (!can_move) {
+                    color.asColor().a *= config.skeleton.cant_move_alpha;
+                }
+                const thickness = config.skeleton.thickness;
                 drawLine(line, color, thickness, mat);
             }
         }.call;
         for (&self.frame.players) |*player| {
             const skeleton: *const model.Skeleton = if (player.skeleton) |*s| s else continue;
+            const blocking = if (player.blocking) |b| b else .not_blocking;
             const can_move = if (player.can_move) |c| c else true;
-            drawBone(matrix, skeleton, can_move, .head, .neck);
-            drawBone(matrix, skeleton, can_move, .neck, .upper_torso);
-            drawBone(matrix, skeleton, can_move, .upper_torso, .left_shoulder);
-            drawBone(matrix, skeleton, can_move, .upper_torso, .right_shoulder);
-            drawBone(matrix, skeleton, can_move, .left_shoulder, .left_elbow);
-            drawBone(matrix, skeleton, can_move, .right_shoulder, .right_elbow);
-            drawBone(matrix, skeleton, can_move, .left_elbow, .left_hand);
-            drawBone(matrix, skeleton, can_move, .right_elbow, .right_hand);
-            drawBone(matrix, skeleton, can_move, .upper_torso, .lower_torso);
-            drawBone(matrix, skeleton, can_move, .lower_torso, .left_pelvis);
-            drawBone(matrix, skeleton, can_move, .lower_torso, .right_pelvis);
-            drawBone(matrix, skeleton, can_move, .left_pelvis, .left_knee);
-            drawBone(matrix, skeleton, can_move, .right_pelvis, .right_knee);
-            drawBone(matrix, skeleton, can_move, .left_knee, .left_ankle);
-            drawBone(matrix, skeleton, can_move, .right_knee, .right_ankle);
+            drawBone(matrix, skeleton, blocking, can_move, .head, .neck);
+            drawBone(matrix, skeleton, blocking, can_move, .neck, .upper_torso);
+            drawBone(matrix, skeleton, blocking, can_move, .upper_torso, .left_shoulder);
+            drawBone(matrix, skeleton, blocking, can_move, .upper_torso, .right_shoulder);
+            drawBone(matrix, skeleton, blocking, can_move, .left_shoulder, .left_elbow);
+            drawBone(matrix, skeleton, blocking, can_move, .right_shoulder, .right_elbow);
+            drawBone(matrix, skeleton, blocking, can_move, .left_elbow, .left_hand);
+            drawBone(matrix, skeleton, blocking, can_move, .right_elbow, .right_hand);
+            drawBone(matrix, skeleton, blocking, can_move, .upper_torso, .lower_torso);
+            drawBone(matrix, skeleton, blocking, can_move, .lower_torso, .left_pelvis);
+            drawBone(matrix, skeleton, blocking, can_move, .lower_torso, .right_pelvis);
+            drawBone(matrix, skeleton, blocking, can_move, .left_pelvis, .left_knee);
+            drawBone(matrix, skeleton, blocking, can_move, .right_pelvis, .right_knee);
+            drawBone(matrix, skeleton, blocking, can_move, .left_knee, .left_ankle);
+            drawBone(matrix, skeleton, blocking, can_move, .right_knee, .right_ankle);
         }
     }
 
     fn drawHitLines(self: *const Self, matrix: sdk.math.Mat4) void {
         for (&self.frame.players) |*player| {
+            const color = config.hit_lines.outline.colors.get(player.attack_type orelse .not_attack);
             for (player.hit_lines.asConstSlice()) |hit_line| {
                 const line = hit_line.line;
-                drawLine(line, hit_line_color, hit_line_thickness, matrix);
+                const thickness = config.hit_lines.fill.thickness + 2.0 * config.hit_lines.outline.thickness;
+                drawLine(line, color, thickness, matrix);
+            }
+        }
+        for (&self.frame.players) |*player| {
+            const color = config.hit_lines.fill.colors.get(player.attack_type orelse .not_attack);
+            for (player.hit_lines.asConstSlice()) |hit_line| {
+                const line = hit_line.line;
+                const thickness = config.hit_lines.fill.thickness;
+                drawLine(line, color, thickness, matrix);
             }
         }
     }
@@ -349,11 +509,25 @@ pub const View = struct {
             const hit_line = self.lingering_hit_lines.get(index) catch unreachable;
             const line = hit_line.line;
 
-            const completion = hit_line.life_time / hit_line_duration;
-            var color = hit_line_color;
+            const duration = config.hit_lines.duration;
+            const completion = hit_line.life_time / duration;
+            var color = config.hit_lines.outline.colors.get(hit_line.attack_type orelse .not_attack);
             color.asColor().a *= 1.0 - (completion * completion * completion * completion);
+            const thickness = config.hit_lines.fill.thickness + 2.0 * config.hit_lines.outline.thickness;
 
-            drawLine(line, color, hit_line_thickness, matrix);
+            drawLine(line, color, thickness, matrix);
+        }
+        for (0..self.lingering_hit_lines.len) |index| {
+            const hit_line = self.lingering_hit_lines.get(index) catch unreachable;
+            const line = hit_line.line;
+
+            const duration = config.hit_lines.duration;
+            const completion = hit_line.life_time / duration;
+            var color = config.hit_lines.fill.colors.get(hit_line.attack_type orelse .not_attack);
+            color.asColor().a *= 1.0 - (completion * completion * completion * completion);
+            const thickness = config.hit_lines.fill.thickness;
+
+            drawLine(line, color, thickness, matrix);
         }
     }
 
@@ -364,12 +538,15 @@ pub const View = struct {
         for (&self.frame.players) |*player| {
             const position = player.position orelse continue;
             const rotation = player.rotation orelse continue;
-            const delta = sdk.math.Vec3.plus_x.scale(look_at_length).rotateZ(rotation);
+            const length = config.look_direction.length;
+            const delta = sdk.math.Vec3.plus_x.scale(length).rotateZ(rotation);
             const line = sdk.math.LineSegment3{
                 .point_1 = position,
                 .point_2 = position.add(delta),
             };
-            drawLine(line, look_at_color, look_at_thickness, matrix);
+            const color = config.look_direction.color;
+            const thickness = config.look_direction.thickness;
+            drawLine(line, color, thickness, matrix);
         }
     }
 
@@ -391,9 +568,11 @@ pub const View = struct {
         const draw_list = imgui.igGetWindowDrawList();
         const point_1 = sdk.math.Vec2.fromArray(.{ screen_x, screen_y }).toImVec();
         const point_2 = sdk.math.Vec2.fromArray(.{ screen_x + screen_w, screen_y }).toImVec();
-        const u32_color = imgui.igGetColorU32_Vec4(floor_color.toImVec());
+        const color = config.floor.color;
+        const u32_color = imgui.igGetColorU32_Vec4(color.toImVec());
+        const thickness = config.floor.thickness;
 
-        imgui.ImDrawList_AddLine(draw_list, point_1, point_2, u32_color, floor_thickness);
+        imgui.ImDrawList_AddLine(draw_list, point_1, point_2, u32_color, thickness);
     }
 
     fn drawSphere(
