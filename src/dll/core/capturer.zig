@@ -44,10 +44,14 @@ pub const Capturer = struct {
 
     fn updateAirborneState(self: *Self, player: *const sdk.misc.Partial(game.Player), player_id: model.PlayerId) void {
         const current_move_frame: u32 = player.current_move_frame orelse return;
+        const state_flags: game.StateFlags = player.state_flags orelse return;
         const airborne_flags: game.AirborneFlags = player.airborne_flags orelse return;
         const airborne_state: *AirborneState = self.airborne_state.getPtr(player_id);
         if (current_move_frame == 1) {
             airborne_state.* = .{};
+        }
+        if (!state_flags.airborne_move_or_downed or !state_flags.airborne_move_and_not_juggled) {
+            return;
         }
         if (airborne_flags.probably_airborne or !airborne_flags.not_airborne_and_not_downed) {
             airborne_state.airborne_started = true;
