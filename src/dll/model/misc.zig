@@ -51,8 +51,9 @@ pub const Blocking = enum {
 pub const Crushing = packed struct {
     high_crushing: bool = false,
     low_crushing: bool = false,
-    power_crushing: bool = false,
+    anti_air_only_crushing: bool = true,
     invincibility: bool = false,
+    power_crushing: bool = false,
 };
 
 pub const Input = packed struct {

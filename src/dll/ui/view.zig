@@ -23,6 +23,7 @@ pub const View = struct {
         player_id: model.PlayerId,
         life_time: f32,
         attack_type: ?model.AttackType,
+        inactive_or_crushed: bool,
     };
     const LingeringCylinder = struct {
         cylinder: sdk.math.Cylinder,
@@ -51,37 +52,73 @@ pub const View = struct {
             .cant_move_alpha = 0.5,
         },
         .hit_lines = .{
-            .fill = .{
-                .colors = std.EnumArray(model.AttackType, sdk.math.Vec4).init(.{
-                    .not_attack = .fromArray(.{ 0.5, 0.5, 0.5, 1.0 }),
-                    .high = .fromArray(.{ 1.0, 0.0, 0.0, 1.0 }),
-                    .mid = .fromArray(.{ 1.0, 1.0, 0.0, 1.0 }),
-                    .low = .fromArray(.{ 0.0, 0.5, 1.0, 1.0 }),
-                    .special_low = .fromArray(.{ 0.0, 1.0, 1.0, 1.0 }),
-                    .high_unblockable = .fromArray(.{ 1.0, 0.0, 0.0, 1.0 }),
-                    .mid_unblockable = .fromArray(.{ 1.0, 1.0, 0.0, 1.0 }),
-                    .low_unblockable = .fromArray(.{ 0.0, 0.5, 1.0, 1.0 }),
-                    .throw = .fromArray(.{ 1.0, 1.0, 1.0, 1.0 }),
-                    .projectile = .fromArray(.{ 0.5, 1.0, 0.5, 1.0 }),
-                    .antiair_only = .fromArray(.{ 1.0, 0.5, 0.0, 1.0 }),
-                }),
-                .thickness = 1.0,
+            .normal = .{
+                .fill = .{
+                    .colors = std.EnumArray(model.AttackType, sdk.math.Vec4).init(.{
+                        .not_attack = .fromArray(.{ 0.5, 0.5, 0.5, 1.0 }),
+                        .high = .fromArray(.{ 1.0, 0.0, 0.0, 1.0 }),
+                        .mid = .fromArray(.{ 1.0, 1.0, 0.0, 1.0 }),
+                        .low = .fromArray(.{ 0.0, 0.5, 1.0, 1.0 }),
+                        .special_low = .fromArray(.{ 0.0, 1.0, 1.0, 1.0 }),
+                        .high_unblockable = .fromArray(.{ 1.0, 0.0, 0.0, 1.0 }),
+                        .mid_unblockable = .fromArray(.{ 1.0, 1.0, 0.0, 1.0 }),
+                        .low_unblockable = .fromArray(.{ 0.0, 0.5, 1.0, 1.0 }),
+                        .throw = .fromArray(.{ 1.0, 1.0, 1.0, 1.0 }),
+                        .projectile = .fromArray(.{ 0.5, 1.0, 0.5, 1.0 }),
+                        .antiair_only = .fromArray(.{ 1.0, 0.5, 0.0, 1.0 }),
+                    }),
+                    .thickness = 1.0,
+                },
+                .outline = .{
+                    .colors = std.EnumArray(model.AttackType, sdk.math.Vec4).init(.{
+                        .not_attack = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                        .high = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                        .mid = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                        .low = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                        .special_low = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                        .high_unblockable = .fromArray(.{ 0.75, 0.0, 0.75, 1.0 }),
+                        .mid_unblockable = .fromArray(.{ 0.75, 0.0, 0.75, 1.0 }),
+                        .low_unblockable = .fromArray(.{ 0.75, 0.0, 0.75, 1.0 }),
+                        .throw = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                        .projectile = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                        .antiair_only = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                    }),
+                    .thickness = 1.0,
+                },
             },
-            .outline = .{
-                .colors = std.EnumArray(model.AttackType, sdk.math.Vec4).init(.{
-                    .not_attack = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
-                    .high = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
-                    .mid = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
-                    .low = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
-                    .special_low = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
-                    .high_unblockable = .fromArray(.{ 0.75, 0.0, 0.75, 1.0 }),
-                    .mid_unblockable = .fromArray(.{ 0.75, 0.0, 0.75, 1.0 }),
-                    .low_unblockable = .fromArray(.{ 0.75, 0.0, 0.75, 1.0 }),
-                    .throw = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
-                    .projectile = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
-                    .antiair_only = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
-                }),
-                .thickness = 1.0,
+            .inactive_or_crushed = .{
+                .fill = .{
+                    .colors = std.EnumArray(model.AttackType, sdk.math.Vec4).init(.{
+                        .not_attack = .fromArray(.{ 0.5, 0.5, 0.5, 1.0 }),
+                        .high = .fromArray(.{ 0.5, 0.3, 0.3, 1.0 }),
+                        .mid = .fromArray(.{ 0.5, 0.5, 0.3, 1.0 }),
+                        .low = .fromArray(.{ 0.3, 0.35, 0.5, 1.0 }),
+                        .special_low = .fromArray(.{ 0.3, 0.5, 0.5, 1.0 }),
+                        .high_unblockable = .fromArray(.{ 0.5, 0.3, 0.3, 1.0 }),
+                        .mid_unblockable = .fromArray(.{ 0.5, 0.5, 0.3, 1.0 }),
+                        .low_unblockable = .fromArray(.{ 0.3, 0.35, 0.5, 1.0 }),
+                        .throw = .fromArray(.{ 0.5, 0.5, 0.5, 1.0 }),
+                        .projectile = .fromArray(.{ 0.35, 0.5, 0.35, 1.0 }),
+                        .antiair_only = .fromArray(.{ 0.5, 0.35, 0.3, 1.0 }),
+                    }),
+                    .thickness = 1.0,
+                },
+                .outline = .{
+                    .colors = std.EnumArray(model.AttackType, sdk.math.Vec4).init(.{
+                        .not_attack = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                        .high = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                        .mid = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                        .low = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                        .special_low = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                        .high_unblockable = .fromArray(.{ 0.4, 0.3, 0.4, 1.0 }),
+                        .mid_unblockable = .fromArray(.{ 0.4, 0.3, 0.4, 1.0 }),
+                        .low_unblockable = .fromArray(.{ 0.4, 0.3, 0.4, 1.0 }),
+                        .throw = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                        .projectile = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                        .antiair_only = .fromArray(.{ 0.0, 0.0, 0.0, 0.0 }),
+                    }),
+                    .thickness = 1.0,
+                },
             },
             .duration = 1.0,
         },
@@ -150,7 +187,7 @@ pub const View = struct {
         const player = frame.getPlayerById(player_id);
         const cylinders: *const model.HurtCylinders = if (player.hurt_cylinders) |*c| c else return;
         for (&cylinders.values, 0..) |*hurt_cylinder, index| {
-            if (!hurt_cylinder.intersects) {
+            if (!hurt_cylinder.flags.is_connected) {
                 continue;
             }
             const cylinder_id = model.HurtCylinders.Indexer.keyForIndex(index);
@@ -171,6 +208,7 @@ pub const View = struct {
                 .player_id = player_id,
                 .life_time = 0,
                 .attack_type = player.attack_type,
+                .inactive_or_crushed = hit_line.flags.is_inactive or hit_line.flags.is_crushed,
             });
         }
     }
@@ -407,7 +445,7 @@ pub const View = struct {
 
                 const life_time = self.hit_hurt_cylinder_life_time.getPtrConst(player_id).get(cylinder_id);
                 const duration = config.hurt_cylinders.hit.duration;
-                const completion: f32 = if (hurt_cylinder.intersects) 0.0 else block: {
+                const completion: f32 = if (hurt_cylinder.flags.is_connected) 0.0 else block: {
                     break :block std.math.clamp(life_time / duration, 0.0, 1.0);
                 };
                 const t = completion * completion * completion * completion;
@@ -487,18 +525,36 @@ pub const View = struct {
 
     fn drawHitLines(self: *const Self, matrix: sdk.math.Mat4) void {
         for (&self.frame.players) |*player| {
-            const color = config.hit_lines.outline.colors.get(player.attack_type orelse .not_attack);
             for (player.hit_lines.asConstSlice()) |hit_line| {
+                const color = if (hit_line.flags.is_inactive or hit_line.flags.is_crushed) block: {
+                    break :block config.hit_lines.inactive_or_crushed.outline.colors.get(player.attack_type orelse .not_attack);
+                } else block: {
+                    break :block config.hit_lines.normal.outline.colors.get(player.attack_type orelse .not_attack);
+                };
+                const thickness: f32 = if (hit_line.flags.is_inactive or hit_line.flags.is_crushed) block: {
+                    break :block config.hit_lines.inactive_or_crushed.fill.thickness +
+                        2.0 * config.hit_lines.inactive_or_crushed.outline.thickness;
+                } else block: {
+                    break :block config.hit_lines.normal.fill.thickness +
+                        2.0 * config.hit_lines.normal.outline.thickness;
+                };
                 const line = hit_line.line;
-                const thickness = config.hit_lines.fill.thickness + 2.0 * config.hit_lines.outline.thickness;
                 drawLine(line, color, thickness, matrix);
             }
         }
         for (&self.frame.players) |*player| {
-            const color = config.hit_lines.fill.colors.get(player.attack_type orelse .not_attack);
             for (player.hit_lines.asConstSlice()) |hit_line| {
+                const color = if (hit_line.flags.is_inactive or hit_line.flags.is_crushed) block: {
+                    break :block config.hit_lines.inactive_or_crushed.fill.colors.get(player.attack_type orelse .not_attack);
+                } else block: {
+                    break :block config.hit_lines.normal.fill.colors.get(player.attack_type orelse .not_attack);
+                };
+                const thickness: f32 = if (hit_line.flags.is_inactive or hit_line.flags.is_crushed) block: {
+                    break :block config.hit_lines.inactive_or_crushed.fill.thickness;
+                } else block: {
+                    break :block config.hit_lines.normal.fill.thickness;
+                };
                 const line = hit_line.line;
-                const thickness = config.hit_lines.fill.thickness;
                 drawLine(line, color, thickness, matrix);
             }
         }
@@ -511,9 +567,19 @@ pub const View = struct {
 
             const duration = config.hit_lines.duration;
             const completion = hit_line.life_time / duration;
-            var color = config.hit_lines.outline.colors.get(hit_line.attack_type orelse .not_attack);
+            var color = if (hit_line.inactive_or_crushed) block: {
+                break :block config.hit_lines.inactive_or_crushed.outline.colors.get(hit_line.attack_type orelse .not_attack);
+            } else block: {
+                break :block config.hit_lines.normal.outline.colors.get(hit_line.attack_type orelse .not_attack);
+            };
             color.asColor().a *= 1.0 - (completion * completion * completion * completion);
-            const thickness = config.hit_lines.fill.thickness + 2.0 * config.hit_lines.outline.thickness;
+            const thickness: f32 = if (hit_line.inactive_or_crushed) block: {
+                break :block config.hit_lines.inactive_or_crushed.fill.thickness +
+                    2.0 * config.hit_lines.inactive_or_crushed.outline.thickness;
+            } else block: {
+                break :block config.hit_lines.normal.fill.thickness +
+                    2.0 * config.hit_lines.normal.outline.thickness;
+            };
 
             drawLine(line, color, thickness, matrix);
         }
@@ -523,9 +589,17 @@ pub const View = struct {
 
             const duration = config.hit_lines.duration;
             const completion = hit_line.life_time / duration;
-            var color = config.hit_lines.fill.colors.get(hit_line.attack_type orelse .not_attack);
+            var color = if (hit_line.inactive_or_crushed) block: {
+                break :block config.hit_lines.inactive_or_crushed.fill.colors.get(hit_line.attack_type orelse .not_attack);
+            } else block: {
+                break :block config.hit_lines.normal.fill.colors.get(hit_line.attack_type orelse .not_attack);
+            };
             color.asColor().a *= 1.0 - (completion * completion * completion * completion);
-            const thickness = config.hit_lines.fill.thickness;
+            const thickness: f32 = if (hit_line.inactive_or_crushed) block: {
+                break :block config.hit_lines.inactive_or_crushed.fill.thickness;
+            } else block: {
+                break :block config.hit_lines.normal.fill.thickness;
+            };
 
             drawLine(line, color, thickness, matrix);
         }

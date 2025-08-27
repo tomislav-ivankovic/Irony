@@ -20,7 +20,17 @@ pub const HurtCylinderId = enum {
 
 pub const HurtCylinder = struct {
     cylinder: sdk.math.Cylinder,
-    intersects: bool = false,
+    flags: HurtCylinderFlags = .{},
+};
+
+pub const HurtCylinderFlags = packed struct {
+    is_intersecting: bool = false,
+    is_crushing: bool = false,
+    is_power_crushing: bool = false,
+    is_connected: bool = false,
+    is_blocking: bool = false,
+    is_being_hit: bool = false,
+    is_being_counter_hit: bool = false,
 };
 
 pub const HurtCylinders = std.EnumArray(HurtCylinderId, HurtCylinder);

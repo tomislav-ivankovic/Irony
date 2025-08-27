@@ -4,7 +4,18 @@ const game = @import("../game/root.zig");
 
 pub const HitLine = struct {
     line: sdk.math.LineSegment3,
-    intersects: bool = false,
+    flags: HitLineFlags = .{},
+};
+
+pub const HitLineFlags = packed struct {
+    is_inactive: bool = false,
+    is_intersecting: bool = false,
+    is_crushed: bool = false,
+    is_power_crushed: bool = false,
+    is_connected: bool = false,
+    is_blocked: bool = false,
+    is_hitting: bool = false,
+    is_counter_hitting: bool = false,
 };
 
 pub const HitLines = struct {
@@ -29,11 +40,9 @@ const testing = std.testing;
 test "HitLines.asConstSlice, asMutableSlice should return correct value" {
     const line_1 = HitLine{
         .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 4, 5, 6 }) },
-        .intersects = false,
     };
     const line_2 = HitLine{
         .line = .{ .point_1 = .fromArray(.{ 7, 8, 9 }), .point_2 = .fromArray(.{ 10, 11, 12 }) },
-        .intersects = true,
     };
     var lines = HitLines{};
     lines.buffer[0] = line_1;

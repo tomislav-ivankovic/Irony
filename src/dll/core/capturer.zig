@@ -239,15 +239,18 @@ pub const Capturer = struct {
         player: *const sdk.misc.Partial(game.Player),
         player_id: model.PlayerId,
     ) ?model.Crushing {
-        const state_flabs: game.StateFlags = player.state_flags orelse return null;
+        const posture = self.capturePosture(player, player_id) orelse return null;
+        const state_flags: game.StateFlags = player.state_flags orelse return null;
         const airborne_state = self.airborne_state.get(player_id);
         const power_crushing: game.Boolean(.{}) = player.power_crushing orelse return null;
         const invincible: game.Boolean(.{}) = player.invincible orelse return null;
         return .{
-            .high_crushing = state_flabs.crouching or state_flabs.downed,
-            .low_crushing = airborne_state.airborne_started and
+            .high_crushing = posture == .crouching or posture == .downed_face_down or posture == .downed_face_up,
+            .low_crushing = posture == .airborne and
+                airborne_state.airborne_started and
                 !airborne_state.low_crushing_ended and
-                !state_flabs.being_juggled,
+                !state_flags.being_juggled,
+            .anti_air_only_crushing = posture != .airborne,
             .power_crushing = power_crushing.toBool() orelse return null,
             .invincibility = invincible.toBool() orelse return null,
         };
@@ -1189,7 +1192,6 @@ test "should capture hit lines correctly" {
                     .point_1 = .fromArray(point_1),
                     .point_2 = .fromArray(point_2),
                 },
-                .intersects = false,
             };
         }
     }.call;
