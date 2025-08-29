@@ -4,13 +4,17 @@ const model = @import("../model/root.zig");
 const game = @import("../game/root.zig");
 
 pub const Capturer = struct {
-    airborne_state: std.EnumArray(model.PlayerId, AirborneState) = .initFill(.{}),
-    previous_hit_lines: std.EnumArray(model.PlayerId, ?game.HitLines) = .initFill(null),
+    player_1_state: PlayerState = .{},
+    player_2_state: PlayerState = .{},
 
     const Self = @This();
     pub const GameMemory = struct {
         player_1: sdk.misc.Partial(game.Player),
         player_2: sdk.misc.Partial(game.Player),
+    };
+    pub const PlayerState = struct {
+        airborne_state: AirborneState = .{},
+        previous_hit_lines: ?game.HitLines = null,
     };
     const AirborneState = packed struct {
         airborne_started: bool = false,
@@ -20,19 +24,12 @@ pub const Capturer = struct {
     };
 
     pub fn captureFrame(self: *Self, game_memory: *const GameMemory) model.Frame {
-        self.updateAirborneState(&game_memory.player_1, .player_1);
-        self.updateAirborneState(&game_memory.player_2, .player_2);
-
         const frames_since_round_start = captureFramesSinceRoundStart(game_memory);
         const floor_z = captureFloorZ(game_memory);
-        const player_1 = self.capturePlayer(&game_memory.player_1, .player_1);
-        const player_2 = self.capturePlayer(&game_memory.player_2, .player_2);
+        const player_1 = capturePlayer(&self.player_1_state, &game_memory.player_1, .player_1);
+        const player_2 = capturePlayer(&self.player_2_state, &game_memory.player_2, .player_2);
         const main_player_id = captureMainPlayerId(game_memory);
         const left_player_id = captureLeftPlayerId(game_memory, main_player_id);
-
-        self.updatePreviousHitLines(&game_memory.player_1, .player_1);
-        self.updatePreviousHitLines(&game_memory.player_2, .player_2);
-
         return .{
             .frames_since_round_start = frames_since_round_start,
             .floor_z = floor_z,
@@ -40,37 +37,6 @@ pub const Capturer = struct {
             .left_player_id = left_player_id,
             .main_player_id = main_player_id,
         };
-    }
-
-    fn updateAirborneState(self: *Self, player: *const sdk.misc.Partial(game.Player), player_id: model.PlayerId) void {
-        const current_move_frame: u32 = player.current_move_frame orelse return;
-        const state_flags: game.StateFlags = player.state_flags orelse return;
-        const airborne_flags: game.AirborneFlags = player.airborne_flags orelse return;
-        const airborne_state: *AirborneState = self.airborne_state.getPtr(player_id);
-        if (current_move_frame == 1) {
-            airborne_state.* = .{};
-        }
-        if (!state_flags.airborne_move_or_downed or !state_flags.airborne_move_and_not_juggled) {
-            return;
-        }
-        if (airborne_flags.probably_airborne or !airborne_flags.not_airborne_and_not_downed) {
-            airborne_state.airborne_started = true;
-        }
-        if (airborne_flags.low_crushing_start) {
-            airborne_state.airborne_started = true;
-            airborne_state.low_crushing_started = true;
-        }
-        if (airborne_flags.low_crushing_end) {
-            airborne_state.low_crushing_ended = true;
-        }
-        if (airborne_flags.airborne_end) {
-            airborne_state.low_crushing_ended = true;
-            airborne_state.airborne_ended = true;
-        }
-    }
-
-    fn updatePreviousHitLines(self: *Self, player: *const sdk.misc.Partial(game.Player), player_id: model.PlayerId) void {
-        self.previous_hit_lines.set(player_id, player.hit_lines);
     }
 
     fn captureFramesSinceRoundStart(game_memory: *const GameMemory) ?u32 {
@@ -123,8 +89,13 @@ pub const Capturer = struct {
         }
     }
 
-    fn capturePlayer(self: *Self, player: *const sdk.misc.Partial(game.Player), player_id: model.PlayerId) model.Player {
-        return .{
+    fn capturePlayer(
+        state: *PlayerState,
+        player: *const sdk.misc.Partial(game.Player),
+        player_id: model.PlayerId,
+    ) model.Player {
+        updateAirborneState(state, player);
+        const captured_player = model.Player{
             .character_id = player.character_id,
             .current_move_id = player.current_move_id,
             .current_move_frame = player.current_move_frame,
@@ -132,9 +103,9 @@ pub const Capturer = struct {
             .attack_type = captureAttackType(player),
             .attack_damage = player.attack_damage,
             .hit_outcome = captureHitOutcome(player),
-            .posture = self.capturePosture(player, player_id),
+            .posture = capturePosture(state, player),
             .blocking = captureBlocking(player),
-            .crushing = self.captureCrushing(player, player_id),
+            .crushing = captureCrushing(state, player),
             .can_move = if (player.can_move) |can_move| can_move.toBool() else null,
             .input = captureInput(player, player_id),
             .health = if (player.health) |*health| health.convert() else null,
@@ -145,8 +116,40 @@ pub const Capturer = struct {
             .skeleton = captureSkeleton(player),
             .hurt_cylinders = captureHurtCylinders(player),
             .collision_spheres = captureCollisionSpheres(player),
-            .hit_lines = self.captureHitLines(player, player_id),
+            .hit_lines = captureHitLines(state, player),
         };
+        updatePreviousHitLines(state, player);
+        return captured_player;
+    }
+
+    fn updateAirborneState(state: *PlayerState, player: *const sdk.misc.Partial(game.Player)) void {
+        const current_move_frame: u32 = player.current_move_frame orelse return;
+        const state_flags: game.StateFlags = player.state_flags orelse return;
+        const airborne_flags: game.AirborneFlags = player.airborne_flags orelse return;
+        if (current_move_frame == 1) {
+            state.airborne_state = .{};
+        }
+        if (!state_flags.airborne_move_or_downed or !state_flags.airborne_move_and_not_juggled) {
+            return;
+        }
+        if (airborne_flags.probably_airborne or !airborne_flags.not_airborne_and_not_downed) {
+            state.airborne_state.airborne_started = true;
+        }
+        if (airborne_flags.low_crushing_start) {
+            state.airborne_state.airborne_started = true;
+            state.airborne_state.low_crushing_started = true;
+        }
+        if (airborne_flags.low_crushing_end) {
+            state.airborne_state.low_crushing_ended = true;
+        }
+        if (airborne_flags.airborne_end) {
+            state.airborne_state.low_crushing_ended = true;
+            state.airborne_state.airborne_ended = true;
+        }
+    }
+
+    fn updatePreviousHitLines(state: *PlayerState, player: *const sdk.misc.Partial(game.Player)) void {
+        state.previous_hit_lines = player.hit_lines;
     }
 
     fn captureAttackType(player: *const sdk.misc.Partial(game.Player)) ?model.AttackType {
@@ -191,13 +194,9 @@ pub const Capturer = struct {
         };
     }
 
-    fn capturePosture(
-        self: *const Self,
-        player: *const sdk.misc.Partial(game.Player),
-        player_id: model.PlayerId,
-    ) ?model.Posture {
+    fn capturePosture(state: *const PlayerState, player: *const sdk.misc.Partial(game.Player)) ?model.Posture {
         const state_flags: game.StateFlags = player.state_flags orelse return null;
-        const airborne_state = self.airborne_state.get(player_id);
+        const airborne_state = state.airborne_state;
         if (state_flags.crouching) {
             return .crouching;
         } else if (state_flags.downed) {
@@ -234,14 +233,10 @@ pub const Capturer = struct {
         }
     }
 
-    fn captureCrushing(
-        self: *Self,
-        player: *const sdk.misc.Partial(game.Player),
-        player_id: model.PlayerId,
-    ) ?model.Crushing {
-        const posture = self.capturePosture(player, player_id) orelse return null;
+    fn captureCrushing(state: *PlayerState, player: *const sdk.misc.Partial(game.Player)) ?model.Crushing {
+        const posture = capturePosture(state, player) orelse return null;
         const state_flags: game.StateFlags = player.state_flags orelse return null;
-        const airborne_state = self.airborne_state.get(player_id);
+        const airborne_state = state.airborne_state;
         const power_crushing: game.Boolean(.{}) = player.power_crushing orelse return null;
         const invincible: game.Boolean(.{}) = player.invincible orelse return null;
         return .{
@@ -400,14 +395,9 @@ pub const Capturer = struct {
         });
     }
 
-    fn captureHitLines(
-        self: *const Self,
-        player: *const sdk.misc.Partial(game.Player),
-        player_id: model.PlayerId,
-    ) model.HitLines {
+    fn captureHitLines(state: *const PlayerState, player: *const sdk.misc.Partial(game.Player)) model.HitLines {
         var result: model.HitLines = .{};
-        const maybe_previous_lines = self.previous_hit_lines.getPtrConst(player_id);
-        const previous_lines: *const game.HitLines = if (maybe_previous_lines.*) |*l| l else return result;
+        const previous_lines: *const game.HitLines = if (state.previous_hit_lines) |*l| l else return result;
         const current_lines: *const game.HitLines = if (player.hit_lines) |*l| l else return result;
         for (previous_lines, current_lines) |*raw_previous_line, *raw_current_line| {
             const previous_line = raw_previous_line.convert();
