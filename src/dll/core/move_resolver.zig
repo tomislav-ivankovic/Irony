@@ -15,11 +15,11 @@ pub const MoveResolver = struct {
     };
 
     pub fn resolve(self: *Self, frame: *model.Frame) void {
-        resolveSide(&self.player_1_state, &frame.players[0]);
-        resolveSide(&self.player_2_state, &frame.players[1]);
+        resolveSide(&self.player_1_state, &frame.players[0], &frame.players[1]);
+        resolveSide(&self.player_2_state, &frame.players[1], &frame.players[0]);
     }
 
-    fn resolveSide(state: *PlayerState, player: *model.Player) void {
+    fn resolveSide(state: *PlayerState, player: *model.Player, other_player: *model.Player) void {
         const current_frame = player.move_frame orelse {
             state.* = .{};
             return;
@@ -67,10 +67,8 @@ pub const MoveResolver = struct {
                 },
             }
         }
-        for (player.hit_lines.asConstSlice()) |*line| {
-            if (line.flags.is_connected) {
-                state.connected_frame = current_frame;
-            }
+        if (state.phase == .active and other_player.hit_outcome != null and other_player.hit_outcome != .none) {
+            state.connected_frame = current_frame;
         }
         player.move_phase = state.phase;
         player.move_first_active_frame = state.first_active_frame;

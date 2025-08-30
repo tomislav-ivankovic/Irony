@@ -8,6 +8,21 @@ pub const Details = struct {
     frame: model.Frame = .{},
 
     const Self = @This();
+    const UActualMax = struct {
+        actual: ?u32,
+        max: ?u32,
+    };
+    const UActualMinMax = struct {
+        actual: ?u32,
+        min: ?u32,
+        max: ?u32,
+    };
+    const IActualMinMax = struct {
+        actual: ?i32,
+        min: ?i32,
+        max: ?i32,
+    };
+
     const string_buffer_size = 128;
     const empty_value_string = "---";
     const error_string = "error";
@@ -40,7 +55,12 @@ pub const Details = struct {
         drawProperty("Character ID", &left.character_id, &right.character_id);
         drawProperty("Move ID", &left.move_id, &right.move_id);
         drawProperty("Current Frame", &left.move_frame, &right.move_frame);
+        drawProperty("Startup Frames", &computeStartupFrames(left), &computeStartupFrames(right));
+        drawProperty("Active Frames", &computeActiveFrames(left), &computeActiveFrames(right));
+        drawProperty("Recovery Frames", &computeRecoveryFrames(left), &computeRecoveryFrames(right));
         drawProperty("Total Frames", &left.move_total_frames, &right.move_total_frames);
+        drawProperty("Frame Advantage", &computeFrameAdvantage(left, right), &computeFrameAdvantage(right, left));
+        drawProperty("Move Phase", &left.move_phase, &right.move_phase);
         drawProperty("Attack Type", &left.attack_type, &right.attack_type);
         drawProperty("Attack Damage", &left.attack_damage, &right.attack_damage);
         drawProperty("Hit Outcome", &left.hit_outcome, &right.hit_outcome);
@@ -54,15 +74,72 @@ pub const Details = struct {
         drawProperty("Heat", &left.heat, &right.heat);
     }
 
-    fn drawProperty(name: [:0]const u8, left_value_pointer: anytype, right_value_pointer: anytype) void {
+    fn computeStartupFrames(player: *const model.Player) UActualMinMax {
+        return .{
+            .actual = player.move_connected_frame,
+            .min = player.move_first_active_frame,
+            .max = player.move_last_active_frame,
+        };
+    }
+
+    fn computeActiveFrames(player: *const model.Player) UActualMax {
+        const first_active_frame = player.move_first_active_frame orelse return .{
+            .actual = null,
+            .max = null,
+        };
+        const connected_or_whiffed_frame = player.move_connected_frame orelse player.move_last_active_frame;
+        return .{
+            .actual = if (connected_or_whiffed_frame) |frame| 1 + frame -| first_active_frame else null,
+            .max = if (player.move_last_active_frame) |frame| 1 + frame -| first_active_frame else null,
+        };
+    }
+
+    fn computeRecoveryFrames(player: *const model.Player) UActualMinMax {
+        const total = player.move_total_frames orelse return .{
+            .actual = null,
+            .min = null,
+            .max = null,
+        };
+        if (player.move_phase == .recovery and player.attack_type == .not_attack) {
+            return .{
+                .actual = total,
+                .min = total,
+                .max = total,
+            };
+        }
+        const connected_or_whiffed_frame = player.move_connected_frame orelse player.move_last_active_frame;
+        return .{
+            .actual = if (connected_or_whiffed_frame) |frame| total -| frame else null,
+            .min = if (player.move_last_active_frame) |frame| total -| frame else null,
+            .max = if (player.move_first_active_frame) |frame| total -| frame else null,
+        };
+    }
+
+    fn computeFrameAdvantage(player: *const model.Player, other_player: *const model.Player) IActualMinMax {
+        const self = computeRecoveryFrames(player);
+        const other = computeRecoveryFrames(other_player);
+        return .{
+            .actual = if (other.actual != null and self.actual != null) block: {
+                break :block @as(i32, @intCast(other.actual.?)) -| @as(i32, @intCast(self.actual.?));
+            } else null,
+            .min = if (other.min != null and self.max != null) block: {
+                break :block @as(i32, @intCast(other.min.?)) -| @as(i32, @intCast(self.max.?));
+            } else null,
+            .max = if (other.max != null and self.min != null) block: {
+                break :block @as(i32, @intCast(other.max.?)) -| @as(i32, @intCast(self.min.?));
+            } else null,
+        };
+    }
+
+    fn drawProperty(name: [:0]const u8, left_pointer: anytype, right_pointer: anytype) void {
         if (imgui.igTableNextColumn()) {
             drawText(name);
         }
         if (imgui.igTableNextColumn()) {
-            drawValue(left_value_pointer);
+            drawValue(left_pointer);
         }
         if (imgui.igTableNextColumn()) {
-            drawValue(right_value_pointer);
+            drawValue(right_pointer);
         }
     }
 
@@ -74,7 +151,15 @@ pub const Details = struct {
                 "The drawValue function expects a pointer but provided value is of type: " ++ @typeName(Pointer),
             ),
         };
-        if (Value == model.AttackType) {
+        if (Value == UActualMax) {
+            drawUActualMax(pointer);
+        } else if (Value == UActualMinMax) {
+            drawUActualMinMax(pointer);
+        } else if (Value == IActualMinMax) {
+            drawIActualMinMax(pointer);
+        } else if (Value == model.MovePhase) {
+            drawMovePhase(pointer);
+        } else if (Value == model.AttackType) {
             drawAttackType(pointer);
         } else if (Value == model.HitOutcome) {
             drawHitOutcome(pointer);
@@ -122,6 +207,116 @@ pub const Details = struct {
         } else {
             drawText(empty_value_string);
         }
+    }
+
+    fn drawUActualMax(pointer: *const UActualMax) void {
+        // if (pointer.actual == null and pointer.max == null) {
+        //     drawText(empty_value_string);
+        //     return;
+        // }
+        var buffer: [string_buffer_size]u8 = [1]u8{0} ** string_buffer_size;
+        var stream = std.io.fixedBufferStream(&buffer);
+        if (pointer.actual) |actual| {
+            stream.writer().print("{}", .{actual}) catch {};
+        } else {
+            _ = stream.write(empty_value_string) catch {};
+        }
+        _ = stream.write(" (") catch {};
+        if (pointer.max) |max| {
+            stream.writer().print("{}", .{max}) catch {};
+        } else {
+            _ = stream.write(empty_value_string) catch {};
+        }
+        _ = stream.write(")") catch {};
+        if (stream.pos >= buffer.len - 1) {
+            drawText(error_string);
+            return;
+        }
+        drawText(buffer[0..stream.pos :0]);
+    }
+
+    fn drawUActualMinMax(pointer: *const UActualMinMax) void {
+        // if (pointer.actual == null and pointer.min == null and pointer.max == null) {
+        //     drawText(empty_value_string);
+        //     return;
+        // }
+        var buffer: [string_buffer_size]u8 = [1]u8{0} ** string_buffer_size;
+        var stream = std.io.fixedBufferStream(&buffer);
+        if (pointer.actual) |actual| {
+            stream.writer().print("{}", .{actual}) catch {};
+        } else {
+            _ = stream.write(empty_value_string) catch {};
+        }
+        _ = stream.write(" (") catch {};
+        if (pointer.min) |min| {
+            stream.writer().print("{}", .{min}) catch {};
+        } else {
+            _ = stream.write(empty_value_string) catch {};
+        }
+        _ = stream.write(" - ") catch {};
+        if (pointer.max) |max| {
+            stream.writer().print("{}", .{max}) catch {};
+        } else {
+            _ = stream.write(empty_value_string) catch {};
+        }
+        _ = stream.write(")") catch {};
+        if (stream.pos >= buffer.len - 1) {
+            drawText(error_string);
+            return;
+        }
+        drawText(buffer[0..stream.pos :0]);
+    }
+
+    fn drawIActualMinMax(pointer: *const IActualMinMax) void {
+        // if (pointer.actual == null and pointer.min == null and pointer.max == null) {
+        //     drawText(empty_value_string);
+        //     return;
+        // }
+        var buffer: [string_buffer_size]u8 = [1]u8{0} ** string_buffer_size;
+        var stream = std.io.fixedBufferStream(&buffer);
+        if (pointer.actual) |actual| {
+            if (actual > 0) {
+                _ = stream.write("+") catch {};
+            }
+            stream.writer().print("{}", .{actual}) catch {};
+        } else {
+            _ = stream.write(empty_value_string) catch {};
+        }
+        _ = stream.write(" (") catch {};
+        if (pointer.min) |min| {
+            if (min > 0) {
+                _ = stream.write("+") catch {};
+            }
+            stream.writer().print("{}", .{min}) catch {};
+        } else {
+            _ = stream.write(empty_value_string) catch {};
+        }
+        _ = stream.write(", ") catch {};
+        if (pointer.max) |max| {
+            if (max > 0) {
+                _ = stream.write("+") catch {};
+            }
+            stream.writer().print("{}", .{max}) catch {};
+        } else {
+            _ = stream.write(empty_value_string) catch {};
+        }
+        _ = stream.write(")") catch {};
+        if (stream.pos >= buffer.len - 1) {
+            drawText(error_string);
+            return;
+        }
+        drawText(buffer[0..stream.pos :0]);
+    }
+
+    fn drawMovePhase(pointer: *const model.MovePhase) void {
+        const text = switch (pointer.*) {
+            .neutral => "Neutral",
+            .start_up => "Start Up",
+            .active => "Active",
+            .active_recovery => "Active Recovery",
+            .recovery => "Recovery",
+        };
+        drawText(text);
     }
 
     fn drawAttackType(pointer: *const model.AttackType) void {
