@@ -7,6 +7,7 @@ pub const Core = struct {
     frame_detector: core.FrameDetector,
     pause_detector: core.PauseDetector(.{}),
     capturer: core.Capturer,
+    attack_detector: core.AttackDetector,
     hit_detector: core.HitDetector,
     controller: core.Controller,
 
@@ -17,6 +18,7 @@ pub const Core = struct {
             .frame_detector = .{},
             .pause_detector = .{},
             .capturer = .{},
+            .attack_detector = .{},
             .hit_detector = .{},
             .controller = core.Controller.init(allocator),
         };
@@ -39,6 +41,7 @@ pub const Core = struct {
         }
         self.pause_detector.update();
         var frame = self.capturer.captureFrame(&.{ .player_1 = player_1, .player_2 = player_2 });
+        self.attack_detector.detect(&frame);
         self.hit_detector.detect(&frame);
         self.controller.processFrame(&frame, context, processFrame);
     }

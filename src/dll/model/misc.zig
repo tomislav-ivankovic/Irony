@@ -12,6 +12,13 @@ pub const AttackType = enum {
     antiair_only,
 };
 
+pub const AttackPhase = enum {
+    not_attack,
+    start_up,
+    active,
+    recovery,
+};
+
 pub const HitOutcome = enum {
     none,
     blocked_standing,

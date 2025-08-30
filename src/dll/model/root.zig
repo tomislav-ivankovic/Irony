@@ -10,6 +10,7 @@ pub const HurtCylinder = @import("hurt_cylinders.zig").HurtCylinder;
 pub const HurtCylinderFlags = @import("hurt_cylinders.zig").HurtCylinderFlags;
 pub const HurtCylinders = @import("hurt_cylinders.zig").HurtCylinders;
 pub const AttackType = @import("misc.zig").AttackType;
+pub const AttackPhase = @import("misc.zig").AttackPhase;
 pub const HitOutcome = @import("misc.zig").HitOutcome;
 pub const Posture = @import("misc.zig").Posture;
 pub const Blocking = @import("misc.zig").Blocking;

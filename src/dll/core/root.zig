@@ -1,3 +1,4 @@
+pub const AttackDetector = @import("attack_detector.zig").AttackDetector;
 pub const Capturer = @import("capturer.zig").Capturer;
 pub const Controller = @import("controller.zig").Controller;
 pub const Core = @import("core.zig").Core;
