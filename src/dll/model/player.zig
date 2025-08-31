@@ -132,6 +132,48 @@ pub const Player = struct {
             } else null,
         };
     }
+
+    pub fn getAngleTo(self: *const Self, other: *const Self) ?f32 {
+        const self_position = self.position orelse return null;
+        const other_position = other.position orelse return null;
+        const other_rotation = other.rotation orelse return null;
+        const difference_2d = self_position.swizzle("xy").subtract(other_position.swizzle("xy"));
+        const difference_rotation = std.math.atan2(difference_2d.y(), difference_2d.x());
+        return std.math.wrap(other_rotation - difference_rotation, std.math.pi);
+    }
+
+    pub fn getHurtCylindersHeight(self: *const Self, floor_z: ?f32) model.F32MinMax {
+        const cylinders: *const model.HurtCylinders = if (self.hurt_cylinders) |*c| c else {
+            return .{ .min = null, .max = null };
+        };
+        const floor_height = floor_z orelse return .{ .min = null, .max = null };
+        var min = std.math.inf(f32);
+        var max = -std.math.inf(f32);
+        for (&cylinders.values) |*hurt_cylinder| {
+            const cylinder = &hurt_cylinder.cylinder;
+            min = @min(min, cylinder.center.z() - cylinder.half_height);
+            max = @max(max, cylinder.center.z() + cylinder.half_height);
+        }
+        return .{ .min = @max(min - floor_height, 0), .max = max - floor_height };
+    }
+
+    pub fn getHitLinesHeight(self: *const Self, floor_z: ?f32) model.F32MinMax {
+        const lines = self.hit_lines.asConstSlice();
+        if (lines.len == 0) {
+            return .{ .min = null, .max = null };
+        }
+        const floor_height = floor_z orelse return .{ .min = null, .max = null };
+        var min = std.math.inf(f32);
+        var max = -std.math.inf(f32);
+        for (lines) |*hit_line| {
+            const line = &hit_line.line;
+            min = @min(min, line.point_1.z());
+            max = @max(max, line.point_1.z());
+            min = @min(min, line.point_2.z());
+            max = @max(max, line.point_2.z());
+        }
+        return .{ .min = @max(min - floor_height, 0), .max = max - floor_height };
+    }
 };
 
 const testing = std.testing;
@@ -274,3 +316,5 @@ test "Player.getFrameAdvantage should return correct value" {
         player_2.getFrameAdvantage(&player_1),
     );
 }
+
+// TODO test getAngleTo, getHurtCylindersHeight, getHitLinesHeight

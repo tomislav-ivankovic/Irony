@@ -58,6 +58,21 @@ pub const Details = struct {
         drawProperty("Health", &left.health, &right.health);
         drawProperty("Rage", &left.rage, &right.rage);
         drawProperty("Heat", &left.heat, &right.heat);
+        drawProperty(
+            "Angle To Opponent [°]",
+            &(if (left.getAngleTo(right)) |angle| @as(?f32, std.math.radiansToDegrees(angle)) else @as(?f32, null)),
+            &(if (right.getAngleTo(left)) |angle| @as(?f32, std.math.radiansToDegrees(angle)) else @as(?f32, null)),
+        );
+        drawProperty(
+            "Hit Lines Height [cm]",
+            &left.getHitLinesHeight(self.frame.floor_z),
+            &right.getHitLinesHeight(self.frame.floor_z),
+        );
+        drawProperty(
+            "Hurt Cylinders Height [cm]",
+            &left.getHurtCylindersHeight(self.frame.floor_z),
+            &right.getHurtCylindersHeight(self.frame.floor_z),
+        );
     }
 
     fn drawProperty(name: [:0]const u8, left_pointer: anytype, right_pointer: anytype) void {
@@ -86,6 +101,8 @@ pub const Details = struct {
             drawU32ActualMinMax(pointer);
         } else if (Value == model.I32ActualMinMax) {
             drawI32ActualMinMax(pointer);
+        } else if (Value == model.F32MinMax) {
+            drawF32MinMax(pointer);
         } else if (Value == model.MovePhase) {
             drawMovePhase(pointer);
         } else if (Value == model.AttackType) {
@@ -218,6 +235,27 @@ pub const Details = struct {
             _ = stream.write(empty_value_string) catch {};
         }
         _ = stream.write(")") catch {};
+        if (stream.pos >= buffer.len - 1) {
+            drawText(error_string);
+            return;
+        }
+        drawText(buffer[0..stream.pos :0]);
+    }
+
+    fn drawF32MinMax(pointer: *const model.F32MinMax) void {
+        var buffer: [string_buffer_size]u8 = [1]u8{0} ** string_buffer_size;
+        var stream = std.io.fixedBufferStream(&buffer);
+        if (pointer.min) |min| {
+            stream.writer().print("{d:.2}", .{min}) catch {};
+        } else {
+            _ = stream.write(empty_value_string) catch {};
+        }
+        _ = stream.write(" - ") catch {};
+        if (pointer.max) |max| {
+            stream.writer().print("{d:.2}", .{max}) catch {};
+        } else {
+            _ = stream.write(empty_value_string) catch {};
+        }
         if (stream.pos >= buffer.len - 1) {
             drawText(error_string);
             return;

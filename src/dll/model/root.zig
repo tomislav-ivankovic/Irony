@@ -12,6 +12,7 @@ pub const HurtCylinders = @import("hurt_cylinders.zig").HurtCylinders;
 pub const U32ActualMax = @import("misc.zig").U32ActualMax;
 pub const U32ActualMinMax = @import("misc.zig").U32ActualMinMax;
 pub const I32ActualMinMax = @import("misc.zig").I32ActualMinMax;
+pub const F32MinMax = @import("misc.zig").F32MinMax;
 pub const MovePhase = @import("misc.zig").MovePhase;
 pub const AttackType = @import("misc.zig").AttackType;
 pub const HitOutcome = @import("misc.zig").HitOutcome;

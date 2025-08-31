@@ -15,6 +15,11 @@ pub const I32ActualMinMax = struct {
     max: ?i32,
 };
 
+pub const F32MinMax = struct {
+    min: ?f32,
+    max: ?f32,
+};
+
 pub const MovePhase = enum {
     neutral,
     start_up,
