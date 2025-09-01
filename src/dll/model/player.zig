@@ -133,6 +133,43 @@ pub const Player = struct {
         };
     }
 
+    pub fn getDistanceTo(self: *const Self, other: *const Self) ?f32 {
+        const self_position = if (self.position) |p| p.swizzle("xy") else return null;
+        const other_position = if (other.position) |p| p.swizzle("xy") else return null;
+        const self_cylinders = self.hurt_cylinders orelse return null;
+        const other_cylinders = other.hurt_cylinders orelse return null;
+
+        const position_difference = other_position.subtract(self_position);
+        const self_to_other_direction = if (!position_difference.isZero(0.0001)) block: {
+            break :block position_difference.normalize();
+        } else block: {
+            break :block sdk.math.Vec2.plus_x;
+        };
+        const other_to_self_direction = self_to_other_direction.negate();
+
+        var max_self_projection = -std.math.inf(f32);
+        for (&self_cylinders.values) |*hurt_cylinder| {
+            const cylinder = &hurt_cylinder.cylinder;
+            const center = cylinder.center.swizzle("xy").subtract(self_position);
+            const center_projected = center.dot(self_to_other_direction);
+            const edge = center_projected + cylinder.radius;
+            max_self_projection = @max(max_self_projection, edge);
+        }
+
+        var max_other_projection = -std.math.inf(f32);
+
+        for (&other_cylinders.values) |*hurt_cylinder| {
+            const cylinder = &hurt_cylinder.cylinder;
+            const center = cylinder.center.swizzle("xy").subtract(other_position);
+            const center_projected = center.dot(other_to_self_direction);
+            const edge = center_projected + cylinder.radius;
+            max_other_projection = @max(max_other_projection, edge);
+        }
+
+        const distance = other_position.distanceTo(self_position) - max_self_projection - max_other_projection;
+        return distance;
+    }
+
     pub fn getAngleTo(self: *const Self, other: *const Self) ?f32 {
         const self_position = self.position orelse return null;
         const other_position = other.position orelse return null;
@@ -317,4 +354,4 @@ test "Player.getFrameAdvantage should return correct value" {
     );
 }
 
-// TODO test getAngleTo, getHurtCylindersHeight, getHitLinesHeight
+// TODO test getDistanceTo, getAngleTo, getHurtCylindersHeight, getHitLinesHeight

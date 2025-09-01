@@ -59,7 +59,12 @@ pub const Details = struct {
         drawProperty("Rage", &left.rage, &right.rage);
         drawProperty("Heat", &left.heat, &right.heat);
         drawProperty(
-            "Angle To Opponent [°]",
+            "Distance [m]",
+            &(if (left.getDistanceTo(right)) |distance| @as(?f32, 0.01 * distance) else @as(?f32, null)),
+            &(if (right.getDistanceTo(left)) |distance| @as(?f32, 0.01 * distance) else @as(?f32, null)),
+        );
+        drawProperty(
+            "Angle [°]",
             &(if (left.getAngleTo(right)) |angle| @as(?f32, std.math.radiansToDegrees(angle)) else @as(?f32, null)),
             &(if (right.getAngleTo(left)) |angle| @as(?f32, std.math.radiansToDegrees(angle)) else @as(?f32, null)),
         );
