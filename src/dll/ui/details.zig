@@ -51,10 +51,15 @@ pub const Details = struct {
         drawProperty("Attack Type", &left.attack_type, &right.attack_type);
         drawProperty(
             "Attack Range [m]",
-            &(if (left.attack_range) |distance| @as(?f32, 0.01 * distance) else @as(?f32, null)),
-            &(if (right.attack_range) |distance| @as(?f32, 0.01 * distance) else @as(?f32, null)),
+            &(if (left.attack_range) |range| @as(?f32, 0.01 * range) else @as(?f32, null)),
+            &(if (right.attack_range) |range| @as(?f32, 0.01 * range) else @as(?f32, null)),
         );
         drawProperty("Attack Height [cm]", &left.getAttackHeight(frame.floor_z), &right.getAttackHeight(frame.floor_z));
+        drawProperty(
+            "Recovery Range [m]",
+            &(if (left.recovery_range) |range| @as(?f32, 0.01 * range) else @as(?f32, null)),
+            &(if (right.recovery_range) |range| @as(?f32, 0.01 * range) else @as(?f32, null)),
+        );
         drawProperty("Attack Damage", &left.attack_damage, &right.attack_damage);
         drawProperty("Hit Outcome", &left.hit_outcome, &right.hit_outcome);
         drawProperty("Posture", &left.posture, &right.posture);

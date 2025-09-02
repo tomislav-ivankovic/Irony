@@ -15,7 +15,7 @@ pub const MoveMeasurer = struct {
         min_hit_lines_z: ?f32 = null,
         max_hit_lines_z: ?f32 = null,
         attack_range: ?f32 = null,
-        recovery_distance: ?f32 = null, // TODO Measure this.
+        recovery_range: ?f32 = null,
     };
 
     pub fn measure(self: *Self, frame: *model.Frame) void {
@@ -30,7 +30,7 @@ pub const MoveMeasurer = struct {
         player.min_hit_lines_z = state.min_hit_lines_z;
         player.max_hit_lines_z = state.max_hit_lines_z;
         player.attack_range = state.attack_range;
-        player.recovery_distance = state.recovery_distance;
+        player.recovery_range = state.recovery_range;
     }
 
     fn updateFirstFrameState(state: *PlayerState, player: *model.Player) void {
@@ -40,6 +40,7 @@ pub const MoveMeasurer = struct {
         state.* = .{
             .before_move_hurt_projection = state.previous_frame_hurt_projection,
             .before_move_rotation = state.previous_frame_rotation,
+            .recovery_range = if (state.attack_range != null) state.recovery_range else null,
         };
     }
 
@@ -67,6 +68,9 @@ pub const MoveMeasurer = struct {
                 state.max_hit_lines_z = line_max_z;
             }
         }
+        if (player.move_frame != null and player.move_frame == player.move_total_frames) {
+            state.recovery_range = findHurtRange(state, player);
+        }
     }
 
     fn updatePreviousFrameState(state: *PlayerState, player: *model.Player) void {
@@ -84,18 +88,38 @@ pub const MoveMeasurer = struct {
         return @max(range_1, range_2);
     }
 
+    fn findHurtRange(state: *const PlayerState, player: *const model.Player) ?f32 {
+        const cylinders = player.hurt_cylinders orelse return null;
+        const hurt_projection = state.before_move_hurt_projection orelse return null;
+        const rotation = state.before_move_rotation orelse return null;
+        const attack_range = state.attack_range orelse return null;
+        const direction = sdk.math.Vec2.plus_x.rotateZ(rotation);
+        var max_projection = -std.math.inf(f32);
+        for (&cylinders.values) |*hurt_cylinder| {
+            const cylinder = hurt_cylinder.cylinder;
+            const center = cylinder.center.swizzle("xy");
+            const projection = center.subtract(hurt_projection).dot(direction) + cylinder.radius;
+            if (projection > max_projection) {
+                max_projection = projection;
+            }
+        }
+        return attack_range - max_projection;
+    }
+
     fn findHurtProjection(player: *model.Player) ?sdk.math.Vec2 {
+        const position = if (player.position) |p| p.swizzle("xy") else return null;
         const rotation = player.rotation orelse return null;
         const cylinders = player.hurt_cylinders orelse return null;
         const direction = sdk.math.Vec2.plus_x.rotateZ(rotation);
         var max_projection = -std.math.inf(f32);
         for (&cylinders.values) |*hurt_cylinder| {
             const cylinder = hurt_cylinder.cylinder;
-            const projection = cylinder.center.swizzle("xy").dot(direction) + cylinder.radius;
+            const center = cylinder.center.swizzle("xy");
+            const projection = center.subtract(position).dot(direction) + cylinder.radius;
             if (projection > max_projection) {
                 max_projection = projection;
             }
         }
-        return direction.scale(max_projection);
+        return position.add(direction.scale(max_projection));
     }
 };
