@@ -154,24 +154,22 @@ pub const Player = struct {
         var max_self_projection = -std.math.inf(f32);
         for (&self_cylinders.values) |*hurt_cylinder| {
             const cylinder = &hurt_cylinder.cylinder;
-            const center = cylinder.center.swizzle("xy").subtract(self_position);
-            const center_projected = center.dot(self_to_other_direction);
-            const edge = center_projected + cylinder.radius;
-            max_self_projection = @max(max_self_projection, edge);
+            const center = cylinder.center.swizzle("xy");
+            const center_projection = center.subtract(self_position).dot(self_to_other_direction);
+            const edge_projection = center_projection + cylinder.radius;
+            max_self_projection = @max(max_self_projection, edge_projection);
         }
 
         var max_other_projection = -std.math.inf(f32);
-
         for (&other_cylinders.values) |*hurt_cylinder| {
             const cylinder = &hurt_cylinder.cylinder;
-            const center = cylinder.center.swizzle("xy").subtract(other_position);
-            const center_projected = center.dot(other_to_self_direction);
-            const edge = center_projected + cylinder.radius;
-            max_other_projection = @max(max_other_projection, edge);
+            const center = cylinder.center.swizzle("xy");
+            const center_projection = center.subtract(other_position).dot(other_to_self_direction);
+            const edge_projection = center_projection + cylinder.radius;
+            max_other_projection = @max(max_other_projection, edge_projection);
         }
 
-        const distance = other_position.distanceTo(self_position) - max_self_projection - max_other_projection;
-        return distance;
+        return other_position.distanceTo(self_position) - max_self_projection - max_other_projection;
     }
 
     pub fn getAngleTo(self: *const Self, other: *const Self) ?f32 {
@@ -195,7 +193,7 @@ pub const Player = struct {
             min = @min(min, cylinder.center.z() - cylinder.half_height);
             max = @max(max, cylinder.center.z() + cylinder.half_height);
         }
-        return .{ .min = @max(min - floor_height, 0), .max = max - floor_height };
+        return .{ .min = @max(min - floor_height, 0), .max = @max(max - floor_height, 0) };
     }
 
     pub fn getHitLinesHeight(self: *const Self, floor_z: ?f32) model.F32MinMax {
@@ -213,7 +211,7 @@ pub const Player = struct {
             min = @min(min, line.point_2.z());
             max = @max(max, line.point_2.z());
         }
-        return .{ .min = @max(min - floor_height, 0), .max = max - floor_height };
+        return .{ .min = @max(min - floor_height, 0), .max = @max(max - floor_height, 0) };
     }
 
     pub fn getAttackHeight(self: *const Self, floor_z: ?f32) model.F32MinMax {
@@ -369,4 +367,146 @@ test "Player.getFrameAdvantage should return correct value" {
     );
 }
 
-// TODO test getDistanceTo, getAngleTo, getHurtCylindersHeight, getHitLinesHeight, getAttackHeight
+test "Player.getDistanceTo should return correct value" {
+    const player_1 = Player{
+        .position = .fromArray(.{ -5, 0, 0 }),
+        .hurt_cylinders = .init(.{
+            .left_ankle = .{ .cylinder = .{ .center = .fromArray(.{ -5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .right_ankle = .{ .cylinder = .{ .center = .fromArray(.{ -5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .left_hand = .{ .cylinder = .{ .center = .fromArray(.{ -5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .right_hand = .{ .cylinder = .{ .center = .fromArray(.{ -6, 1, 0 }), .radius = 3, .half_height = 1 } },
+            .left_knee = .{ .cylinder = .{ .center = .fromArray(.{ -5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .right_knee = .{ .cylinder = .{ .center = .fromArray(.{ -5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .left_elbow = .{ .cylinder = .{ .center = .fromArray(.{ -5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .right_elbow = .{ .cylinder = .{ .center = .fromArray(.{ -5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .head = .{ .cylinder = .{ .center = .fromArray(.{ -5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .left_shoulder = .{ .cylinder = .{ .center = .fromArray(.{ -5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .right_shoulder = .{ .cylinder = .{ .center = .fromArray(.{ -5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .upper_torso = .{ .cylinder = .{ .center = .fromArray(.{ -5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .left_pelvis = .{ .cylinder = .{ .center = .fromArray(.{ -5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .right_pelvis = .{ .cylinder = .{ .center = .fromArray(.{ -5, 0, 0 }), .radius = 1, .half_height = 1 } },
+        }),
+    };
+    const player_2 = Player{
+        .position = .fromArray(.{ 5, 0, 0 }),
+        .hurt_cylinders = .init(.{
+            .left_ankle = .{ .cylinder = .{ .center = .fromArray(.{ 5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .right_ankle = .{ .cylinder = .{ .center = .fromArray(.{ 5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .left_hand = .{ .cylinder = .{ .center = .fromArray(.{ 6, 1, 0 }), .radius = 3, .half_height = 1 } },
+            .right_hand = .{ .cylinder = .{ .center = .fromArray(.{ 5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .left_knee = .{ .cylinder = .{ .center = .fromArray(.{ 5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .right_knee = .{ .cylinder = .{ .center = .fromArray(.{ 5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .left_elbow = .{ .cylinder = .{ .center = .fromArray(.{ 5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .right_elbow = .{ .cylinder = .{ .center = .fromArray(.{ 5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .head = .{ .cylinder = .{ .center = .fromArray(.{ 5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .left_shoulder = .{ .cylinder = .{ .center = .fromArray(.{ 5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .right_shoulder = .{ .cylinder = .{ .center = .fromArray(.{ 5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .upper_torso = .{ .cylinder = .{ .center = .fromArray(.{ 5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .left_pelvis = .{ .cylinder = .{ .center = .fromArray(.{ 5, 0, 0 }), .radius = 1, .half_height = 1 } },
+            .right_pelvis = .{ .cylinder = .{ .center = .fromArray(.{ 5, 0, 0 }), .radius = 1, .half_height = 1 } },
+        }),
+    };
+    try testing.expectEqual(6.0, player_1.getDistanceTo(&player_2));
+    try testing.expectEqual(6.0, player_2.getDistanceTo(&player_1));
+    var player_3 = player_1;
+    player_3.position = null;
+    var player_4 = player_2;
+    player_4.hurt_cylinders = null;
+    try testing.expectEqual(null, player_2.getDistanceTo(&player_3));
+    try testing.expectEqual(null, player_3.getDistanceTo(&player_2));
+    try testing.expectEqual(null, player_1.getDistanceTo(&player_4));
+    try testing.expectEqual(null, player_4.getDistanceTo(&player_1));
+}
+
+test "Player.getAngleTo should return correct value" {
+    const player_1 = Player{ .position = .fromArray(.{ 0, 0, 0 }), .rotation = 0 };
+    const player_2 = Player{ .position = .fromArray(.{ 1, 0, 0 }), .rotation = -std.math.pi };
+    const player_3 = Player{ .position = .fromArray(.{ 0, 1, 0 }), .rotation = -std.math.pi };
+    const player_4 = Player{ .position = .fromArray(.{ 1, 1, 0 }), .rotation = null };
+
+    try testing.expect(player_2.getAngleTo(&player_1) != null);
+    try testing.expect(player_3.getAngleTo(&player_1) != null);
+    try testing.expect(player_4.getAngleTo(&player_1) != null);
+    try testing.expectApproxEqAbs(0.0, player_2.getAngleTo(&player_1).?, 0.000001);
+    try testing.expectApproxEqAbs(-0.5 * std.math.pi, player_3.getAngleTo(&player_1).?, 0.000001);
+    try testing.expectApproxEqAbs(-0.25 * std.math.pi, player_4.getAngleTo(&player_1).?, 0.000001);
+
+    try testing.expect(player_1.getAngleTo(&player_2) != null);
+    try testing.expect(player_3.getAngleTo(&player_2) != null);
+    try testing.expect(player_4.getAngleTo(&player_2) != null);
+    try testing.expectApproxEqAbs(0.0, player_1.getAngleTo(&player_2).?, 0.000001);
+    try testing.expectApproxEqAbs(0.25 * std.math.pi, player_3.getAngleTo(&player_2).?, 0.000001);
+    try testing.expectApproxEqAbs(0.5 * std.math.pi, player_4.getAngleTo(&player_2).?, 0.000001);
+
+    try testing.expect(player_1.getAngleTo(&player_3) != null);
+    try testing.expect(player_2.getAngleTo(&player_3) != null);
+    try testing.expect(player_4.getAngleTo(&player_3) != null);
+    try testing.expectApproxEqAbs(-0.5 * std.math.pi, player_1.getAngleTo(&player_3).?, 0.000001);
+    try testing.expectApproxEqAbs(-0.75 * std.math.pi, player_2.getAngleTo(&player_3).?, 0.000001);
+    try testing.expectApproxEqAbs(-std.math.pi, player_4.getAngleTo(&player_3).?, 0.000001);
+
+    try testing.expectEqual(null, player_1.getAngleTo(&player_4));
+    try testing.expectEqual(null, player_2.getAngleTo(&player_4));
+    try testing.expectEqual(null, player_3.getAngleTo(&player_4));
+}
+
+test "Player.getHurtCylindersHeight should return correct value" {
+    const player = Player{
+        .hurt_cylinders = .init(.{
+            .left_ankle = .{ .cylinder = .{ .center = .fromArray(.{ 1, 14, -7 }), .radius = 1, .half_height = 1 } },
+            .right_ankle = .{ .cylinder = .{ .center = .fromArray(.{ 2, 13, -6 }), .radius = 2, .half_height = 3 } },
+            .left_hand = .{ .cylinder = .{ .center = .fromArray(.{ 3, 12, -5 }), .radius = 3, .half_height = 1 } },
+            .right_hand = .{ .cylinder = .{ .center = .fromArray(.{ 4, 11, -4 }), .radius = 4, .half_height = 1 } },
+            .left_knee = .{ .cylinder = .{ .center = .fromArray(.{ 5, 10, -3 }), .radius = 5, .half_height = 1 } },
+            .right_knee = .{ .cylinder = .{ .center = .fromArray(.{ 6, 9, -2 }), .radius = 6, .half_height = 1 } },
+            .left_elbow = .{ .cylinder = .{ .center = .fromArray(.{ 7, 8, -1 }), .radius = 7, .half_height = 1 } },
+            .right_elbow = .{ .cylinder = .{ .center = .fromArray(.{ 8, 7, 0 }), .radius = 8, .half_height = 1 } },
+            .head = .{ .cylinder = .{ .center = .fromArray(.{ 9, 6, 1 }), .radius = 9, .half_height = 1 } },
+            .left_shoulder = .{ .cylinder = .{ .center = .fromArray(.{ 10, 5, 2 }), .radius = 10, .half_height = 1 } },
+            .right_shoulder = .{ .cylinder = .{ .center = .fromArray(.{ 11, 4, 3 }), .radius = 11, .half_height = 1 } },
+            .upper_torso = .{ .cylinder = .{ .center = .fromArray(.{ 12, 3, 4 }), .radius = 12, .half_height = 1 } },
+            .left_pelvis = .{ .cylinder = .{ .center = .fromArray(.{ 13, 2, 5 }), .radius = 13, .half_height = 3 } },
+            .right_pelvis = .{ .cylinder = .{ .center = .fromArray(.{ 14, 1, 6 }), .radius = 14, .half_height = 1 } },
+        }),
+    };
+    try testing.expectEqual(model.F32MinMax{ .min = 0, .max = 8 }, player.getHurtCylindersHeight(0));
+    try testing.expectEqual(model.F32MinMax{ .min = 1, .max = 18 }, player.getHurtCylindersHeight(-10));
+    try testing.expectEqual(model.F32MinMax{ .min = 0, .max = 0 }, player.getHurtCylindersHeight(10));
+    try testing.expectEqual(model.F32MinMax{ .min = null, .max = null }, player.getHurtCylindersHeight(null));
+}
+
+test "Player.getHitLinesHeight should return correct value" {
+    const player = Player{
+        .hit_lines = .{
+            .buffer = .{
+                .{ .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 4, 5, 6 }) } },
+                .{ .line = .{ .point_1 = .fromArray(.{ 7, 8, 9 }), .point_2 = .fromArray(.{ 10, 11, 12 }) } },
+                .{ .line = .{ .point_1 = .fromArray(.{ 13, 14, 15 }), .point_2 = .fromArray(.{ 16, 17, 18 }) } },
+                .{ .line = .{ .point_1 = .fromArray(.{ 19, 20, 21 }), .point_2 = .fromArray(.{ 22, 23, 24 }) } },
+                .{ .line = .{ .point_1 = .fromArray(.{ 25, 26, 27 }), .point_2 = .fromArray(.{ 28, 29, 30 }) } },
+                .{ .line = .{ .point_1 = .fromArray(.{ 31, 32, 33 }), .point_2 = .fromArray(.{ 34, 35, 36 }) } },
+                .{ .line = .{ .point_1 = .fromArray(.{ 37, 38, 39 }), .point_2 = .fromArray(.{ 40, 41, 42 }) } },
+                .{ .line = .{ .point_1 = .fromArray(.{ 43, 44, 45 }), .point_2 = .fromArray(.{ 46, 47, 48 }) } },
+            },
+            .len = 8,
+        },
+    };
+    try testing.expectEqual(model.F32MinMax{ .min = 3, .max = 48 }, player.getHitLinesHeight(0));
+    try testing.expectEqual(model.F32MinMax{ .min = 13, .max = 58 }, player.getHitLinesHeight(-10));
+    try testing.expectEqual(model.F32MinMax{ .min = 0, .max = 38 }, player.getHitLinesHeight(10));
+    try testing.expectEqual(model.F32MinMax{ .min = 0, .max = 0 }, player.getHitLinesHeight(50));
+    try testing.expectEqual(model.F32MinMax{ .min = null, .max = null }, player.getHitLinesHeight(null));
+    const no_lines_player = Player{ .hit_lines = .{ .buffer = undefined, .len = 0 } };
+    try testing.expectEqual(model.F32MinMax{ .min = null, .max = null }, no_lines_player.getHitLinesHeight(0));
+}
+
+test "Player.getAttackHeight should return correct value" {
+    const player = Player{ .min_hit_lines_z = 1, .max_hit_lines_z = 3 };
+    try testing.expectEqual(model.F32MinMax{ .min = 1, .max = 3 }, player.getAttackHeight(0));
+    try testing.expectEqual(model.F32MinMax{ .min = 11, .max = 13 }, player.getAttackHeight(-10));
+    try testing.expectEqual(model.F32MinMax{ .min = 0, .max = 1 }, player.getAttackHeight(2));
+    try testing.expectEqual(model.F32MinMax{ .min = 0, .max = 0 }, player.getAttackHeight(10));
+    try testing.expectEqual(model.F32MinMax{ .min = null, .max = null }, player.getAttackHeight(null));
+    const no_lines_player = Player{ .min_hit_lines_z = null, .max_hit_lines_z = null };
+    try testing.expectEqual(model.F32MinMax{ .min = null, .max = null }, no_lines_player.getAttackHeight(0));
+}
