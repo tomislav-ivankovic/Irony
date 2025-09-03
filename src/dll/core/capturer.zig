@@ -307,10 +307,10 @@ pub const Capturer = struct {
     }
 
     fn capturePlayerRotation(player: *const sdk.misc.Partial(game.Player)) ?f32 {
-        const raw_matrix = player.transform_matrix orelse {
-            const raw_rotation = player.rotation orelse return null;
-            return raw_rotation.convert();
-        };
+        if (player.rotation) |rotation| {
+            return rotation.convert();
+        }
+        const raw_matrix = player.transform_matrix orelse return null;
         const matrix: sdk.math.Mat4 = raw_matrix.convert();
         const transformed = sdk.math.Vec3.plus_x.directionTransform(matrix);
         var angle = std.math.atan2(transformed.y(), transformed.x());
@@ -952,18 +952,18 @@ test "should capture player rotation correctly" {
     var capturer = Capturer{};
     const frame = capturer.captureFrame(&.{
         .player_1 = .{
+            .rotation = .fromConverted(0.75 * std.math.pi),
             .transform_matrix = .fromConverted(sdk.math.Mat4.fromZRotation(std.math.pi)),
-            .rotation = .fromConverted(0.5 * std.math.pi),
         },
         .player_2 = .{
-            .transform_matrix = null,
-            .rotation = .fromConverted(0.25 * std.math.pi),
+            .rotation = null,
+            .transform_matrix = .fromConverted(sdk.math.Mat4.fromZRotation(std.math.pi)),
         },
     });
     try testing.expect(frame.getPlayerById(.player_1).rotation != null);
     try testing.expect(frame.getPlayerById(.player_2).rotation != null);
-    try testing.expectApproxEqAbs(-0.5 * std.math.pi, frame.getPlayerById(.player_1).rotation.?, 0.0001);
-    try testing.expectApproxEqAbs(0.25 * std.math.pi, frame.getPlayerById(.player_2).rotation.?, 0.0001);
+    try testing.expectApproxEqAbs(0.75 * std.math.pi, frame.getPlayerById(.player_1).rotation.?, 0.0001);
+    try testing.expectApproxEqAbs(-0.5 * std.math.pi, frame.getPlayerById(.player_2).rotation.?, 0.0001);
 }
 
 test "should capture skeleton correctly" {
