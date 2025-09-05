@@ -98,6 +98,7 @@ test {
     _ = @import("dll/ui/message_window.zig");
     _ = @import("dll/ui/quadrant-layout.zig");
     _ = @import("dll/ui/shapes.zig");
+    _ = @import("dll/ui/skeletons.zig");
     _ = @import("dll/ui/view.zig");
 
     _ = struct {

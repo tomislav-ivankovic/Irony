@@ -17,4 +17,5 @@ pub const View = @import("view.zig").View;
 pub const drawLine = @import("shapes.zig").drawLine;
 pub const drawSphere = @import("shapes.zig").drawSphere;
 pub const drawCylinder = @import("shapes.zig").drawCylinder;
+pub const drawSkeletons = @import("skeletons.zig").drawSkeletons;
 pub const drawFloor = @import("shapes.zig").drawFloor;
