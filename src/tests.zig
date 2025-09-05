@@ -92,6 +92,7 @@ test {
     _ = @import("dll/ui/details.zig");
     _ = @import("dll/ui/frame_window.zig");
     _ = @import("dll/ui/game_memory_window.zig");
+    _ = @import("dll/ui/hit_lines.zig");
     _ = @import("dll/ui/hurt_cylinders.zig");
     _ = @import("dll/ui/logs_window.zig");
     _ = @import("dll/ui/main_window.zig");

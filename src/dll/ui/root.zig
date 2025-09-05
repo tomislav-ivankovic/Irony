@@ -6,6 +6,7 @@ pub const drawData = @import("data.zig").drawData;
 pub const Details = @import("details.zig").Details;
 pub const FrameWindow = @import("frame_window.zig").FrameWindow;
 pub const GameMemoryWindow = @import("game_memory_window.zig").GameMemoryWindow;
+pub const HitLines = @import("hit_lines.zig").HitLines;
 pub const HurtCylinders = @import("hurt_cylinders.zig").HurtCylinders;
 pub const LogsWindow = @import("logs_window.zig").LogsWindow;
 pub const MainWindow = @import("main_window.zig").MainWindow;
