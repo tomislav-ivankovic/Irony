@@ -15,15 +15,17 @@ pub const MainWindow = struct {
     frame_window: ui.FrameWindow = .{},
     quadrant_layout: ui.QuadrantLayout = .{},
     view: ui.View = .{},
-    details: ui.Details = .{},
     controls: ui.Controls(.{}) = .{},
     controls_height: f32 = 0,
 
     const Self = @This();
+    const QuadrantContext = struct {
+        self: *Self,
+        frame: ?*const model.Frame,
+    };
 
     pub fn processFrame(self: *Self, frame: *const model.Frame) void {
         self.view.processFrame(frame);
-        self.details.processFrame(frame);
     }
 
     pub fn update(self: *Self, delta_time: f32) void {
@@ -45,7 +47,11 @@ pub const MainWindow = struct {
         }
         self.drawMenuBar();
         if (imgui.igBeginChild_Str("views", .{ .x = 0, .y = -self.controls_height }, 0, 0)) {
-            self.quadrant_layout.draw(self, &.{
+            const context = QuadrantContext{
+                .self = self,
+                .frame = controller.getCurrentFrame(),
+            };
+            self.quadrant_layout.draw(context, &.{
                 .top_left = .{ .id = "front", .content = drawFrontView },
                 .top_right = .{ .id = "side", .content = drawSideView },
                 .bottom_left = .{ .id = "top", .content = drawTopView },
@@ -104,19 +110,23 @@ pub const MainWindow = struct {
         }
     }
 
-    fn drawFrontView(self: *Self) void {
-        self.view.draw(.front);
+    fn drawFrontView(context: QuadrantContext) void {
+        const frame = context.frame orelse return;
+        context.self.view.draw(frame, .front);
     }
 
-    fn drawSideView(self: *Self) void {
-        self.view.draw(.side);
+    fn drawSideView(context: QuadrantContext) void {
+        const frame = context.frame orelse return;
+        context.self.view.draw(frame, .side);
     }
 
-    fn drawTopView(self: *Self) void {
-        self.view.draw(.top);
+    fn drawTopView(context: QuadrantContext) void {
+        const frame = context.frame orelse return;
+        context.self.view.draw(frame, .top);
     }
 
-    fn drawDetails(self: *Self) void {
-        self.details.draw();
+    fn drawDetails(context: QuadrantContext) void {
+        const frame = context.frame orelse return;
+        ui.drawDetails(frame);
     }
 };

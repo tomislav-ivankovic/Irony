@@ -108,7 +108,7 @@ pub const HurtCylinders = struct {
     }
 
     pub fn draw(
-        self: *Self,
+        self: *const Self,
         frame: *const model.Frame,
         direction: ui.ViewDirection,
         matrix: sdk.math.Mat4,

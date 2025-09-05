@@ -11,7 +11,6 @@ pub const ViewDirection = enum {
 };
 
 pub const View = struct {
-    frame: model.Frame = .{},
     camera: ui.Camera = .{},
     hurt_cylinders: ui.HurtCylinders = .{},
     hit_lines: ui.HitLines = .{},
@@ -21,7 +20,6 @@ pub const View = struct {
     pub fn processFrame(self: *Self, frame: *const model.Frame) void {
         self.hurt_cylinders.processFrame(frame);
         self.hit_lines.processFrame(frame);
-        self.frame = frame.*;
     }
 
     pub fn update(self: *Self, delta_time: f32) void {
@@ -29,16 +27,16 @@ pub const View = struct {
         self.hit_lines.update(delta_time);
     }
 
-    pub fn draw(self: *Self, direction: ViewDirection) void {
+    pub fn draw(self: *Self, frame: *const model.Frame, direction: ViewDirection) void {
         self.camera.updateWindowState(direction);
-        const matrix = self.camera.calculateMatrix(&self.frame, direction) orelse return;
+        const matrix = self.camera.calculateMatrix(frame, direction) orelse return;
         const inverse_matrix = matrix.inverse() orelse sdk.math.Mat4.identity;
 
-        ui.drawCollisionSpheres(&self.frame, matrix, inverse_matrix);
-        self.hurt_cylinders.draw(&self.frame, direction, matrix, inverse_matrix);
-        ui.drawFloor(&self.frame, direction, matrix);
-        ui.drawForwardDirections(&self.frame, direction, matrix);
-        ui.drawSkeletons(&self.frame, matrix);
-        self.hit_lines.draw(&self.frame, matrix);
+        ui.drawCollisionSpheres(frame, matrix, inverse_matrix);
+        self.hurt_cylinders.draw(frame, direction, matrix, inverse_matrix);
+        ui.drawFloor(frame, direction, matrix);
+        ui.drawForwardDirections(frame, direction, matrix);
+        ui.drawSkeletons(frame, matrix);
+        self.hit_lines.draw(frame, matrix);
     }
 };
