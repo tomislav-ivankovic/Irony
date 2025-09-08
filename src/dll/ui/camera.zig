@@ -7,6 +7,7 @@ const ui = @import("../ui/root.zig");
 pub const Camera = struct {
     windows: std.EnumArray(ui.ViewDirection, Window) = .initFill(.{}),
     transform: Transform = .{},
+    rotation_radius: ?f32 = null,
 
     const Self = @This();
     pub const Window = struct {
@@ -26,7 +27,7 @@ pub const Camera = struct {
         self.windows.set(direction, window);
     }
 
-    pub fn processInput(self: *Self, inverse_matrix: sdk.math.Mat4) void {
+    pub fn processInput(self: *Self, direction: ui.ViewDirection, inverse_matrix: sdk.math.Mat4) void {
         if (!imgui.igIsWindowHovered(imgui.ImGuiHoveredFlags_ChildWindows)) {
             return;
         }
@@ -57,7 +58,37 @@ pub const Camera = struct {
             self.transform.translation = self.transform.translation.add(delta_world);
             imgui.igSetMouseCursor(imgui.ImGuiMouseCursor_ResizeAll);
         }
-        if (imgui.igIsKeyDown_Nil(imgui.ImGuiKey_MouseRight)) {
+        if (direction != .top and imgui.igIsKeyDown_Nil(imgui.ImGuiKey_MouseRight)) {
+            var window_pos: imgui.ImVec2 = undefined;
+            imgui.igGetCursorScreenPos(&window_pos);
+            var window_size: imgui.ImVec2 = undefined;
+            imgui.igGetContentRegionAvail(&window_size);
+            const center = window_pos.x + 0.5 * window_size.x;
+
+            const acosExtended = struct {
+                fn call(x: f32) f32 {
+                    const periods = @floor(0.5 * x + 0.5);
+                    const remainder = std.math.wrap(x, 1);
+                    return -std.math.pi * periods + std.math.acos(remainder);
+                }
+            }.call;
+
+            const previous_mouse = imgui.igGetIO_Nil().*.MousePosPrev.x;
+            const current_mouse = imgui.igGetIO_Nil().*.MousePos.x;
+            const radius = self.rotation_radius orelse @abs(current_mouse - center);
+            self.rotation_radius = radius;
+            const previous_offset = previous_mouse - center;
+            const current_offset = current_mouse - center;
+            const previous_angle = acosExtended(previous_offset / radius);
+            const current_angle = acosExtended(current_offset / radius);
+            const delta_angle = current_angle - previous_angle;
+
+            self.transform.rotation = std.math.wrap(self.transform.rotation + delta_angle, std.math.pi);
+            imgui.igSetMouseCursor(imgui.ImGuiMouseCursor_ResizeEW);
+        } else {
+            self.rotation_radius = null;
+        }
+        if (direction == .top and imgui.igIsKeyDown_Nil(imgui.ImGuiKey_MouseRight)) {
             var window_pos: sdk.math.Vec2 = undefined;
             imgui.igGetCursorScreenPos(window_pos.asImVec());
             var window_size: sdk.math.Vec2 = undefined;

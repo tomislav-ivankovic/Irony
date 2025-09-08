@@ -31,7 +31,7 @@ pub const View = struct {
         self.camera.updateWindowState(direction);
         const matrix = self.camera.calculateMatrix(frame, direction) orelse return;
         const inverse_matrix = matrix.inverse() orelse sdk.math.Mat4.identity;
-        self.camera.processInput(inverse_matrix);
+        self.camera.processInput(direction, inverse_matrix);
 
         ui.drawCollisionSpheres(frame, matrix, inverse_matrix);
         self.hurt_cylinders.draw(frame, direction, matrix, inverse_matrix);
