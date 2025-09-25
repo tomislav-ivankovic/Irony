@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const w32 = @import("win32").everything;
 const misc = @import("../misc/root.zig");
+const os = @import("../os/root.zig");
 const dx12 = @import("root.zig");
 
 pub fn Context(comptime buffer_count: usize, comptime svr_heap_size: usize) type {
@@ -132,6 +133,9 @@ pub const BufferContext = struct {
     command_list: *w32.ID3D12GraphicsCommandList,
     resource: *w32.ID3D12Resource,
     rtv_descriptor_handle: w32.D3D12_CPU_DESCRIPTOR_HANDLE,
+    fence: *w32.ID3D12Fence,
+    fence_value: u64,
+    fence_event: w32.HANDLE,
     test_allocation: if (builtin.is_test) *u8 else void,
 
     const Self = @This();
@@ -198,6 +202,31 @@ pub const BufferContext = struct {
         };
         device.CreateRenderTargetView(resource, null, rtv_descriptor_handle);
 
+        var fence: *w32.ID3D12Fence = undefined;
+        const fence_result = device.CreateFence(0, .{}, w32.IID_ID3D12Fence, @ptrCast(&fence));
+        if (dx12.Error.from(fence_result)) |err| {
+            misc.error_context.new("{}", .{err});
+            misc.error_context.append("ID3D12Device.CreateFence returned a failure value.", .{});
+            misc.error_context.append("Failed to create the fence.", .{});
+            return error.Dx12Error;
+        }
+        errdefer _ = fence.IUnknown.Release();
+
+        const fence_event = w32.CreateEventW(null, 0, 0, null) orelse {
+            misc.error_context.new("{}", .{os.Error.getLast()});
+            misc.error_context.append("CreateEventW returned null.", .{});
+            misc.error_context.append("Failed to create the fence event.", .{});
+            return error.OsError;
+        };
+        errdefer {
+            const success = w32.CloseHandle(fence_event);
+            if (success == 0) {
+                misc.error_context.new("{}", .{os.Error.getLast()});
+                misc.error_context.append("CloseHandle returned 0.", .{});
+                misc.error_context.logError(error.OsError);
+            }
+        }
+
         const test_allocation = if (builtin.is_test) try std.testing.allocator.create(u8) else {};
 
         return .{
@@ -205,11 +234,22 @@ pub const BufferContext = struct {
             .command_list = command_list,
             .rtv_descriptor_handle = rtv_descriptor_handle,
             .resource = resource,
+            .fence = fence,
+            .fence_value = 0,
+            .fence_event = fence_event,
             .test_allocation = test_allocation,
         };
     }
 
     pub fn deinit(self: *const Self) void {
+        const close_success = w32.CloseHandle(self.fence_event);
+        if (close_success == 0) {
+            misc.error_context.new("{}", .{os.Error.getLast()});
+            misc.error_context.append("CloseHandle returned 0.", .{});
+            misc.error_context.append("Failed to close fence event.", .{});
+            misc.error_context.logError(error.OsError);
+        }
+        _ = self.fence.IUnknown.Release();
         _ = self.resource.IUnknown.Release();
         _ = self.command_list.IUnknown.Release();
         _ = self.command_allocator.IUnknown.Release();
@@ -223,9 +263,9 @@ pub const BufferContext = struct {
 pub fn beforeRender(
     comptime buffer_count: usize,
     comptime srv_heap_size: usize,
-    context: *const Context(buffer_count, srv_heap_size),
+    context: *Context(buffer_count, srv_heap_size),
     swap_chain: *const w32.IDXGISwapChain,
-) !*const BufferContext {
+) !*BufferContext {
     const swap_chain_3: *const w32.IDXGISwapChain3 = @ptrCast(swap_chain);
     const buffer_index = swap_chain_3.GetCurrentBackBufferIndex();
     if (buffer_index >= buffer_count) {
@@ -240,6 +280,10 @@ pub fn beforeRender(
         return error.IndexOutOfBounds;
     }
     const buffer_context = &context.buffer_contexts[buffer_index];
+
+    while (buffer_context.fence.GetCompletedValue() < buffer_context.fence_value) {
+        _ = w32.WaitForSingleObject(buffer_context.fence_event, 10);
+    }
 
     const allocator_result = buffer_context.command_allocator.Reset();
     if (dx12.Error.from(allocator_result)) |err| {
@@ -257,7 +301,7 @@ pub fn beforeRender(
 
     buffer_context.command_list.ResourceBarrier(1, &.{.{
         .Type = .TRANSITION,
-        .Flags = .{},
+        .Flags = .{ .BEGIN_ONLY = 1 },
         .Anonymous = .{ .Transition = .{
             .pResource = buffer_context.resource,
             .Subresource = w32.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
@@ -275,12 +319,12 @@ pub fn beforeRender(
 }
 
 pub fn afterRender(
-    buffer_context: *const BufferContext,
+    buffer_context: *BufferContext,
     command_queue: *const w32.ID3D12CommandQueue,
 ) !void {
     buffer_context.command_list.ResourceBarrier(1, &.{.{
         .Type = .TRANSITION,
-        .Flags = .{},
+        .Flags = .{ .END_ONLY = 1 },
         .Anonymous = .{ .Transition = .{
             .pResource = buffer_context.resource,
             .Subresource = w32.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
@@ -298,6 +342,26 @@ pub fn afterRender(
 
     var lists = [1](?*w32.ID3D12CommandList){@ptrCast(buffer_context.command_list)};
     command_queue.ExecuteCommandLists(1, &lists);
+
+    const next_fence_value = buffer_context.fence_value +% 1;
+
+    const signal_result = command_queue.Signal(buffer_context.fence, next_fence_value);
+    if (dx12.Error.from(signal_result)) |err| {
+        misc.error_context.new("{}", .{err});
+        misc.error_context.append("ID3D12CommandQueue.Signal returned a failure value.", .{});
+        return error.Dx12Error;
+    }
+    buffer_context.fence_value = next_fence_value;
+
+    const set_event_result = buffer_context.fence.SetEventOnCompletion(
+        buffer_context.fence_value,
+        buffer_context.fence_event,
+    );
+    if (dx12.Error.from(set_event_result)) |err| {
+        misc.error_context.new("{}", .{err});
+        misc.error_context.append("ID3D12Fence.SetEventOnCompletion returned a failure value.", .{});
+        return error.Dx12Error;
+    }
 }
 
 const testing = std.testing;
@@ -312,10 +376,12 @@ test "init and deinit should succeed" {
 test "beforeRender and afterRender should succeed" {
     const testing_context = try dx12.TestingContext.init();
     defer testing_context.deinit();
-    const context = try Context(3, 64).init(testing.allocator, testing_context.device, testing_context.swap_chain);
+    var context = try Context(3, 64).init(testing.allocator, testing_context.device, testing_context.swap_chain);
     defer context.deinit();
-    const buffer_context = try beforeRender(3, 64, &context, testing_context.swap_chain);
-    try afterRender(buffer_context, testing_context.command_queue);
+    for (0..10) |_| {
+        const buffer_context = try beforeRender(3, 64, &context, testing_context.swap_chain);
+        try afterRender(buffer_context, testing_context.command_queue);
+    }
 }
 
 test "deinitBufferContexts and reinitBufferContexts should succeed" {
@@ -323,6 +389,14 @@ test "deinitBufferContexts and reinitBufferContexts should succeed" {
     defer testing_context.deinit();
     var context = try Context(3, 64).init(testing.allocator, testing_context.device, testing_context.swap_chain);
     defer context.deinit();
+    for (0..10) |_| {
+        const buffer_context = try beforeRender(3, 64, &context, testing_context.swap_chain);
+        try afterRender(buffer_context, testing_context.command_queue);
+    }
     context.deinitBufferContexts();
     try context.reinitBufferContexts(testing_context.device, testing_context.swap_chain);
+    for (0..10) |_| {
+        const buffer_context = try beforeRender(3, 64, &context, testing_context.swap_chain);
+        try afterRender(buffer_context, testing_context.command_queue);
+    }
 }
