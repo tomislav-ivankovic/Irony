@@ -142,6 +142,9 @@ pub fn encryptHeatGauge(value: f32) u32 {
 }
 
 pub fn decryptHealth(value: game.EncryptedHealth) ?i32 {
+    if (value[0] != 0 and value[0] != 1) {
+        return null; // Decrypting invalid encrypted health value can cause a crash. This prevents it.
+    }
     const decrypt = conversion_globals.decrypt_health_function orelse return null;
     const shifted = decrypt(&value);
     return @intCast(shifted >> 16);
