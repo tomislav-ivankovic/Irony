@@ -6,6 +6,7 @@ const ui = @import("../ui/root.zig");
 
 pub const Camera = struct {
     windows: std.EnumArray(ui.ViewDirection, Window) = .initFill(.{}),
+    follow_target: FollowTarget = .ingame_camera,
     transform: Transform = .{},
     rotation_radius: ?f32 = null,
 
@@ -13,6 +14,11 @@ pub const Camera = struct {
     pub const Window = struct {
         position: sdk.math.Vec2 = .zero,
         size: sdk.math.Vec2 = .zero,
+    };
+    pub const FollowTarget = enum {
+        ingame_camera,
+        players,
+        origin,
     };
     pub const Transform = struct {
         translation: sdk.math.Vec3 = .zero,
@@ -103,7 +109,7 @@ pub const Camera = struct {
             const current_angle = std.math.atan2(current_offset.y(), current_offset.x());
             const delta_angle = current_angle - previous_angle;
 
-            self.transform.rotation = std.math.wrap(self.transform.rotation + delta_angle, std.math.pi);
+            self.transform.rotation = std.math.wrap(self.transform.rotation - delta_angle, std.math.pi);
             const factor = comptime (1.0 / std.math.tan(std.math.pi / 8.0));
             if (@abs(current_offset.x()) > factor * @abs(current_offset.y())) {
                 imgui.igSetMouseCursor(imgui.ImGuiMouseCursor_ResizeNS);
@@ -120,15 +126,40 @@ pub const Camera = struct {
         }
     }
 
+    pub fn drawMenuBar(self: *Self) void {
+        if (imgui.igMenuItem_Bool("Follow Ingame Camera", null, self.follow_target == .ingame_camera, true)) {
+            self.follow_target = .ingame_camera;
+        }
+        if (imgui.igMenuItem_Bool("Follow Players", null, self.follow_target == .players, true)) {
+            self.follow_target = .players;
+        }
+        if (imgui.igMenuItem_Bool("Stay At Origin", null, self.follow_target == .origin, true)) {
+            self.follow_target = .origin;
+        }
+        imgui.igSeparator();
+        if (imgui.igMenuItem_Bool("Reset View Offset", null, false, !std.meta.eql(self.transform, .{}))) {
+            self.transform = .{};
+        }
+    }
+
     pub fn calculateMatrix(self: *const Self, frame: *const model.Frame, direction: ui.ViewDirection) ?sdk.math.Mat4 {
         const translation_matrix = sdk.math.Mat4.fromTranslation(self.transform.translation);
-        const look_at_matrix = calculateLookAtMatrix(frame, direction) orelse return null;
+        const look_at_matrix = switch (self.follow_target) {
+            .ingame_camera => calculateIngameCameraLookAtMatrix(frame, direction) orelse return null,
+            .players => calculatePlayersLookAtMatrix(frame, direction) orelse return null,
+            .origin => calculateOriginLookAtMatrix(frame, direction),
+        };
         const rotation_matrix = switch (direction) {
             .front, .side => sdk.math.Mat4.fromYRotation(self.transform.rotation),
             .top => sdk.math.Mat4.fromZRotation(-self.transform.rotation),
         };
         const scale_matrix = sdk.math.Mat4.fromScale(sdk.math.Vec3.fill(self.transform.scale));
-        const orthographic_matrix = self.calculateOrthographicMatrix(frame, direction, look_at_matrix) orelse return null;
+        const orthographic_matrix = self.calculateOrthographicMatrix(
+            frame,
+            direction,
+            look_at_matrix,
+            self.follow_target == .origin,
+        ) orelse return null;
         const window_matrix = self.calculateWindowMatrix(direction);
         return translation_matrix
             .multiply(look_at_matrix)
@@ -138,16 +169,36 @@ pub const Camera = struct {
             .multiply(window_matrix);
     }
 
-    fn calculateLookAtMatrix(frame: *const model.Frame, direction: ui.ViewDirection) ?sdk.math.Mat4 {
+    fn calculateIngameCameraLookAtMatrix(frame: *const model.Frame, direction: ui.ViewDirection) ?sdk.math.Mat4 {
+        const left_player = frame.getPlayerBySide(.left).position orelse return null;
+        const right_player = frame.getPlayerBySide(.right).position orelse return null;
+        const camera = frame.camera orelse return null;
+        const eye = left_player.add(right_player).scale(0.5);
+        const difference_2d = eye.swizzle("xy").subtract(camera.position.swizzle("xy"));
+        const camera_dir = if (!difference_2d.isZero(0)) difference_2d.normalize().extend(0) else sdk.math.Vec3.plus_x;
+        const look_direction = switch (direction) {
+            .front => camera_dir,
+            .side => camera_dir.rotateZ(0.5 * std.math.pi),
+            .top => sdk.math.Vec3.minus_z,
+        };
+        const target = eye.add(look_direction);
+        const up = switch (direction) {
+            .front, .side => sdk.math.Vec3.plus_z,
+            .top => camera_dir,
+        };
+        return sdk.math.Mat4.fromLookAt(eye, target, up);
+    }
+
+    fn calculatePlayersLookAtMatrix(frame: *const model.Frame, direction: ui.ViewDirection) ?sdk.math.Mat4 {
         const left_player = frame.getPlayerBySide(.left).position orelse return null;
         const right_player = frame.getPlayerBySide(.right).position orelse return null;
         const eye = left_player.add(right_player).scale(0.5);
         const difference_2d = right_player.swizzle("xy").subtract(left_player.swizzle("xy"));
         const player_dir = if (!difference_2d.isZero(0)) difference_2d.normalize().extend(0) else sdk.math.Vec3.plus_x;
         const look_direction = switch (direction) {
-            .front => player_dir.cross(sdk.math.Vec3.minus_z),
-            .side => player_dir.negate(),
-            .top => sdk.math.Vec3.plus_z,
+            .front => player_dir.cross(sdk.math.Vec3.plus_z),
+            .side => player_dir,
+            .top => sdk.math.Vec3.minus_z,
         };
         const target = eye.add(look_direction);
         const up = switch (direction) {
@@ -157,39 +208,57 @@ pub const Camera = struct {
         return sdk.math.Mat4.fromLookAt(eye, target, up);
     }
 
+    fn calculateOriginLookAtMatrix(frame: *const model.Frame, direction: ui.ViewDirection) sdk.math.Mat4 {
+        const floor_z = frame.floor_z orelse 0.0;
+        const eye = sdk.math.Vec3.fromArray(.{ 0.0, 0.0, floor_z + 90.0 });
+        const target = switch (direction) {
+            .front => eye.add(sdk.math.Vec3.plus_y),
+            .side => eye.add(sdk.math.Vec3.minus_x),
+            .top => eye.add(sdk.math.Vec3.minus_z),
+        };
+        const up = switch (direction) {
+            .front, .side => sdk.math.Vec3.plus_z,
+            .top => sdk.math.Vec3.plus_y,
+        };
+        return sdk.math.Mat4.fromLookAt(eye, target, up);
+    }
+
     fn calculateOrthographicMatrix(
         self: *const Self,
         frame: *const model.Frame,
         direction: ui.ViewDirection,
         look_at_matrix: sdk.math.Mat4,
+        use_static_scale: bool,
     ) ?sdk.math.Mat4 {
-        var min = sdk.math.Vec3.fill(std.math.inf(f32));
-        var max = sdk.math.Vec3.fill(-std.math.inf(f32));
-        for (&frame.players) |*player| {
-            if (player.collision_spheres) |*spheres| {
-                for (&spheres.values) |*sphere| {
-                    const pos = sphere.center.pointTransform(look_at_matrix);
-                    const half_size = sdk.math.Vec3.fill(sphere.radius);
-                    min = sdk.math.Vec3.minElements(min, pos.subtract(half_size));
-                    max = sdk.math.Vec3.maxElements(max, pos.add(half_size));
+        const world_box = if (use_static_scale) sdk.math.Vec3.fill(280) else block: {
+            var min = sdk.math.Vec3.fill(std.math.inf(f32));
+            var max = sdk.math.Vec3.fill(-std.math.inf(f32));
+            for (&frame.players) |*player| {
+                if (player.collision_spheres) |*spheres| {
+                    for (&spheres.values) |*sphere| {
+                        const pos = sphere.center.pointTransform(look_at_matrix);
+                        const half_size = sdk.math.Vec3.fill(sphere.radius);
+                        min = sdk.math.Vec3.minElements(min, pos.subtract(half_size));
+                        max = sdk.math.Vec3.maxElements(max, pos.add(half_size));
+                    }
+                }
+                if (player.hurt_cylinders) |*cylinders| {
+                    for (&cylinders.values) |*hurt_cylinder| {
+                        const cylinder = &hurt_cylinder.cylinder;
+                        const pos = cylinder.center.pointTransform(look_at_matrix);
+                        const half_size = sdk.math.Vec3.fromArray(.{
+                            cylinder.radius,
+                            cylinder.radius,
+                            cylinder.half_height,
+                        });
+                        min = sdk.math.Vec3.minElements(min, pos.subtract(half_size));
+                        max = sdk.math.Vec3.maxElements(max, pos.add(half_size));
+                    }
                 }
             }
-            if (player.hurt_cylinders) |*cylinders| {
-                for (&cylinders.values) |*hurt_cylinder| {
-                    const cylinder = &hurt_cylinder.cylinder;
-                    const pos = cylinder.center.pointTransform(look_at_matrix);
-                    const half_size = sdk.math.Vec3.fromArray(.{
-                        cylinder.radius,
-                        cylinder.radius,
-                        cylinder.half_height,
-                    });
-                    min = sdk.math.Vec3.minElements(min, pos.subtract(half_size));
-                    max = sdk.math.Vec3.maxElements(max, pos.add(half_size));
-                }
-            }
-        }
-        const padding = sdk.math.Vec3.fill(50);
-        const world_box = sdk.math.Vec3.maxElements(min.negate(), max).add(padding).scale(2);
+            const padding = sdk.math.Vec3.fill(50);
+            break :block sdk.math.Vec3.maxElements(min.negate(), max).add(padding).scale(2);
+        };
         const screen_box = switch (direction) {
             .front => sdk.math.Vec3.fromArray(.{
                 @min(self.windows.get(.front).size.x(), self.windows.get(.top).size.x()),
@@ -223,7 +292,7 @@ pub const Camera = struct {
     fn calculateWindowMatrix(self: *const Self, direction: ui.ViewDirection) sdk.math.Mat4 {
         const window = self.windows.get(direction);
         return sdk.math.Mat4.identity
-            .scale(sdk.math.Vec3.fromArray(.{ 0.5 * window.size.x(), -0.5 * window.size.y(), 1 }))
+            .scale(sdk.math.Vec3.fromArray(.{ -0.5 * window.size.x(), -0.5 * window.size.y(), 1 }))
             .translate(window.size.scale(0.5).add(window.position).extend(0));
     }
 };

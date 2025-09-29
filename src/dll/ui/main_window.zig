@@ -93,6 +93,11 @@ pub const MainWindow = struct {
         }
         defer imgui.igEndMenuBar();
 
+        if (imgui.igBeginMenu("Camera", true)) {
+            defer imgui.igEndMenu();
+            self.view.camera.drawMenuBar();
+        }
+
         if (imgui.igBeginMenu("Help", true)) {
             defer imgui.igEndMenu();
             if (imgui.igMenuItem_Bool(ui.LogsWindow.name, null, false, true)) {
