@@ -455,7 +455,6 @@ pub const RawCamera = extern struct {
     pitch: f64,
     yaw: f64,
     roll: f64,
-    fov: f32,
 };
 
 pub const ConvertedCamera = extern struct {
@@ -463,7 +462,6 @@ pub const ConvertedCamera = extern struct {
     pitch: f32,
     yaw: f32,
     roll: f32,
-    fov: f32,
 };
 
 pub const Camera = sdk.memory.ConvertedValue(

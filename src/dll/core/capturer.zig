@@ -76,7 +76,6 @@ pub const Capturer = struct {
             .pitch = camera.pitch,
             .yaw = camera.yaw,
             .roll = camera.roll,
-            .fov = camera.fov,
         };
     }
 
@@ -520,7 +519,6 @@ test "should capture camera correctly" {
             .pitch = 0.25 * std.math.pi,
             .roll = 0.5 * std.math.pi,
             .yaw = 0.75 * std.math.pi,
-            .fov = std.math.pi,
         },
         capturer.captureFrame(&.{
             .player_1 = .{},
@@ -530,7 +528,6 @@ test "should capture camera correctly" {
                 .pitch = 0.25 * std.math.pi,
                 .roll = 0.5 * std.math.pi,
                 .yaw = 0.75 * std.math.pi,
-                .fov = std.math.pi,
             }),
         }).camera,
     );

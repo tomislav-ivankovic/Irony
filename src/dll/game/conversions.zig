@@ -160,7 +160,6 @@ pub fn rawToConvertedCamera(value: game.RawCamera) game.ConvertedCamera {
         .pitch = @floatCast(std.math.degreesToRadians(value.pitch)),
         .yaw = @floatCast(std.math.degreesToRadians(value.yaw)),
         .roll = @floatCast(std.math.degreesToRadians(value.roll)),
-        .fov = @floatCast(std.math.degreesToRadians(value.fov)),
     };
 }
 
@@ -174,7 +173,6 @@ pub fn convertedToRawCamera(value: game.ConvertedCamera) game.RawCamera {
         .pitch = @floatCast(std.math.radiansToDegrees(value.pitch)),
         .yaw = @floatCast(std.math.radiansToDegrees(value.yaw)),
         .roll = @floatCast(std.math.radiansToDegrees(value.roll)),
-        .fov = @floatCast(std.math.radiansToDegrees(value.fov)),
     };
 }
 
@@ -264,7 +262,6 @@ test "rawToConvertedCamera and convertedToRawCamera should cancel out" {
         .pitch = 0.25 * std.math.pi,
         .roll = 0.5 * std.math.pi,
         .yaw = 0.75 * std.math.pi,
-        .fov = std.math.pi,
     };
     try testing.expectEqual(converted, rawToConvertedCamera(convertedToRawCamera(converted)));
     const raw = game.RawCamera{
@@ -272,7 +269,6 @@ test "rawToConvertedCamera and convertedToRawCamera should cancel out" {
         .pitch = 45,
         .roll = 90,
         .yaw = 135,
-        .fov = 180,
     };
     try testing.expectEqual(raw, convertedToRawCamera(rawToConvertedCamera(raw)));
 }

@@ -125,5 +125,4 @@ pub const Camera = struct {
     pitch: f32,
     yaw: f32,
     roll: f32,
-    fov: f32,
 };
