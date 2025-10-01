@@ -122,6 +122,8 @@ pub const ActivatedHeat = struct {
 
 pub const Camera = struct {
     position: sdk.math.Vec3,
-    rotation: sdk.math.Vec3,
+    pitch: f32,
+    yaw: f32,
+    roll: f32,
     fov: f32,
 };

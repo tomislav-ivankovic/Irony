@@ -450,11 +450,28 @@ pub const Player = struct {
     ), // 0x3580
 };
 
-pub const Camera = extern struct {
+pub const RawCamera = extern struct {
     position: sdk.math.Vector(3, f64),
-    rotation: sdk.math.Vector(3, f64),
+    pitch: f64,
+    yaw: f64,
+    roll: f64,
     fov: f32,
 };
+
+pub const ConvertedCamera = extern struct {
+    position: sdk.math.Vec3,
+    pitch: f32,
+    yaw: f32,
+    roll: f32,
+    fov: f32,
+};
+
+pub const Camera = sdk.memory.ConvertedValue(
+    RawCamera,
+    ConvertedCamera,
+    game.rawToConvertedCamera,
+    game.convertedToRawCamera,
+);
 
 pub const TickFunction = fn (delta_time: f64) callconv(.c) void;
 

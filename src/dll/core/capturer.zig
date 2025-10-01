@@ -70,18 +70,12 @@ pub const Capturer = struct {
     }
 
     fn captureCamera(game_memory: *const GameMemory) ?model.Camera {
-        const camera: game.Camera = game_memory.camera orelse return null;
+        const camera = if (game_memory.camera) |c| c.convert() else return null;
         return .{
-            .position = .fromArray(.{
-                @floatCast(camera.position.array[0]),
-                @floatCast(camera.position.array[1]),
-                @floatCast(camera.position.array[2]),
-            }),
-            .rotation = .fromArray(.{
-                @floatCast(camera.rotation.array[0]),
-                @floatCast(camera.rotation.array[1]),
-                @floatCast(camera.rotation.array[2]),
-            }),
+            .position = camera.position,
+            .pitch = camera.pitch,
+            .yaw = camera.yaw,
+            .roll = camera.roll,
             .fov = camera.fov,
         };
     }
@@ -507,6 +501,38 @@ test "should capture floor Z correctly" {
             .player_1 = .{ .floor_z = null },
             .player_2 = .{ .floor_z = null },
         }).floor_z,
+    );
+}
+
+test "should capture camera correctly" {
+    var capturer = Capturer{};
+    try testing.expectEqual(
+        null,
+        capturer.captureFrame(&.{
+            .player_1 = .{},
+            .player_2 = .{},
+            .camera = null,
+        }).camera,
+    );
+    try testing.expectEqual(
+        model.Camera{
+            .position = .fromArray(.{ 1, 2, 3 }),
+            .pitch = 0.25 * std.math.pi,
+            .roll = 0.5 * std.math.pi,
+            .yaw = 0.75 * std.math.pi,
+            .fov = std.math.pi,
+        },
+        capturer.captureFrame(&.{
+            .player_1 = .{},
+            .player_2 = .{},
+            .camera = .fromConverted(.{
+                .position = .fromArray(.{ 1, 2, 3 }),
+                .pitch = 0.25 * std.math.pi,
+                .roll = 0.5 * std.math.pi,
+                .yaw = 0.75 * std.math.pi,
+                .fov = std.math.pi,
+            }),
+        }).camera,
     );
 }
 

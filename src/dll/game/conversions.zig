@@ -150,6 +150,34 @@ pub fn decryptHealth(value: game.EncryptedHealth) ?i32 {
     return @intCast(shifted >> 16);
 }
 
+pub fn rawToConvertedCamera(value: game.RawCamera) game.ConvertedCamera {
+    return .{
+        .position = .fromArray(.{
+            @floatCast(value.position.array[0]),
+            @floatCast(value.position.array[1]),
+            @floatCast(value.position.array[2]),
+        }),
+        .pitch = @floatCast(std.math.degreesToRadians(value.pitch)),
+        .yaw = @floatCast(std.math.degreesToRadians(value.yaw)),
+        .roll = @floatCast(std.math.degreesToRadians(value.roll)),
+        .fov = @floatCast(std.math.degreesToRadians(value.fov)),
+    };
+}
+
+pub fn convertedToRawCamera(value: game.ConvertedCamera) game.RawCamera {
+    return .{
+        .position = .fromArray(.{
+            @floatCast(value.position.array[0]),
+            @floatCast(value.position.array[1]),
+            @floatCast(value.position.array[2]),
+        }),
+        .pitch = @floatCast(std.math.radiansToDegrees(value.pitch)),
+        .yaw = @floatCast(std.math.radiansToDegrees(value.yaw)),
+        .roll = @floatCast(std.math.radiansToDegrees(value.roll)),
+        .fov = @floatCast(std.math.radiansToDegrees(value.fov)),
+    };
+}
+
 const testing = std.testing;
 
 test "scaleToUnrealSpace and scaleFromUnrealSpace should cancel out" {
@@ -228,4 +256,23 @@ test "collisionSphereToUnrealSpace and collisionSphereFromUnrealSpace should can
 test "decryptHeatGauge and encryptHeatGauge should cancel out" {
     try testing.expectEqual(0.12345, decryptHeatGauge(encryptHeatGauge(0.12345)));
     try testing.expectEqual(12345, encryptHeatGauge(decryptHeatGauge(12345)));
+}
+
+test "rawToConvertedCamera and convertedToRawCamera should cancel out" {
+    const converted = game.ConvertedCamera{
+        .position = .fromArray(.{ 1, 2, 3 }),
+        .pitch = 0.25 * std.math.pi,
+        .roll = 0.5 * std.math.pi,
+        .yaw = 0.75 * std.math.pi,
+        .fov = std.math.pi,
+    };
+    try testing.expectEqual(converted, rawToConvertedCamera(convertedToRawCamera(converted)));
+    const raw = game.RawCamera{
+        .position = .fromArray(.{ 1, 2, 3 }),
+        .pitch = 45,
+        .roll = 90,
+        .yaw = 135,
+        .fov = 180,
+    };
+    try testing.expectEqual(raw, convertedToRawCamera(rawToConvertedCamera(raw)));
 }
