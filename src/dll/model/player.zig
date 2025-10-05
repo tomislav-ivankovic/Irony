@@ -130,17 +130,56 @@ pub const Player = struct {
     }
 
     pub fn getFrameAdvantage(self: *const Self, other: *const Self) model.I32ActualMinMax {
+        if (self.move_phase != .recovery or other.move_phase != .recovery) {
+            return .{
+                .actual = null,
+                .min = null,
+                .max = null,
+            };
+        }
+        const self_current = self.animation_frame orelse return .{
+            .actual = null,
+            .min = null,
+            .max = null,
+        };
+        const self_total = self.animation_total_frames orelse return .{
+            .actual = null,
+            .min = null,
+            .max = null,
+        };
+        const other_current = other.animation_frame orelse return .{
+            .actual = null,
+            .min = null,
+            .max = null,
+        };
+        const other_total = other.animation_total_frames orelse return .{
+            .actual = null,
+            .min = null,
+            .max = null,
+        };
+        const self_remaining = self_total -| self_current;
+        const other_remaining = other_total -| other_current;
+        const actual_advantage = @as(i32, @intCast(other_remaining)) -% @as(i32, @intCast(self_remaining));
         const self_recovery = self.getRecoveryFrames();
         const other_recovery = other.getRecoveryFrames();
-        return .{
+        const recovery_advantage = model.I32ActualMinMax{
             .actual = if (other_recovery.actual != null and self_recovery.actual != null) block: {
-                break :block @as(i32, @intCast(other_recovery.actual.?)) -| @as(i32, @intCast(self_recovery.actual.?));
+                break :block @as(i32, @intCast(other_recovery.actual.?)) -% @as(i32, @intCast(self_recovery.actual.?));
             } else null,
             .min = if (other_recovery.min != null and self_recovery.max != null) block: {
-                break :block @as(i32, @intCast(other_recovery.min.?)) -| @as(i32, @intCast(self_recovery.max.?));
+                break :block @as(i32, @intCast(other_recovery.min.?)) -% @as(i32, @intCast(self_recovery.max.?));
             } else null,
             .max = if (other_recovery.max != null and self_recovery.min != null) block: {
-                break :block @as(i32, @intCast(other_recovery.max.?)) -| @as(i32, @intCast(self_recovery.min.?));
+                break :block @as(i32, @intCast(other_recovery.max.?)) -% @as(i32, @intCast(self_recovery.min.?));
+            } else null,
+        };
+        return .{
+            .actual = actual_advantage,
+            .min = if (recovery_advantage.min != null and recovery_advantage.actual != null) block: {
+                break :block recovery_advantage.min.? -% recovery_advantage.actual.? +% actual_advantage;
+            } else null,
+            .max = if (recovery_advantage.max != null and recovery_advantage.actual != null) block: {
+                break :block recovery_advantage.max.? -% recovery_advantage.actual.? +% actual_advantage;
             } else null,
         };
     }
@@ -400,8 +439,8 @@ test "Player.getFrameAdvantage should return correct value" {
         .first_active_frame = null,
         .connected_frame = null,
         .last_active_frame = null,
-        .animation_frame = 5,
-        .move_frame = 4,
+        .animation_frame = 3,
+        .move_frame = 2,
         .animation_total_frames = 6,
     };
     try testing.expectEqual(
