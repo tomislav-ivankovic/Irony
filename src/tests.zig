@@ -84,6 +84,7 @@ test {
     _ = @import("dll/model/hurt_cylinders.zig");
     _ = @import("dll/model/misc.zig");
     _ = @import("dll/model/player.zig");
+    _ = @import("dll/model/settings.zig");
     _ = @import("dll/model/skeleton.zig");
 
     _ = @import("dll/ui/camera.zig");
