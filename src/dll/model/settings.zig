@@ -10,6 +10,29 @@ pub const Settings = struct {
     forward_directions: PlayerSettings(ForwardDirectionSettings) = .{ .same = .{} },
     floor: FloorSettings = .{},
     ingame_camera: IngameCameraSettings = .{},
+
+    const Self = @This();
+    const file_name = "settings.json";
+
+    pub fn load(base_dir: *const sdk.misc.BaseDir) !Self {
+        var buffer: [sdk.os.max_file_path_length]u8 = undefined;
+        const size = base_dir.getPath(&buffer, file_name) catch |err| {
+            sdk.misc.error_context.append("Failed to construct file path.", .{});
+            return err;
+        };
+        const file_path = buffer[0..size];
+        return sdk.misc.loadSettings(Self, file_path);
+    }
+
+    pub fn save(self: *const Self, base_dir: *const sdk.misc.BaseDir) !void {
+        var buffer: [sdk.os.max_file_path_length]u8 = undefined;
+        const size = base_dir.getPath(&buffer, file_name) catch |err| {
+            sdk.misc.error_context.append("Failed to construct file path.", .{});
+            return err;
+        };
+        const file_path = buffer[0..size];
+        return sdk.misc.saveSettings(self.*, file_path);
+    }
 };
 
 pub const HitLinesSettings = struct {
@@ -268,6 +291,19 @@ pub fn PlayerSettings(comptime Type: type) type {
 }
 
 const testing = std.testing;
+
+test "Settings.load should load the same settings that Settings.save saves" {
+    const expected_settings = Settings{
+        .floor = .{
+            .thickness = 123.0,
+        },
+    };
+    const base_dir = try sdk.misc.BaseDir.fromStr("./test_assets");
+    try expected_settings.save(&base_dir);
+    defer std.fs.cwd().deleteFile("./test_assets/settings.json") catch @panic("Failed to cleanup test file.");
+    const actual_settings = try Settings.load(&base_dir);
+    try testing.expectEqual(expected_settings, actual_settings);
+}
 
 test "PlayerSettings.getById should return correct value" {
     const same = PlayerSettings(u8){ .same = 'S' };

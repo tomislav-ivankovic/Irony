@@ -36,6 +36,7 @@ pub const MainWindow = struct {
 
     pub fn draw(
         self: *Self,
+        base_dir: *const sdk.misc.BaseDir,
         settings: *model.Settings,
         game_memory: *const game.Memory,
         controller: *core.Controller,
@@ -46,7 +47,7 @@ pub const MainWindow = struct {
         if (!self.is_open) {
             return;
         }
-        self.drawSecondaryWindows(settings, game_memory, controller);
+        self.drawSecondaryWindows(base_dir, settings, game_memory, controller);
         const render_content = imgui.igBegin("Irony", &self.is_open, imgui.ImGuiWindowFlags_MenuBar);
         defer imgui.igEnd();
         if (!render_content) {
@@ -91,11 +92,12 @@ pub const MainWindow = struct {
 
     fn drawSecondaryWindows(
         self: *Self,
+        base_dir: *const sdk.misc.BaseDir,
         settings: *model.Settings,
         game_memory: *const game.Memory,
         controller: *const core.Controller,
     ) void {
-        self.settings_window.draw(settings);
+        self.settings_window.draw(base_dir, settings);
         self.logs_window.draw(dll.buffer_logger);
         self.game_memory_window.draw(game_memory);
         self.frame_window.draw(controller.getCurrentFrame());

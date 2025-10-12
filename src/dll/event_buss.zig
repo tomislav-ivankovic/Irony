@@ -9,13 +9,16 @@ const game = @import("game/root.zig");
 
 pub const EventBuss = struct {
     timer: sdk.misc.Timer(.{}),
-    dx12_context: ?sdk.dx12.Context(buffer_count, srv_heap_size),
+    dx12_context: ?Dx12Context,
     ui_context: ?sdk.ui.Context,
+    settings_task: SettingsTask,
     core: core.Core,
     main_window: ui.MainWindow,
-    settings: model.Settings,
 
     const Self = @This();
+    const Dx12Context = sdk.dx12.Context(buffer_count, srv_heap_size);
+    const SettingsTask = sdk.misc.Task(model.Settings);
+
     const buffer_count = 3;
     const srv_heap_size = 64;
 
@@ -28,7 +31,7 @@ pub const EventBuss = struct {
         swap_chain: *const w32.IDXGISwapChain,
     ) Self {
         std.log.debug("Initializing DX12 context...", .{});
-        const dx12_context = if (sdk.dx12.Context(buffer_count, srv_heap_size).init(
+        const dx12_context = if (Dx12Context.init(
             allocator,
             device,
             swap_chain,
@@ -63,6 +66,27 @@ pub const EventBuss = struct {
             }
         } else null;
 
+        std.log.debug("Spawning settings loading task...", .{});
+        const settings_task = SettingsTask.spawn(allocator, struct {
+            fn call(dir: *const sdk.misc.BaseDir) model.Settings {
+                std.log.info("Settings loading task spawned.", .{});
+                std.log.debug("Loading settings...", .{});
+                if (model.Settings.load(dir)) |settings| {
+                    std.log.info("Settings loaded.", .{});
+                    return settings;
+                } else |err| {
+                    sdk.misc.error_context.append("Failed to load settings. Using default settings.", .{});
+                    sdk.misc.error_context.logWarning(err);
+                    return .{};
+                }
+            }
+        }.call, .{base_dir}) catch |err| block: {
+            sdk.misc.error_context.append("Failed to spawn settings loading task. Using default settings.", .{});
+            sdk.misc.error_context.logWarning(err);
+            break :block SettingsTask.createCompleted(.{});
+        };
+        errdefer _ = settings_task.join();
+
         std.log.debug("Initializing core...", .{});
         const c = core.Core.init(allocator);
         std.log.info("Core initialized.", .{});
@@ -71,9 +95,9 @@ pub const EventBuss = struct {
             .timer = .{},
             .dx12_context = dx12_context,
             .ui_context = ui_context,
+            .settings_task = settings_task,
             .core = c,
             .main_window = .{},
-            .settings = .{},
         };
     }
 
@@ -90,6 +114,10 @@ pub const EventBuss = struct {
         _ = window;
         _ = device;
         _ = command_queue;
+
+        std.log.debug("Joining settings loading task...", .{});
+        _ = self.settings_task.join();
+        std.log.info("Settings loading task joined.", .{});
 
         std.log.debug("De-initializing core...", .{});
         self.core.deinit();
@@ -115,7 +143,8 @@ pub const EventBuss = struct {
     }
 
     fn processFrame(self: *Self, frame: *const model.Frame) void {
-        self.main_window.processFrame(&self.settings, frame);
+        const settings = self.settings_task.peek() orelse return;
+        self.main_window.processFrame(settings, frame);
     }
 
     pub fn tick(self: *Self, game_memory: *const game.Memory) void {
@@ -131,7 +160,6 @@ pub const EventBuss = struct {
         swap_chain: *const w32.IDXGISwapChain,
         game_memory: ?*const game.Memory,
     ) void {
-        _ = base_dir;
         _ = window;
         _ = device;
 
@@ -147,7 +175,11 @@ pub const EventBuss = struct {
         imgui.igGetIO_Nil().*.MouseDrawCursor = true;
         sdk.ui.toasts.draw();
         if (game_memory) |memory| {
-            self.main_window.draw(&self.settings, memory, &self.core.controller);
+            if (self.settings_task.peek()) |settings| {
+                self.main_window.draw(base_dir, settings, memory, &self.core.controller);
+            } else {
+                ui.drawMessageWindow("Loading", "Loading settings...", .center);
+            }
         } else {
             ui.drawMessageWindow("Loading", "Searching for memory addresses and offsets...", .center);
         }
