@@ -31,7 +31,7 @@ pub const Settings = struct {
             return err;
         };
         const file_path = buffer[0..size];
-        return sdk.misc.saveSettings(self.*, file_path);
+        return sdk.misc.saveSettings(self, file_path);
     }
 };
 
@@ -117,6 +117,28 @@ pub const HitLinesSettings = struct {
     pub const ColorsAndThickness = struct {
         colors: std.EnumArray(model.AttackType, sdk.math.Vec4),
         thickness: f32,
+
+        const Self = @This();
+        const JsonValue = struct {
+            colors: std.enums.EnumFieldStruct(model.AttackType, sdk.math.Vec4, null),
+            thickness: f32,
+        };
+
+        pub fn jsonStringify(self: *const Self, jsonWriter: anytype) !void {
+            const json_value = JsonValue{
+                .colors = sdk.misc.enumArrayToEnumFieldStruct(model.AttackType, sdk.math.Vec4, &self.colors),
+                .thickness = self.thickness,
+            };
+            try jsonWriter.write(json_value);
+        }
+
+        pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !Self {
+            const json_value = try std.json.innerParse(JsonValue, allocator, source, options);
+            return .{
+                .colors = .init(json_value.colors),
+                .thickness = json_value.thickness,
+            };
+        }
     };
 };
 
@@ -185,6 +207,35 @@ pub const SkeletonSettings = struct {
     }),
     thickness: f32 = 2.0,
     cant_move_alpha: f32 = 0.5,
+
+    const Self = @This();
+    const JsonValue = struct {
+        enabled: ?bool = null,
+        colors: ?std.enums.EnumFieldStruct(model.Blocking, sdk.math.Vec4, null) = null,
+        thickness: ?f32 = null,
+        cant_move_alpha: ?f32 = null,
+    };
+
+    pub fn jsonStringify(self: *const Self, jsonWriter: anytype) !void {
+        const json_value = JsonValue{
+            .enabled = self.enabled,
+            .colors = sdk.misc.enumArrayToEnumFieldStruct(model.Blocking, sdk.math.Vec4, &self.colors),
+            .thickness = self.thickness,
+            .cant_move_alpha = self.cant_move_alpha,
+        };
+        try jsonWriter.write(json_value);
+    }
+
+    pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !Self {
+        const default = Self{};
+        const json_value = try std.json.innerParse(JsonValue, allocator, source, options);
+        return .{
+            .enabled = json_value.enabled orelse default.enabled,
+            .colors = if (json_value.colors) |c| std.EnumArray(model.Blocking, sdk.math.Vec4).init(c) else default.colors,
+            .thickness = json_value.thickness orelse default.thickness,
+            .cant_move_alpha = json_value.cant_move_alpha orelse default.cant_move_alpha,
+        };
+    }
 };
 
 pub const ForwardDirectionSettings = struct {

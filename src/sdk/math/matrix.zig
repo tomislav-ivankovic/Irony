@@ -700,6 +700,15 @@ pub fn Matrix(comptime size: usize, comptime Element: type) type {
                 }
             }
         }
+
+        pub fn jsonStringify(self: *const Self, jsonWriter: anytype) !void {
+            try jsonWriter.write(self.asConstFlat());
+        }
+
+        pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !Self {
+            const flat = try std.json.innerParse(Flat, allocator, source, options);
+            return fromFlat(flat);
+        }
     };
 }
 
@@ -1301,4 +1310,29 @@ test "should format correctly" {
             "|13, 14, 15, 16|",
         string,
     );
+}
+
+test "should serialize to JSON correctly" {
+    const matrix = Matrix(4, f32).fromArray(.{
+        .{ 1, 2, 3, 4 },
+        .{ 5, 6, 7, 8 },
+        .{ 9, 10, 11, 12 },
+        .{ 13, 14, 15, 16 },
+    });
+    const json = try std.json.Stringify.valueAlloc(testing.allocator, matrix, .{});
+    defer testing.allocator.free(json);
+    try testing.expectEqualStrings("[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]", json);
+}
+
+test "should deserialize from JSON correctly" {
+    const json = "[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]";
+    const parsed = try std.json.parseFromSlice(Matrix(4, f32), testing.allocator, json, .{});
+    defer parsed.deinit();
+    const expected = Matrix(4, f32).fromArray(.{
+        .{ 1, 2, 3, 4 },
+        .{ 5, 6, 7, 8 },
+        .{ 9, 10, 11, 12 },
+        .{ 13, 14, 15, 16 },
+    });
+    try testing.expectEqual(expected, parsed.value);
 }

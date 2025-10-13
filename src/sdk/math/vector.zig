@@ -522,6 +522,15 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
             }
             try writer.writeByte('}');
         }
+
+        pub fn jsonStringify(self: *const Self, jsonWriter: anytype) !void {
+            try jsonWriter.write(&self.array);
+        }
+
+        pub fn jsonParse(allocator: std.mem.Allocator, source: anytype, options: std.json.ParseOptions) !Self {
+            const array = try std.json.innerParse(Array, allocator, source, options);
+            return .{ .array = array };
+        }
     };
 }
 
@@ -931,4 +940,18 @@ test "should format correctly" {
     const string = try std.fmt.allocPrint(testing.allocator, "{f}", .{vec});
     defer testing.allocator.free(string);
     try testing.expectEqualStrings("{1, 2, 3, 4}", string);
+}
+
+test "should serialize to JSON correctly" {
+    const vec = Vector(4, f32).fromArray(.{ 1, 2, 3, 4 });
+    const json = try std.json.Stringify.valueAlloc(testing.allocator, vec, .{});
+    defer testing.allocator.free(json);
+    try testing.expectEqualStrings("[1,2,3,4]", json);
+}
+
+test "should deserialize from JSON correctly" {
+    const json = "[1,2,3,4]";
+    const parsed = try std.json.parseFromSlice(Vector(4, f32), testing.allocator, json, .{});
+    defer parsed.deinit();
+    try testing.expectEqual(Vector(4, f32).fromArray(.{ 1, 2, 3, 4 }), parsed.value);
 }

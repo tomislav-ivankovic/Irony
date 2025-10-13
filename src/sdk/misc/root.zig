@@ -8,6 +8,7 @@ pub threadlocal var error_context = ErrorContext(.{}){};
 pub const Partial = @import("meta.zig").Partial;
 pub const FieldMap = @import("meta.zig").FieldMap;
 pub const areAllFieldsNull = @import("meta.zig").areAllFieldsNull;
+pub const enumArrayToEnumFieldStruct = @import("meta.zig").enumArrayToEnumFieldStruct;
 pub const loadSettings = @import("settings.zig").loadSettings;
 pub const saveSettings = @import("settings.zig").saveSettings;
 pub const Task = @import("task.zig").Task;

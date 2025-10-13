@@ -75,6 +75,23 @@ pub fn areAllFieldsNull(struct_pointer: anytype) bool {
     return true;
 }
 
+pub fn enumArrayToEnumFieldStruct(
+    comptime Enum: type,
+    comptime Value: type,
+    array: *const std.EnumArray(Enum, Value),
+) std.enums.EnumFieldStruct(Enum, Value, null) {
+    const enum_info: std.builtin.Type = @typeInfo(Enum);
+    const fields = switch (enum_info) {
+        .@"enum" => |e| e.fields,
+        else => @compileError("Expected Enum to be a enum type but got: " ++ @typeName(Enum)),
+    };
+    var field_struct: std.enums.EnumFieldStruct(Enum, Value, null) = undefined;
+    inline for (fields) |*field| {
+        @field(field_struct, field.name) = array.get(@enumFromInt(field.value));
+    }
+    return field_struct;
+}
+
 const testing = std.testing;
 
 test "FieldMap should make every field typed with the specified type" {
@@ -131,4 +148,16 @@ test "areAllFieldsNull should return null only if all fields of provided struct 
     };
     try testing.expectEqual(true, areAllFieldsNull(&struct_1));
     try testing.expectEqual(false, areAllFieldsNull(&struct_2));
+}
+
+test "enumArrayToEnumFieldStruct should return correct value" {
+    const Enum = enum { a, b, c };
+    const expected = std.enums.EnumFieldStruct(Enum, u8, null){
+        .a = 1,
+        .b = 2,
+        .c = 3,
+    };
+    const array = std.EnumArray(Enum, u8).init(expected);
+    const actual = enumArrayToEnumFieldStruct(Enum, u8, &array);
+    try testing.expectEqual(expected, actual);
 }
