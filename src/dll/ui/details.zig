@@ -8,7 +8,7 @@ const string_buffer_size = 128;
 const empty_value_string = "---";
 const error_string = "error";
 
-pub fn drawDetails(frame: *const model.Frame) void {
+pub fn drawDetails(frame: *const model.Frame, columns: model.MiscSettings.DetailsColumns) void {
     const table_flags = imgui.ImGuiTableFlags_RowBg |
         imgui.ImGuiTableFlags_BordersInner |
         imgui.ImGuiTableFlags_PadOuterX |
@@ -22,12 +22,37 @@ pub fn drawDetails(frame: *const model.Frame) void {
 
     imgui.igTableSetupScrollFreeze(0, 1);
     imgui.igTableSetupColumn("Property", 0, 0, 0);
-    imgui.igTableSetupColumn("Left Player", 0, 0, 0);
-    imgui.igTableSetupColumn("Right Player", 0, 0, 0);
+    switch (columns) {
+        .id_based => {
+            imgui.igTableSetupColumn("Player 1", 0, 0, 0);
+            imgui.igTableSetupColumn("Player 2", 0, 0, 0);
+        },
+        .side_based => {
+            imgui.igTableSetupColumn("Left Player", 0, 0, 0);
+            imgui.igTableSetupColumn("Right Player", 0, 0, 0);
+        },
+        .role_based => {
+            imgui.igTableSetupColumn("Main Player", 0, 0, 0);
+            imgui.igTableSetupColumn("Secondary Player", 0, 0, 0);
+        },
+    }
+
     imgui.igTableHeadersRow();
 
-    const left = frame.getPlayerBySide(.left);
-    const right = frame.getPlayerBySide(.right);
+    const left, const right = switch (columns) {
+        .id_based => .{
+            frame.getPlayerById(.player_1),
+            frame.getPlayerById(.player_2),
+        },
+        .side_based => .{
+            frame.getPlayerBySide(.left),
+            frame.getPlayerBySide(.right),
+        },
+        .role_based => .{
+            frame.getPlayerByRole(.main),
+            frame.getPlayerByRole(.secondary),
+        },
+    };
     drawProperty("Since Round Start", &frame.frames_since_round_start, &frame.frames_since_round_start);
     drawProperty("Character ID", &left.character_id, &right.character_id);
     drawProperty("Animation ID", &left.animation_id, &right.animation_id);

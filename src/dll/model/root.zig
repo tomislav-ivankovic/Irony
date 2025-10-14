@@ -36,6 +36,7 @@ pub const SkeletonSettings = @import("settings.zig").SkeletonSettings;
 pub const ForwardDirectionSettings = @import("settings.zig").ForwardDirectionSettings;
 pub const FloorSettings = @import("settings.zig").FloorSettings;
 pub const IngameCameraSettings = @import("settings.zig").IngameCameraSettings;
+pub const MiscSettings = @import("settings.zig").MiscSettings;
 pub const PlayerSettingsMode = @import("settings.zig").PlayerSettingsMode;
 pub const PlayerSettings = @import("settings.zig").PlayerSettings;
 pub const SkeletonPointId = @import("skeleton.zig").SkeletonPointId;

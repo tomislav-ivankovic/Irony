@@ -10,6 +10,7 @@ pub const Settings = struct {
     forward_directions: PlayerSettings(ForwardDirectionSettings) = .{ .mode = .same, .players = .{ .{}, .{} } },
     floor: FloorSettings = .{},
     ingame_camera: IngameCameraSettings = .{},
+    misc: MiscSettings = .{},
 
     const Self = @This();
     const file_name = "settings.json";
@@ -283,6 +284,16 @@ pub const IngameCameraSettings = struct {
     color: sdk.math.Vec4 = .fromArray(.{ 1.0, 1.0, 1.0, 0.05 }),
     length: f32 = 800.0,
     thickness: f32 = 1.0,
+};
+
+pub const MiscSettings = struct {
+    details_columns: DetailsColumns = .id_based,
+
+    pub const DetailsColumns = enum {
+        id_based,
+        side_based,
+        role_based,
+    };
 };
 
 pub const PlayerSettingsMode = enum {

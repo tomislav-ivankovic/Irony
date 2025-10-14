@@ -148,6 +148,8 @@ const MiscSettings = struct {
     const Self = @This();
 
     pub fn draw(self: *Self, base_dir: *const sdk.misc.BaseDir, settings: *model.Settings) void {
+        drawMiscSettings(&settings.misc);
+        imgui.igSeparator();
         self.reload_button.draw(base_dir, settings);
         self.defaults_button.draw(settings);
     }
@@ -317,21 +319,18 @@ fn drawPlayerSettings(
     settings: *model.PlayerSettings(Type),
     drawContent: *const fn (settings: *Type) void,
 ) void {
-    const labels = std.EnumArray(model.PlayerSettingsMode, [:0]const u8).init(.{
-        .same = "Same Settings",
-        .id_separated = "Player 1 / Player 2",
-        .side_separated = "Left Player / Right Player",
-        .role_separated = "Main Player / Secondary Player",
-    });
-    if (imgui.igBeginCombo("Player Separation", labels.get(settings.mode), 0)) {
-        defer imgui.igEndCombo();
-        inline for (@typeInfo(model.PlayerSettingsMode).@"enum".fields) |*field| {
-            const mode: model.PlayerSettingsMode = @enumFromInt(field.value);
-            if (imgui.igSelectable_Bool(labels.get(mode), settings.mode == mode, 0, .{})) {
-                settings.mode = mode;
-            }
-        }
-    }
+    drawEnum(
+        model.PlayerSettingsMode,
+        "Player Separation",
+        &.{
+            .same = "Same Settings",
+            .id_separated = "Player 1 / Player 2",
+            .side_separated = "Left Player / Right Player",
+            .role_separated = "Main Player / Secondary Player",
+        },
+        &settings.mode,
+        .same,
+    );
 
     const label_1, const label_2 = switch (settings.mode) {
         .same => {
@@ -595,6 +594,21 @@ fn drawIngameCameraSettings(settings: *model.IngameCameraSettings) void {
     drawThickness("Thickness", &settings.thickness, defaults.thickness);
 }
 
+fn drawMiscSettings(settings: *model.MiscSettings) void {
+    const defaults = model.MiscSettings{};
+    drawEnum(
+        model.MiscSettings.DetailsColumns,
+        "Details Table Columns",
+        &.{
+            .id_based = "Player 1 / Player 2",
+            .side_based = "Left Player / Right Player",
+            .role_based = "Main Player / Secondary Player",
+        },
+        &settings.details_columns,
+        defaults.details_columns,
+    );
+}
+
 fn drawBool(label: [:0]const u8, value: *bool, default_value: bool) void {
     imgui.igPushID_Str(label);
     drawDefaultButton(value, default_value);
@@ -638,6 +652,33 @@ fn drawFloat(
     imgui.igPopID();
     imgui.igSameLine(0, -1);
     _ = imgui.igDragFloat(label, value, step, min, max, format, flags);
+}
+
+fn drawEnum(
+    comptime Type: type,
+    label: [:0]const u8,
+    names: *const std.enums.EnumFieldStruct(Type, [:0]const u8, null),
+    value: *Type,
+    default_value: Type,
+) void {
+    const fields = switch (@typeInfo(Type)) {
+        .@"enum" => |info| info.fields,
+        else => @compileError("Expected Type to be a enum type but got: " ++ @typeName(Type)),
+    };
+    imgui.igPushID_Str(label);
+    drawDefaultButton(value, default_value);
+    imgui.igPopID();
+    imgui.igSameLine(0, -1);
+    const array = std.EnumArray(Type, [:0]const u8).init(names.*);
+    if (imgui.igBeginCombo(label, array.get(value.*), 0)) {
+        defer imgui.igEndCombo();
+        inline for (fields) |*field| {
+            const current_value: Type = @enumFromInt(field.value);
+            if (imgui.igSelectable_Bool(array.get(current_value), value.* == current_value, 0, .{})) {
+                value.* = current_value;
+            }
+        }
+    }
 }
 
 fn drawDefaultButton(value_pointer: anytype, default_value: @TypeOf(value_pointer.*)) void {

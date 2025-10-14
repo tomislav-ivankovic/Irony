@@ -153,6 +153,6 @@ pub const MainWindow = struct {
 
     fn drawDetails(context: QuadrantContext) void {
         const frame = context.frame orelse return;
-        ui.drawDetails(frame);
+        ui.drawDetails(frame, context.settings.misc.details_columns);
     }
 };
