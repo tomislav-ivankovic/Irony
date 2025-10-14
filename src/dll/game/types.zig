@@ -429,25 +429,25 @@ pub const Player = struct {
     in_rage: Boolean(.{}), // 0x0DD1
     used_rage: Boolean(.{}), // 0x0E08
     frames_since_round_start: u32, // 0x1410
-    used_heat: Boolean(.{}), // 0x21C0
     heat_gauge: sdk.memory.ConvertedValue(
         u32,
         f32,
         game.decryptHeatGauge,
         game.encryptHeatGauge,
-    ), // 0x21B0
-    in_heat: Boolean(.{}), // 0x21E1
-    input_side: PlayerSide, // 0x252C
-    input: Input, // 0x2554
-    hit_lines: HitLines, // 0x2500
-    hurt_cylinders: HurtCylinders, // 0x2900
-    collision_spheres: CollisionSpheres, // 0x2D40
+    ), // 0x22C0
+    used_heat: Boolean(.{}), // 0x22D0
+    in_heat: Boolean(.{}), // 0x22F1
+    input_side: PlayerSide, // 0x263C
+    input: Input, // 0x2664
+    hit_lines: HitLines, // 0x26D0
+    hurt_cylinders: HurtCylinders, // 0x2AD0
+    collision_spheres: CollisionSpheres, // 0x2F10
     health: sdk.memory.ConvertedValue(
         EncryptedHealth,
         ?i32,
         game.decryptHealth,
         null,
-    ), // 0x3580
+    ), // 0x3690
 };
 
 pub const RawCamera = extern struct {
