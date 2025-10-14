@@ -7,6 +7,7 @@ const ui = @import("root.zig");
 pub const SettingsWindow = struct {
     is_open: bool = false,
     navigation_layout: ui.NavigationLayout = .{},
+    misc_settings: MiscSettings = .{},
     save_button: SaveButton = .{},
 
     const Self = @This();
@@ -33,11 +34,122 @@ pub const SettingsWindow = struct {
 
         const navigation_layout_height = content_size.y - self.save_button.height - imgui.igGetStyle().*.ItemSpacing.y;
         if (imgui.igBeginChild_Str("navigation_layout", .{ .y = navigation_layout_height }, 0, 0)) {
-            drawNavigationLayout(&self.navigation_layout, settings);
+            self.drawNavigationLayout(base_dir, settings);
         }
         imgui.igEndChild();
 
         self.save_button.draw(base_dir, settings);
+    }
+
+    pub fn drawNavigationLayout(self: *Self, base_dir: *const sdk.misc.BaseDir, settings: *model.Settings) void {
+        const Context = struct {
+            self: *Self,
+            base_dir: *const sdk.misc.BaseDir,
+            settings: *model.Settings,
+        };
+        const context = Context{
+            .self = self,
+            .base_dir = base_dir,
+            .settings = settings,
+        };
+        self.navigation_layout.draw(&context, &.{
+            .{
+                .name = "Hit Lines",
+                .content = struct {
+                    fn call(c: *const Context) void {
+                        drawPlayerSettings(
+                            model.HitLinesSettings,
+                            &c.settings.hit_lines,
+                            drawHitLinesSettings,
+                        );
+                    }
+                }.call,
+            },
+            .{
+                .name = "Hurt Cylinders",
+                .content = struct {
+                    fn call(c: *const Context) void {
+                        drawPlayerSettings(
+                            model.HurtCylindersSettings,
+                            &c.settings.hurt_cylinders,
+                            drawHurtCylindersSettings,
+                        );
+                    }
+                }.call,
+            },
+            .{
+                .name = "Collision Spheres",
+                .content = struct {
+                    fn call(c: *const Context) void {
+                        drawPlayerSettings(
+                            model.CollisionSpheresSettings,
+                            &c.settings.collision_spheres,
+                            drawCollisionSpheresSettings,
+                        );
+                    }
+                }.call,
+            },
+            .{
+                .name = "Skeletons",
+                .content = struct {
+                    fn call(c: *const Context) void {
+                        drawPlayerSettings(
+                            model.SkeletonSettings,
+                            &c.settings.skeletons,
+                            drawSkeletonSettings,
+                        );
+                    }
+                }.call,
+            },
+            .{
+                .name = "Forward Directions",
+                .content = struct {
+                    fn call(c: *const Context) void {
+                        drawPlayerSettings(
+                            model.ForwardDirectionSettings,
+                            &c.settings.forward_directions,
+                            drawForwardDirectionsSettings,
+                        );
+                    }
+                }.call,
+            },
+            .{
+                .name = "Floor",
+                .content = struct {
+                    fn call(c: *const Context) void {
+                        drawFloorSettings(&c.settings.floor);
+                    }
+                }.call,
+            },
+            .{
+                .name = "Ingame Camera",
+                .content = struct {
+                    fn call(c: *const Context) void {
+                        drawIngameCameraSettings(&c.settings.ingame_camera);
+                    }
+                }.call,
+            },
+            .{
+                .name = "Miscellaneous",
+                .content = struct {
+                    fn call(c: *const Context) void {
+                        c.self.misc_settings.draw(c.base_dir, c.settings);
+                    }
+                }.call,
+            },
+        });
+    }
+};
+
+const MiscSettings = struct {
+    reload_button: ReloadButton = .{},
+    defaults_button: DefaultsButton = .{},
+
+    const Self = @This();
+
+    pub fn draw(self: *Self, base_dir: *const sdk.misc.BaseDir, settings: *model.Settings) void {
+        self.reload_button.draw(base_dir, settings);
+        self.defaults_button.draw(settings);
     }
 };
 
@@ -72,7 +184,7 @@ const SaveButton = struct {
                     settings_to_save: model.Settings,
                     enabled: *std.atomic.Value(bool),
                 ) void {
-                    std.log.info("Starting save thread started.", .{});
+                    std.log.info("Settings save thread started.", .{});
                     std.log.info("Saving settings...", .{});
                     if (settings_to_save.save(dir)) {
                         std.log.info("Settings saved.", .{});
@@ -86,7 +198,7 @@ const SaveButton = struct {
             }.call,
             .{ base_dir, settings.*, &self.is_enabled },
         ) catch |err| {
-            sdk.misc.error_context.new("Failed to spawn settings thread.", .{});
+            sdk.misc.error_context.new("Failed to spawn settings save thread.", .{});
             sdk.misc.error_context.logError(err);
             self.is_enabled.store(true, .seq_cst);
             return;
@@ -95,86 +207,110 @@ const SaveButton = struct {
     }
 };
 
-fn drawNavigationLayout(navigation_layout: *ui.NavigationLayout, settings: *model.Settings) void {
-    navigation_layout.draw(settings, &.{
-        .{
-            .name = "Hit Lines",
-            .content = struct {
-                fn call(s: *model.Settings) void {
-                    drawPlayerSettings(
-                        model.HitLinesSettings,
-                        &s.hit_lines,
-                        drawHitLinesSettings,
-                    );
+const ReloadButton = struct {
+    is_enabled: std.atomic.Value(bool) = .init(true),
+    loaded_settings: ?model.Settings = null,
+    confirm_open: bool = false,
+
+    const Self = @This();
+
+    fn draw(self: *Self, base_dir: *const sdk.misc.BaseDir, settings: *model.Settings) void {
+        imgui.igBeginDisabled(!self.is_enabled.load(.seq_cst));
+        defer imgui.igEndDisabled();
+        if (imgui.igButton("Reload Settings", .{})) {
+            self.confirm_open = true;
+            imgui.igOpenPopup_Str("Reload settings?", 0);
+        }
+        if (imgui.igBeginPopupModal("Reload settings?", &self.confirm_open, imgui.ImGuiWindowFlags_AlwaysAutoResize)) {
+            defer imgui.igEndPopup();
+            imgui.igText("Are you sure you want to reload settings?");
+            imgui.igText("Any settings you did not save will be lost.");
+            imgui.igSeparator();
+            if (imgui.igButton("Reload", .{})) {
+                self.loadSettings(base_dir);
+                imgui.igCloseCurrentPopup();
+            }
+            imgui.igSameLine(0, -1);
+            imgui.igSetItemDefaultFocus();
+            if (imgui.igButton("Cancel", .{})) {
+                imgui.igCloseCurrentPopup();
+            }
+        }
+        if (self.is_enabled.load(.seq_cst)) {
+            if (self.loaded_settings) |s| {
+                settings.* = s;
+                self.loaded_settings = null;
+                std.log.info("Settings loaded.", .{});
+                sdk.ui.toasts.send(.success, null, "Settings reloaded successfully.", .{});
+            }
+        }
+    }
+
+    fn loadSettings(self: *Self, base_dir: *const sdk.misc.BaseDir) void {
+        self.is_enabled.store(false, .seq_cst);
+        std.log.debug("Spawning settings load thread...", .{});
+        const thread = std.Thread.spawn(
+            .{},
+            struct {
+                fn call(
+                    s: *Self,
+                    dir: *const sdk.misc.BaseDir,
+                    enabled: *std.atomic.Value(bool),
+                ) void {
+                    std.log.info("Settings load thread started.", .{});
+                    std.log.info("Loading settings...", .{});
+                    if (model.Settings.load(dir)) |settings| {
+                        s.loaded_settings = settings;
+                        std.log.info("Settings loaded into temporary storage.", .{});
+                    } else |err| {
+                        sdk.misc.error_context.append("Failed to load settings.", .{});
+                        sdk.misc.error_context.logError(err);
+                    }
+                    enabled.store(true, .seq_cst);
                 }
             }.call,
-        },
-        .{
-            .name = "Hurt Cylinders",
-            .content = struct {
-                fn call(s: *model.Settings) void {
-                    drawPlayerSettings(
-                        model.HurtCylindersSettings,
-                        &s.hurt_cylinders,
-                        drawHurtCylindersSettings,
-                    );
-                }
-            }.call,
-        },
-        .{
-            .name = "Collision Spheres",
-            .content = struct {
-                fn call(s: *model.Settings) void {
-                    drawPlayerSettings(
-                        model.CollisionSpheresSettings,
-                        &s.collision_spheres,
-                        drawCollisionSpheresSettings,
-                    );
-                }
-            }.call,
-        },
-        .{
-            .name = "Skeletons",
-            .content = struct {
-                fn call(s: *model.Settings) void {
-                    drawPlayerSettings(
-                        model.SkeletonSettings,
-                        &s.skeletons,
-                        drawSkeletonSettings,
-                    );
-                }
-            }.call,
-        },
-        .{
-            .name = "Forward Directions",
-            .content = struct {
-                fn call(s: *model.Settings) void {
-                    drawPlayerSettings(
-                        model.ForwardDirectionSettings,
-                        &s.forward_directions,
-                        drawForwardDirectionsSettings,
-                    );
-                }
-            }.call,
-        },
-        .{
-            .name = "Floor",
-            .content = struct {
-                fn call(s: *model.Settings) void {
-                    drawFloorSettings(&s.floor);
-                }
-            }.call,
-        },
-        .{
-            .name = "Ingame Camera",
-            .content = struct {
-                fn call(s: *model.Settings) void {
-                    drawIngameCameraSettings(&s.ingame_camera);
-                }
-            }.call,
-        },
-    });
-}
+            .{ self, base_dir, &self.is_enabled },
+        ) catch |err| {
+            sdk.misc.error_context.new("Failed to spawn settings load thread.", .{});
+            sdk.misc.error_context.logError(err);
+            self.is_enabled.store(true, .seq_cst);
+            return;
+        };
+        thread.detach();
+    }
+};
+
+const DefaultsButton = struct {
+    confirm_open: bool = false,
+
+    const Self = @This();
+
+    fn draw(self: *Self, settings: *model.Settings) void {
+        if (imgui.igButton("Reset Settings To Defaults", .{})) {
+            self.confirm_open = true;
+            imgui.igOpenPopup_Str("Reset settings to defaults?", 0);
+        }
+        if (imgui.igBeginPopupModal("Reset settings to defaults?", &self.confirm_open, imgui.ImGuiWindowFlags_AlwaysAutoResize)) {
+            defer imgui.igEndPopup();
+            imgui.igText("Are you sure you want to reset all settings to default values?");
+            imgui.igText("Any settings you did not save will be lost.");
+            imgui.igText("You can however reload your saved settings.");
+            imgui.igText("(Unless you override them by saving.)");
+            imgui.igSeparator();
+            if (imgui.igButton("Reset", .{})) {
+                settings.* = .{};
+                std.log.info("Settings set to default values.", .{});
+                sdk.ui.toasts.send(.success, null, "Settings set to default values.", .{});
+                imgui.igCloseCurrentPopup();
+            }
+            imgui.igSameLine(0, -1);
+            imgui.igSetItemDefaultFocus();
+            if (imgui.igButton("Cancel", .{})) {
+                imgui.igCloseCurrentPopup();
+            }
+        }
+    }
+};
 
 fn drawPlayerSettings(
     comptime Type: type,
