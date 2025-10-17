@@ -22,62 +22,62 @@ pub const F32MinMax = struct {
     max: ?f32,
 };
 
-pub const MovePhase = enum {
-    neutral,
-    start_up,
-    active,
-    active_recovery,
-    recovery,
+pub const MovePhase = enum(u8) {
+    neutral = 0,
+    start_up = 1,
+    active = 2,
+    active_recovery = 3,
+    recovery = 4,
 };
 
-pub const AttackType = enum {
-    not_attack,
-    high,
-    mid,
-    low,
-    special_low,
-    unblockable_high,
-    unblockable_mid,
-    unblockable_low,
-    throw,
-    projectile,
-    antiair_only,
+pub const AttackType = enum(u8) {
+    not_attack = 0,
+    high = 1,
+    mid = 2,
+    low = 3,
+    special_low = 4,
+    unblockable_high = 5,
+    unblockable_mid = 6,
+    unblockable_low = 7,
+    throw = 8,
+    projectile = 9,
+    antiair_only = 10,
 };
 
-pub const HitOutcome = enum {
-    none,
-    blocked_standing,
-    blocked_crouching,
-    juggle,
-    screw,
-    grounded_face_down,
-    grounded_face_up,
-    counter_hit_standing,
-    counter_hit_crouching,
-    normal_hit_standing,
-    normal_hit_crouching,
-    normal_hit_standing_left,
-    normal_hit_crouching_left,
-    normal_hit_standing_back,
-    normal_hit_crouching_back,
-    normal_hit_standing_right,
-    normal_hit_crouching_right,
+pub const HitOutcome = enum(u8) {
+    none = 0,
+    blocked_standing = 1,
+    blocked_crouching = 2,
+    juggle = 3,
+    screw = 4,
+    grounded_face_down = 5,
+    grounded_face_up = 6,
+    counter_hit_standing = 7,
+    counter_hit_crouching = 8,
+    normal_hit_standing = 9,
+    normal_hit_crouching = 10,
+    normal_hit_standing_left = 11,
+    normal_hit_crouching_left = 12,
+    normal_hit_standing_back = 13,
+    normal_hit_crouching_back = 14,
+    normal_hit_standing_right = 15,
+    normal_hit_crouching_right = 16,
 };
 
-pub const Posture = enum {
-    standing,
-    crouching,
-    downed_face_up,
-    downed_face_down,
-    airborne,
+pub const Posture = enum(u8) {
+    standing = 0,
+    crouching = 1,
+    downed_face_up = 2,
+    downed_face_down = 3,
+    airborne = 4,
 };
 
-pub const Blocking = enum {
-    not_blocking,
-    neutral_blocking_mids,
-    fully_blocking_mids,
-    neutral_blocking_lows,
-    fully_blocking_lows,
+pub const Blocking = enum(u8) {
+    not_blocking = 0,
+    neutral_blocking_mids = 1,
+    fully_blocking_mids = 2,
+    neutral_blocking_lows = 3,
+    fully_blocking_lows = 4,
 };
 
 pub const Crushing = packed struct {
@@ -110,10 +110,16 @@ pub const Rage = enum {
     used_up,
 };
 
-pub const Heat = union(enum) {
+pub const Heat = union(HeatTag) {
     available: void,
     activated: ActivatedHeat,
     used_up: void,
+};
+
+pub const HeatTag = enum(u8) {
+    available = 0,
+    activated = 1,
+    used_up = 2,
 };
 
 pub const ActivatedHeat = struct {

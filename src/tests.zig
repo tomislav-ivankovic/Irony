@@ -73,6 +73,7 @@ test {
     _ = @import("dll/core/move_detector.zig");
     _ = @import("dll/core/move_measurer.zig");
     _ = @import("dll/core/pause_detector.zig");
+    _ = @import("dll/core/recording.zig");
 
     _ = @import("dll/game/conversions.zig");
     _ = @import("dll/game/hooks.zig");

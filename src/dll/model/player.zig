@@ -2,9 +2,9 @@ const std = @import("std");
 const sdk = @import("../../sdk/root.zig");
 const model = @import("root.zig");
 
-pub const PlayerId = enum {
-    player_1,
-    player_2,
+pub const PlayerId = enum(u8) {
+    player_1 = 0,
+    player_2 = 1,
 
     const Self = @This();
     pub const all = [2]Self{ .player_1, .player_2 };
@@ -17,9 +17,9 @@ pub const PlayerId = enum {
     }
 };
 
-pub const PlayerSide = enum {
-    left,
-    right,
+pub const PlayerSide = enum(u8) {
+    left = 0,
+    right = 1,
 
     const Self = @This();
     pub const all = [2]Self{ .left, .right };
@@ -32,9 +32,9 @@ pub const PlayerSide = enum {
     }
 };
 
-pub const PlayerRole = enum {
-    main,
-    secondary,
+pub const PlayerRole = enum(u8) {
+    main = 0,
+    secondary = 1,
 
     const Self = @This();
     pub const all = [2]Self{ .main, .secondary };

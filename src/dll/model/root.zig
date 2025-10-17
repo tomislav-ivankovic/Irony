@@ -22,6 +22,7 @@ pub const Crushing = @import("misc.zig").Crushing;
 pub const Input = @import("misc.zig").Input;
 pub const Rage = @import("misc.zig").Rage;
 pub const Heat = @import("misc.zig").Heat;
+pub const HeatTag = @import("misc.zig").HeatTag;
 pub const Camera = @import("misc.zig").Camera;
 pub const ActivatedHeat = @import("misc.zig").ActivatedHeat;
 pub const PlayerId = @import("player.zig").PlayerId;
