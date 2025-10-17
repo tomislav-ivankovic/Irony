@@ -9,10 +9,10 @@ const NumberOfFrames = u64;
 const LocalField = struct {
     path: []const u8,
     offset: FieldOffset,
-    Type: type,
+    size: FieldSize,
 };
 const RemoteField = struct {
-    local_index: ?usize,
+    local_field: ?*const LocalField,
     size: FieldSize,
 };
 
@@ -87,12 +87,12 @@ pub fn loadRecording(comptime Frame: type, allocator: std.mem.Allocator, file_pa
     };
     const remote_fields = remote_fields_buffer[0..remote_fields_len];
 
-    const initial_values = readInitialValues(Frame, reader, remote_fields, local_fields) catch |err| {
+    const initial_values = readInitialValues(Frame, reader, remote_fields) catch |err| {
         sdk.misc.error_context.append("Failed to read initial values.", .{});
         return err;
     };
 
-    const frames = readFrames(Frame, allocator, reader, &initial_values, remote_fields, local_fields) catch |err| {
+    const frames = readFrames(Frame, allocator, reader, &initial_values, remote_fields) catch |err| {
         sdk.misc.error_context.append("Failed to read frames.", .{});
         return err;
     };
@@ -100,12 +100,12 @@ pub fn loadRecording(comptime Frame: type, allocator: std.mem.Allocator, file_pa
     return frames;
 }
 
-fn writeFieldList(writer: *std.io.Writer, comptime fields: []const LocalField) !void {
+fn writeFieldList(writer: *std.io.Writer, fields: []const LocalField) !void {
     writer.writeInt(FieldIndex, @intCast(fields.len), endian) catch |err| {
         sdk.misc.error_context.new("Failed to write number of fields: {}", .{fields.len});
         return err;
     };
-    inline for (fields) |*field| {
+    for (fields) |*field| {
         errdefer sdk.misc.error_context.append("Failed to write field: {s}", .{field.path});
         writer.writeInt(FieldPathLength, @intCast(field.path.len), endian) catch |err| {
             sdk.misc.error_context.new("Failed to write the size of field path: {}", .{field.path.len});
@@ -115,8 +115,8 @@ fn writeFieldList(writer: *std.io.Writer, comptime fields: []const LocalField) !
             sdk.misc.error_context.new("Failed to write the field path: {s}", .{field.path});
             return err;
         };
-        writer.writeInt(FieldSize, @sizeOf(field.Type), endian) catch |err| {
-            sdk.misc.error_context.new("Failed to write the field size: {}", .{@sizeOf(field.Type)});
+        writer.writeInt(FieldSize, field.size, endian) catch |err| {
+            sdk.misc.error_context.new("Failed to write the field size: {}", .{field.size});
             return err;
         };
     }
@@ -154,13 +154,13 @@ fn readFieldList(
             sdk.misc.error_context.new("Failed to read the field size. Field path is: {s}", .{path});
             return err;
         };
-        const local_index: ?usize = inline for (local_fields, 0..) |*field, local_index| {
-            if (std.mem.eql(u8, field.path, path) and @sizeOf(field.Type) == size) {
-                break local_index;
+        const local_field: ?*const LocalField = for (local_fields) |*field| {
+            if (std.mem.eql(u8, field.path, path) and field.size == size) {
+                break field;
             }
         } else null;
         remote_fields_buffer[index] = .{
-            .local_index = local_index,
+            .local_field = local_field,
             .size = size,
         };
     }
@@ -171,12 +171,12 @@ fn writeInitialValues(
     comptime Frame: type,
     writer: *std.io.Writer,
     initial_values: *const Frame,
-    comptime fields: []const LocalField,
+    fields: []const LocalField,
 ) !void {
     const frame_bytes: *const [@sizeOf(Frame)]u8 = @ptrCast(initial_values);
-    inline for (fields) |*field| {
+    for (fields) |*field| {
         const offset = field.offset;
-        const size = @sizeOf(field.Type);
+        const size = field.size;
         const bytes = frame_bytes[offset..(offset + size)];
         writer.writeAll(bytes) catch |err| {
             sdk.misc.error_context.new("Failed to write the value of field: {s}", .{field.path});
@@ -189,28 +189,21 @@ fn readInitialValues(
     comptime Frame: type,
     reader: *std.io.Reader,
     remote_fields: []const RemoteField,
-    comptime local_fields: []const LocalField,
 ) !Frame {
     var frame = Frame{};
     const frame_bytes: *[@sizeOf(Frame)]u8 = @ptrCast(&frame);
     for (remote_fields) |*remote_field| {
-        const local_index = remote_field.local_index orelse {
+        const local_field = remote_field.local_field orelse {
             reader.toss(remote_field.size);
             continue;
         };
-        inline for (local_fields, 0..) |*local_field, index| {
-            if (index == local_index) {
-                const offset = local_field.offset;
-                const size = @sizeOf(local_field.Type);
-                var bytes: [size]u8 = undefined;
-                reader.readSliceAll(&bytes) catch |err| {
-                    sdk.misc.error_context.new("Failed to read the value of field: {s}", .{local_field.path});
-                    return err;
-                };
-                frame_bytes[offset..(offset + size)].* = bytes;
-                break;
-            }
-        } else unreachable;
+        const offset = local_field.offset;
+        const size = local_field.size;
+        const field_bytes = frame_bytes[offset..(offset + size)];
+        reader.readSliceAll(field_bytes) catch |err| {
+            sdk.misc.error_context.new("Failed to read the value of field: {s}", .{local_field.path});
+            return err;
+        };
     }
     return frame;
 }
@@ -220,7 +213,7 @@ fn writeFrames(
     writer: *std.io.Writer,
     initial_values: *const Frame,
     frames: []const Frame,
-    comptime fields: []const LocalField,
+    fields: []const LocalField,
 ) !void {
     writer.writeInt(NumberOfFrames, @intCast(frames.len), endian) catch |err| {
         sdk.misc.error_context.new("Failed to write number of frames: {}", .{frames.len});
@@ -231,9 +224,9 @@ fn writeFrames(
         errdefer sdk.misc.error_context.append("Failed to write frame: {}", .{frame_index});
         const frame_bytes: *const [@sizeOf(Frame)]u8 = @ptrCast(frame);
         var number_of_changes: FieldIndex = 0;
-        inline for (fields) |*field| {
+        for (fields) |*field| {
             const offset = field.offset;
-            const size = @sizeOf(field.Type);
+            const size = field.size;
             const field_bytes = frame_bytes[offset..(offset + size)];
             const last_field_bytes = last_frame_bytes[offset..(offset + size)];
             if (!std.mem.eql(u8, field_bytes, last_field_bytes)) {
@@ -244,14 +237,14 @@ fn writeFrames(
             sdk.misc.error_context.new("Failed to write number of changes: {}", .{number_of_changes});
             return err;
         };
-        inline for (fields, 0..) |*field, field_index| {
+        for (fields, 0..) |*field, field_index| {
             errdefer sdk.misc.error_context.append("Failed to write change for field: {s}", .{field.path});
             const offset = field.offset;
-            const size = @sizeOf(field.Type);
+            const size = field.size;
             const field_bytes = frame_bytes[offset..(offset + size)];
             const last_field_bytes = last_frame_bytes[offset..(offset + size)];
             if (!std.mem.eql(u8, field_bytes, last_field_bytes)) {
-                writer.writeInt(FieldIndex, field_index, endian) catch |err| {
+                writer.writeInt(FieldIndex, @intCast(field_index), endian) catch |err| {
                     sdk.misc.error_context.new("Failed to write field index: {}", .{field_index});
                     return err;
                 };
@@ -271,7 +264,6 @@ fn readFrames(
     reader: *std.io.Reader,
     initial_values: *const Frame,
     remote_fields: []const RemoteField,
-    comptime local_fields: []const LocalField,
 ) ![]Frame {
     const number_of_frames = reader.takeInt(NumberOfFrames, endian) catch |err| {
         sdk.misc.error_context.new("Failed to read number of frames.", .{});
@@ -306,22 +298,17 @@ fn readFrames(
                 return error.IndexOutOfBounds;
             }
             const remote_field = &remote_fields[remote_index];
-            const local_index = remote_field.local_index orelse {
+            const local_field = remote_field.local_field orelse {
                 reader.toss(remote_field.size);
                 continue;
             };
-            inline for (local_fields, 0..) |*local_field, index| {
-                if (index == local_index) {
-                    const offset = local_field.offset;
-                    const size = @sizeOf(local_field.Type);
-                    const field_bytes = current_frame_bytes[offset..(offset + size)];
-                    reader.readSliceAll(field_bytes) catch |err| {
-                        sdk.misc.error_context.new("Failed to read the new value of: {s}", .{local_field.path});
-                        return err;
-                    };
-                    break;
-                }
-            } else unreachable;
+            const offset = local_field.offset;
+            const size = local_field.size;
+            const field_bytes = current_frame_bytes[offset..(offset + size)];
+            reader.readSliceAll(field_bytes) catch |err| {
+                sdk.misc.error_context.new("Failed to read the new value of: {s}", .{local_field.path});
+                return err;
+            };
         }
         frames[frame_index] = current_frame;
     }
@@ -329,65 +316,72 @@ fn readFrames(
 }
 
 inline fn getLocalFields(comptime Frame: type) []const LocalField {
-    const getFieldsInner = struct {
-        fn call(
-            comptime Type: type,
-            path: []const u8,
-            offset: usize,
-            buffer: []LocalField,
-            len: *usize,
-        ) void {
-            switch (@typeInfo(Type)) {
-                .@"struct" => |*info| {
-                    for (info.fields) |*field| {
-                        call(
-                            field.type,
-                            std.fmt.comptimePrint("{s}.{s}", .{ path, field.name }),
-                            offset + @offsetOf(Type, field.name),
-                            buffer,
-                            len,
-                        );
-                    }
-                },
-                .array => |*info| {
-                    inline for (0..info.len) |index| {
-                        call(
-                            info.child,
-                            std.fmt.comptimePrint("{s}.{}", .{ path, index }),
-                            offset + (index * @sizeOf(info.child)),
-                            buffer,
-                            len,
-                        );
-                    }
-                },
-                .pointer => {
-                    @compileError("Serialization/deserialization of pointers is not supported in this file format.");
-                },
-                else => {
-                    if (len.* >= buffer.len) {
-                        @compileError("Maximum number of fields exceeded.");
-                    }
-                    if (path.len > max_field_path_len) {
-                        @compileError("Maximum size of field path exceeded.");
-                    }
-                    buffer[len.*] = .{
-                        .path = path,
-                        .offset = offset,
-                        .Type = Type,
-                    };
-                    len.* += 1;
-                },
-            }
-        }
-    }.call;
     comptime {
         @setEvalBranchQuota(10000);
         var buffer: [max_number_of_fields]LocalField = undefined;
         var len: usize = 0;
-        getFieldsInner(Frame, "", 0, &buffer, &len);
+        getLocalFieldsRecursive(Frame, "", 0, &buffer, &len);
         const array = buffer[0..len].*;
         return &array;
     }
+}
+
+fn getLocalFieldsRecursive(
+    comptime Type: type,
+    path: []const u8,
+    offset: usize,
+    buffer: []LocalField,
+    len: *usize,
+) void {
+    const type_info = @typeInfo(Type);
+    switch (type_info) {
+        .void => {},
+        .bool, .int, .comptime_int, .float, .comptime_float, .vector, .@"enum", .optional, .@"union" => {
+            appendLocalField(buffer, len, .{
+                .path = path,
+                .offset = offset,
+                .size = @sizeOf(Type),
+            });
+        },
+        .@"struct" => |*info| {
+            for (info.fields) |*field| {
+                getLocalFieldsRecursive(
+                    field.type,
+                    std.fmt.comptimePrint("{s}.{s}", .{ path, field.name }),
+                    offset + @offsetOf(Type, field.name),
+                    buffer,
+                    len,
+                );
+            }
+        },
+        .array => |*info| {
+            inline for (0..info.len) |index| {
+                getLocalFieldsRecursive(
+                    info.child,
+                    std.fmt.comptimePrint("{s}.{}", .{ path, index }),
+                    offset + (index * @sizeOf(info.child)),
+                    buffer,
+                    len,
+                );
+            }
+        },
+        else => @compileError("Unsupported type: " ++ @typeName(Type)),
+    }
+}
+
+fn appendLocalField(
+    buffer: []LocalField,
+    len: *usize,
+    field: LocalField,
+) void {
+    if (len.* >= buffer.len) {
+        @compileError("Maximum number of fields exceeded.");
+    }
+    if (field.path.len > max_field_path_len) {
+        @compileError("Maximum size of field path exceeded.");
+    }
+    buffer[len.*] = field;
+    len.* += 1;
 }
 
 const testing = std.testing;
@@ -408,7 +402,9 @@ test "loadRecording should load the same recording that saveRecording saved" {
         optional: ?f32 = 0,
         @"enum": enum { a, b } = .a,
         @"struct": struct { a: f32 = 0, b: f32 = 0 } = .{},
+        tuple: struct { f32, f32 } = .{ 0, 0 },
         array: [2]f32 = .{ 0, 0 },
+        tagged_union: union(enum) { i: i32, f: f32 } = .{ .i = 0 },
         array_of_struct: [2]struct { a: f32 = 0, b: f32 = 0 } = .{ .{}, .{} },
         struct_of_array: struct { a: [2]f32 = .{ 0, 0 }, b: [2]f32 = .{ 0, 0 } } = .{},
     };
@@ -428,9 +424,11 @@ test "loadRecording should load the same recording that saveRecording saved" {
             .optional = null,
             .@"enum" = .a,
             .@"struct" = .{ .a = 1, .b = 2 },
-            .array = .{ 3, 4 },
-            .array_of_struct = .{ .{ .a = 5, .b = 6 }, .{ .a = 7, .b = 8 } },
-            .struct_of_array = .{ .a = .{ 9, 10 }, .b = .{ 11, 12 } },
+            .tuple = .{ 3, 4 },
+            .array = .{ 5, 6 },
+            .tagged_union = .{ .i = 7 },
+            .array_of_struct = .{ .{ .a = 8, .b = 9 }, .{ .a = 10, .b = 11 } },
+            .struct_of_array = .{ .a = .{ 12, 13 }, .b = .{ 14, 15 } },
         },
         .{
             .bool = true,
@@ -446,8 +444,10 @@ test "loadRecording should load the same recording that saveRecording saved" {
             .f64 = 0.1,
             .optional = 123,
             .@"enum" = .b,
-            .@"struct" = .{ .a = 12, .b = 11 },
-            .array = .{ 10, 9 },
+            .@"struct" = .{ .a = 15, .b = 14 },
+            .array = .{ 13, 12 },
+            .tuple = .{ 11, 10 },
+            .tagged_union = .{ .f = 9 },
             .array_of_struct = .{ .{ .a = 8, .b = 7 }, .{ .a = 6, .b = 5 } },
             .struct_of_array = .{ .a = .{ 4, 3 }, .b = .{ 2, 1 } },
         },
