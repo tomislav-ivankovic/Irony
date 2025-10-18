@@ -11,13 +11,13 @@ const LocalField = struct {
     access: []const AccessElement,
     Type: type,
 };
-const RemoteField = struct {
-    local_index: ?usize,
-    size: FieldSize,
-};
 const AccessElement = union(enum) {
     name: []const u8,
     index: usize,
+};
+const RemoteField = struct {
+    local_index: ?usize,
+    size: FieldSize,
 };
 
 const magic_number = "irony";
@@ -32,32 +32,31 @@ pub fn saveRecording(comptime Frame: type, frames: []const Frame, file_path: []c
     };
     defer file.close();
     var buffer: [1024]u8 = undefined;
-    var file_writer = file.writer(&buffer);
-    const writer = &file_writer.interface;
+    var writer = file.writer(&buffer);
 
-    writer.writeAll(magic_number) catch |err| {
+    writer.interface.writeAll(magic_number) catch |err| {
         sdk.misc.error_context.new("Failed to write magic number.", .{});
         return err;
     };
 
     const fields = getLocalFields(Frame);
-    writeFieldList(writer, fields) catch |err| {
+    writeFieldList(&writer, fields) catch |err| {
         sdk.misc.error_context.append("Failed to write field list.", .{});
         return err;
     };
 
     const initial_values = if (frames.len > 0) &frames[0] else &Frame{};
-    writeInitialValues(Frame, writer, initial_values, fields) catch |err| {
+    writeInitialValues(Frame, &writer, initial_values, fields) catch |err| {
         sdk.misc.error_context.append("Failed to write initial values.", .{});
         return err;
     };
 
-    writeFrames(Frame, writer, initial_values, frames, fields) catch |err| {
+    writeFrames(Frame, &writer, initial_values, frames, fields) catch |err| {
         sdk.misc.error_context.append("Failed to write frames.", .{});
         return err;
     };
 
-    file_writer.end() catch |err| {
+    writer.end() catch |err| {
         sdk.misc.error_context.new("Failed to end file writing.", .{});
         return err;
     };
@@ -70,11 +69,10 @@ pub fn loadRecording(comptime Frame: type, allocator: std.mem.Allocator, file_pa
     };
     defer file.close();
     var buffer: [1024]u8 = undefined;
-    var file_reader = file.reader(&buffer);
-    const reader = &file_reader.interface;
+    var reader = file.reader(&buffer);
 
     var magic_buffer: [magic_number.len]u8 = undefined;
-    reader.readSliceAll(&magic_buffer) catch |err| {
+    reader.interface.readSliceAll(&magic_buffer) catch |err| {
         sdk.misc.error_context.new("Failed to read magic number.", .{});
         return err;
     };
@@ -85,18 +83,18 @@ pub fn loadRecording(comptime Frame: type, allocator: std.mem.Allocator, file_pa
 
     const local_fields = getLocalFields(Frame);
     var remote_fields_buffer: [max_number_of_fields]RemoteField = undefined;
-    const remote_fields_len = readFieldList(reader, &remote_fields_buffer, local_fields) catch |err| {
+    const remote_fields_len = readFieldList(&reader, &remote_fields_buffer, local_fields) catch |err| {
         sdk.misc.error_context.append("Failed to read fields list.", .{});
         return err;
     };
     const remote_fields = remote_fields_buffer[0..remote_fields_len];
 
-    const initial_values = readInitialValues(Frame, reader, remote_fields, local_fields) catch |err| {
+    const initial_values = readInitialValues(Frame, &reader, remote_fields, local_fields) catch |err| {
         sdk.misc.error_context.append("Failed to read initial values.", .{});
         return err;
     };
 
-    const frames = readFrames(Frame, allocator, reader, &initial_values, remote_fields, local_fields) catch |err| {
+    const frames = readFrames(Frame, allocator, &reader, &initial_values, remote_fields, local_fields) catch |err| {
         sdk.misc.error_context.append("Failed to read frames.", .{});
         return err;
     };
@@ -104,23 +102,23 @@ pub fn loadRecording(comptime Frame: type, allocator: std.mem.Allocator, file_pa
     return frames;
 }
 
-fn writeFieldList(writer: *std.io.Writer, comptime fields: []const LocalField) !void {
-    writer.writeInt(FieldIndex, @intCast(fields.len), endian) catch |err| {
+fn writeFieldList(writer: *std.fs.File.Writer, comptime fields: []const LocalField) !void {
+    writer.interface.writeInt(FieldIndex, @intCast(fields.len), endian) catch |err| {
         sdk.misc.error_context.new("Failed to write number of fields: {}", .{fields.len});
         return err;
     };
     inline for (fields) |*field| {
         errdefer sdk.misc.error_context.append("Failed to write field: {s}", .{field.path});
-        writer.writeInt(FieldPathLength, @intCast(field.path.len), endian) catch |err| {
+        writer.interface.writeInt(FieldPathLength, @intCast(field.path.len), endian) catch |err| {
             sdk.misc.error_context.new("Failed to write the size of field path: {}", .{field.path.len});
             return err;
         };
-        writer.writeAll(field.path) catch |err| {
+        writer.interface.writeAll(field.path) catch |err| {
             sdk.misc.error_context.new("Failed to write the field path: {s}", .{field.path});
             return err;
         };
-        const size: FieldSize = comptime @intCast(getTypeSize(field.Type));
-        writer.writeInt(FieldSize, size, endian) catch |err| {
+        const size: FieldSize = serializedSizeOf(field.Type);
+        writer.interface.writeInt(FieldSize, size, endian) catch |err| {
             sdk.misc.error_context.new("Failed to write the field size: {}", .{size});
             return err;
         };
@@ -128,11 +126,11 @@ fn writeFieldList(writer: *std.io.Writer, comptime fields: []const LocalField) !
 }
 
 fn readFieldList(
-    reader: *std.io.Reader,
+    reader: *std.fs.File.Reader,
     remote_fields_buffer: []RemoteField,
     comptime local_fields: []const LocalField,
 ) !usize {
-    const remote_fields_len = reader.takeInt(FieldIndex, endian) catch |err| {
+    const remote_fields_len = reader.interface.takeInt(FieldIndex, endian) catch |err| {
         sdk.misc.error_context.new("Failed to read number of fields.", .{});
         return err;
     };
@@ -145,22 +143,22 @@ fn readFieldList(
     }
     for (0..remote_fields_len) |index| {
         errdefer sdk.misc.error_context.append("Failed to read field: {}", .{index});
-        const path_len = reader.takeInt(FieldPathLength, endian) catch |err| {
+        const path_len = reader.interface.takeInt(FieldPathLength, endian) catch |err| {
             sdk.misc.error_context.new("Failed to read the size of the field path.", .{});
             return err;
         };
         var path_buffer: [max_field_path_len]u8 = undefined;
         const path = path_buffer[0..path_len];
-        reader.readSliceAll(path) catch |err| {
+        reader.interface.readSliceAll(path) catch |err| {
             sdk.misc.error_context.new("Failed to read the field path.", .{});
             return err;
         };
-        const remote_size = reader.takeInt(FieldSize, endian) catch |err| {
+        const remote_size = reader.interface.takeInt(FieldSize, endian) catch |err| {
             sdk.misc.error_context.new("Failed to read the field size. Field path is: {s}", .{path});
             return err;
         };
         inline for (local_fields, 0..) |*local_field, local_index| {
-            const local_size = getTypeSize(local_field.Type);
+            const local_size = serializedSizeOf(local_field.Type);
             if (std.mem.eql(u8, local_field.path, path) and local_size == remote_size) {
                 remote_fields_buffer[index] = .{
                     .local_index = local_index,
@@ -180,7 +178,7 @@ fn readFieldList(
 
 fn writeInitialValues(
     comptime Frame: type,
-    writer: *std.io.Writer,
+    writer: *std.fs.File.Writer,
     frame: *const Frame,
     comptime fields: []const LocalField,
 ) !void {
@@ -195,22 +193,26 @@ fn writeInitialValues(
 
 fn readInitialValues(
     comptime Frame: type,
-    reader: *std.io.Reader,
+    reader: *std.fs.File.Reader,
     remote_fields: []const RemoteField,
     comptime local_fields: []const LocalField,
 ) !Frame {
-    var frame = Frame{};
+    const default_frame = Frame{};
+    var frame = default_frame;
     for (remote_fields) |*remote_field| {
         const local_index = remote_field.local_index orelse {
-            reader.toss(remote_field.size);
+            reader.interface.toss(remote_field.size);
             continue;
         };
         inline for (local_fields, 0..) |*local_field, index| {
             if (local_index == index) {
                 const field_pointer = getFieldPointer(&frame, local_field);
-                field_pointer.* = readValue(local_field.Type, reader) catch |err| {
-                    sdk.misc.error_context.new("Failed to read the value of field: {s}", .{local_field.path});
-                    return err;
+                field_pointer.* = readValue(local_field.Type, reader) catch |err| switch (err) {
+                    error.InvalidValue => getConstFieldPointer(&default_frame, local_field).*,
+                    else => {
+                        sdk.misc.error_context.new("Failed to read the value of field: {s}", .{local_field.path});
+                        return err;
+                    },
                 };
                 break;
             }
@@ -221,12 +223,12 @@ fn readInitialValues(
 
 fn writeFrames(
     comptime Frame: type,
-    writer: *std.io.Writer,
+    writer: *std.fs.File.Writer,
     initial_values: *const Frame,
     frames: []const Frame,
     comptime fields: []const LocalField,
 ) !void {
-    writer.writeInt(NumberOfFrames, @intCast(frames.len), endian) catch |err| {
+    writer.interface.writeInt(NumberOfFrames, @intCast(frames.len), endian) catch |err| {
         sdk.misc.error_context.new("Failed to write number of frames: {}", .{frames.len});
         return err;
     };
@@ -241,7 +243,7 @@ fn writeFrames(
                 number_of_changes += 1;
             }
         }
-        writer.writeInt(FieldIndex, number_of_changes, endian) catch |err| {
+        writer.interface.writeInt(FieldIndex, number_of_changes, endian) catch |err| {
             sdk.misc.error_context.new("Failed to write number of changes: {}", .{number_of_changes});
             return err;
         };
@@ -250,7 +252,7 @@ fn writeFrames(
             const field_pointer = getConstFieldPointer(frame, field);
             const last_field_pointer = getConstFieldPointer(last_frame, field);
             if (!std.meta.eql(field_pointer.*, last_field_pointer.*)) {
-                writer.writeInt(FieldIndex, @intCast(field_index), endian) catch |err| {
+                writer.interface.writeInt(FieldIndex, @intCast(field_index), endian) catch |err| {
                     sdk.misc.error_context.new("Failed to write field index: {}", .{field_index});
                     return err;
                 };
@@ -267,12 +269,12 @@ fn writeFrames(
 fn readFrames(
     comptime Frame: type,
     allocator: std.mem.Allocator,
-    reader: *std.io.Reader,
+    reader: *std.fs.File.Reader,
     initial_values: *const Frame,
     remote_fields: []const RemoteField,
     comptime local_fields: []const LocalField,
 ) ![]Frame {
-    const number_of_frames = reader.takeInt(NumberOfFrames, endian) catch |err| {
+    const number_of_frames = reader.interface.takeInt(NumberOfFrames, endian) catch |err| {
         sdk.misc.error_context.new("Failed to read number of frames.", .{});
         return err;
     };
@@ -283,16 +285,17 @@ fn readFrames(
         );
         return err;
     };
+    const default_frame = Frame{};
     var current_frame = initial_values.*;
     for (0..number_of_frames) |frame_index| {
         errdefer sdk.misc.error_context.append("Failed read frame: {}", .{frame_index});
-        const number_of_changes = reader.takeInt(FieldIndex, endian) catch |err| {
+        const number_of_changes = reader.interface.takeInt(FieldIndex, endian) catch |err| {
             sdk.misc.error_context.new("Failed to read number changes.", .{});
             return err;
         };
         for (0..number_of_changes) |change_index| {
             errdefer sdk.misc.error_context.append("Failed read change: {}", .{change_index});
-            const remote_index = reader.takeInt(FieldIndex, endian) catch |err| {
+            const remote_index = reader.interface.takeInt(FieldIndex, endian) catch |err| {
                 sdk.misc.error_context.new("Failed to read field index.", .{});
                 return err;
             };
@@ -305,15 +308,18 @@ fn readFrames(
             }
             const remote_field = remote_fields[remote_index];
             const local_index = remote_field.local_index orelse {
-                reader.toss(remote_field.size);
+                reader.interface.toss(remote_field.size);
                 continue;
             };
             inline for (local_fields, 0..) |*local_field, index| {
                 if (index == local_index) {
                     const field_pointer = getFieldPointer(&current_frame, local_field);
-                    field_pointer.* = readValue(local_field.Type, reader) catch |err| {
-                        sdk.misc.error_context.new("Failed to read the new value of: {s}", .{local_field.path});
-                        return err;
+                    field_pointer.* = readValue(local_field.Type, reader) catch |err| switch (err) {
+                        error.InvalidValue => getConstFieldPointer(&default_frame, local_field).*,
+                        else => {
+                            sdk.misc.error_context.new("Failed to read the new value of: {s}", .{local_field.path});
+                            return err;
+                        },
                     };
                     break;
                 }
@@ -324,11 +330,16 @@ fn readFrames(
     return frames;
 }
 
-fn writeValue(writer: *std.io.Writer, value_pointer: anytype) !void {
+fn writeValue(writer: *std.fs.File.Writer, value_pointer: anytype) !void {
     const Type = switch (@typeInfo(@TypeOf(value_pointer))) {
         .pointer => |info| info.child,
         else => @compileError("Expected value_pointer to be a pointer but got: " ++ @typeName(@TypeOf(value_pointer))),
     };
+    const start_pos = writer.pos + writer.interface.end;
+    defer {
+        const end_pos = writer.pos + writer.interface.end;
+        std.debug.assert(end_pos - start_pos == serializedSizeOf(Type));
+    }
     switch (@typeInfo(Type)) {
         .void => {},
         .bool => {
@@ -336,19 +347,19 @@ fn writeValue(writer: *std.io.Writer, value_pointer: anytype) !void {
                 false => 0,
                 true => 1,
             };
-            try writer.writeByte(byte);
+            try writer.interface.writeByte(byte);
         },
         .int => |info| {
             const WriteType = @Type(.{ .int = .{
                 .signedness = info.signedness,
-                .bits = @sizeOf(Type) * std.mem.byte_size_in_bits,
+                .bits = serializedSizeOf(Type) * std.mem.byte_size_in_bits,
             } });
-            try writer.writeInt(WriteType, value_pointer.*, endian);
+            try writer.interface.writeInt(WriteType, value_pointer.*, endian);
         },
         .float => |*info| {
             const IntType = @Type(.{ .int = .{ .signedness = .unsigned, .bits = info.bits } });
             const int: IntType = @bitCast(value_pointer.*);
-            try writer.writeInt(IntType, int, endian);
+            try writer.interface.writeInt(IntType, int, endian);
         },
         .@"enum" => |*info| {
             const Tag = info.tag_type;
@@ -357,12 +368,12 @@ fn writeValue(writer: *std.io.Writer, value_pointer: anytype) !void {
         },
         .optional => |*info| {
             if (value_pointer.*) |*child_pointer| {
-                try writer.writeByte(1);
+                try writer.interface.writeByte(1);
                 try writeValue(writer, child_pointer);
             } else {
-                try writer.writeByte(0);
-                for (0..getTypeSize(info.child)) |_| {
-                    try writer.writeByte(0);
+                try writer.interface.writeByte(0);
+                for (0..serializedSizeOf(info.child)) |_| {
+                    try writer.interface.writeByte(0);
                 }
             }
         },
@@ -387,9 +398,9 @@ fn writeValue(writer: *std.io.Writer, value_pointer: anytype) !void {
                 inline else => |*payload_pointer| {
                     const Payload = @TypeOf(payload_pointer.*);
                     try writeValue(writer, payload_pointer);
-                    const padding_size = getTypeSize(Type) - getTypeSize(Tag) - getTypeSize(Payload);
+                    const padding_size = serializedSizeOf(Type) - serializedSizeOf(Tag) - serializedSizeOf(Payload);
                     for (0..padding_size) |_| {
-                        try writer.writeByte(0);
+                        try writer.interface.writeByte(0);
                     }
                 },
             }
@@ -398,11 +409,21 @@ fn writeValue(writer: *std.io.Writer, value_pointer: anytype) !void {
     }
 }
 
-fn readValue(comptime Type: type, reader: *std.io.Reader) !Type {
+fn readValue(comptime Type: type, reader: *std.fs.File.Reader) anyerror!Type {
+    const start_pos = reader.logicalPos();
+    defer {
+        const end_pos = reader.logicalPos();
+        const target_end_pos = start_pos + serializedSizeOf(Type);
+        if (end_pos != target_end_pos) {
+            // If the value read fails,
+            // the writer still needs to position itself correctly to read the rest of the file.
+            reader.seekTo(target_end_pos) catch {};
+        }
+    }
     switch (@typeInfo(Type)) {
         .void => return {},
         .bool => {
-            const byte = try reader.takeByte();
+            const byte = try reader.interface.takeByte();
             return switch (byte) {
                 0 => false,
                 1 => true,
@@ -412,14 +433,14 @@ fn readValue(comptime Type: type, reader: *std.io.Reader) !Type {
         .int => |info| {
             const ReadType = @Type(.{ .int = .{
                 .signedness = info.signedness,
-                .bits = @sizeOf(Type) * std.mem.byte_size_in_bits,
+                .bits = serializedSizeOf(Type) * std.mem.byte_size_in_bits,
             } });
-            const read_int = try reader.takeInt(ReadType, endian);
-            return @intCast(read_int); // TODO Handle if it can't be casted.
+            const read_int = try reader.interface.takeInt(ReadType, endian);
+            return std.math.cast(Type, read_int) orelse return error.InvalidValue;
         },
         .float => |*info| {
             const IntType = @Type(.{ .int = .{ .signedness = .unsigned, .bits = info.bits } });
-            const int = try reader.takeInt(IntType, endian);
+            const int = try reader.interface.takeInt(IntType, endian);
             return @bitCast(int);
         },
         .@"enum" => |*info| {
@@ -433,17 +454,14 @@ fn readValue(comptime Type: type, reader: *std.io.Reader) !Type {
             return error.InvalidValue;
         },
         .optional => |*info| {
-            const byte = try reader.takeByte();
+            const byte = try reader.interface.takeByte();
             return switch (byte) {
                 0 => {
-                    reader.toss(getTypeSize(info.child));
+                    reader.interface.toss(serializedSizeOf(info.child));
                     return null;
                 },
                 1 => try readValue(info.child, reader),
-                else => {
-                    reader.toss(getTypeSize(info.child));
-                    return error.InvalidValue;
-                },
+                else => return error.InvalidValue,
             };
         },
         .array => |*info| {
@@ -470,30 +488,35 @@ fn readValue(comptime Type: type, reader: *std.io.Reader) !Type {
                 if (std.mem.eql(u8, @tagName(tag), field.name)) {
                     const Payload = field.type;
                     const payload = try readValue(Payload, reader);
-                    const padding_size = getTypeSize(Type) - getTypeSize(Tag) - getTypeSize(Payload);
-                    reader.toss(padding_size);
+                    const padding_size = serializedSizeOf(Type) - serializedSizeOf(Tag) - serializedSizeOf(Payload);
+                    reader.interface.toss(padding_size);
                     return @unionInit(Type, field.name, payload);
                 }
             }
-            const padding_size = getTypeSize(Type) - getTypeSize(Tag);
-            reader.toss(padding_size);
             return error.InvalidValue;
         },
         else => @compileError("Unsupported type: " ++ @typeName(Type)),
     }
 }
 
-fn getTypeSize(comptime Type: type) usize {
+fn serializedSizeOf(comptime Type: type) comptime_int {
     return switch (@typeInfo(Type)) {
         .void => 0,
         .bool => 1,
-        .int, .float, .@"enum" => @sizeOf(Type),
-        .optional => |*info| 1 + getTypeSize(info.child),
-        .array => |*info| info.len * getTypeSize(info.child),
+        .int => |*info| std.math.divCeil(u16, info.bits, std.mem.byte_size_in_bits) catch {
+            @compileError(std.fmt.comptimePrint(
+                "Failed to ceil devide {} with {}.",
+                .{ info.bits, std.mem.byte_size_in_bits },
+            ));
+        },
+        .float => @sizeOf(Type),
+        .@"enum" => |*info| serializedSizeOf(info.tag_type),
+        .optional => |*info| 1 + serializedSizeOf(info.child),
+        .array => |*info| info.len * serializedSizeOf(info.child),
         .@"struct" => |*info| {
             var sum: usize = 0;
             for (info.fields) |*field| {
-                sum += getTypeSize(field.type);
+                sum += serializedSizeOf(field.type);
             }
             return sum;
         },
@@ -503,7 +526,7 @@ fn getTypeSize(comptime Type: type) usize {
             };
             var max: usize = 0;
             inline for (info.fields) |*field| {
-                max = @max(max, getTypeSize(field.type));
+                max = @max(max, serializedSizeOf(field.type));
             }
             return @sizeOf(Tag) + max;
         },
@@ -563,11 +586,19 @@ fn getLocalFieldsRecursive(
     switch (type_info) {
         .void => {},
         .bool, .int, .float, .@"enum", .optional, .@"union" => {
-            appendLocalField(buffer, len, .{
+            const field = LocalField{
                 .path = path,
                 .access = access,
                 .Type = Type,
-            });
+            };
+            if (len.* >= buffer.len) {
+                @compileError("Maximum number of fields exceeded.");
+            }
+            if (field.path.len > max_field_path_len) {
+                @compileError("Maximum size of field path exceeded.");
+            }
+            buffer[len.*] = field;
+            len.* += 1;
         },
         .@"struct" => |*info| {
             for (info.fields) |*field| {
@@ -593,21 +624,6 @@ fn getLocalFieldsRecursive(
         },
         else => @compileError("Unsupported type: " ++ @typeName(Type)),
     }
-}
-
-fn appendLocalField(
-    buffer: []LocalField,
-    len: *usize,
-    field: LocalField,
-) void {
-    if (len.* >= buffer.len) {
-        @compileError("Maximum number of fields exceeded.");
-    }
-    if (field.path.len > max_field_path_len) {
-        @compileError("Maximum size of field path exceeded.");
-    }
-    buffer[len.*] = field;
-    len.* += 1;
 }
 
 const testing = std.testing;
@@ -761,46 +777,120 @@ test "loadRecording should use default value when a field has different size the
     }, recording);
 }
 
-// TODO make these tests pass
-// test "loadRecording should use default value when encountering invalid enum value" {
-//     const Enum = enum(u8) { a = 1, b = 2 };
-//     const SavedFrame = struct { a: u8 = 0, b: ?u8 = null };
-//     const LoadedFrame = struct { a: Enum = .a, b: ?Enum = null };
-//     try saveRecording(SavedFrame, &.{
-//         .{ .a = 0, .b = null },
-//         .{ .a = 0, .b = 0 },
-//         .{ .a = 1, .b = 1 },
-//         .{ .a = 2, .b = 2 },
-//         .{ .a = 3, .b = 3 },
-//     }, "./test_assets/recording.irony");
-//     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
-//     const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony");
-//     defer testing.allocator.free(recording);
-//     try testing.expectEqualSlices(LoadedFrame, &.{
-//         .{ .a = .a, .b = null },
-//         .{ .a = .a, .b = null },
-//         .{ .a = .a, .b = .a },
-//         .{ .a = .b, .b = .b },
-//         .{ .a = .a, .b = null },
-//     }, recording);
-// }
-//
-// test "loadRecording should use default value when encountering invalid bool value" {
-//     const SavedFrame = struct { a: u8 = 0, b: ?u8 = null };
-//     const LoadedFrame = struct { a: bool = false, b: ?bool = null };
-//     try saveRecording(SavedFrame, &.{
-//         .{ .a = 0, .b = null },
-//         .{ .a = 0, .b = 0 },
-//         .{ .a = 1, .b = 1 },
-//         .{ .a = 2, .b = 2 },
-//     }, "./test_assets/recording.irony");
-//     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
-//     const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony");
-//     defer testing.allocator.free(recording);
-//     try testing.expectEqualSlices(LoadedFrame, &.{
-//         .{ .a = false, .b = null },
-//         .{ .a = false, .b = false },
-//         .{ .a = true, .b = true },
-//         .{ .a = false, .b = null },
-//     }, recording);
-// }
+test "loadRecording should use default value when encountering invalid bool value" {
+    const SavedFrame = struct { a: u8 = 1, b: ?u8 = null };
+    const LoadedFrame = struct { a: bool = false, b: ?bool = null };
+    try saveRecording(SavedFrame, &.{
+        .{ .a = 0, .b = null },
+        .{ .a = 0, .b = 0 },
+        .{ .a = 1, .b = 1 },
+        .{ .a = 2, .b = 2 },
+    }, "./test_assets/recording.irony");
+    defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
+    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony");
+    defer testing.allocator.free(recording);
+    try testing.expectEqualSlices(LoadedFrame, &.{
+        .{ .a = false, .b = null },
+        .{ .a = false, .b = false },
+        .{ .a = true, .b = true },
+        .{ .a = false, .b = null },
+    }, recording);
+}
+
+test "loadRecording should use default value when encountering invalid int value" {
+    const SavedFrame = struct { a: u16 = 0, b: ?u16 = null };
+    const LoadedFrame = struct { a: u9 = 1, b: ?u9 = null };
+    try saveRecording(SavedFrame, &.{
+        .{ .a = 0, .b = null },
+        .{ .a = 0, .b = 0 },
+        .{ .a = 511, .b = 511 },
+        .{ .a = 512, .b = 512 },
+    }, "./test_assets/recording.irony");
+    defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
+    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony");
+    defer testing.allocator.free(recording);
+    try testing.expectEqualSlices(LoadedFrame, &.{
+        .{ .a = 0, .b = null },
+        .{ .a = 0, .b = 0 },
+        .{ .a = 511, .b = 511 },
+        .{ .a = 1, .b = null },
+    }, recording);
+}
+
+test "loadRecording should use default value when encountering invalid enum value" {
+    const Enum = enum(u8) { a = 1, b = 2 };
+    const SavedFrame = struct { a: u8 = 0, b: ?u8 = null };
+    const LoadedFrame = struct { a: Enum = .a, b: ?Enum = null };
+    try saveRecording(SavedFrame, &.{
+        .{ .a = 0, .b = null },
+        .{ .a = 0, .b = 0 },
+        .{ .a = 1, .b = 1 },
+        .{ .a = 2, .b = 2 },
+        .{ .a = 3, .b = 3 },
+    }, "./test_assets/recording.irony");
+    defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
+    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony");
+    defer testing.allocator.free(recording);
+    try testing.expectEqualSlices(LoadedFrame, &.{
+        .{ .a = .a, .b = null },
+        .{ .a = .a, .b = null },
+        .{ .a = .a, .b = .a },
+        .{ .a = .b, .b = .b },
+        .{ .a = .a, .b = null },
+    }, recording);
+}
+
+test "loadRecording should use default value when encountering invalid optional" {
+    const SavedFrame = struct { a: u16 = 0xFFFF, b: u16 = 0xFFFF };
+    const LoadedFrame = struct { a: ?u8 = null, b: ?u8 = 0 };
+    try saveRecording(SavedFrame, &.{
+        .{ .a = 0x0000, .b = 0x0000 },
+        .{ .a = 0x0001, .b = 0x0001 },
+        .{ .a = 0x0101, .b = 0x0101 },
+        .{ .a = 0x0102, .b = 0x0102 },
+    }, "./test_assets/recording.irony");
+    defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
+    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony");
+    defer testing.allocator.free(recording);
+    try testing.expectEqualSlices(LoadedFrame, &.{
+        .{ .a = null, .b = null },
+        .{ .a = 0, .b = 0 },
+        .{ .a = 1, .b = 1 },
+        .{ .a = null, .b = 0 },
+    }, recording);
+}
+
+test "loadRecording should use default value when encountering invalid tagged union" {
+    const Tag = enum(u8) { a = 1, b = 2 };
+    const Union = union(Tag) { a: u8, b: u16 };
+    const SavedFrame = struct { f1: u24 = 0xFFFFFF, f2: u24 = 0xFFFFFF };
+    const LoadedFrame = struct { f1: Union = .{ .a = 128 }, f2: Union = .{ .b = 129 } };
+    try testing.expectEqual(serializedSizeOf(Union), serializedSizeOf(u24));
+    try saveRecording(SavedFrame, &.{
+        .{ .f1 = 0x000000, .f2 = 0x000000 },
+        .{ .f1 = 0x000001, .f2 = 0x000001 },
+        .{ .f1 = 0x000101, .f2 = 0x000101 },
+        .{ .f1 = 0x000002, .f2 = 0x000002 },
+        .{ .f1 = 0x000102, .f2 = 0x000102 },
+        .{ .f1 = 0x000003, .f2 = 0x000003 },
+        .{ .f1 = 0x00FF01, .f2 = 0x00FF01 },
+        .{ .f1 = 0x010001, .f2 = 0x010001 },
+        .{ .f1 = 0x00FF02, .f2 = 0x00FF02 },
+        .{ .f1 = 0x010002, .f2 = 0x010002 },
+    }, "./test_assets/recording.irony");
+    defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
+    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony");
+    defer testing.allocator.free(recording);
+    try testing.expectEqualSlices(LoadedFrame, &.{
+        .{ .f1 = .{ .a = 128 }, .f2 = .{ .b = 129 } },
+        .{ .f1 = .{ .a = 0 }, .f2 = .{ .a = 0 } },
+        .{ .f1 = .{ .a = 1 }, .f2 = .{ .a = 1 } },
+        .{ .f1 = .{ .b = 0 }, .f2 = .{ .b = 0 } },
+        .{ .f1 = .{ .b = 1 }, .f2 = .{ .b = 1 } },
+        .{ .f1 = .{ .a = 128 }, .f2 = .{ .b = 129 } },
+        .{ .f1 = .{ .a = 255 }, .f2 = .{ .a = 255 } },
+        .{ .f1 = .{ .a = 0 }, .f2 = .{ .a = 0 } },
+        .{ .f1 = .{ .b = 255 }, .f2 = .{ .b = 255 } },
+        .{ .f1 = .{ .b = 256 }, .f2 = .{ .b = 256 } },
+    }, recording);
+}
