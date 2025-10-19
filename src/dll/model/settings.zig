@@ -15,24 +15,24 @@ pub const Settings = struct {
     const Self = @This();
     const file_name = "settings.json";
 
-    pub fn load(base_dir: *const sdk.misc.BaseDir) !Self {
+    pub fn load(base_dir: *const sdk.fs.BaseDir) !Self {
         var buffer: [sdk.os.max_file_path_length]u8 = undefined;
         const size = base_dir.getPath(&buffer, file_name) catch |err| {
             sdk.misc.error_context.append("Failed to construct file path.", .{});
             return err;
         };
         const file_path = buffer[0..size];
-        return sdk.misc.loadSettings(Self, file_path);
+        return sdk.fs.loadSettings(Self, file_path);
     }
 
-    pub fn save(self: *const Self, base_dir: *const sdk.misc.BaseDir) !void {
+    pub fn save(self: *const Self, base_dir: *const sdk.fs.BaseDir) !void {
         var buffer: [sdk.os.max_file_path_length]u8 = undefined;
         const size = base_dir.getPath(&buffer, file_name) catch |err| {
             sdk.misc.error_context.append("Failed to construct file path.", .{});
             return err;
         };
         const file_path = buffer[0..size];
-        return sdk.misc.saveSettings(self, file_path);
+        return sdk.fs.saveSettings(self, file_path);
     }
 };
 
@@ -146,7 +146,7 @@ pub const HitLinesSettings = struct {
                 .colors = sdk.misc.enumArrayToEnumFieldStruct(model.AttackType, sdk.math.Vec4, &default_value.colors),
                 .thickness = default_value.thickness,
             };
-            const json_value = try sdk.misc.settingsInnerParse(JsonValue, allocator, reader, &json_default);
+            const json_value = try sdk.fs.settingsInnerParse(JsonValue, allocator, reader, &json_default);
             return .{
                 .colors = .init(json_value.colors),
                 .thickness = json_value.thickness,
@@ -256,7 +256,7 @@ pub const SkeletonSettings = struct {
             .thickness = default_value.thickness,
             .cant_move_alpha = default_value.cant_move_alpha,
         };
-        const json_value = try sdk.misc.settingsInnerParse(JsonValue, allocator, reader, &json_default);
+        const json_value = try sdk.fs.settingsInnerParse(JsonValue, allocator, reader, &json_default);
         return .{
             .enabled = json_value.enabled,
             .colors = .init(json_value.colors),
@@ -380,7 +380,7 @@ test "Settings.load should load the same settings that Settings.save saves" {
             .thickness = 123.0,
         },
     };
-    const base_dir = try sdk.misc.BaseDir.fromStr("./test_assets");
+    const base_dir = try sdk.fs.BaseDir.fromStr("./test_assets");
     try expected_settings.save(&base_dir);
     defer std.fs.cwd().deleteFile("./test_assets/settings.json") catch @panic("Failed to cleanup test file.");
     const actual_settings = try Settings.load(&base_dir);

@@ -1,5 +1,5 @@
 const std = @import("std");
-const sdk = @import("../../sdk/root.zig");
+const misc = @import("../misc/root.zig");
 
 const FieldIndex = u8;
 const FieldPathLength = u8;
@@ -27,7 +27,7 @@ const max_field_path_len = std.math.maxInt(FieldPathLength);
 
 pub fn saveRecording(comptime Frame: type, frames: []const Frame, file_path: []const u8) !void {
     const file = std.fs.cwd().createFile(file_path, .{}) catch |err| {
-        sdk.misc.error_context.new("Failed to create or open file: {s}", .{file_path});
+        misc.error_context.new("Failed to create or open file: {s}", .{file_path});
         return err;
     };
     defer file.close();
@@ -35,36 +35,36 @@ pub fn saveRecording(comptime Frame: type, frames: []const Frame, file_path: []c
     var writer = file.writer(&buffer);
 
     writer.interface.writeAll(magic_number) catch |err| {
-        sdk.misc.error_context.new("Failed to write magic number.", .{});
+        misc.error_context.new("Failed to write magic number.", .{});
         return err;
     };
 
     const fields = getLocalFields(Frame);
     writeFieldList(&writer, fields) catch |err| {
-        sdk.misc.error_context.append("Failed to write field list.", .{});
+        misc.error_context.append("Failed to write field list.", .{});
         return err;
     };
 
     const initial_values = if (frames.len > 0) &frames[0] else &Frame{};
     writeInitialValues(Frame, &writer, initial_values, fields) catch |err| {
-        sdk.misc.error_context.append("Failed to write initial values.", .{});
+        misc.error_context.append("Failed to write initial values.", .{});
         return err;
     };
 
     writeFrames(Frame, &writer, initial_values, frames, fields) catch |err| {
-        sdk.misc.error_context.append("Failed to write frames.", .{});
+        misc.error_context.append("Failed to write frames.", .{});
         return err;
     };
 
     writer.end() catch |err| {
-        sdk.misc.error_context.new("Failed to end file writing.", .{});
+        misc.error_context.new("Failed to end file writing.", .{});
         return err;
     };
 }
 
 pub fn loadRecording(comptime Frame: type, allocator: std.mem.Allocator, file_path: []const u8) ![]Frame {
     const file = std.fs.cwd().openFile(file_path, .{}) catch |err| {
-        sdk.misc.error_context.new("Failed to open file: {s}", .{file_path});
+        misc.error_context.new("Failed to open file: {s}", .{file_path});
         return err;
     };
     defer file.close();
@@ -73,29 +73,29 @@ pub fn loadRecording(comptime Frame: type, allocator: std.mem.Allocator, file_pa
 
     var magic_buffer: [magic_number.len]u8 = undefined;
     reader.interface.readSliceAll(&magic_buffer) catch |err| {
-        sdk.misc.error_context.new("Failed to read magic number.", .{});
+        misc.error_context.new("Failed to read magic number.", .{});
         return err;
     };
     if (!std.mem.eql(u8, &magic_buffer, magic_number)) {
-        sdk.misc.error_context.new("Incorrect magic number.", .{});
+        misc.error_context.new("Incorrect magic number.", .{});
         return error.MagicNumber;
     }
 
     const local_fields = getLocalFields(Frame);
     var remote_fields_buffer: [max_number_of_fields]RemoteField = undefined;
     const remote_fields_len = readFieldList(&reader, &remote_fields_buffer, local_fields) catch |err| {
-        sdk.misc.error_context.append("Failed to read fields list.", .{});
+        misc.error_context.append("Failed to read fields list.", .{});
         return err;
     };
     const remote_fields = remote_fields_buffer[0..remote_fields_len];
 
     const initial_values = readInitialValues(Frame, &reader, remote_fields, local_fields) catch |err| {
-        sdk.misc.error_context.append("Failed to read initial values.", .{});
+        misc.error_context.append("Failed to read initial values.", .{});
         return err;
     };
 
     const frames = readFrames(Frame, allocator, &reader, &initial_values, remote_fields, local_fields) catch |err| {
-        sdk.misc.error_context.append("Failed to read frames.", .{});
+        misc.error_context.append("Failed to read frames.", .{});
         return err;
     };
 
@@ -104,22 +104,22 @@ pub fn loadRecording(comptime Frame: type, allocator: std.mem.Allocator, file_pa
 
 fn writeFieldList(writer: *std.fs.File.Writer, comptime fields: []const LocalField) !void {
     writer.interface.writeInt(FieldIndex, @intCast(fields.len), endian) catch |err| {
-        sdk.misc.error_context.new("Failed to write number of fields: {}", .{fields.len});
+        misc.error_context.new("Failed to write number of fields: {}", .{fields.len});
         return err;
     };
     inline for (fields) |*field| {
-        errdefer sdk.misc.error_context.append("Failed to write field: {s}", .{field.path});
+        errdefer misc.error_context.append("Failed to write field: {s}", .{field.path});
         writer.interface.writeInt(FieldPathLength, @intCast(field.path.len), endian) catch |err| {
-            sdk.misc.error_context.new("Failed to write the size of field path: {}", .{field.path.len});
+            misc.error_context.new("Failed to write the size of field path: {}", .{field.path.len});
             return err;
         };
         writer.interface.writeAll(field.path) catch |err| {
-            sdk.misc.error_context.new("Failed to write the field path: {s}", .{field.path});
+            misc.error_context.new("Failed to write the field path: {s}", .{field.path});
             return err;
         };
         const size: FieldSize = serializedSizeOf(field.Type);
         writer.interface.writeInt(FieldSize, size, endian) catch |err| {
-            sdk.misc.error_context.new("Failed to write the field size: {}", .{size});
+            misc.error_context.new("Failed to write the field size: {}", .{size});
             return err;
         };
     }
@@ -131,30 +131,30 @@ fn readFieldList(
     comptime local_fields: []const LocalField,
 ) !usize {
     const remote_fields_len = reader.interface.takeInt(FieldIndex, endian) catch |err| {
-        sdk.misc.error_context.new("Failed to read number of fields.", .{});
+        misc.error_context.new("Failed to read number of fields.", .{});
         return err;
     };
     if (remote_fields_len > remote_fields_buffer.len) {
-        sdk.misc.error_context.new(
+        misc.error_context.new(
             "Number of fields {} exceeds maximum allowed number: {}",
             .{ remote_fields_len, remote_fields_buffer.len },
         );
         return error.TooManyFields;
     }
     for (0..remote_fields_len) |index| {
-        errdefer sdk.misc.error_context.append("Failed to read field: {}", .{index});
+        errdefer misc.error_context.append("Failed to read field: {}", .{index});
         const path_len = reader.interface.takeInt(FieldPathLength, endian) catch |err| {
-            sdk.misc.error_context.new("Failed to read the size of the field path.", .{});
+            misc.error_context.new("Failed to read the size of the field path.", .{});
             return err;
         };
         var path_buffer: [max_field_path_len]u8 = undefined;
         const path = path_buffer[0..path_len];
         reader.interface.readSliceAll(path) catch |err| {
-            sdk.misc.error_context.new("Failed to read the field path.", .{});
+            misc.error_context.new("Failed to read the field path.", .{});
             return err;
         };
         const remote_size = reader.interface.takeInt(FieldSize, endian) catch |err| {
-            sdk.misc.error_context.new("Failed to read the field size. Field path is: {s}", .{path});
+            misc.error_context.new("Failed to read the field size. Field path is: {s}", .{path});
             return err;
         };
         inline for (local_fields, 0..) |*local_field, local_index| {
@@ -185,7 +185,7 @@ fn writeInitialValues(
     inline for (fields) |*field| {
         const field_pointer = getConstFieldPointer(frame, field);
         writeValue(writer, field_pointer) catch |err| {
-            sdk.misc.error_context.new("Failed to write the value of field: {s}", .{field.path});
+            misc.error_context.new("Failed to write the value of field: {s}", .{field.path});
             return err;
         };
     }
@@ -210,7 +210,7 @@ fn readInitialValues(
                 field_pointer.* = readValue(local_field.Type, reader) catch |err| switch (err) {
                     error.InvalidValue => getConstFieldPointer(&default_frame, local_field).*,
                     else => {
-                        sdk.misc.error_context.new("Failed to read the value of field: {s}", .{local_field.path});
+                        misc.error_context.new("Failed to read the value of field: {s}", .{local_field.path});
                         return err;
                     },
                 };
@@ -229,12 +229,12 @@ fn writeFrames(
     comptime fields: []const LocalField,
 ) !void {
     writer.interface.writeInt(NumberOfFrames, @intCast(frames.len), endian) catch |err| {
-        sdk.misc.error_context.new("Failed to write number of frames: {}", .{frames.len});
+        misc.error_context.new("Failed to write number of frames: {}", .{frames.len});
         return err;
     };
     var last_frame: *const Frame = initial_values;
     for (frames, 0..) |*frame, frame_index| {
-        errdefer sdk.misc.error_context.append("Failed to write frame: {}", .{frame_index});
+        errdefer misc.error_context.append("Failed to write frame: {}", .{frame_index});
         var number_of_changes: FieldIndex = 0;
         inline for (fields) |*field| {
             const field_pointer = getConstFieldPointer(frame, field);
@@ -244,20 +244,20 @@ fn writeFrames(
             }
         }
         writer.interface.writeInt(FieldIndex, number_of_changes, endian) catch |err| {
-            sdk.misc.error_context.new("Failed to write number of changes: {}", .{number_of_changes});
+            misc.error_context.new("Failed to write number of changes: {}", .{number_of_changes});
             return err;
         };
         inline for (fields, 0..) |*field, field_index| {
-            errdefer sdk.misc.error_context.append("Failed to write change for field: {s}", .{field.path});
+            errdefer misc.error_context.append("Failed to write change for field: {s}", .{field.path});
             const field_pointer = getConstFieldPointer(frame, field);
             const last_field_pointer = getConstFieldPointer(last_frame, field);
             if (!std.meta.eql(field_pointer.*, last_field_pointer.*)) {
                 writer.interface.writeInt(FieldIndex, @intCast(field_index), endian) catch |err| {
-                    sdk.misc.error_context.new("Failed to write field index: {}", .{field_index});
+                    misc.error_context.new("Failed to write field index: {}", .{field_index});
                     return err;
                 };
                 writeValue(writer, field_pointer) catch |err| {
-                    sdk.misc.error_context.new("Failed to write the new value.", .{});
+                    misc.error_context.new("Failed to write the new value.", .{});
                     return err;
                 };
             }
@@ -275,11 +275,11 @@ fn readFrames(
     comptime local_fields: []const LocalField,
 ) ![]Frame {
     const number_of_frames = reader.interface.takeInt(NumberOfFrames, endian) catch |err| {
-        sdk.misc.error_context.new("Failed to read number of frames.", .{});
+        misc.error_context.new("Failed to read number of frames.", .{});
         return err;
     };
     const frames = allocator.alloc(Frame, number_of_frames) catch |err| {
-        sdk.misc.error_context.new(
+        misc.error_context.new(
             "Failed to allocate enough memory to store the recording frames. Number of frames is: {}",
             .{number_of_frames},
         );
@@ -288,19 +288,19 @@ fn readFrames(
     const default_frame = Frame{};
     var current_frame = initial_values.*;
     for (0..number_of_frames) |frame_index| {
-        errdefer sdk.misc.error_context.append("Failed read frame: {}", .{frame_index});
+        errdefer misc.error_context.append("Failed read frame: {}", .{frame_index});
         const number_of_changes = reader.interface.takeInt(FieldIndex, endian) catch |err| {
-            sdk.misc.error_context.new("Failed to read number changes.", .{});
+            misc.error_context.new("Failed to read number changes.", .{});
             return err;
         };
         for (0..number_of_changes) |change_index| {
-            errdefer sdk.misc.error_context.append("Failed read change: {}", .{change_index});
+            errdefer misc.error_context.append("Failed read change: {}", .{change_index});
             const remote_index = reader.interface.takeInt(FieldIndex, endian) catch |err| {
-                sdk.misc.error_context.new("Failed to read field index.", .{});
+                misc.error_context.new("Failed to read field index.", .{});
                 return err;
             };
             if (remote_index >= remote_fields.len) {
-                sdk.misc.error_context.new(
+                misc.error_context.new(
                     "Field index {} is out of bounds. Number of fields is: {}",
                     .{ remote_index, remote_fields.len },
                 );
@@ -317,7 +317,7 @@ fn readFrames(
                     field_pointer.* = readValue(local_field.Type, reader) catch |err| switch (err) {
                         error.InvalidValue => getConstFieldPointer(&default_frame, local_field).*,
                         else => {
-                            sdk.misc.error_context.new("Failed to read the new value of: {s}", .{local_field.path});
+                            misc.error_context.new("Failed to read the new value of: {s}", .{local_field.path});
                             return err;
                         },
                     };

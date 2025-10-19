@@ -24,7 +24,7 @@ pub const EventBuss = struct {
 
     pub fn init(
         allocator: std.mem.Allocator,
-        base_dir: *const sdk.misc.BaseDir,
+        base_dir: *const sdk.fs.BaseDir,
         window: w32.HWND,
         device: *const w32.ID3D12Device,
         command_queue: *const w32.ID3D12CommandQueue,
@@ -68,7 +68,7 @@ pub const EventBuss = struct {
 
         std.log.debug("Spawning settings loading task...", .{});
         const settings_task = SettingsTask.spawn(allocator, struct {
-            fn call(dir: *const sdk.misc.BaseDir) model.Settings {
+            fn call(dir: *const sdk.fs.BaseDir) model.Settings {
                 std.log.info("Settings loading task spawned.", .{});
                 std.log.debug("Loading settings...", .{});
                 if (model.Settings.load(dir)) |settings| {
@@ -113,7 +113,7 @@ pub const EventBuss = struct {
 
     pub fn deinit(
         self: *Self,
-        base_dir: *const sdk.misc.BaseDir,
+        base_dir: *const sdk.fs.BaseDir,
         window: w32.HWND,
         device: *const w32.ID3D12Device,
         command_queue: *const w32.ID3D12CommandQueue,
@@ -163,7 +163,7 @@ pub const EventBuss = struct {
 
     pub fn draw(
         self: *Self,
-        base_dir: *const sdk.misc.BaseDir,
+        base_dir: *const sdk.fs.BaseDir,
         window: w32.HWND,
         device: *const w32.ID3D12Device,
         command_queue: *const w32.ID3D12CommandQueue,
@@ -213,7 +213,7 @@ pub const EventBuss = struct {
 
     pub fn beforeResize(
         self: *Self,
-        base_dir: *const sdk.misc.BaseDir,
+        base_dir: *const sdk.fs.BaseDir,
         window: w32.HWND,
         device: *const w32.ID3D12Device,
         command_queue: *const w32.ID3D12CommandQueue,
@@ -235,7 +235,7 @@ pub const EventBuss = struct {
 
     pub fn afterResize(
         self: *Self,
-        base_dir: *const sdk.misc.BaseDir,
+        base_dir: *const sdk.fs.BaseDir,
         window: w32.HWND,
         device: *const w32.ID3D12Device,
         command_queue: *const w32.ID3D12CommandQueue,
@@ -259,7 +259,7 @@ pub const EventBuss = struct {
 
     pub fn processWindowMessage(
         self: *Self,
-        base_dir: *const sdk.misc.BaseDir,
+        base_dir: *const sdk.fs.BaseDir,
         window: w32.HWND,
         u_msg: u32,
         w_param: w32.WPARAM,

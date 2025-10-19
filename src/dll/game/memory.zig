@@ -20,7 +20,7 @@ pub const Memory = struct {
 
     pub fn init(
         allocator: std.mem.Allocator,
-        base_dir: ?*const sdk.misc.BaseDir,
+        base_dir: ?*const sdk.fs.BaseDir,
         last_camera_manager_address_pointer: *const usize,
     ) Self {
         var cache = initPatternCache(allocator, base_dir) catch |err| block: {
@@ -105,7 +105,7 @@ pub const Memory = struct {
         return self;
     }
 
-    fn initPatternCache(allocator: std.mem.Allocator, base_dir: ?*const sdk.misc.BaseDir) !sdk.memory.PatternCache {
+    fn initPatternCache(allocator: std.mem.Allocator, base_dir: ?*const sdk.fs.BaseDir) !sdk.memory.PatternCache {
         const main_module = sdk.os.Module.getMain() catch |err| {
             sdk.misc.error_context.append("Failed to get main module.", .{});
             return err;
@@ -124,7 +124,7 @@ pub const Memory = struct {
         return cache;
     }
 
-    fn deinitPatternCache(cache: *sdk.memory.PatternCache, base_dir: ?*const sdk.misc.BaseDir) void {
+    fn deinitPatternCache(cache: *sdk.memory.PatternCache, base_dir: ?*const sdk.fs.BaseDir) void {
         if (base_dir) |dir| {
             savePatternCache(cache, dir) catch |err| {
                 sdk.misc.error_context.append("Failed to save memory pattern cache.", .{});
@@ -134,7 +134,7 @@ pub const Memory = struct {
         cache.deinit();
     }
 
-    fn loadPatternCache(cache: *sdk.memory.PatternCache, base_dir: *const sdk.misc.BaseDir) !void {
+    fn loadPatternCache(cache: *sdk.memory.PatternCache, base_dir: *const sdk.fs.BaseDir) !void {
         var buffer: [sdk.os.max_file_path_length]u8 = undefined;
         const size = base_dir.getPath(&buffer, pattern_cache_file_name) catch |err| {
             sdk.misc.error_context.append("Failed to construct file path.", .{});
@@ -150,7 +150,7 @@ pub const Memory = struct {
         return cache.load(file_path, executable_timestamp);
     }
 
-    fn savePatternCache(cache: *sdk.memory.PatternCache, base_dir: *const sdk.misc.BaseDir) !void {
+    fn savePatternCache(cache: *sdk.memory.PatternCache, base_dir: *const sdk.fs.BaseDir) !void {
         var buffer: [sdk.os.max_file_path_length]u8 = undefined;
         const size = base_dir.getPath(&buffer, pattern_cache_file_name) catch |err| {
             sdk.misc.error_context.append("Failed to construct file path.", .{});

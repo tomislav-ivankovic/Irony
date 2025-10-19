@@ -26,7 +26,7 @@ const number_of_hooking_retries = 10;
 const hooking_retry_sleep_time = 100 * std.time.ns_per_ms;
 
 var module_handle_shared_value: ?sdk.os.SharedValue(w32.HINSTANCE) = null;
-var base_dir = sdk.misc.BaseDir.working_dir;
+var base_dir = sdk.fs.BaseDir.working_dir;
 var main_allocator: ?MainAllocator = null;
 var window_procedure: ?sdk.os.WindowProcedure = null;
 var event_buss: ?dll.EventBuss = null;
@@ -190,15 +190,15 @@ fn findBaseDir() void {
         sdk.misc.error_context.append("Failed find base directory.", .{});
         sdk.misc.error_context.logError(err);
         std.log.info("Defaulting base directory to working directory.", .{});
-        base_dir = sdk.misc.BaseDir.working_dir;
+        base_dir = sdk.fs.BaseDir.working_dir;
         return;
     };
-    base_dir = sdk.misc.BaseDir.fromModule(&dll_module) catch |err| {
+    base_dir = sdk.fs.BaseDir.fromModule(&dll_module) catch |err| {
         sdk.misc.error_context.append("Failed to find base directory from module: {s}", .{module_name});
         sdk.misc.error_context.append("Failed find base directory.", .{});
         sdk.misc.error_context.logError(err);
         std.log.info("Defaulting base directory to working directory.", .{});
-        base_dir = sdk.misc.BaseDir.working_dir;
+        base_dir = sdk.fs.BaseDir.working_dir;
         return;
     };
 }
@@ -249,7 +249,7 @@ fn onHooksInit(
     }
 }
 
-fn performMemorySearch(allocator: std.mem.Allocator, dir: *const sdk.misc.BaseDir) dll.game.Memory {
+fn performMemorySearch(allocator: std.mem.Allocator, dir: *const sdk.fs.BaseDir) dll.game.Memory {
     std.log.debug("Initializing game memory...", .{});
     const game_memory = dll.game.Memory.init(allocator, dir, &game_hooks.last_camera_manager_address);
     std.log.info("Game memory initialized.", .{});

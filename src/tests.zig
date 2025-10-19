@@ -6,6 +6,10 @@ test {
     _ = @import("sdk/dx12/misc.zig");
     _ = @import("sdk/dx12/testing_context.zig");
 
+    _ = @import("sdk/fs/base_dir.zig");
+    _ = @import("sdk/fs/recording.zig");
+    _ = @import("sdk/fs/settings.zig");
+
     _ = @import("sdk/hooking/hook.zig");
     _ = @import("sdk/hooking/main_hooks.zig");
 
@@ -33,11 +37,9 @@ test {
     _ = @import("sdk/memory/struct_proxy.zig");
     _ = @import("sdk/memory/struct_with_offsets.zig");
 
-    _ = @import("sdk/misc/base_dir.zig");
     _ = @import("sdk/misc/circular_buffer.zig");
     _ = @import("sdk/misc/error_context.zig");
     _ = @import("sdk/misc/meta.zig");
-    _ = @import("sdk/misc/settings.zig");
     _ = @import("sdk/misc/task.zig");
     _ = @import("sdk/misc/timer.zig");
     _ = @import("sdk/misc/timestamp.zig");
@@ -73,7 +75,6 @@ test {
     _ = @import("dll/core/move_detector.zig");
     _ = @import("dll/core/move_measurer.zig");
     _ = @import("dll/core/pause_detector.zig");
-    _ = @import("dll/core/recording.zig");
 
     _ = @import("dll/game/conversions.zig");
     _ = @import("dll/game/hooks.zig");

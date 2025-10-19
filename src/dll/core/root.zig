@@ -6,5 +6,3 @@ pub const HitDetector = @import("hit_detector.zig").HitDetector;
 pub const MoveMeasurer = @import("move_measurer.zig").MoveMeasurer;
 pub const MoveDetector = @import("move_detector.zig").MoveDetector;
 pub const PauseDetector = @import("pause_detector.zig").PauseDetector;
-pub const saveRecording = @import("recording.zig").saveRecording;
-pub const loadRecording = @import("recording.zig").loadRecording;

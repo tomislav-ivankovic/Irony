@@ -1,7 +1,7 @@
 const std = @import("std");
 const w32 = @import("win32").everything;
+const misc = @import("../misc/root.zig");
 const os = @import("../os/root.zig");
-const misc = @import("root.zig");
 
 pub const BaseDir = struct {
     buffer: [os.max_file_path_length:0]u8,

@@ -36,7 +36,7 @@ pub const MainWindow = struct {
 
     pub fn draw(
         self: *Self,
-        base_dir: *const sdk.misc.BaseDir,
+        base_dir: *const sdk.fs.BaseDir,
         settings: *model.Settings,
         game_memory: *const game.Memory,
         controller: *core.Controller,
@@ -92,7 +92,7 @@ pub const MainWindow = struct {
 
     fn drawSecondaryWindows(
         self: *Self,
-        base_dir: *const sdk.misc.BaseDir,
+        base_dir: *const sdk.fs.BaseDir,
         settings: *model.Settings,
         game_memory: *const game.Memory,
         controller: *const core.Controller,

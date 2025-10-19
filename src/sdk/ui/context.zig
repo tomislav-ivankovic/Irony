@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const w32 = @import("win32").everything;
 const imgui = @import("imgui");
 const misc = @import("../misc/root.zig");
+const fs = @import("../fs/root.zig");
 const dx12 = @import("../dx12/root.zig");
 const ui = @import("root.zig");
 
@@ -21,7 +22,7 @@ pub const Context = struct {
         comptime buffer_count: usize,
         comptime srv_heap_size: usize,
         allocator: std.mem.Allocator,
-        base_dir: ?*const misc.BaseDir,
+        base_dir: ?*const fs.BaseDir,
         window: w32.HWND,
         device: *const w32.ID3D12Device,
         command_queue: *const w32.ID3D12CommandQueue,
@@ -94,7 +95,7 @@ pub const Context = struct {
                     cpu_handle: *w32.D3D12_CPU_DESCRIPTOR_HANDLE,
                     gpu_handle: *w32.D3D12_GPU_DESCRIPTOR_HANDLE,
                 ) callconv(.c) void {
-                    const a: *dx12.DescriptorHeapAllocator(srv_heap_size) = @alignCast(@ptrCast(info.user_data));
+                    const a: *dx12.DescriptorHeapAllocator(srv_heap_size) = @ptrCast(@alignCast(info.user_data));
                     a.alloc(cpu_handle, gpu_handle) catch |err| {
                         misc.error_context.append("Failed to allocate memory on SRV heap.", .{});
                         misc.error_context.logError(err);
@@ -107,7 +108,7 @@ pub const Context = struct {
                     cpu_handle: w32.D3D12_CPU_DESCRIPTOR_HANDLE,
                     gpu_handle: w32.D3D12_GPU_DESCRIPTOR_HANDLE,
                 ) callconv(.c) void {
-                    const a: *dx12.DescriptorHeapAllocator(srv_heap_size) = @alignCast(@ptrCast(info.user_data));
+                    const a: *dx12.DescriptorHeapAllocator(srv_heap_size) = @ptrCast(@alignCast(info.user_data));
                     a.free(cpu_handle, gpu_handle) catch |err| {
                         misc.error_context.append("Failed to free memory on SRV heap.", .{});
                         misc.error_context.logError(err);
