@@ -26,7 +26,17 @@ const endian = std.builtin.Endian.little;
 const max_number_of_fields = std.math.maxInt(FieldIndex);
 const max_field_path_len = std.math.maxInt(FieldPathLength);
 
-pub fn saveRecording(comptime Frame: type, frames: []const Frame, file_path: []const u8) !void {
+pub const RecordingConfig = struct {
+    atomic_types: []const type = &.{},
+    atomic_paths: []const []const u8 = &.{},
+};
+
+pub fn saveRecording(
+    comptime Frame: type,
+    frames: []const Frame,
+    file_path: []const u8,
+    comptime config: *const RecordingConfig,
+) !void {
     const file = std.fs.cwd().createFile(file_path, .{}) catch |err| {
         misc.error_context.new("Failed to create or open file: {s}", .{file_path});
         return err;
@@ -40,7 +50,7 @@ pub fn saveRecording(comptime Frame: type, frames: []const Frame, file_path: []c
         return err;
     };
 
-    const fields = getLocalFields(Frame);
+    const fields = getLocalFields(Frame, config);
     writeFieldList(&writer, fields) catch |err| {
         misc.error_context.append("Failed to write field list.", .{});
         return err;
@@ -63,7 +73,12 @@ pub fn saveRecording(comptime Frame: type, frames: []const Frame, file_path: []c
     };
 }
 
-pub fn loadRecording(comptime Frame: type, allocator: std.mem.Allocator, file_path: []const u8) ![]Frame {
+pub fn loadRecording(
+    comptime Frame: type,
+    allocator: std.mem.Allocator,
+    file_path: []const u8,
+    comptime config: *const RecordingConfig,
+) ![]Frame {
     const file = std.fs.cwd().openFile(file_path, .{}) catch |err| {
         misc.error_context.new("Failed to open file: {s}", .{file_path});
         return err;
@@ -82,7 +97,7 @@ pub fn loadRecording(comptime Frame: type, allocator: std.mem.Allocator, file_pa
         return error.MagicNumber;
     }
 
-    const local_fields = getLocalFields(Frame);
+    const local_fields = getLocalFields(Frame, config);
     var remote_fields_buffer: [max_number_of_fields]RemoteField = undefined;
     const remote_fields_len = readFieldList(&reader, &remote_fields_buffer, local_fields) catch |err| {
         misc.error_context.append("Failed to read fields list.", .{});
@@ -723,12 +738,12 @@ fn getFieldPointerRecursive(
     return getFieldPointerRecursive(Pointer, next_pointer, next_access);
 }
 
-inline fn getLocalFields(comptime Frame: type) []const LocalField {
+inline fn getLocalFields(comptime Frame: type, comptime config: *const RecordingConfig) []const LocalField {
     comptime {
         @setEvalBranchQuota(100000);
         var buffer: [max_number_of_fields]LocalField = undefined;
         var len: usize = 0;
-        getLocalFieldsRecursive(Frame, "", &.{}, &buffer, &len);
+        getLocalFieldsRecursive(Frame, config, "", &.{}, &buffer, &len);
         const array = buffer[0..len].*;
         return &array;
     }
@@ -736,46 +751,58 @@ inline fn getLocalFields(comptime Frame: type) []const LocalField {
 
 fn getLocalFieldsRecursive(
     comptime Type: type,
+    comptime config: *const RecordingConfig,
     path: []const u8,
     access: []const AccessElement,
     buffer: []LocalField,
     len: *usize,
 ) void {
+    for (config.atomic_types) |AtomicType| {
+        if (AtomicType != Type) {
+            continue;
+        }
+        const field = LocalField{ .path = path, .access = access, .Type = Type };
+        appendLocalField(&field, buffer, len);
+        return;
+    }
+    for (config.atomic_paths) |pattern| {
+        if (!doesPathMatchPattern(path, pattern)) {
+            continue;
+        }
+        const field = LocalField{ .path = path, .access = access, .Type = Type };
+        appendLocalField(&field, buffer, len);
+        return;
+    }
     const type_info = @typeInfo(Type);
     switch (type_info) {
         .void => {},
         .bool, .int, .float, .@"enum", .optional, .@"union" => {
-            const field = LocalField{
-                .path = path,
-                .access = access,
-                .Type = Type,
-            };
+            const field = LocalField{ .path = path, .access = access, .Type = Type };
             appendLocalField(&field, buffer, len);
         },
         .@"struct" => |*info| if (info.layout == .@"packed") {
-            const field = LocalField{
-                .path = path,
-                .access = access,
-                .Type = Type,
-            };
+            const field = LocalField{ .path = path, .access = access, .Type = Type };
             appendLocalField(&field, buffer, len);
         } else {
             for (info.fields) |*field| {
-                getLocalFieldsRecursive(
-                    field.type,
-                    std.fmt.comptimePrint("{s}.{s}", .{ path, field.name }),
-                    access ++ &[1]AccessElement{.{ .name = field.name }},
-                    buffer,
-                    len,
-                );
+                const field_path = if (path.len == 0) field.name else path ++ "." ++ field.name;
+                const field_access = access ++ &[1]AccessElement{.{ .name = field.name }};
+                getLocalFieldsRecursive(field.type, config, field_path, field_access, buffer, len);
             }
         },
         .array => |*info| {
             inline for (0..info.len) |index| {
+                const field_path = if (path.len == 0) block: {
+                    break :block std.fmt.comptimePrint("{}", .{index});
+                } else block: {
+                    break :block std.fmt.comptimePrint("{s}.{}", .{ path, index });
+                };
+                const field_access = access ++ &[1]AccessElement{.{ .index = index }};
                 getLocalFieldsRecursive(
                     info.child,
-                    std.fmt.comptimePrint("{s}.{}", .{ path, index }),
-                    access ++ &[1]AccessElement{.{ .index = index }},
+                    config,
+                    field_path,
+                    field_access,
                     buffer,
                     len,
                 );
@@ -794,6 +821,35 @@ fn appendLocalField(element: *const LocalField, buffer: []LocalField, len: *usiz
     }
     buffer[len.*] = element.*;
     len.* += 1;
+}
+
+fn doesPathMatchPattern(path: []const u8, pattern: []const u8) bool {
+    const State = enum { normal, wildcard };
+    var state: State = .normal;
+    var pattern_index: usize = 0;
+    for (path) |path_char| {
+        switch (state) {
+            .normal => {
+                if (pattern_index >= pattern.len) {
+                    return false;
+                }
+                const pattern_char = pattern[pattern_index];
+                if (pattern_char == '?') {
+                    state = .wildcard;
+                } else if (path_char != pattern_char) {
+                    return false;
+                }
+                pattern_index += 1;
+            },
+            .wildcard => {
+                if (path_char == '.') {
+                    state = .normal;
+                    pattern_index += 1;
+                }
+            },
+        }
+    }
+    return pattern_index == pattern.len;
 }
 
 const testing = std.testing;
@@ -867,9 +923,9 @@ test "loadRecording should load the same recording that saveRecording saved" {
             .struct_of_array = .{ .a = .{ 4, 3 }, .b = .{ 2, 1 } },
         },
     };
-    try saveRecording(Frame, &saved_recording, "./test_assets/recording.irony");
+    try saveRecording(Frame, &saved_recording, "./test_assets/recording.irony", &.{});
     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
-    const loaded_recording = try loadRecording(Frame, testing.allocator, "./test_assets/recording.irony");
+    const loaded_recording = try loadRecording(Frame, testing.allocator, "./test_assets/recording.irony", &.{});
     defer testing.allocator.free(loaded_recording);
     try testing.expectEqualSlices(Frame, &saved_recording, loaded_recording);
 }
@@ -880,14 +936,14 @@ test "saveRecording should overwrite the file if it already exists" {
         .{ .a = 1 },
         .{ .a = 2 },
         .{ .a = 3 },
-    }, "./test_assets/recording.irony");
+    }, "./test_assets/recording.irony", &.{});
     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
     try saveRecording(Frame, &.{
         .{ .a = 2 },
         .{ .a = 3 },
         .{ .a = 4 },
-    }, "./test_assets/recording.irony");
-    const recording = try loadRecording(Frame, testing.allocator, "./test_assets/recording.irony");
+    }, "./test_assets/recording.irony", &.{});
+    const recording = try loadRecording(Frame, testing.allocator, "./test_assets/recording.irony", &.{});
     defer testing.allocator.free(recording);
     try testing.expectEqualSlices(Frame, &.{
         .{ .a = 2 },
@@ -903,9 +959,9 @@ test "loadRecording should succeed when when recording has more fields then expe
         .{ .a = 1, .b = 2 },
         .{ .a = 3, .b = 4 },
         .{ .a = 5, .b = 6 },
-    }, "./test_assets/recording.irony");
+    }, "./test_assets/recording.irony", &.{});
     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
-    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony");
+    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony", &.{});
     defer testing.allocator.free(recording);
     try testing.expectEqualSlices(LoadedFrame, &.{
         .{ .a = 1 },
@@ -921,9 +977,9 @@ test "loadRecording should load default value when recording does not contain a 
         .{ .a = 1 },
         .{ .a = 2 },
         .{ .a = 3 },
-    }, "./test_assets/recording.irony");
+    }, "./test_assets/recording.irony", &.{});
     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
-    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony");
+    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony", &.{});
     defer testing.allocator.free(recording);
     try testing.expectEqualSlices(LoadedFrame, &.{
         .{ .a = 1, .b = -3 },
@@ -939,9 +995,9 @@ test "loadRecording should use default value when a field has different size the
         .{ .a = 1, .b = 2 },
         .{ .a = 3, .b = 4 },
         .{ .a = 5, .b = 6 },
-    }, "./test_assets/recording.irony");
+    }, "./test_assets/recording.irony", &.{});
     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
-    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony");
+    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony", &.{});
     defer testing.allocator.free(recording);
     try testing.expectEqualSlices(LoadedFrame, &.{
         .{ .a = 1, .b = -4 },
@@ -958,9 +1014,9 @@ test "loadRecording should use default value when encountering invalid bool valu
         .{ .a = 0, .b = 0 },
         .{ .a = 1, .b = 1 },
         .{ .a = 2, .b = 2 },
-    }, "./test_assets/recording.irony");
+    }, "./test_assets/recording.irony", &.{});
     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
-    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony");
+    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony", &.{});
     defer testing.allocator.free(recording);
     try testing.expectEqualSlices(LoadedFrame, &.{
         .{ .a = false, .b = null },
@@ -978,9 +1034,9 @@ test "loadRecording should use default value when encountering invalid int value
         .{ .a = 0, .b = 0 },
         .{ .a = 511, .b = 511 },
         .{ .a = 512, .b = 512 },
-    }, "./test_assets/recording.irony");
+    }, "./test_assets/recording.irony", &.{});
     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
-    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony");
+    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony", &.{});
     defer testing.allocator.free(recording);
     try testing.expectEqualSlices(LoadedFrame, &.{
         .{ .a = 0, .b = null },
@@ -1000,9 +1056,9 @@ test "loadRecording should use default value when encountering invalid enum valu
         .{ .a = 1, .b = 1 },
         .{ .a = 2, .b = 2 },
         .{ .a = 3, .b = 3 },
-    }, "./test_assets/recording.irony");
+    }, "./test_assets/recording.irony", &.{});
     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
-    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony");
+    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony", &.{});
     defer testing.allocator.free(recording);
     try testing.expectEqualSlices(LoadedFrame, &.{
         .{ .a = .a, .b = null },
@@ -1022,9 +1078,9 @@ test "loadRecording should use default value when encountering invalid optional"
         .{ .a = .{ .tag = 1, .payload = 0 }, .b = .{ .tag = 1, .payload = 0 } },
         .{ .a = .{ .tag = 1, .payload = 1 }, .b = .{ .tag = 1, .payload = 1 } },
         .{ .a = .{ .tag = 2, .payload = 1 }, .b = .{ .tag = 2, .payload = 1 } },
-    }, "./test_assets/recording.irony");
+    }, "./test_assets/recording.irony", &.{});
     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
-    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony");
+    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony", &.{});
     defer testing.allocator.free(recording);
     try testing.expectEqualSlices(LoadedFrame, &.{
         .{ .a = null, .b = null },
@@ -1052,9 +1108,9 @@ test "loadRecording should use default value when encountering invalid tagged un
         .{ .f1 = .{ .tag = 1, .payload = 256 }, .f2 = .{ .tag = 1, .payload = 256 } },
         .{ .f1 = .{ .tag = 2, .payload = 255 }, .f2 = .{ .tag = 2, .payload = 255 } },
         .{ .f1 = .{ .tag = 2, .payload = 256 }, .f2 = .{ .tag = 2, .payload = 256 } },
-    }, "./test_assets/recording.irony");
+    }, "./test_assets/recording.irony", &.{});
     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
-    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony");
+    const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony", &.{});
     defer testing.allocator.free(recording);
     try testing.expectEqualSlices(LoadedFrame, &.{
         .{ .f1 = .{ .a = 128 }, .f2 = .{ .b = 129 } },
@@ -1099,11 +1155,10 @@ test "loadRecording should load the same recording that saveRecording saved when
             .union_of_structs = .{ .b = .{ .f1 = 1, .f2 = 1 } },
         },
     };
-    try saveRecording(Frame, &saved_recording, "./test_assets/recording.irony");
+    try saveRecording(Frame, &saved_recording, "./test_assets/recording.irony", &.{});
     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
-    const loaded_recording = try loadRecording(Frame, testing.allocator, "./test_assets/recording.irony");
+    const loaded_recording = try loadRecording(Frame, testing.allocator, "./test_assets/recording.irony", &.{});
     defer testing.allocator.free(loaded_recording);
-
     try testing.expectEqual(saved_recording.len, loaded_recording.len);
     for (0..saved_recording.len) |index| {
         try testing.expectEqual(
@@ -1115,4 +1170,102 @@ test "loadRecording should load the same recording that saveRecording saved when
             @as(UnionOfStructs.Int, @bitCast(loaded_recording[index].union_of_structs)),
         );
     }
+}
+
+test "should correctly match paths with patterns" {
+    try testing.expectEqual(true, doesPathMatchPattern("", ""));
+    try testing.expectEqual(false, doesPathMatchPattern("", "a"));
+    try testing.expectEqual(false, doesPathMatchPattern("", "?"));
+
+    try testing.expectEqual(false, doesPathMatchPattern("a", ""));
+    try testing.expectEqual(true, doesPathMatchPattern("a", "a"));
+    try testing.expectEqual(false, doesPathMatchPattern("a", "ab"));
+    try testing.expectEqual(true, doesPathMatchPattern("a", "?"));
+
+    try testing.expectEqual(false, doesPathMatchPattern("ab", ""));
+    try testing.expectEqual(false, doesPathMatchPattern("ab", "a"));
+    try testing.expectEqual(true, doesPathMatchPattern("ab", "ab"));
+    try testing.expectEqual(true, doesPathMatchPattern("ab", "?"));
+
+    try testing.expectEqual(false, doesPathMatchPattern("a.b", ""));
+    try testing.expectEqual(false, doesPathMatchPattern("a.b", "a"));
+    try testing.expectEqual(false, doesPathMatchPattern("a.b", "ab"));
+    try testing.expectEqual(true, doesPathMatchPattern("a.b", "a.b"));
+    try testing.expectEqual(false, doesPathMatchPattern("a.b", "?"));
+    try testing.expectEqual(true, doesPathMatchPattern("a.b", "a.?"));
+    try testing.expectEqual(true, doesPathMatchPattern("a.b", "?.b"));
+    try testing.expectEqual(false, doesPathMatchPattern("a.b", "b.?"));
+    try testing.expectEqual(false, doesPathMatchPattern("a.b", "?.a"));
+    try testing.expectEqual(true, doesPathMatchPattern("a.b", "?.?"));
+
+    try testing.expectEqual(false, doesPathMatchPattern("abc.cde.efg", ""));
+    try testing.expectEqual(false, doesPathMatchPattern("abc.cde.efg", "?"));
+    try testing.expectEqual(false, doesPathMatchPattern("abc.cde.efg", "?.?"));
+    try testing.expectEqual(true, doesPathMatchPattern("abc.cde.efg", "?.?.?"));
+    try testing.expectEqual(false, doesPathMatchPattern("abc.cde.efg", "?.?.?.?"));
+    try testing.expectEqual(true, doesPathMatchPattern("abc.cde.efg", "abc.cde.efg"));
+    try testing.expectEqual(false, doesPathMatchPattern("abc.cde.efg", "abc.cde.efg.?"));
+    try testing.expectEqual(true, doesPathMatchPattern("abc.cde.efg", "?.cde.efg"));
+    try testing.expectEqual(true, doesPathMatchPattern("abc.cde.efg", "abc.?.efg"));
+    try testing.expectEqual(true, doesPathMatchPattern("abc.cde.efg", "abc.cde.?"));
+    try testing.expectEqual(true, doesPathMatchPattern("abc.cde.efg", "abc.?.?"));
+    try testing.expectEqual(true, doesPathMatchPattern("abc.cde.efg", "?.?.efg"));
+    try testing.expectEqual(true, doesPathMatchPattern("abc.cde.efg", "?.cde.?"));
+    try testing.expectEqual(false, doesPathMatchPattern("abc.cde.efg", "abc.?.efh"));
+}
+
+test "should correctly atomically represent parts of the struct based on configuration" {
+    const NormalStruct = struct { a: f32, b: f32 };
+    const AtomicStruct = struct { a: f32, b: f32 };
+    const Frame = struct {
+        f1: [2]NormalStruct,
+        f2: [2]AtomicStruct,
+        f3: [2]NormalStruct,
+        f4: [2]AtomicStruct,
+    };
+    const fields = getLocalFields(Frame, &.{
+        .atomic_types = &.{AtomicStruct},
+        .atomic_paths = &.{ "f3", "f4", "?.1" },
+    });
+    const contains = struct {
+        fn call(comptime fields_slice: []const LocalField, path: []const u8) bool {
+            inline for (fields_slice) |*field| {
+                if (std.mem.eql(u8, field.path, path)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }.call;
+
+    try testing.expectEqual(false, contains(fields, "f1"));
+    try testing.expectEqual(false, contains(fields, "f2"));
+    try testing.expectEqual(true, contains(fields, "f3"));
+    try testing.expectEqual(true, contains(fields, "f4"));
+
+    try testing.expectEqual(false, contains(fields, "f1.0"));
+    try testing.expectEqual(true, contains(fields, "f1.1"));
+    try testing.expectEqual(true, contains(fields, "f2.0"));
+    try testing.expectEqual(true, contains(fields, "f2.1"));
+    try testing.expectEqual(false, contains(fields, "f3.0"));
+    try testing.expectEqual(false, contains(fields, "f3.1"));
+    try testing.expectEqual(false, contains(fields, "f4.0"));
+    try testing.expectEqual(false, contains(fields, "f4.1"));
+
+    try testing.expectEqual(true, contains(fields, "f1.0.a"));
+    try testing.expectEqual(true, contains(fields, "f1.0.b"));
+    try testing.expectEqual(false, contains(fields, "f1.1.a"));
+    try testing.expectEqual(false, contains(fields, "f1.1.b"));
+    try testing.expectEqual(false, contains(fields, "f2.0.a"));
+    try testing.expectEqual(false, contains(fields, "f2.0.b"));
+    try testing.expectEqual(false, contains(fields, "f2.1.a"));
+    try testing.expectEqual(false, contains(fields, "f2.1.b"));
+    try testing.expectEqual(false, contains(fields, "f3.0.a"));
+    try testing.expectEqual(false, contains(fields, "f3.0.b"));
+    try testing.expectEqual(false, contains(fields, "f3.1.a"));
+    try testing.expectEqual(false, contains(fields, "f3.1.b"));
+    try testing.expectEqual(false, contains(fields, "f4.0.a"));
+    try testing.expectEqual(false, contains(fields, "f4.0.b"));
+    try testing.expectEqual(false, contains(fields, "f4.1.a"));
+    try testing.expectEqual(false, contains(fields, "f4.1.b"));
 }
