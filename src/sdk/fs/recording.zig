@@ -605,7 +605,7 @@ fn readValue(comptime Type: type, reader: *std.fs.File.Reader) anyerror!Type {
         .array => |*info| {
             var value: Type = undefined;
             for (&value, 0..) |*element, index| {
-                element = readValue(info.child, reader) catch |err| {
+                element.* = readValue(info.child, reader) catch |err| {
                     misc.error_context.append("Failed to read array element at index: {}", .{index});
                     return err;
                 };
@@ -625,7 +625,7 @@ fn readValue(comptime Type: type, reader: *std.fs.File.Reader) anyerror!Type {
             var value: Type = undefined;
             inline for (info.fields) |*field| {
                 const field_value = readValue(field.type, reader) catch |err| {
-                    misc.error_context.append("Failed to read struct field: {}", .{field.name});
+                    misc.error_context.append("Failed to read struct field: {s}", .{field.name});
                     return err;
                 };
                 @field(value, field.name) = field_value;
