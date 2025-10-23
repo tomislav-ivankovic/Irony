@@ -153,7 +153,7 @@ pub const Controller = struct {
                     self.mode = .{ .live = .{ .frame = .{} } };
                 }
             },
-            .save => |*state| if (state.task == .completed) {
+            .save => |*state| if (state.task.peek() != null) {
                 if (state.frame_index) |frame_index| {
                     self.cleanUpModeState();
                     self.mode = .{ .pause = .{
@@ -354,10 +354,10 @@ pub const Controller = struct {
             return;
         }
         std.log.info("Loading recording... {s}", .{file_path});
-        const file_path_buffer: [sdk.os.max_file_path_length]u8 = undefined;
-        const file_path_copy = std.fmt.bufPrint(file_path_buffer, "{s}", .{file_path}) catch |err| {
+        var file_path_buffer: [sdk.os.max_file_path_length]u8 = undefined;
+        const file_path_copy = std.fmt.bufPrint(&file_path_buffer, "{s}", .{file_path}) catch |err| {
             sdk.misc.error_context.new("Failed to copy file path to buffer.", .{});
-            sdk.misc.error_context.append("Failed to load recording: {}", .{file_path});
+            sdk.misc.error_context.append("Failed to load recording: {s}", .{file_path});
             sdk.misc.error_context.logError(err);
             return;
         };
@@ -399,10 +399,10 @@ pub const Controller = struct {
             return;
         }
         std.log.info("Saving recording... {s}", .{file_path});
-        const file_path_buffer: [sdk.os.max_file_path_length]u8 = undefined;
-        const file_path_copy = std.fmt.bufPrint(file_path_buffer, "{s}", .{file_path}) catch |err| {
+        var file_path_buffer: [sdk.os.max_file_path_length]u8 = undefined;
+        const file_path_copy = std.fmt.bufPrint(&file_path_buffer, "{s}", .{file_path}) catch |err| {
             sdk.misc.error_context.new("Failed to copy file path to buffer.", .{});
-            sdk.misc.error_context.append("Failed to save recording: {}", .{file_path});
+            sdk.misc.error_context.append("Failed to save recording: {s}", .{file_path});
             sdk.misc.error_context.logError(err);
             return;
         };
@@ -423,7 +423,7 @@ pub const Controller = struct {
                     sdk.misc.error_context.logError(err);
                 }
             }
-        }.call, .{ &self.recording.items, file_path_buffer, file_path_copy.len }) catch |err| {
+        }.call, .{ self.recording.items, file_path_buffer, file_path_copy.len }) catch |err| {
             sdk.misc.error_context.append("Failed to spawn save recording task.", .{});
             sdk.misc.error_context.append("Failed to save recording: {s}", .{file_path});
             sdk.misc.error_context.logError(err);
