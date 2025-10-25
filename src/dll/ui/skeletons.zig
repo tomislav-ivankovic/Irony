@@ -14,14 +14,14 @@ pub fn drawSkeletons(
             continue;
         }
         const player = frame.getPlayerById(player_id);
-        const skeleton: *const model.Skeleton = if (player.skeleton) |*s| s else continue;
+        const skeleton = player.getSkeleton() orelse continue;
         const blocking = player.blocking orelse .not_blocking;
         const can_move = player.can_move orelse true;
         var color = player_settings.colors.get(blocking);
         if (!can_move) {
             color.asColor().a *= player_settings.cant_move_alpha;
         }
-        drawSkeleton(skeleton, color, player_settings.thickness, matrix);
+        drawSkeleton(&skeleton, color, player_settings.thickness, matrix);
     }
 }
 

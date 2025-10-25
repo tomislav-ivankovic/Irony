@@ -74,12 +74,34 @@ pub const Player = struct {
     heat: ?model.Heat = null,
     position: ?sdk.math.Vec3 = null,
     rotation: ?f32 = null,
-    skeleton: ?model.Skeleton = null,
     hurt_cylinders: ?model.HurtCylinders = null,
     collision_spheres: ?model.CollisionSpheres = null,
     hit_lines: model.HitLines = .{},
 
     const Self = @This();
+
+    pub fn getSkeleton(self: *const Self) ?model.Skeleton {
+        const cylinders: *const model.HurtCylinders = if (self.hurt_cylinders) |*c| c else return null;
+        const spheres: *const model.CollisionSpheres = if (self.collision_spheres) |*s| s else return null;
+        return .init(.{
+            .head = cylinders.getPtrConst(.head).cylinder.center,
+            .neck = spheres.getPtrConst(.neck).center,
+            .upper_torso = cylinders.getPtrConst(.upper_torso).cylinder.center,
+            .left_shoulder = cylinders.getPtrConst(.left_shoulder).cylinder.center,
+            .right_shoulder = cylinders.getPtrConst(.right_shoulder).cylinder.center,
+            .left_elbow = cylinders.getPtrConst(.left_elbow).cylinder.center,
+            .right_elbow = cylinders.getPtrConst(.right_elbow).cylinder.center,
+            .left_hand = cylinders.getPtrConst(.left_hand).cylinder.center,
+            .right_hand = cylinders.getPtrConst(.right_hand).cylinder.center,
+            .lower_torso = spheres.getPtrConst(.lower_torso).center,
+            .left_pelvis = cylinders.getPtrConst(.left_pelvis).cylinder.center,
+            .right_pelvis = cylinders.getPtrConst(.right_pelvis).cylinder.center,
+            .left_knee = cylinders.getPtrConst(.left_knee).cylinder.center,
+            .right_knee = cylinders.getPtrConst(.right_knee).cylinder.center,
+            .left_ankle = cylinders.getPtrConst(.left_ankle).cylinder.center,
+            .right_ankle = cylinders.getPtrConst(.right_ankle).cylinder.center,
+        });
+    }
 
     pub fn getStartupFrames(self: *const Self) model.U32ActualMinMax {
         return .{
@@ -288,6 +310,73 @@ test "PlayerSide.getOther should return correct value" {
 test "PlayerRole.getOther should return correct value" {
     try testing.expectEqual(PlayerRole.secondary, PlayerRole.main.getOther());
     try testing.expectEqual(PlayerRole.main, PlayerRole.secondary.getOther());
+}
+
+test "Player.getSkeleton should return correct value" {
+    const cylinder = struct {
+        fn call(x: f32, y: f32, z: f32) model.HurtCylinder {
+            return .{ .cylinder = .{
+                .center = .fromArray(.{ x, y, z }),
+                .radius = 0.0,
+                .half_height = 0.0,
+            } };
+        }
+    }.call;
+    const sphere = struct {
+        fn call(x: f32, y: f32, z: f32) model.CollisionSphere {
+            return .{
+                .center = .fromArray(.{ x, y, z }),
+                .radius = 0.0,
+            };
+        }
+    }.call;
+    const player = Player{
+        .hurt_cylinders = .init(.{
+            .left_ankle = cylinder(43, 44, 45),
+            .right_ankle = cylinder(46, 47, 48),
+            .left_hand = cylinder(22, 23, 24),
+            .right_hand = cylinder(25, 26, 27),
+            .left_knee = cylinder(37, 38, 39),
+            .right_knee = cylinder(40, 41, 42),
+            .left_elbow = cylinder(16, 17, 18),
+            .right_elbow = cylinder(19, 20, 21),
+            .head = cylinder(1, 2, 3),
+            .left_shoulder = cylinder(10, 11, 12),
+            .right_shoulder = cylinder(13, 14, 15),
+            .upper_torso = cylinder(7, 8, 9),
+            .left_pelvis = cylinder(31, 32, 33),
+            .right_pelvis = cylinder(34, 35, 36),
+        }),
+        .collision_spheres = .init(.{
+            .neck = sphere(4, 5, 6),
+            .left_elbow = sphere(16, 17, 18),
+            .right_elbow = sphere(19, 20, 21),
+            .lower_torso = sphere(28, 29, 30),
+            .left_knee = sphere(37, 38, 39),
+            .right_knee = sphere(40, 41, 42),
+            .left_ankle = sphere(43, 44, 45),
+            .right_ankle = sphere(46, 47, 48),
+        }),
+    };
+    try testing.expectEqual(model.Skeleton.init(.{
+        .head = .fromArray(.{ 1, 2, 3 }),
+        .neck = .fromArray(.{ 4, 5, 6 }),
+        .upper_torso = .fromArray(.{ 7, 8, 9 }),
+        .left_shoulder = .fromArray(.{ 10, 11, 12 }),
+        .right_shoulder = .fromArray(.{ 13, 14, 15 }),
+        .left_elbow = .fromArray(.{ 16, 17, 18 }),
+        .right_elbow = .fromArray(.{ 19, 20, 21 }),
+        .left_hand = .fromArray(.{ 22, 23, 24 }),
+        .right_hand = .fromArray(.{ 25, 26, 27 }),
+        .lower_torso = .fromArray(.{ 28, 29, 30 }),
+        .left_pelvis = .fromArray(.{ 31, 32, 33 }),
+        .right_pelvis = .fromArray(.{ 34, 35, 36 }),
+        .left_knee = .fromArray(.{ 37, 38, 39 }),
+        .right_knee = .fromArray(.{ 40, 41, 42 }),
+        .left_ankle = .fromArray(.{ 43, 44, 45 }),
+        .right_ankle = .fromArray(.{ 46, 47, 48 }),
+    }), player.getSkeleton());
+    try testing.expectEqual(null, (Player{}).getSkeleton());
 }
 
 test "Player.getStartupFrames should return correct value" {

@@ -126,7 +126,6 @@ pub const Capturer = struct {
             .heat = captureHeat(player),
             .position = capturePlayerPosition(player),
             .rotation = capturePlayerRotation(player),
-            .skeleton = captureSkeleton(player),
             .hurt_cylinders = captureHurtCylinders(player),
             .collision_spheres = captureCollisionSpheres(player),
             .hit_lines = captureHitLines(state, player),
@@ -332,29 +331,6 @@ pub const Capturer = struct {
             angle -= 2.0 * std.math.pi;
         }
         return angle;
-    }
-
-    fn captureSkeleton(player: *const sdk.misc.Partial(game.Player)) ?model.Skeleton {
-        const cylinders: *const game.HurtCylinders = if (player.hurt_cylinders) |*c| c else return null;
-        const spheres: *const game.CollisionSpheres = if (player.collision_spheres) |*s| s else return null;
-        return .init(.{
-            .head = cylinders.head.convert().center,
-            .neck = spheres.neck.convert().center,
-            .upper_torso = cylinders.upper_torso.convert().center,
-            .left_shoulder = cylinders.left_shoulder.convert().center,
-            .right_shoulder = cylinders.right_shoulder.convert().center,
-            .left_elbow = cylinders.left_elbow.convert().center,
-            .right_elbow = cylinders.right_elbow.convert().center,
-            .left_hand = cylinders.left_hand.convert().center,
-            .right_hand = cylinders.right_hand.convert().center,
-            .lower_torso = spheres.lower_torso.convert().center,
-            .left_pelvis = cylinders.left_pelvis.convert().center,
-            .right_pelvis = cylinders.right_pelvis.convert().center,
-            .left_knee = cylinders.left_knee.convert().center,
-            .right_knee = cylinders.right_knee.convert().center,
-            .left_ankle = cylinders.left_ankle.convert().center,
-            .right_ankle = cylinders.right_ankle.convert().center,
-        });
     }
 
     fn captureHurtCylinders(player: *const sdk.misc.Partial(game.Player)) ?model.HurtCylinders {
@@ -1007,85 +983,6 @@ test "should capture player rotation correctly" {
     try testing.expect(frame.getPlayerById(.player_2).rotation != null);
     try testing.expectApproxEqAbs(0.75 * std.math.pi, frame.getPlayerById(.player_1).rotation.?, 0.0001);
     try testing.expectApproxEqAbs(-0.5 * std.math.pi, frame.getPlayerById(.player_2).rotation.?, 0.0001);
-}
-
-test "should capture skeleton correctly" {
-    const cylinder = struct {
-        fn call(x: f32, y: f32, z: f32) game.HurtCylinders.Element {
-            return .fromConverted(.{
-                .center = .fromArray(.{ x, y, z }),
-                .multiplier = 1.0,
-                .half_height = 0.0,
-                .radius = 0.0,
-                .squared_radius = 0.0,
-                ._padding = undefined,
-            });
-        }
-    }.call;
-    const sphere = struct {
-        fn call(x: f32, y: f32, z: f32) game.CollisionSpheres.Element {
-            return .fromConverted(.{
-                .center = .fromArray(.{ x, y, z }),
-                .multiplier = 1.0,
-                .radius = 0.0,
-                ._padding = undefined,
-            });
-        }
-    }.call;
-    var capturer = Capturer{};
-    const frame = capturer.captureFrame(&.{
-        .player_1 = .{
-            .hurt_cylinders = .{
-                .left_ankle = cylinder(43, 44, 45),
-                .right_ankle = cylinder(46, 47, 48),
-                .left_hand = cylinder(22, 23, 24),
-                .right_hand = cylinder(25, 26, 27),
-                .left_knee = cylinder(37, 38, 39),
-                .right_knee = cylinder(40, 41, 42),
-                .left_elbow = cylinder(16, 17, 18),
-                .right_elbow = cylinder(19, 20, 21),
-                .head = cylinder(1, 2, 3),
-                .left_shoulder = cylinder(10, 11, 12),
-                .right_shoulder = cylinder(13, 14, 15),
-                .upper_torso = cylinder(7, 8, 9),
-                .left_pelvis = cylinder(31, 32, 33),
-                .right_pelvis = cylinder(34, 35, 36),
-            },
-            .collision_spheres = .{
-                .neck = sphere(4, 5, 6),
-                .left_elbow = sphere(16, 17, 18),
-                .right_elbow = sphere(19, 20, 21),
-                .lower_torso = sphere(28, 29, 30),
-                .left_knee = sphere(37, 38, 39),
-                .right_knee = sphere(40, 41, 42),
-                .left_ankle = sphere(43, 44, 45),
-                .right_ankle = sphere(46, 47, 48),
-            },
-        },
-        .player_2 = .{
-            .hurt_cylinders = null,
-            .collision_spheres = null,
-        },
-    });
-    try testing.expectEqual(model.Skeleton.init(.{
-        .head = .fromArray(.{ 1, 2, 3 }),
-        .neck = .fromArray(.{ 4, 5, 6 }),
-        .upper_torso = .fromArray(.{ 7, 8, 9 }),
-        .left_shoulder = .fromArray(.{ 10, 11, 12 }),
-        .right_shoulder = .fromArray(.{ 13, 14, 15 }),
-        .left_elbow = .fromArray(.{ 16, 17, 18 }),
-        .right_elbow = .fromArray(.{ 19, 20, 21 }),
-        .left_hand = .fromArray(.{ 22, 23, 24 }),
-        .right_hand = .fromArray(.{ 25, 26, 27 }),
-        .lower_torso = .fromArray(.{ 28, 29, 30 }),
-        .left_pelvis = .fromArray(.{ 31, 32, 33 }),
-        .right_pelvis = .fromArray(.{ 34, 35, 36 }),
-        .left_knee = .fromArray(.{ 37, 38, 39 }),
-        .right_knee = .fromArray(.{ 40, 41, 42 }),
-        .left_ankle = .fromArray(.{ 43, 44, 45 }),
-        .right_ankle = .fromArray(.{ 46, 47, 48 }),
-    }), frame.getPlayerById(.player_1).skeleton);
-    try testing.expectEqual(null, frame.getPlayerById(.player_2).skeleton);
 }
 
 test "should capture hurt cylinders correctly" {
