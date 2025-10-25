@@ -180,12 +180,6 @@ pub const FileMenu = struct {
         }
         return self.file_path_buffer[0..self.file_path_len :0];
     }
-
-    pub fn getFileName(self: *const Self) ?[:0]const u8 {
-        const path = self.getFilePath() orelse return null;
-        const index = std.mem.lastIndexOfAny(u8, path, &.{ '/', '\\' }) orelse return path;
-        return path[(index + 1)..];
-    }
 };
 
 const MenuBar = struct {

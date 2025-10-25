@@ -136,11 +136,10 @@ pub const Memory = struct {
 
     fn loadPatternCache(cache: *sdk.memory.PatternCache, base_dir: *const sdk.fs.BaseDir) !void {
         var buffer: [sdk.os.max_file_path_length]u8 = undefined;
-        const size = base_dir.getPath(&buffer, pattern_cache_file_name) catch |err| {
+        const file_path = base_dir.getPath(&buffer, pattern_cache_file_name) catch |err| {
             sdk.misc.error_context.append("Failed to construct file path.", .{});
             return err;
         };
-        const file_path = buffer[0..size];
 
         const executable_timestamp = sdk.os.getExecutableTimestamp() catch |err| {
             sdk.misc.error_context.append("Failed to get executable timestamp.", .{});
@@ -152,11 +151,10 @@ pub const Memory = struct {
 
     fn savePatternCache(cache: *sdk.memory.PatternCache, base_dir: *const sdk.fs.BaseDir) !void {
         var buffer: [sdk.os.max_file_path_length]u8 = undefined;
-        const size = base_dir.getPath(&buffer, pattern_cache_file_name) catch |err| {
+        const file_path = base_dir.getPath(&buffer, pattern_cache_file_name) catch |err| {
             sdk.misc.error_context.append("Failed to construct file path.", .{});
             return err;
         };
-        const file_path = buffer[0..size];
 
         const executable_timestamp = sdk.os.getExecutableTimestamp() catch |err| {
             sdk.misc.error_context.append("Failed to get executable timestamp.", .{});

@@ -231,11 +231,10 @@ fn findBaseDir() void {
 
 fn startFileLogging() !void {
     var buffer: [sdk.os.max_file_path_length]u8 = undefined;
-    const size = base_dir.getPath(&buffer, log_file_name) catch |err| {
+    const file_path = base_dir.getPath(&buffer, log_file_name) catch |err| {
         sdk.misc.error_context.append("Failed to find log file path.", .{});
         return err;
     };
-    const file_path = buffer[0..size];
     file_logger.start(file_path) catch |err| {
         sdk.misc.error_context.append("Failed to start file logging with file path: {s}", .{file_path});
         return err;

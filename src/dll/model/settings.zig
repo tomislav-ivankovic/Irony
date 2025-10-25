@@ -17,21 +17,19 @@ pub const Settings = struct {
 
     pub fn load(base_dir: *const sdk.fs.BaseDir) !Self {
         var buffer: [sdk.os.max_file_path_length]u8 = undefined;
-        const size = base_dir.getPath(&buffer, file_name) catch |err| {
+        const file_path = base_dir.getPath(&buffer, file_name) catch |err| {
             sdk.misc.error_context.append("Failed to construct file path.", .{});
             return err;
         };
-        const file_path = buffer[0..size];
         return sdk.fs.loadSettings(Self, file_path);
     }
 
     pub fn save(self: *const Self, base_dir: *const sdk.fs.BaseDir) !void {
         var buffer: [sdk.os.max_file_path_length]u8 = undefined;
-        const size = base_dir.getPath(&buffer, file_name) catch |err| {
+        const file_path = base_dir.getPath(&buffer, file_name) catch |err| {
             sdk.misc.error_context.append("Failed to construct file path.", .{});
             return err;
         };
-        const file_path = buffer[0..size];
         return sdk.fs.saveSettings(self, file_path);
     }
 };

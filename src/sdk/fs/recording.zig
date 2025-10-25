@@ -101,11 +101,10 @@ pub fn loadRecording(
 
     const local_fields = getLocalFields(Frame, config);
     var remote_fields_buffer: [max_number_of_fields]RemoteField = undefined;
-    const remote_fields_len = readFieldList(&reader, &remote_fields_buffer, local_fields) catch |err| {
+    const remote_fields = readFieldList(&reader, &remote_fields_buffer, local_fields) catch |err| {
         misc.error_context.append("Failed to read fields list.", .{});
         return err;
     };
-    const remote_fields = remote_fields_buffer[0..remote_fields_len];
 
     const initial_values = readInitialValues(Frame, &reader, remote_fields, local_fields) catch |err| {
         misc.error_context.append("Failed to read initial values.", .{});
@@ -147,7 +146,7 @@ fn readFieldList(
     reader: *std.fs.File.Reader,
     remote_fields_buffer: []RemoteField,
     comptime local_fields: []const LocalField,
-) !usize {
+) ![]RemoteField {
     const remote_fields_len = reader.interface.takeInt(FieldIndex, endian) catch |err| {
         misc.error_context.new("Failed to read number of fields.", .{});
         return err;
@@ -191,7 +190,7 @@ fn readFieldList(
             };
         }
     }
-    return remote_fields_len;
+    return remote_fields_buffer[0..remote_fields_len];
 }
 
 fn writeInitialValues(

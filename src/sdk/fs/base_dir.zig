@@ -41,12 +41,11 @@ pub const BaseDir = struct {
         return self.buffer[0..self.len :0];
     }
 
-    pub fn getPath(self: *const Self, buffer: *[os.max_file_path_length]u8, sub_path: []const u8) !usize {
-        const full_path = std.fmt.bufPrint(buffer, "{s}\\{s}", .{ self.get(), sub_path }) catch |err| {
+    pub fn getPath(self: *const Self, buffer: *[os.max_file_path_length]u8, sub_path: []const u8) ![:0]u8 {
+        return std.fmt.bufPrintZ(buffer, "{s}\\{s}", .{ self.get(), sub_path }) catch |err| {
             misc.error_context.new("Failed to put path into the buffer: {s}\\{s}", .{ self.get(), sub_path });
             return err;
         };
-        return full_path.len;
     }
 
     pub fn allocPath(self: *const Self, allocator: std.mem.Allocator, sub_path: []const u8) ![:0]u8 {
@@ -78,8 +77,7 @@ test "fromModule should make the base dir the directory of the module" {
 test "getPath should combine base dir and sub dir" {
     const base_dir = try BaseDir.fromStr("\\test_1\\test_2\\test_3");
     var buffer: [os.max_file_path_length]u8 = undefined;
-    const size = try base_dir.getPath(&buffer, "test_4\\test_5.txt");
-    const path = buffer[0..size];
+    const path = try base_dir.getPath(&buffer, "test_4\\test_5.txt");
     try testing.expectEqualStrings("\\test_1\\test_2\\test_3\\test_4\\test_5.txt", path);
 }
 
