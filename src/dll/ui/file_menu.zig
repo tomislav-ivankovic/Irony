@@ -297,6 +297,9 @@ const FileDialog = struct {
     pub const Action = enum { no_action, proceed, cancel };
     pub const Type = enum { save, open };
 
+    const directory_name = "recordings";
+    const file_extension = ".irony";
+
     pub fn draw(
         self: *Self,
         context: *imgui.ImGuiFileDialog,
@@ -307,7 +310,8 @@ const FileDialog = struct {
         defer self.is_open = is_open;
 
         if (!self.is_open and is_open) {
-            var buffer: [sdk.os.max_file_path_length]u8 = undefined;
+            var buffer_1: [sdk.os.max_file_path_length]u8 = undefined;
+            var buffer_2: [sdk.os.max_file_path_length]u8 = undefined;
             var config = imgui.IGFD_FileDialog_Config_Get();
             config.countSelectionMax = 1;
             config.flags = imgui.ImGuiFileDialogFlags_Modal;
@@ -316,13 +320,25 @@ const FileDialog = struct {
                     if (current_path) |path| {
                         config.filePathName = path.ptr;
                     } else {
-                        config.fileName = "recording.irony";
-                        config.path = createAndGetRecordingsDirectory(&buffer, base_dir);
+                        config.fileName = getTimestampFileName(&buffer_1) catch |err| block: {
+                            sdk.misc.error_context.append("Failed to construct a timestamp based file name.", .{});
+                            sdk.misc.error_context.logError(err);
+                            break :block "untitled" ++ file_extension;
+                        };
+                        config.path = createAndGetRecordingsDirectory(&buffer_2, base_dir) catch |err| block: {
+                            sdk.misc.error_context.append("Failed to create \"{s}\" directory.", .{directory_name});
+                            sdk.misc.error_context.logError(err);
+                            break :block base_dir.get();
+                        };
                     }
                     config.flags |= imgui.ImGuiFileDialogFlags_ConfirmOverwrite;
                 },
                 .open => {
-                    config.path = createAndGetRecordingsDirectory(&buffer, base_dir);
+                    config.path = createAndGetRecordingsDirectory(&buffer_1, base_dir) catch |err| block: {
+                        sdk.misc.error_context.append("Failed to create \"{s}\" directory.", .{directory_name});
+                        sdk.misc.error_context.logError(err);
+                        break :block base_dir.get();
+                    };
                 },
             }
             imgui.IGFD_OpenDialog(
@@ -335,7 +351,7 @@ const FileDialog = struct {
                     .save => "Save AS",
                     .open => "Open",
                 },
-                "irony recordings (*.irony){.irony}",
+                "irony recordings (*" ++ file_extension ++ "){" ++ file_extension ++ "}",
                 config,
             );
         }
@@ -388,11 +404,10 @@ const FileDialog = struct {
     fn createAndGetRecordingsDirectory(
         buffer: *[sdk.os.max_file_path_length]u8,
         base_dir: *const sdk.misc.BaseDir,
-    ) [:0]const u8 {
-        const path = base_dir.getPath(buffer, "recordings") catch |err| {
-            sdk.misc.error_context.append("Failed to construct recordings directory path.", .{});
-            sdk.misc.error_context.logError(err);
-            return base_dir.get();
+    ) ![:0]const u8 {
+        const path = base_dir.getPath(buffer, directory_name) catch |err| {
+            sdk.misc.error_context.append("Failed to construct \"{s}\" directory path.", .{directory_name});
+            return err;
         };
 
         var returned_error: ?anyerror = null;
@@ -405,20 +420,34 @@ const FileDialog = struct {
         }.call, .{ path, &returned_error }) catch |err| {
             sdk.misc.error_context.append("Failed to spawn directory make thread.", .{});
             sdk.misc.error_context.append("Failed to make directory: {s}", .{path});
-            sdk.misc.error_context.logError(err);
-            return base_dir.get();
+            return err;
         };
         thread.join();
         if (returned_error) |err| {
             sdk.misc.error_context.append("Failed to make directory: {s}", .{path});
-            sdk.misc.error_context.logError(err);
-            return base_dir.get();
+            return err;
         }
 
         return path;
     }
 
-    fn getLastSelectedPath(self: *const Self) ?[:0]const u8 {
+    fn getTimestampFileName(buffer: []u8) ![:0]const u8 {
+        const nano = std.time.nanoTimestamp();
+        const ts = sdk.misc.Timestamp.fromNano(nano, .local) catch |err| {
+            sdk.misc.error_context.append("Failed to construct timestamp structure for nano timestamp: {}", .{nano});
+            return err;
+        };
+        return std.fmt.bufPrintZ(
+            buffer,
+            "{:0>4}-{:0>2}-{:0>2}T{:0>2}:{:0>2}:{:0>2}" ++ file_extension,
+            .{ @abs(ts.year), ts.month, ts.day, ts.hour, ts.minute, ts.second },
+        ) catch |err| {
+            sdk.misc.error_context.append("Failed to construct timestamp string for nano time: {}", .{nano});
+            return err;
+        };
+    }
+
+    pub fn getLastSelectedPath(self: *const Self) ?[:0]const u8 {
         if (self.last_selected_path_len == 0) {
             return null;
         }
