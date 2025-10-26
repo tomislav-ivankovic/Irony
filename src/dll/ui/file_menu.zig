@@ -269,15 +269,14 @@ const UnsavedDialog = struct {
             action = .save;
         }
         imgui.igSameLine(0, -1);
-        imgui.igSetItemDefaultFocus();
         if (imgui.igButton("Don't Save", .{})) {
             action = .dont_save;
         }
         imgui.igSameLine(0, -1);
-        imgui.igSetItemDefaultFocus();
         if (imgui.igButton("Cancel", .{})) {
             action = .cancel;
         }
+        imgui.igSetItemDefaultFocus();
         if (!remains_open) {
             action = .cancel;
         }
@@ -308,6 +307,7 @@ const FileDialog = struct {
         defer self.is_open = is_open;
 
         if (!self.is_open and is_open) {
+            var buffer: [sdk.os.max_file_path_length]u8 = undefined;
             var config = imgui.IGFD_FileDialog_Config_Get();
             config.countSelectionMax = 1;
             config.flags = imgui.ImGuiFileDialogFlags_Modal;
@@ -317,12 +317,12 @@ const FileDialog = struct {
                         config.filePathName = path.ptr;
                     } else {
                         config.fileName = "recording.irony";
-                        config.path = base_dir.get();
+                        config.path = createAndGetRecordingsDirectory(&buffer, base_dir);
                     }
                     config.flags |= imgui.ImGuiFileDialogFlags_ConfirmOverwrite;
                 },
                 .open => {
-                    config.path = base_dir.get();
+                    config.path = createAndGetRecordingsDirectory(&buffer, base_dir);
                 },
             }
             imgui.IGFD_OpenDialog(
@@ -352,7 +352,7 @@ const FileDialog = struct {
             },
             imgui.ImGuiWindowFlags_NoCollapse,
             .{ .x = 0.5 * display_size.x, .y = 0.5 * display_size.y },
-            .{ .x = 0.5 * display_size.x, .y = 0.5 * display_size.y },
+            .{ .x = display_size.x, .y = display_size.y },
         );
         if (!has_action or !is_open) {
             self.action = .no_action;
@@ -383,6 +383,39 @@ const FileDialog = struct {
         self.last_selected_path_len = path.len;
 
         self.action = .proceed;
+    }
+
+    fn createAndGetRecordingsDirectory(
+        buffer: *[sdk.os.max_file_path_length]u8,
+        base_dir: *const sdk.misc.BaseDir,
+    ) [:0]const u8 {
+        const path = base_dir.getPath(buffer, "recordings") catch |err| {
+            sdk.misc.error_context.append("Failed to construct recordings directory path.", .{});
+            sdk.misc.error_context.logError(err);
+            return base_dir.get();
+        };
+
+        var returned_error: ?anyerror = null;
+        const thread = std.Thread.spawn(.{}, struct {
+            fn call(in_path: []const u8, out_err: *?anyerror) void {
+                std.fs.cwd().makePath(in_path) catch |err| {
+                    out_err.* = err;
+                };
+            }
+        }.call, .{ path, &returned_error }) catch |err| {
+            sdk.misc.error_context.append("Failed to spawn directory make thread.", .{});
+            sdk.misc.error_context.append("Failed to make directory: {s}", .{path});
+            sdk.misc.error_context.logError(err);
+            return base_dir.get();
+        };
+        thread.join();
+        if (returned_error) |err| {
+            sdk.misc.error_context.append("Failed to make directory: {s}", .{path});
+            sdk.misc.error_context.logError(err);
+            return base_dir.get();
+        }
+
+        return path;
     }
 
     fn getLastSelectedPath(self: *const Self) ?[:0]const u8 {
