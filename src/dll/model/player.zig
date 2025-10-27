@@ -53,7 +53,7 @@ pub const Player = struct {
     animation_frame: ?u32 = null,
     animation_total_frames: ?u32 = null,
     move_phase: ?model.MovePhase = null,
-    move_frame: ?u32 = null,
+    animation_to_move_delta: ?u32 = null,
     first_active_frame: ?u32 = null,
     last_active_frame: ?u32 = null,
     connected_frame: ?u32 = null,
@@ -112,6 +112,14 @@ pub const Player = struct {
         });
     }
 
+    pub fn getMoveFrame(self: *const Self) ?u32 {
+        if (self.animation_frame != null and self.animation_to_move_delta != null) {
+            return self.animation_frame.? -| self.animation_to_move_delta.?;
+        } else {
+            return null;
+        }
+    }
+
     pub fn getStartupFrames(self: *const Self) model.U32ActualMinMax {
         return .{
             .actual = self.connected_frame,
@@ -156,7 +164,7 @@ pub const Player = struct {
     pub fn getTotalFrames(self: *const Self) ?u32 {
         const animation_total = self.animation_total_frames orelse return null;
         const animation_frame = self.animation_frame orelse return null;
-        const move_frame = self.move_frame orelse return null;
+        const move_frame = self.getMoveFrame() orelse return null;
         return animation_total +| move_frame -| animation_frame;
     }
 
@@ -455,6 +463,12 @@ test "Player.getSkeleton should return correct value" {
     try testing.expectEqual(null, (Player{}).getSkeleton());
 }
 
+test "Player.getMoveFrame should return correct value" {
+    try testing.expectEqual(2, (Player{ .animation_frame = 5, .animation_to_move_delta = 3 }).getMoveFrame());
+    try testing.expectEqual(null, (Player{ .animation_frame = null, .animation_to_move_delta = 3 }).getMoveFrame());
+    try testing.expectEqual(null, (Player{ .animation_frame = 5, .animation_to_move_delta = null }).getMoveFrame());
+}
+
 test "Player.getStartupFrames should return correct value" {
     try testing.expectEqual(model.U32ActualMinMax{ .actual = 2, .min = 1, .max = 3 }, (Player{
         .first_active_frame = 1,
@@ -509,7 +523,7 @@ test "Player.getRecoveryFrames should return correct value" {
         .connected_frame = 2,
         .last_active_frame = 3,
         .animation_frame = 5,
-        .move_frame = 4,
+        .animation_to_move_delta = 1,
         .animation_total_frames = 6,
     }).getRecoveryFrames());
     try testing.expectEqual(model.U32ActualMinMax{ .actual = 3, .min = 2, .max = null }, (Player{
@@ -519,7 +533,7 @@ test "Player.getRecoveryFrames should return correct value" {
         .connected_frame = 2,
         .last_active_frame = 3,
         .animation_frame = 5,
-        .move_frame = 4,
+        .animation_to_move_delta = 1,
         .animation_total_frames = 6,
     }).getRecoveryFrames());
     try testing.expectEqual(model.U32ActualMinMax{ .actual = 2, .min = 2, .max = 4 }, (Player{
@@ -529,7 +543,7 @@ test "Player.getRecoveryFrames should return correct value" {
         .connected_frame = null,
         .last_active_frame = 3,
         .animation_frame = 5,
-        .move_frame = 4,
+        .animation_to_move_delta = 1,
         .animation_total_frames = 6,
     }).getRecoveryFrames());
     try testing.expectEqual(model.U32ActualMinMax{ .actual = 3, .min = null, .max = 4 }, (Player{
@@ -539,7 +553,7 @@ test "Player.getRecoveryFrames should return correct value" {
         .connected_frame = 2,
         .last_active_frame = null,
         .animation_frame = 5,
-        .move_frame = 4,
+        .animation_to_move_delta = 1,
         .animation_total_frames = 6,
     }).getRecoveryFrames());
     try testing.expectEqual(model.U32ActualMinMax{ .actual = null, .min = null, .max = null }, (Player{
@@ -549,7 +563,7 @@ test "Player.getRecoveryFrames should return correct value" {
         .connected_frame = 2,
         .last_active_frame = 3,
         .animation_frame = 5,
-        .move_frame = 4,
+        .animation_to_move_delta = 1,
         .animation_total_frames = null,
     }).getRecoveryFrames());
     try testing.expectEqual(model.U32ActualMinMax{ .actual = 5, .min = 5, .max = 5 }, (Player{
@@ -559,7 +573,7 @@ test "Player.getRecoveryFrames should return correct value" {
         .connected_frame = null,
         .last_active_frame = null,
         .animation_frame = 5,
-        .move_frame = 4,
+        .animation_to_move_delta = 1,
         .animation_total_frames = 6,
     }).getRecoveryFrames());
 }
@@ -567,22 +581,22 @@ test "Player.getRecoveryFrames should return correct value" {
 test "Player.getTotalFrames should return correct value" {
     try testing.expectEqual(4, (Player{
         .animation_frame = 3,
-        .move_frame = 2,
+        .animation_to_move_delta = 1,
         .animation_total_frames = 5,
     }).getTotalFrames());
     try testing.expectEqual(null, (Player{
         .animation_frame = null,
-        .move_frame = 2,
+        .animation_to_move_delta = 1,
         .animation_total_frames = 5,
     }).getTotalFrames());
     try testing.expectEqual(null, (Player{
         .animation_frame = 3,
-        .move_frame = null,
+        .animation_to_move_delta = null,
         .animation_total_frames = 5,
     }).getTotalFrames());
     try testing.expectEqual(null, (Player{
         .animation_frame = 3,
-        .move_frame = 2,
+        .animation_to_move_delta = 1,
         .animation_total_frames = null,
     }).getTotalFrames());
 }
@@ -595,7 +609,7 @@ test "Player.getFrameAdvantage should return correct value" {
         .connected_frame = 2,
         .last_active_frame = 3,
         .animation_frame = 5,
-        .move_frame = 4,
+        .animation_to_move_delta = 1,
         .animation_total_frames = 6,
     };
     const player_2 = Player{
@@ -605,7 +619,7 @@ test "Player.getFrameAdvantage should return correct value" {
         .connected_frame = null,
         .last_active_frame = null,
         .animation_frame = 3,
-        .move_frame = 2,
+        .animation_to_move_delta = 1,
         .animation_total_frames = 6,
     };
     try testing.expectEqual(

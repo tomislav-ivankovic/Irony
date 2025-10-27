@@ -59,7 +59,7 @@ pub fn drawDetails(frame: *const model.Frame, columns: model.MiscSettings.Detail
     drawProperty("Animation Frame", &left.animation_frame, &right.animation_frame);
     drawProperty("Animation Total Frames", &left.animation_total_frames, &right.animation_total_frames);
     drawProperty("Move Phase", &left.move_phase, &right.move_phase);
-    drawProperty("Move Frame", &left.move_frame, &right.move_frame);
+    drawProperty("Move Frame", &left.getMoveFrame(), &right.getMoveFrame());
     drawProperty("Startup Frames", &left.getStartupFrames(), &right.getStartupFrames());
     drawProperty("Active Frames", &left.getActiveFrames(), &right.getActiveFrames());
     drawProperty("Recovery Frames", &left.getRecoveryFrames(), &right.getRecoveryFrames());

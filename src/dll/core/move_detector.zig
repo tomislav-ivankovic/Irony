@@ -124,7 +124,7 @@ pub const MoveDetector = struct {
             state.connected_frame = move_frame;
         }
         player.move_phase = state.phase;
-        player.move_frame = state.move_frame;
+        player.animation_to_move_delta = animation_frame -| move_frame;
         player.first_active_frame = state.first_active_frame;
         player.last_active_frame = state.last_active_frame;
         player.connected_frame = state.connected_frame;
@@ -133,7 +133,7 @@ pub const MoveDetector = struct {
 
 const testing = std.testing;
 
-test "should set move_phase, move_frame, first_active_frame, last_active_frame, connected_frame to correct value at correct frame" {
+test "should set move_phase, animation_to_move_delta, first_active_frame, last_active_frame, connected_frame to correct value at correct frame" {
     var frame = model.Frame{};
     var detector = MoveDetector{};
 
@@ -159,12 +159,12 @@ test "should set move_phase, move_frame, first_active_frame, last_active_frame, 
     };
     detector.detect(&frame);
     try testing.expectEqual(null, frame.players[0].move_phase);
-    try testing.expectEqual(null, frame.players[0].move_frame);
+    try testing.expectEqual(null, frame.players[0].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[0].first_active_frame);
     try testing.expectEqual(null, frame.players[0].connected_frame);
     try testing.expectEqual(null, frame.players[0].last_active_frame);
     try testing.expectEqual(null, frame.players[1].move_phase);
-    try testing.expectEqual(null, frame.players[1].move_frame);
+    try testing.expectEqual(null, frame.players[1].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[1].first_active_frame);
     try testing.expectEqual(null, frame.players[1].connected_frame);
     try testing.expectEqual(null, frame.players[1].last_active_frame);
@@ -191,12 +191,12 @@ test "should set move_phase, move_frame, first_active_frame, last_active_frame, 
     };
     detector.detect(&frame);
     try testing.expectEqual(null, frame.players[0].move_phase);
-    try testing.expectEqual(null, frame.players[0].move_frame);
+    try testing.expectEqual(null, frame.players[0].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[0].first_active_frame);
     try testing.expectEqual(null, frame.players[0].connected_frame);
     try testing.expectEqual(null, frame.players[0].last_active_frame);
     try testing.expectEqual(.neutral, frame.players[1].move_phase);
-    try testing.expectEqual(1, frame.players[1].move_frame);
+    try testing.expectEqual(0, frame.players[1].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[1].first_active_frame);
     try testing.expectEqual(null, frame.players[1].connected_frame);
     try testing.expectEqual(null, frame.players[1].last_active_frame);
@@ -223,12 +223,12 @@ test "should set move_phase, move_frame, first_active_frame, last_active_frame, 
     };
     detector.detect(&frame);
     try testing.expectEqual(.start_up, frame.players[0].move_phase);
-    try testing.expectEqual(1, frame.players[0].move_frame);
+    try testing.expectEqual(0, frame.players[0].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[0].first_active_frame);
     try testing.expectEqual(null, frame.players[0].connected_frame);
     try testing.expectEqual(null, frame.players[0].last_active_frame);
     try testing.expectEqual(.neutral, frame.players[1].move_phase);
-    try testing.expectEqual(2, frame.players[1].move_frame);
+    try testing.expectEqual(0, frame.players[1].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[1].first_active_frame);
     try testing.expectEqual(null, frame.players[1].connected_frame);
     try testing.expectEqual(null, frame.players[1].last_active_frame);
@@ -255,12 +255,12 @@ test "should set move_phase, move_frame, first_active_frame, last_active_frame, 
     };
     detector.detect(&frame);
     try testing.expectEqual(.start_up, frame.players[0].move_phase);
-    try testing.expectEqual(2, frame.players[0].move_frame);
+    try testing.expectEqual(0, frame.players[0].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[0].first_active_frame);
     try testing.expectEqual(null, frame.players[0].connected_frame);
     try testing.expectEqual(null, frame.players[0].last_active_frame);
     try testing.expectEqual(.neutral, frame.players[1].move_phase);
-    try testing.expectEqual(3, frame.players[1].move_frame);
+    try testing.expectEqual(0, frame.players[1].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[1].first_active_frame);
     try testing.expectEqual(null, frame.players[1].connected_frame);
     try testing.expectEqual(null, frame.players[1].last_active_frame);
@@ -287,12 +287,12 @@ test "should set move_phase, move_frame, first_active_frame, last_active_frame, 
     };
     detector.detect(&frame);
     try testing.expectEqual(.start_up, frame.players[0].move_phase);
-    try testing.expectEqual(2, frame.players[0].move_frame);
+    try testing.expectEqual(1, frame.players[0].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[0].first_active_frame);
     try testing.expectEqual(null, frame.players[0].connected_frame);
     try testing.expectEqual(null, frame.players[0].last_active_frame);
     try testing.expectEqual(.neutral, frame.players[1].move_phase);
-    try testing.expectEqual(3, frame.players[1].move_frame);
+    try testing.expectEqual(0, frame.players[1].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[1].first_active_frame);
     try testing.expectEqual(null, frame.players[1].connected_frame);
     try testing.expectEqual(null, frame.players[1].last_active_frame);
@@ -319,12 +319,12 @@ test "should set move_phase, move_frame, first_active_frame, last_active_frame, 
     };
     detector.detect(&frame);
     try testing.expectEqual(.active, frame.players[0].move_phase);
-    try testing.expectEqual(3, frame.players[0].move_frame);
+    try testing.expectEqual(1, frame.players[0].animation_to_move_delta);
     try testing.expectEqual(3, frame.players[0].first_active_frame);
     try testing.expectEqual(null, frame.players[0].connected_frame);
     try testing.expectEqual(null, frame.players[0].last_active_frame);
     try testing.expectEqual(.neutral, frame.players[1].move_phase);
-    try testing.expectEqual(4, frame.players[1].move_frame);
+    try testing.expectEqual(0, frame.players[1].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[1].first_active_frame);
     try testing.expectEqual(null, frame.players[1].connected_frame);
     try testing.expectEqual(null, frame.players[1].last_active_frame);
@@ -351,12 +351,12 @@ test "should set move_phase, move_frame, first_active_frame, last_active_frame, 
     };
     detector.detect(&frame);
     try testing.expectEqual(.active, frame.players[0].move_phase);
-    try testing.expectEqual(4, frame.players[0].move_frame);
+    try testing.expectEqual(1, frame.players[0].animation_to_move_delta);
     try testing.expectEqual(3, frame.players[0].first_active_frame);
     try testing.expectEqual(4, frame.players[0].connected_frame);
     try testing.expectEqual(null, frame.players[0].last_active_frame);
     try testing.expectEqual(.neutral, frame.players[1].move_phase);
-    try testing.expectEqual(5, frame.players[1].move_frame);
+    try testing.expectEqual(0, frame.players[1].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[1].first_active_frame);
     try testing.expectEqual(null, frame.players[1].connected_frame);
     try testing.expectEqual(null, frame.players[1].last_active_frame);
@@ -383,12 +383,12 @@ test "should set move_phase, move_frame, first_active_frame, last_active_frame, 
     };
     detector.detect(&frame);
     try testing.expectEqual(.active_recovery, frame.players[0].move_phase);
-    try testing.expectEqual(5, frame.players[0].move_frame);
+    try testing.expectEqual(1, frame.players[0].animation_to_move_delta);
     try testing.expectEqual(3, frame.players[0].first_active_frame);
     try testing.expectEqual(4, frame.players[0].connected_frame);
     try testing.expectEqual(null, frame.players[0].last_active_frame);
     try testing.expectEqual(.recovery, frame.players[1].move_phase);
-    try testing.expectEqual(1, frame.players[1].move_frame);
+    try testing.expectEqual(0, frame.players[1].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[1].first_active_frame);
     try testing.expectEqual(null, frame.players[1].connected_frame);
     try testing.expectEqual(null, frame.players[1].last_active_frame);
@@ -415,12 +415,12 @@ test "should set move_phase, move_frame, first_active_frame, last_active_frame, 
     };
     detector.detect(&frame);
     try testing.expectEqual(.recovery, frame.players[0].move_phase);
-    try testing.expectEqual(6, frame.players[0].move_frame);
+    try testing.expectEqual(1, frame.players[0].animation_to_move_delta);
     try testing.expectEqual(3, frame.players[0].first_active_frame);
     try testing.expectEqual(4, frame.players[0].connected_frame);
     try testing.expectEqual(5, frame.players[0].last_active_frame);
     try testing.expectEqual(.recovery, frame.players[1].move_phase);
-    try testing.expectEqual(2, frame.players[1].move_frame);
+    try testing.expectEqual(0, frame.players[1].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[1].first_active_frame);
     try testing.expectEqual(null, frame.players[1].connected_frame);
     try testing.expectEqual(null, frame.players[1].last_active_frame);
@@ -447,12 +447,12 @@ test "should set move_phase, move_frame, first_active_frame, last_active_frame, 
     };
     detector.detect(&frame);
     try testing.expectEqual(.recovery, frame.players[0].move_phase);
-    try testing.expectEqual(6, frame.players[0].move_frame);
+    try testing.expectEqual(1, frame.players[0].animation_to_move_delta);
     try testing.expectEqual(3, frame.players[0].first_active_frame);
     try testing.expectEqual(4, frame.players[0].connected_frame);
     try testing.expectEqual(5, frame.players[0].last_active_frame);
     try testing.expectEqual(.recovery, frame.players[1].move_phase);
-    try testing.expectEqual(2, frame.players[1].move_frame);
+    try testing.expectEqual(1, frame.players[1].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[1].first_active_frame);
     try testing.expectEqual(null, frame.players[1].connected_frame);
     try testing.expectEqual(null, frame.players[1].last_active_frame);
@@ -479,12 +479,12 @@ test "should set move_phase, move_frame, first_active_frame, last_active_frame, 
     };
     detector.detect(&frame);
     try testing.expectEqual(.recovery, frame.players[0].move_phase);
-    try testing.expectEqual(7, frame.players[0].move_frame);
+    try testing.expectEqual(1, frame.players[0].animation_to_move_delta);
     try testing.expectEqual(3, frame.players[0].first_active_frame);
     try testing.expectEqual(4, frame.players[0].connected_frame);
     try testing.expectEqual(5, frame.players[0].last_active_frame);
     try testing.expectEqual(.neutral, frame.players[1].move_phase);
-    try testing.expectEqual(1, frame.players[1].move_frame);
+    try testing.expectEqual(0, frame.players[1].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[1].first_active_frame);
     try testing.expectEqual(null, frame.players[1].connected_frame);
     try testing.expectEqual(null, frame.players[1].last_active_frame);
@@ -511,12 +511,12 @@ test "should set move_phase, move_frame, first_active_frame, last_active_frame, 
     };
     detector.detect(&frame);
     try testing.expectEqual(.neutral, frame.players[0].move_phase);
-    try testing.expectEqual(1, frame.players[0].move_frame);
+    try testing.expectEqual(0, frame.players[0].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[0].first_active_frame);
     try testing.expectEqual(null, frame.players[0].connected_frame);
     try testing.expectEqual(null, frame.players[0].last_active_frame);
     try testing.expectEqual(.neutral, frame.players[1].move_phase);
-    try testing.expectEqual(2, frame.players[1].move_frame);
+    try testing.expectEqual(0, frame.players[1].animation_to_move_delta);
     try testing.expectEqual(null, frame.players[1].first_active_frame);
     try testing.expectEqual(null, frame.players[1].connected_frame);
     try testing.expectEqual(null, frame.players[1].last_active_frame);
