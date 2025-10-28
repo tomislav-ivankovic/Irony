@@ -51,7 +51,10 @@ const hooking_retry_sleep_time = 100 * std.time.ns_per_ms;
 var dll_module: sdk.os.Module = undefined;
 var module_handle_shared_value: ?sdk.os.SharedValue(w32.HINSTANCE) = null;
 var main_thread: ?std.Thread = null;
-var mutex = std.Thread.Mutex{};
+var main_thread_running = std.atomic.Value(bool).init(false);
+
+var pending_event_mutex = std.Thread.Mutex{};
+var producer_mutex = std.Thread.Mutex{};
 var consumer_condition = std.Thread.Condition{};
 var producer_condition = std.Thread.Condition{};
 var pending_event: ?Event = null;
@@ -84,7 +87,8 @@ pub fn DllMain(
                 sdk.misc.error_context.logError(err);
                 return 0;
             };
-            std.log.debug("Initialization thread spawned.", .{});
+            std.log.debug("Main thread spawned.", .{});
+            main_thread_running.store(true, .seq_cst);
 
             std.log.info("DLL attached successfully.", .{});
             return 1;
@@ -98,8 +102,11 @@ pub fn DllMain(
                 sendEvent(&.shut_down);
                 std.log.info("Shutdown event sent.", .{});
 
-                std.log.debug("Joining main thread...", .{});
-                thread.join();
+                std.log.debug("Waiting for main thread to shut down...", .{});
+                while (main_thread_running.load(.seq_cst)) {
+                    std.Thread.sleep(100 * std.time.ns_per_ms);
+                }
+                thread.detach();
                 std.log.info("Main thread shut down.", .{});
             } else {
                 std.log.debug("Nothing to shut down.", .{});
@@ -146,8 +153,7 @@ pub fn selfEject() void {
 }
 
 pub fn main() void {
-    mutex.lock();
-    defer mutex.unlock();
+    defer main_thread_running.store(false, .seq_cst);
 
     std.log.info("Main thread started.", .{});
     defer std.log.info("Main thread stopped.", .{});
@@ -254,14 +260,16 @@ pub fn main() void {
     var event_buss: ?dll.EventBuss = null;
     var window_procedure: ?sdk.os.WindowProcedure = null;
 
+    pending_event_mutex.lock();
     listening_to_events.store(true, .seq_cst);
     defer {
         listening_to_events.store(false, .seq_cst);
+        pending_event_mutex.unlock();
         producer_condition.broadcast();
     }
 
     while (true) {
-        consumer_condition.wait(&mutex);
+        consumer_condition.wait(&pending_event_mutex);
         const event = pending_event orelse continue;
         defer {
             pending_event = null;
@@ -394,10 +402,12 @@ fn sendEvent(event: *const Event) void {
     if (!listening_to_events.load(.seq_cst)) {
         return;
     }
-    mutex.lock();
-    defer mutex.unlock();
+    producer_mutex.lock();
+    defer producer_mutex.unlock();
+    pending_event_mutex.lock();
+    defer pending_event_mutex.unlock();
     while (pending_event != null) {
-        producer_condition.wait(&mutex);
+        producer_condition.wait(&pending_event_mutex);
         if (!listening_to_events.load(.seq_cst)) {
             return;
         }
@@ -405,7 +415,7 @@ fn sendEvent(event: *const Event) void {
     pending_event = event.*;
     consumer_condition.signal();
     while (pending_event != null) {
-        producer_condition.wait(&mutex);
+        producer_condition.wait(&pending_event_mutex);
         if (!listening_to_events.load(.seq_cst)) {
             return;
         }
