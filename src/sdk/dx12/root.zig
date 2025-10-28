@@ -1,12 +1,14 @@
 pub const Context = @import("context.zig").Context;
 pub const BufferContext = @import("context.zig").BufferContext;
+pub const FrameContext = @import("context.zig").FrameContext;
 pub const beforeRender = @import("context.zig").beforeRender;
 pub const afterRender = @import("context.zig").afterRender;
 pub const DescriptorHeapAllocator = @import("descriptor_heap_allocator.zig").DescriptorHeapAllocator;
 pub const Error = @import("error.zig").Error;
 pub const ErrorEnum = @import("error.zig").ErrorEnum;
 pub const Functions = @import("functions.zig").Functions;
-pub const FrameContext = @import("context.zig").FrameContext;
+pub const OnHookEvent = @import("hooks.zig").OnHookEvent;
+pub const Hooks = @import("hooks.zig").Hooks;
 pub const getWindowFromSwapChain = @import("misc.zig").getWindowFromSwapChain;
 pub const getDeviceFromSwapChain = @import("misc.zig").getDeviceFromSwapChain;
 pub const getCpuDescriptorHandleForHeapStart = @import("misc.zig").getCpuDescriptorHandleForHeapStart;

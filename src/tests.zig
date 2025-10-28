@@ -3,11 +3,11 @@ test {
     _ = @import("sdk/dx12/descriptor_heap_allocator.zig");
     _ = @import("sdk/dx12/error.zig");
     _ = @import("sdk/dx12/functions.zig");
+    _ = @import("sdk/dx12/hooks.zig");
     _ = @import("sdk/dx12/misc.zig");
     _ = @import("sdk/dx12/testing_context.zig");
 
     _ = @import("sdk/hooking/hook.zig");
-    _ = @import("sdk/hooking/main_hooks.zig");
 
     _ = @import("sdk/io/recording.zig");
     _ = @import("sdk/io/settings.zig");

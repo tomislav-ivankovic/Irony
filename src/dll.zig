@@ -20,10 +20,8 @@ pub const std_options = std.Options{
 const MainAllocator = std.heap.GeneralPurposeAllocator(.{});
 const MemorySearchTask = sdk.misc.Task(dll.game.Memory);
 const Event = union(enum) {
-    hooks_init: Dx12Event,
-    hooks_deinit: Dx12Event,
+    present: Dx12Event,
     tick: void,
-    update: Dx12Event,
     before_resize: Dx12Event,
     after_resize: Dx12Event,
     window_procedure: WindowProcedure,
@@ -45,7 +43,7 @@ const Event = union(enum) {
     };
 };
 
-const main_hooks = sdk.hooking.MainHooks(onHooksInit, onHooksDeinit, onUpdate, beforeResize, afterResize);
+const dx12_hooks = sdk.dx12.Hooks(onPresent, beforeResize, afterResize);
 const game_hooks = dll.game.Hooks(onTick);
 const number_of_hooking_retries = 10;
 const hooking_retry_sleep_time = 100 * std.time.ns_per_ms;
@@ -56,7 +54,7 @@ var main_thread: ?std.Thread = null;
 var mutex = std.Thread.Mutex{};
 var consumer_condition = std.Thread.Condition{};
 var producer_condition = std.Thread.Condition{};
-var event: ?Event = null;
+var pending_event: ?Event = null;
 
 pub fn DllMain(
     module_handle: w32.HINSTANCE,
@@ -96,11 +94,7 @@ pub fn DllMain(
             std.log.debug("Shutting down main thread...", .{});
             if (main_thread) |*thread| {
                 std.log.debug("Sending shutdown event...", .{});
-                mutex.lock();
-                defer mutex.unlock();
-                event = .tick;
-                consumer_condition.signal();
-                producer_condition.wait(&mutex);
+                sendEvent(&.shut_down);
                 std.log.info("Shutdown event sent.", .{});
 
                 std.log.debug("Joining main thread...", .{});
@@ -209,21 +203,26 @@ pub fn main() void {
         }
     }
 
-    std.log.debug("Initializing main hooks...", .{});
+    std.log.debug("Initializing DX12 hooks...", .{});
     for (0..number_of_hooking_retries) |retry_number| {
-        main_hooks.init() catch |err| {
+        dx12_hooks.init() catch |err| {
             if (retry_number < number_of_hooking_retries - 1) {
                 std.Thread.sleep(hooking_retry_sleep_time);
                 continue;
             } else {
-                sdk.misc.error_context.append("Failed to initialize main hooks.", .{});
+                sdk.misc.error_context.append("Failed to initialize DX12 hooks.", .{});
                 sdk.misc.error_context.logError(err);
                 return;
             }
         };
         break;
     }
-    std.log.info("Main hooks initialized.", .{});
+    std.log.info("DX12 hooks initialized.", .{});
+    defer {
+        std.log.debug("De-initializing DX12 hooks...", .{});
+        dx12_hooks.deinit();
+        std.log.info("DX12 hooks de-initialized.", .{});
+    }
 
     std.log.debug("Spawning memory search task...", .{});
     var memory_search_task = if (MemorySearchTask.spawn(
@@ -249,56 +248,68 @@ pub fn main() void {
         std.log.info("Game hooks de-initialized.", .{});
     }
 
+    const State = enum { starting_up, up, shutting_down, down };
+    var state = State.starting_up;
     var event_buss: ?dll.EventBuss = null;
     var window_procedure: ?sdk.os.WindowProcedure = null;
-    defer producer_condition.broadcast();
 
-    while (true) {
+    while (state != .down) {
         consumer_condition.wait(&mutex);
-        const event_union = event orelse continue;
+        const event = pending_event orelse continue;
         defer {
-            event = null;
+            pending_event = null;
             producer_condition.signal();
         }
-        switch (event_union) {
-            .hooks_init => |e| {
-                std.log.info("Initializing event buss...", .{});
-                event_buss = .init(allocator, &base_dir, e.window, e.device, e.command_queue, e.swap_chain);
-                std.log.info("Event buss initialized.", .{});
+        switch (event) {
+            .present => |*e| switch (state) {
+                .starting_up => {
+                    std.log.info("Initializing event buss...", .{});
+                    event_buss = .init(allocator, &base_dir, e.window, e.device, e.command_queue, e.swap_chain);
+                    std.log.info("Event buss initialized.", .{});
 
-                std.log.debug("Initializing window procedure...", .{});
-                if (sdk.os.WindowProcedure.init(e.window, windowProcedure)) |procedure| {
-                    std.log.info("Window procedure initialized.", .{});
-                    window_procedure = procedure;
-                } else |err| {
-                    sdk.misc.error_context.append("Failed to initialize window procedure.", .{});
-                    sdk.misc.error_context.logError(err);
-                }
-            },
-            .hooks_deinit => |e| {
-                std.log.debug("De-initializing window procedure...", .{});
-                if (window_procedure) |*procedure| {
-                    if (procedure.deinit()) {
-                        window_procedure = null;
-                        std.log.info("Window procedure de-initialized.", .{});
+                    std.log.debug("Initializing window procedure...", .{});
+                    if (sdk.os.WindowProcedure.init(e.window, windowProcedure)) |procedure| {
+                        std.log.info("Window procedure initialized.", .{});
+                        window_procedure = procedure;
                     } else |err| {
-                        sdk.misc.error_context.append("Failed to de-initialize window procedure.", .{});
+                        sdk.misc.error_context.append("Failed to initialize window procedure.", .{});
                         sdk.misc.error_context.logError(err);
                     }
-                } else {
-                    std.log.debug("Nothing to de-initialize.", .{});
-                }
 
-                std.log.info("De-initializing event buss...", .{});
-                if (event_buss) |*buss| {
-                    buss.deinit(&base_dir, e.window, e.device, e.command_queue, e.swap_chain);
-                    event_buss = null;
-                    std.log.info("Event buss de-initialized.", .{});
-                } else {
-                    std.log.info("Nothing to de-initialize.", .{});
-                }
+                    state = .up;
+                },
+                .up => {
+                    if (event_buss) |*buss| {
+                        const game_memory = memory_search_task.peek();
+                        buss.draw(&base_dir, e.window, e.device, e.command_queue, e.swap_chain, game_memory);
+                    }
+                },
+                .shutting_down => {
+                    std.log.debug("De-initializing window procedure...", .{});
+                    if (window_procedure) |*procedure| {
+                        if (procedure.deinit()) {
+                            window_procedure = null;
+                            std.log.info("Window procedure de-initialized.", .{});
+                        } else |err| {
+                            sdk.misc.error_context.append("Failed to de-initialize window procedure.", .{});
+                            sdk.misc.error_context.logError(err);
+                        }
+                    } else {
+                        std.log.debug("Nothing to de-initialize.", .{});
+                    }
 
-                break;
+                    std.log.info("De-initializing event buss...", .{});
+                    if (event_buss) |*buss| {
+                        buss.deinit(&base_dir, e.window, e.device, e.command_queue, e.swap_chain);
+                        event_buss = null;
+                        std.log.info("Event buss de-initialized.", .{});
+                    } else {
+                        std.log.info("Nothing to de-initialize.", .{});
+                    }
+
+                    state = .down;
+                },
+                .down => {},
             },
             .tick => {
                 if (event_buss) |*buss| {
@@ -306,34 +317,26 @@ pub fn main() void {
                     buss.tick(game_memory);
                 }
             },
-            .update => |e| {
-                if (event_buss) |*buss| {
-                    const game_memory = memory_search_task.peek();
-                    buss.draw(&base_dir, e.window, e.device, e.command_queue, e.swap_chain, game_memory);
-                }
-            },
-            .before_resize => |e| {
+            .before_resize => |*e| {
                 std.log.info("Detected before resize event.", .{});
                 if (event_buss) |*buss| {
                     buss.beforeResize(&base_dir, e.window, e.device, e.command_queue, e.swap_chain);
                 }
             },
-            .after_resize => |e| {
+            .after_resize => |*e| {
                 std.log.info("Detected after resize event.", .{});
                 if (event_buss) |*buss| {
                     buss.afterResize(&base_dir, e.window, e.device, e.command_queue, e.swap_chain);
                 }
             },
-            .window_procedure => |e| {
+            .window_procedure => |*e| {
                 e.out_window_procedure.* = window_procedure;
                 if (event_buss) |*buss| {
                     e.out_result.* = buss.processWindowMessage(&base_dir, e.window, e.u_msg, e.w_param, e.l_param);
                 }
             },
             .shut_down => {
-                std.log.debug("De-initializing main hooks...", .{});
-                main_hooks.deinit();
-                std.log.info("Main hooks de-initialized.", .{});
+                state = .shutting_down;
             },
         }
     }
@@ -381,66 +384,35 @@ fn performMemorySearch(allocator: std.mem.Allocator, dir: *const sdk.misc.BaseDi
     return game_memory;
 }
 
-fn onHooksInit(
-    window: w32.HWND,
-    device: *const w32.ID3D12Device,
-    command_queue: *const w32.ID3D12CommandQueue,
-    swap_chain: *const w32.IDXGISwapChain,
-) void {
+fn sendEvent(event: *const Event) void {
     mutex.lock();
     defer mutex.unlock();
-    event = .{ .hooks_init = .{
-        .window = window,
-        .device = device,
-        .command_queue = command_queue,
-        .swap_chain = swap_chain,
-    } };
+    while (pending_event != null) {
+        producer_condition.wait(&mutex);
+    }
+    pending_event = event.*;
     consumer_condition.signal();
-    producer_condition.wait(&mutex);
+    while (pending_event != null) {
+        producer_condition.wait(&mutex);
+    }
 }
 
-fn onHooksDeinit(
+fn onPresent(
     window: w32.HWND,
     device: *const w32.ID3D12Device,
     command_queue: *const w32.ID3D12CommandQueue,
     swap_chain: *const w32.IDXGISwapChain,
 ) void {
-    mutex.lock();
-    defer mutex.unlock();
-    event = .{ .hooks_deinit = .{
+    sendEvent(&.{ .present = .{
         .window = window,
         .device = device,
         .command_queue = command_queue,
         .swap_chain = swap_chain,
-    } };
-    consumer_condition.signal();
-    producer_condition.wait(&mutex);
+    } });
 }
 
 fn onTick() void {
-    mutex.lock();
-    defer mutex.unlock();
-    event = .tick;
-    consumer_condition.signal();
-    producer_condition.wait(&mutex);
-}
-
-fn onUpdate(
-    window: w32.HWND,
-    device: *const w32.ID3D12Device,
-    command_queue: *const w32.ID3D12CommandQueue,
-    swap_chain: *const w32.IDXGISwapChain,
-) void {
-    mutex.lock();
-    defer mutex.unlock();
-    event = .{ .update = .{
-        .window = window,
-        .device = device,
-        .command_queue = command_queue,
-        .swap_chain = swap_chain,
-    } };
-    consumer_condition.signal();
-    producer_condition.wait(&mutex);
+    sendEvent(&.tick);
 }
 
 fn beforeResize(
@@ -449,16 +421,12 @@ fn beforeResize(
     command_queue: *const w32.ID3D12CommandQueue,
     swap_chain: *const w32.IDXGISwapChain,
 ) void {
-    mutex.lock();
-    defer mutex.unlock();
-    event = .{ .before_resize = .{
+    sendEvent(&.{ .before_resize = .{
         .window = window,
         .device = device,
         .command_queue = command_queue,
         .swap_chain = swap_chain,
-    } };
-    consumer_condition.signal();
-    producer_condition.wait(&mutex);
+    } });
 }
 
 fn afterResize(
@@ -467,16 +435,12 @@ fn afterResize(
     command_queue: *const w32.ID3D12CommandQueue,
     swap_chain: *const w32.IDXGISwapChain,
 ) void {
-    mutex.lock();
-    defer mutex.unlock();
-    event = .{ .after_resize = .{
+    sendEvent(&.{ .after_resize = .{
         .window = window,
         .device = device,
         .command_queue = command_queue,
         .swap_chain = swap_chain,
-    } };
-    consumer_condition.signal();
-    producer_condition.wait(&mutex);
+    } });
 }
 
 fn windowProcedure(
@@ -487,18 +451,14 @@ fn windowProcedure(
 ) callconv(.winapi) w32.LRESULT {
     var window_procedure: ?sdk.os.WindowProcedure = null;
     var result: ?w32.LRESULT = null;
-    mutex.lock();
-    defer mutex.unlock();
-    event = .{ .window_procedure = .{
+    sendEvent(&.{ .window_procedure = .{
         .window = window,
         .u_msg = u_msg,
         .w_param = w_param,
         .l_param = l_param,
         .out_window_procedure = &window_procedure,
         .out_result = &result,
-    } };
-    consumer_condition.signal();
-    producer_condition.wait(&mutex);
+    } });
     if (result) |r| {
         return r;
     }
