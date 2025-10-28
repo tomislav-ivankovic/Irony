@@ -409,25 +409,10 @@ const FileDialog = struct {
             sdk.misc.error_context.append("Failed to construct \"{s}\" directory path.", .{directory_name});
             return err;
         };
-
-        var returned_error: ?anyerror = null;
-        const thread = std.Thread.spawn(.{}, struct {
-            fn call(in_path: []const u8, out_err: *?anyerror) void {
-                std.fs.cwd().makePath(in_path) catch |err| {
-                    out_err.* = err;
-                };
-            }
-        }.call, .{ path, &returned_error }) catch |err| {
-            sdk.misc.error_context.append("Failed to spawn directory make thread.", .{});
+        std.fs.cwd().makePath(path) catch |err| {
             sdk.misc.error_context.append("Failed to make directory: {s}", .{path});
             return err;
         };
-        thread.join();
-        if (returned_error) |err| {
-            sdk.misc.error_context.append("Failed to make directory: {s}", .{path});
-            return err;
-        }
-
         return path;
     }
 

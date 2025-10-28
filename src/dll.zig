@@ -19,18 +19,44 @@ pub const std_options = std.Options{
 
 const MainAllocator = std.heap.GeneralPurposeAllocator(.{});
 const MemorySearchTask = sdk.misc.Task(dll.game.Memory);
+const Event = union(enum) {
+    hooks_init: Dx12Event,
+    hooks_deinit: Dx12Event,
+    tick: void,
+    update: Dx12Event,
+    before_resize: Dx12Event,
+    after_resize: Dx12Event,
+    window_procedure: WindowProcedure,
+    shut_down: void,
+
+    pub const Dx12Event = struct {
+        window: w32.HWND,
+        device: *const w32.ID3D12Device,
+        command_queue: *const w32.ID3D12CommandQueue,
+        swap_chain: *const w32.IDXGISwapChain,
+    };
+    pub const WindowProcedure = struct {
+        window: w32.HWND,
+        u_msg: u32,
+        w_param: w32.WPARAM,
+        l_param: w32.LPARAM,
+        out_window_procedure: *?sdk.os.WindowProcedure,
+        out_result: *?w32.LRESULT,
+    };
+};
 
 const main_hooks = sdk.hooking.MainHooks(onHooksInit, onHooksDeinit, onUpdate, beforeResize, afterResize);
 const game_hooks = dll.game.Hooks(onTick);
 const number_of_hooking_retries = 10;
 const hooking_retry_sleep_time = 100 * std.time.ns_per_ms;
 
+var dll_module: sdk.os.Module = undefined;
 var module_handle_shared_value: ?sdk.os.SharedValue(w32.HINSTANCE) = null;
-var base_dir = sdk.misc.BaseDir.working_dir;
-var main_allocator: ?MainAllocator = null;
-var window_procedure: ?sdk.os.WindowProcedure = null;
-var event_buss: ?dll.EventBuss = null;
-var memory_search_task: ?MemorySearchTask = null;
+var main_thread: ?std.Thread = null;
+var mutex = std.Thread.Mutex{};
+var consumer_condition = std.Thread.Condition{};
+var producer_condition = std.Thread.Condition{};
+var event: ?Event = null;
 
 pub fn DllMain(
     module_handle: w32.HINSTANCE,
@@ -41,23 +67,24 @@ pub fn DllMain(
     switch (forward_reason) {
         w32.DLL_PROCESS_ATTACH => {
             std.log.info("DLL attached event detected.", .{});
+            dll_module = sdk.os.Module{ .handle = module_handle, .process = .getCurrent() };
 
             std.log.debug("Creating module handle shared value...", .{});
-            if (createModuleHandleSharedValue(module_handle)) |shared_value| {
+            module_handle_shared_value = if (createModuleHandleSharedValue(module_handle)) |shared_value| block: {
                 std.log.info("Module handle shared value created.", .{});
-                module_handle_shared_value = shared_value;
-            } else |err| {
+                break :block shared_value;
+            } else |err| block: {
                 sdk.misc.error_context.append("Failed to create module handle shared value.", .{});
                 sdk.misc.error_context.logError(err);
-            }
+                break :block null;
+            };
 
-            std.log.debug("Spawning the initialization thread...", .{});
-            const thread = std.Thread.spawn(.{}, init, .{}) catch |err| {
-                sdk.misc.error_context.new("Failed to spawn initialization thread.", .{});
+            std.log.debug("Spawning the main thread...", .{});
+            main_thread = std.Thread.spawn(.{}, main, .{}) catch |err| {
+                sdk.misc.error_context.new("Failed to spawn main thread.", .{});
                 sdk.misc.error_context.logError(err);
                 return 0;
             };
-            thread.detach();
             std.log.debug("Initialization thread spawned.", .{});
 
             std.log.info("DLL attached successfully.", .{});
@@ -66,7 +93,22 @@ pub fn DllMain(
         w32.DLL_PROCESS_DETACH => {
             std.log.info("DLL detach event detected.", .{});
 
-            deinit();
+            std.log.debug("Shutting down main thread...", .{});
+            if (main_thread) |*thread| {
+                std.log.debug("Sending shutdown event...", .{});
+                mutex.lock();
+                defer mutex.unlock();
+                event = .tick;
+                consumer_condition.signal();
+                producer_condition.wait(&mutex);
+                std.log.info("Shutdown event sent.", .{});
+
+                std.log.debug("Joining main thread...", .{});
+                thread.join();
+                std.log.info("Main thread shut down.", .{});
+            } else {
+                std.log.debug("Nothing to shut down.", .{});
+            }
 
             std.log.debug("Destroying module handle shared value...", .{});
             if (module_handle_shared_value) |*shared_value| {
@@ -91,13 +133,7 @@ pub fn DllMain(
 pub fn selfEject() void {
     const thread = std.Thread.spawn(.{}, struct {
         fn call() void {
-            const module = sdk.os.Module.getLocal(module_name) catch |err| {
-                sdk.misc.error_context.append("Failed to find self module.", .{});
-                sdk.misc.error_context.append("Failed to self eject.", .{});
-                sdk.misc.error_context.logError(err);
-                return;
-            };
-            const success = w32.FreeLibrary(module.handle);
+            const success = w32.FreeLibrary(dll_module.handle);
             if (success == 0) {
                 sdk.misc.error_context.new("{f}", .{sdk.os.Error.getLast()});
                 sdk.misc.error_context.append("FreeLibrary returned 0.", .{});
@@ -112,6 +148,195 @@ pub fn selfEject() void {
         return;
     };
     thread.detach();
+}
+
+pub fn main() void {
+    mutex.lock();
+    defer mutex.unlock();
+
+    std.log.info("Main thread started.", .{});
+    defer std.log.info("Main thread stopped.", .{});
+
+    std.log.debug("Finding base directory...", .{});
+    const base_dir = if (sdk.misc.BaseDir.fromModule(&dll_module)) |dir| block: {
+        std.log.info("Base directory found: {s}", .{dir.get()});
+        break :block dir;
+    } else |err| block: {
+        sdk.misc.error_context.append("Failed to find base directory. Using working directory instead.", .{});
+        sdk.misc.error_context.logError(err);
+        break :block sdk.misc.BaseDir.working_dir;
+    };
+
+    std.log.debug("Starting file logging...", .{});
+    if (startFileLogging(&base_dir)) {
+        std.log.info("File logging started.", .{});
+    } else |err| {
+        sdk.misc.error_context.append("Failed to start file logging.", .{});
+        sdk.misc.error_context.logError(err);
+    }
+    defer {
+        std.log.info("Stopping file logging...", .{});
+        file_logger.stop();
+        std.log.info("File logging stopped.", .{});
+    }
+
+    std.log.debug("Initializing main allocator...", .{});
+    var main_allocator = MainAllocator.init;
+    const allocator = main_allocator.allocator();
+    std.log.info("Main allocator initialized.", .{});
+    defer {
+        std.log.debug("De-initializing main allocator...", .{});
+        switch (main_allocator.deinit()) {
+            .ok => std.log.info("Main allocator de-initialized.", .{}),
+            .leak => std.log.err("Main allocator detected memory leaks.", .{}),
+        }
+    }
+
+    std.log.debug("Initializing hooking...", .{});
+    sdk.hooking.init() catch |err| {
+        sdk.misc.error_context.append("Failed to initialize hooking.", .{});
+        sdk.misc.error_context.logError(err);
+        return;
+    };
+    std.log.info("Hooking initialized.", .{});
+    defer {
+        std.log.debug("De-initializing hooking...", .{});
+        if (sdk.hooking.deinit()) {
+            std.log.info("Hooking de-initialized.", .{});
+        } else |err| {
+            sdk.misc.error_context.append("Failed to de-initialize hooking.", .{});
+            sdk.misc.error_context.logError(err);
+        }
+    }
+
+    std.log.debug("Initializing main hooks...", .{});
+    for (0..number_of_hooking_retries) |retry_number| {
+        main_hooks.init() catch |err| {
+            if (retry_number < number_of_hooking_retries - 1) {
+                std.Thread.sleep(hooking_retry_sleep_time);
+                continue;
+            } else {
+                sdk.misc.error_context.append("Failed to initialize main hooks.", .{});
+                sdk.misc.error_context.logError(err);
+                return;
+            }
+        };
+        break;
+    }
+    std.log.info("Main hooks initialized.", .{});
+
+    std.log.debug("Spawning memory search task...", .{});
+    var memory_search_task = if (MemorySearchTask.spawn(
+        allocator,
+        performMemorySearch,
+        .{ allocator, &base_dir },
+    )) |task| block: {
+        std.log.info("Memory search task spawned.", .{});
+        break :block task;
+    } else |err| block: {
+        sdk.misc.error_context.append("Failed to spawn memory search task. Searching in main thread...", .{});
+        sdk.misc.error_context.logWarning(err);
+        const result = performMemorySearch(allocator, &base_dir);
+        break :block MemorySearchTask.createCompleted(result);
+    };
+    defer {
+        std.log.debug("Joining memory search task...", .{});
+        _ = memory_search_task.join();
+        std.log.info("Memory search task joined.", .{});
+
+        std.log.debug("De-initializing game hooks...", .{});
+        game_hooks.deinit();
+        std.log.info("Game hooks de-initialized.", .{});
+    }
+
+    var event_buss: ?dll.EventBuss = null;
+    var window_procedure: ?sdk.os.WindowProcedure = null;
+    defer producer_condition.broadcast();
+
+    while (true) {
+        consumer_condition.wait(&mutex);
+        const event_union = event orelse continue;
+        defer {
+            event = null;
+            producer_condition.signal();
+        }
+        switch (event_union) {
+            .hooks_init => |e| {
+                std.log.info("Initializing event buss...", .{});
+                event_buss = .init(allocator, &base_dir, e.window, e.device, e.command_queue, e.swap_chain);
+                std.log.info("Event buss initialized.", .{});
+
+                std.log.debug("Initializing window procedure...", .{});
+                if (sdk.os.WindowProcedure.init(e.window, windowProcedure)) |procedure| {
+                    std.log.info("Window procedure initialized.", .{});
+                    window_procedure = procedure;
+                } else |err| {
+                    sdk.misc.error_context.append("Failed to initialize window procedure.", .{});
+                    sdk.misc.error_context.logError(err);
+                }
+            },
+            .hooks_deinit => |e| {
+                std.log.debug("De-initializing window procedure...", .{});
+                if (window_procedure) |*procedure| {
+                    if (procedure.deinit()) {
+                        window_procedure = null;
+                        std.log.info("Window procedure de-initialized.", .{});
+                    } else |err| {
+                        sdk.misc.error_context.append("Failed to de-initialize window procedure.", .{});
+                        sdk.misc.error_context.logError(err);
+                    }
+                } else {
+                    std.log.debug("Nothing to de-initialize.", .{});
+                }
+
+                std.log.info("De-initializing event buss...", .{});
+                if (event_buss) |*buss| {
+                    buss.deinit(&base_dir, e.window, e.device, e.command_queue, e.swap_chain);
+                    event_buss = null;
+                    std.log.info("Event buss de-initialized.", .{});
+                } else {
+                    std.log.info("Nothing to de-initialize.", .{});
+                }
+
+                break;
+            },
+            .tick => {
+                if (event_buss) |*buss| {
+                    const game_memory = memory_search_task.join();
+                    buss.tick(game_memory);
+                }
+            },
+            .update => |e| {
+                if (event_buss) |*buss| {
+                    const game_memory = memory_search_task.peek();
+                    buss.draw(&base_dir, e.window, e.device, e.command_queue, e.swap_chain, game_memory);
+                }
+            },
+            .before_resize => |e| {
+                std.log.info("Detected before resize event.", .{});
+                if (event_buss) |*buss| {
+                    buss.beforeResize(&base_dir, e.window, e.device, e.command_queue, e.swap_chain);
+                }
+            },
+            .after_resize => |e| {
+                std.log.info("Detected after resize event.", .{});
+                if (event_buss) |*buss| {
+                    buss.afterResize(&base_dir, e.window, e.device, e.command_queue, e.swap_chain);
+                }
+            },
+            .window_procedure => |e| {
+                e.out_window_procedure.* = window_procedure;
+                if (event_buss) |*buss| {
+                    e.out_result.* = buss.processWindowMessage(&base_dir, e.window, e.u_msg, e.w_param, e.l_param);
+                }
+            },
+            .shut_down => {
+                std.log.debug("De-initializing main hooks...", .{});
+                main_hooks.deinit();
+                std.log.info("Main hooks de-initialized.", .{});
+            },
+        }
+    }
 }
 
 fn createModuleHandleSharedValue(module_handle: w32.HINSTANCE) !sdk.os.SharedValue(w32.HINSTANCE) {
@@ -132,146 +357,16 @@ fn createModuleHandleSharedValue(module_handle: w32.HINSTANCE) !sdk.os.SharedVal
     return shared_value;
 }
 
-fn init() void {
-    std.log.info("Running initialization...", .{});
-
-    std.log.debug("Finding base directory...", .{});
-    findBaseDir();
-    std.log.info("Base directory set to: {s}", .{base_dir.get()});
-
-    std.log.debug("Starting file logging...", .{});
-    if (startFileLogging()) {
-        std.log.info("File logging started.", .{});
-    } else |err| {
-        sdk.misc.error_context.append("Failed to start file logging.", .{});
-        sdk.misc.error_context.logError(err);
-    }
-
-    std.log.debug("Initializing main allocator...", .{});
-    main_allocator = MainAllocator.init;
-    std.log.info("Main allocator initialized.", .{});
-
-    std.log.debug("Initializing hooking...", .{});
-    sdk.hooking.init() catch |err| {
-        sdk.misc.error_context.append("Failed to initialize hooking.", .{});
-        sdk.misc.error_context.logError(err);
-        return;
-    };
-    std.log.info("Hooking initialized.", .{});
-
-    std.log.debug("Initializing main hooks...", .{});
-    for (0..number_of_hooking_retries) |retry_number| {
-        main_hooks.init() catch |err| {
-            if (retry_number < number_of_hooking_retries - 1) {
-                std.Thread.sleep(hooking_retry_sleep_time);
-                continue;
-            } else {
-                sdk.misc.error_context.append("Failed to initialize main hooks.", .{});
-                sdk.misc.error_context.logError(err);
-                return;
-            }
-        };
-        break;
-    }
-    std.log.info("Main hooks initialized.", .{});
-
-    std.log.info("Initialization completed.", .{});
-}
-
-fn deinit() void {
-    std.log.info("Running de-initialization...", .{});
-
-    std.log.debug("De-initializing main hooks...", .{});
-    main_hooks.deinit();
-    std.log.info("Main hooks de-initialized.", .{});
-
-    std.log.debug("De-initializing hooking...", .{});
-    if (sdk.hooking.deinit()) {
-        std.log.info("Hooking de-initialized.", .{});
-    } else |err| {
-        sdk.misc.error_context.append("Failed to de-initialize hooking.", .{});
-        sdk.misc.error_context.logError(err);
-    }
-
-    std.log.debug("De-initializing main allocator...", .{});
-    if (main_allocator) |*allocator| {
-        switch (allocator.deinit()) {
-            .ok => std.log.info("Main allocator de-initialized.", .{}),
-            .leak => std.log.err("Main allocator detected memory leaks.", .{}),
-        }
-    } else {
-        std.log.debug("Nothing to de-initialize.", .{});
-    }
-
-    std.log.info("Stopping file logging...", .{});
-    file_logger.stop();
-    std.log.info("File logging stopped.", .{});
-
-    std.log.info("De-initialization completed.", .{});
-}
-
-fn findBaseDir() void {
-    const dll_module = sdk.os.Module.getLocal(module_name) catch |err| {
-        sdk.misc.error_context.append("Failed to get local module: {s}", .{module_name});
-        sdk.misc.error_context.append("Failed find base directory.", .{});
-        sdk.misc.error_context.logError(err);
-        std.log.info("Defaulting base directory to working directory.", .{});
-        base_dir = sdk.misc.BaseDir.working_dir;
-        return;
-    };
-    base_dir = sdk.misc.BaseDir.fromModule(&dll_module) catch |err| {
-        sdk.misc.error_context.append("Failed to find base directory from module: {s}", .{module_name});
-        sdk.misc.error_context.append("Failed find base directory.", .{});
-        sdk.misc.error_context.logError(err);
-        std.log.info("Defaulting base directory to working directory.", .{});
-        base_dir = sdk.misc.BaseDir.working_dir;
-        return;
-    };
-}
-
-fn startFileLogging() !void {
+fn startFileLogging(base_dir: *const sdk.misc.BaseDir) !void {
     var buffer: [sdk.os.max_file_path_length]u8 = undefined;
     const file_path = base_dir.getPath(&buffer, log_file_name) catch |err| {
-        sdk.misc.error_context.append("Failed to find log file path.", .{});
+        sdk.misc.error_context.append("Failed to construct log file path.", .{});
         return err;
     };
     file_logger.start(file_path) catch |err| {
         sdk.misc.error_context.append("Failed to start file logging with file path: {s}", .{file_path});
         return err;
     };
-}
-
-fn onHooksInit(
-    window: w32.HWND,
-    device: *const w32.ID3D12Device,
-    command_queue: *const w32.ID3D12CommandQueue,
-    swap_chain: *const w32.IDXGISwapChain,
-) void {
-    const allocator = if (main_allocator) |*a| a.allocator() else return;
-
-    std.log.info("Initializing event buss...", .{});
-    event_buss = dll.EventBuss.init(allocator, &base_dir, window, device, command_queue, swap_chain);
-    std.log.info("Event buss initialized.", .{});
-
-    std.log.debug("Initializing window procedure...", .{});
-    if (sdk.os.WindowProcedure.init(window, windowProcedure)) |procedure| {
-        std.log.info("Window procedure initialized.", .{});
-        window_procedure = procedure;
-    } else |err| {
-        sdk.misc.error_context.append("Failed to initialize window procedure.", .{});
-        sdk.misc.error_context.logError(err);
-    }
-
-    std.log.debug("Spawning memory search task...", .{});
-    if (MemorySearchTask.spawn(allocator, performMemorySearch, .{ allocator, &base_dir })) |task| {
-        std.log.info("Memory search task spawned.", .{});
-        memory_search_task = task;
-    } else |err| {
-        sdk.misc.error_context.append("Failed to spawn memory search task. Searching in main thread...", .{});
-        sdk.misc.error_context.logWarning(err);
-        const result = performMemorySearch(allocator, &base_dir);
-        memory_search_task = MemorySearchTask.createCompleted(result);
-    }
 }
 
 fn performMemorySearch(allocator: std.mem.Allocator, dir: *const sdk.misc.BaseDir) dll.game.Memory {
@@ -286,54 +381,48 @@ fn performMemorySearch(allocator: std.mem.Allocator, dir: *const sdk.misc.BaseDi
     return game_memory;
 }
 
+fn onHooksInit(
+    window: w32.HWND,
+    device: *const w32.ID3D12Device,
+    command_queue: *const w32.ID3D12CommandQueue,
+    swap_chain: *const w32.IDXGISwapChain,
+) void {
+    mutex.lock();
+    defer mutex.unlock();
+    event = .{ .hooks_init = .{
+        .window = window,
+        .device = device,
+        .command_queue = command_queue,
+        .swap_chain = swap_chain,
+    } };
+    consumer_condition.signal();
+    producer_condition.wait(&mutex);
+}
+
 fn onHooksDeinit(
     window: w32.HWND,
     device: *const w32.ID3D12Device,
     command_queue: *const w32.ID3D12CommandQueue,
     swap_chain: *const w32.IDXGISwapChain,
 ) void {
-    std.log.debug("Joining memory search task...", .{});
-    if (memory_search_task) |*task| {
-        _ = task.join();
-        std.log.info("Memory search task joined.", .{});
-
-        std.log.debug("De-initializing game hooks...", .{});
-        game_hooks.deinit();
-        std.log.info("Game hooks de-initialized.", .{});
-
-        memory_search_task = null;
-    } else {
-        std.log.debug("Nothing to join.", .{});
-    }
-
-    std.log.debug("De-initializing window procedure...", .{});
-    if (window_procedure) |*procedure| {
-        if (procedure.deinit()) {
-            window_procedure = null;
-            std.log.info("Window procedure de-initialized.", .{});
-        } else |err| {
-            sdk.misc.error_context.append("Failed to de-initialize window procedure.", .{});
-            sdk.misc.error_context.logError(err);
-        }
-    } else {
-        std.log.debug("Nothing to de-initialize.", .{});
-    }
-
-    std.log.info("De-initializing event buss...", .{});
-    if (event_buss) |*buss| {
-        buss.deinit(&base_dir, window, device, command_queue, swap_chain);
-        event_buss = null;
-        std.log.info("Event buss de-initialized.", .{});
-    } else {
-        std.log.info("Nothing to de-initialize.", .{});
-    }
+    mutex.lock();
+    defer mutex.unlock();
+    event = .{ .hooks_deinit = .{
+        .window = window,
+        .device = device,
+        .command_queue = command_queue,
+        .swap_chain = swap_chain,
+    } };
+    consumer_condition.signal();
+    producer_condition.wait(&mutex);
 }
 
 fn onTick() void {
-    if (event_buss) |*buss| {
-        const game_memory = memory_search_task.?.join();
-        buss.tick(game_memory);
-    }
+    mutex.lock();
+    defer mutex.unlock();
+    event = .tick;
+    consumer_condition.signal();
+    producer_condition.wait(&mutex);
 }
 
 fn onUpdate(
@@ -342,10 +431,16 @@ fn onUpdate(
     command_queue: *const w32.ID3D12CommandQueue,
     swap_chain: *const w32.IDXGISwapChain,
 ) void {
-    if (event_buss) |*buss| {
-        const game_memory = memory_search_task.?.peek();
-        buss.draw(&base_dir, window, device, command_queue, swap_chain, game_memory);
-    }
+    mutex.lock();
+    defer mutex.unlock();
+    event = .{ .update = .{
+        .window = window,
+        .device = device,
+        .command_queue = command_queue,
+        .swap_chain = swap_chain,
+    } };
+    consumer_condition.signal();
+    producer_condition.wait(&mutex);
 }
 
 fn beforeResize(
@@ -354,10 +449,16 @@ fn beforeResize(
     command_queue: *const w32.ID3D12CommandQueue,
     swap_chain: *const w32.IDXGISwapChain,
 ) void {
-    std.log.info("Detected before resize event.", .{});
-    if (event_buss) |*buss| {
-        buss.beforeResize(&base_dir, window, device, command_queue, swap_chain);
-    }
+    mutex.lock();
+    defer mutex.unlock();
+    event = .{ .before_resize = .{
+        .window = window,
+        .device = device,
+        .command_queue = command_queue,
+        .swap_chain = swap_chain,
+    } };
+    consumer_condition.signal();
+    producer_condition.wait(&mutex);
 }
 
 fn afterResize(
@@ -366,11 +467,16 @@ fn afterResize(
     command_queue: *const w32.ID3D12CommandQueue,
     swap_chain: *const w32.IDXGISwapChain,
 ) void {
-    std.log.info("Detected after resize event.", .{});
-    std.log.info("Detected before resize event.", .{});
-    if (event_buss) |*buss| {
-        buss.afterResize(&base_dir, window, device, command_queue, swap_chain);
-    }
+    mutex.lock();
+    defer mutex.unlock();
+    event = .{ .after_resize = .{
+        .window = window,
+        .device = device,
+        .command_queue = command_queue,
+        .swap_chain = swap_chain,
+    } };
+    consumer_condition.signal();
+    producer_condition.wait(&mutex);
 }
 
 fn windowProcedure(
@@ -379,11 +485,22 @@ fn windowProcedure(
     w_param: w32.WPARAM,
     l_param: w32.LPARAM,
 ) callconv(.winapi) w32.LRESULT {
-    if (event_buss) |*buss| {
-        const result = buss.processWindowMessage(&base_dir, window, u_msg, w_param, l_param);
-        if (result) |r| {
-            return r;
-        }
+    var window_procedure: ?sdk.os.WindowProcedure = null;
+    var result: ?w32.LRESULT = null;
+    mutex.lock();
+    defer mutex.unlock();
+    event = .{ .window_procedure = .{
+        .window = window,
+        .u_msg = u_msg,
+        .w_param = w_param,
+        .l_param = l_param,
+        .out_window_procedure = &window_procedure,
+        .out_result = &result,
+    } };
+    consumer_condition.signal();
+    producer_condition.wait(&mutex);
+    if (result) |r| {
+        return r;
     }
     return w32.CallWindowProcW(window_procedure.?.original, window, u_msg, w_param, l_param);
 }
