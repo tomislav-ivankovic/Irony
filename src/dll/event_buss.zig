@@ -252,13 +252,11 @@ pub const EventBuss = struct {
 
     pub fn processWindowMessage(
         self: *Self,
-        base_dir: *const sdk.misc.BaseDir,
         window: w32.HWND,
         u_msg: u32,
         w_param: w32.WPARAM,
         l_param: w32.LPARAM,
     ) ?w32.LRESULT {
-        _ = base_dir;
         if (self.ui_context) |*context| {
             return context.processWindowMessage(window, u_msg, w_param, l_param);
         }

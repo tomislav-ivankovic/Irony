@@ -23,7 +23,6 @@ const Event = union(enum) {
     tick: void,
     before_resize: Dx12Event,
     after_resize: Dx12Event,
-    window_procedure: WindowProcedure,
     shut_down: void,
 
     pub const Dx12Event = struct {
@@ -31,14 +30,6 @@ const Event = union(enum) {
         device: *const w32.ID3D12Device,
         command_queue: *const w32.ID3D12CommandQueue,
         swap_chain: *const w32.IDXGISwapChain,
-    };
-    pub const WindowProcedure = struct {
-        window: w32.HWND,
-        u_msg: u32,
-        w_param: w32.WPARAM,
-        l_param: w32.LPARAM,
-        out_window_procedure: *?sdk.os.WindowProcedure,
-        out_result: *?w32.LRESULT,
     };
 };
 const ListeningToEvents = enum(u8) { none, all, only_present };
@@ -59,6 +50,9 @@ var consumer_condition = std.Thread.Condition{};
 var producer_condition = std.Thread.Condition{};
 var pending_event: ?Event = null;
 var listening_to_events = std.atomic.Value(ListeningToEvents).init(.none);
+
+var event_buss: ?dll.EventBuss = null;
+var window_procedure: ?sdk.os.WindowProcedure = null;
 
 pub fn DllMain(
     module_handle: w32.HINSTANCE,
@@ -251,8 +245,6 @@ pub fn main() void {
 
     const State = enum { starting_up, up, shutting_down };
     var state = State.starting_up;
-    var event_buss: ?dll.EventBuss = null;
-    var window_procedure: ?sdk.os.WindowProcedure = null;
 
     defer producer_condition.broadcast();
     pending_event_mutex.lock();
@@ -333,12 +325,6 @@ pub fn main() void {
                 std.log.info("Detected after resize event.", .{});
                 if (event_buss) |*buss| {
                     buss.afterResize(&base_dir, e.window, e.device, e.command_queue, e.swap_chain);
-                }
-            },
-            .window_procedure => |*e| {
-                e.out_window_procedure.* = window_procedure;
-                if (event_buss) |*buss| {
-                    e.out_result.* = buss.processWindowMessage(&base_dir, e.window, e.u_msg, e.w_param, e.l_param);
                 }
             },
             .shut_down => {
@@ -479,21 +465,11 @@ fn windowProcedure(
     w_param: w32.WPARAM,
     l_param: w32.LPARAM,
 ) callconv(.winapi) w32.LRESULT {
-    var window_procedure: ?sdk.os.WindowProcedure = null;
-    var result: ?w32.LRESULT = null;
-    sendEvent(&.{ .window_procedure = .{
-        .window = window,
-        .u_msg = u_msg,
-        .w_param = w_param,
-        .l_param = l_param,
-        .out_window_procedure = &window_procedure,
-        .out_result = &result,
-    } });
-    if (result) |r| {
-        return r;
+    if (event_buss) |*buss| {
+        const result = buss.processWindowMessage(window, u_msg, w_param, l_param);
+        if (result) |r| {
+            return r;
+        }
     }
-    if (window_procedure) |procedure| {
-        return w32.CallWindowProcW(procedure.original, window, u_msg, w_param, l_param);
-    }
-    return 0;
+    return w32.CallWindowProcW(window_procedure.?.original, window, u_msg, w_param, l_param);
 }
