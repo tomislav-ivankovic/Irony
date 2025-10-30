@@ -8,6 +8,7 @@ pub fn Hooks(onTick: *const fn () void) type {
         var tick_hook: ?TickHook = null;
         var update_camera_hook: ?UpdateCameraHook = null;
         pub var last_camera_manager_address: usize = 0;
+        var active_hook_calls = std.atomic.Value(u8).init(0);
 
         const TickHook = sdk.hooking.Hook(game.TickFunction);
         const UpdateCameraHook = sdk.hooking.Hook(game.UpdateCameraFunction);
@@ -92,14 +93,22 @@ pub fn Hooks(onTick: *const fn () void) type {
             } else {
                 std.log.debug("Nothing to destroy.", .{});
             }
+
+            while (active_hook_calls.load(.seq_cst) > 0) {
+                std.Thread.sleep(10 * std.time.ns_per_ms);
+            }
         }
 
         fn onTickInternal(delta_time: f64) callconv(.c) void {
+            _ = active_hook_calls.fetchAdd(1, .seq_cst);
+            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
             tick_hook.?.original(delta_time);
             onTick();
         }
 
         fn onUpdateCamera(camera_manager_address: usize, delta_time: f32) callconv(.c) void {
+            _ = active_hook_calls.fetchAdd(1, .seq_cst);
+            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
             last_camera_manager_address = camera_manager_address;
             update_camera_hook.?.original(camera_manager_address, delta_time);
         }

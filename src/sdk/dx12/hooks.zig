@@ -18,6 +18,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
         var resize_buffers_hook: ?hooking.Hook(dx12.Functions.ResizeBuffers) = null;
         var present_hook: ?hooking.Hook(dx12.Functions.Present) = null;
         var g_command_queue: ?*const w32.ID3D12CommandQueue = null;
+        var active_hook_calls = std.atomic.Value(u8).init(0);
 
         pub fn init() !void {
             std.log.debug("Finding DX12 functions...", .{});
@@ -140,6 +141,10 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                 std.log.debug("Nothing to destroy.", .{});
             }
 
+            while (active_hook_calls.load(.seq_cst) > 0) {
+                std.Thread.sleep(10 * std.time.ns_per_ms);
+            }
+
             std.log.debug("Releasing the DX12 command queue...", .{});
             if (g_command_queue) |command_queue| {
                 _ = command_queue.IUnknown.Release();
@@ -154,6 +159,9 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             num_command_lists: u32,
             pp_command_lists: [*]?*w32.ID3D12CommandList,
         ) callconv(.winapi) void {
+            _ = active_hook_calls.fetchAdd(1, .seq_cst);
+            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
+
             execute_command_lists_hook.?.original(command_queue, num_command_lists, pp_command_lists);
             if (command_queue == g_command_queue) {
                 return;
@@ -183,6 +191,9 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             sync_interval: u32,
             flags: u32,
         ) callconv(.winapi) w32.HRESULT {
+            _ = active_hook_calls.fetchAdd(1, .seq_cst);
+            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
+
             const command_queue = g_command_queue orelse {
                 std.log.debug("Present function was called before command queue was found. Skipping this frame.", .{});
                 return present_hook.?.original(swap_chain, sync_interval, flags);
@@ -198,6 +209,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                 return present_hook.?.original(swap_chain, sync_interval, flags);
             };
             onPresent(window, device, command_queue, swap_chain);
+
             return present_hook.?.original(swap_chain, sync_interval, flags);
         }
 
@@ -209,6 +221,9 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             new_format: w32.DXGI_FORMAT,
             swap_chain_flags: u32,
         ) callconv(.winapi) w32.HRESULT {
+            _ = active_hook_calls.fetchAdd(1, .seq_cst);
+            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
+
             const command_queue = g_command_queue orelse {
                 std.log.debug("Resize buffers was called before command queue was found. Skipping this call.", .{});
                 return resize_buffers_hook.?.original(
@@ -244,6 +259,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                     swap_chain_flags,
                 );
             };
+
             beforeResize(window, device, command_queue, swap_chain);
             const return_value = resize_buffers_hook.?.original(
                 swap_chain,
@@ -254,6 +270,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                 swap_chain_flags,
             );
             afterResize(window, device, command_queue, swap_chain);
+
             return return_value;
         }
     };
