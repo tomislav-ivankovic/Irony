@@ -64,13 +64,7 @@ pub fn saveRecording(
         return err;
     };
 
-    const initial_values = if (frames.len > 0) &frames[0] else &Frame{};
-    writeInitialValues(Frame, &writer, initial_values, fields) catch |err| {
-        misc.error_context.append("Failed to write initial values.", .{});
-        return err;
-    };
-
-    writeFrames(Frame, &writer, initial_values, frames, fields) catch |err| {
+    writeFrames(Frame, &writer, frames, fields) catch |err| {
         misc.error_context.append("Failed to write frames.", .{});
         return err;
     };
@@ -112,12 +106,7 @@ pub fn loadRecording(
         return err;
     };
 
-    const initial_values = readInitialValues(Frame, &reader, remote_fields, local_fields) catch |err| {
-        misc.error_context.append("Failed to read initial values.", .{});
-        return err;
-    };
-
-    const frames = readFrames(Frame, allocator, &reader, &initial_values, remote_fields, local_fields) catch |err| {
+    const frames = readFrames(Frame, allocator, &reader, remote_fields, local_fields) catch |err| {
         misc.error_context.append("Failed to read frames.", .{});
         return err;
     };
@@ -199,70 +188,9 @@ fn readFieldList(
     return remote_fields_buffer[0..remote_fields_len];
 }
 
-fn writeInitialValues(
-    comptime Frame: type,
-    writer: *std.fs.File.Writer,
-    frame: *const Frame,
-    comptime fields: []const LocalField,
-) !void {
-    inline for (fields) |*field| {
-        if (field.parent_index != null) {
-            continue; // Ancestors store the initial value of descendants.
-        }
-        const field_pointer = getConstFieldPointer(frame, field) catch unreachable;
-        writeValue(writer, field_pointer) catch |err| {
-            misc.error_context.append("Failed to write the value of field: {s}", .{field.path});
-            return err;
-        };
-    }
-}
-
-fn readInitialValues(
-    comptime Frame: type,
-    reader: *std.fs.File.Reader,
-    remote_fields: []const RemoteField,
-    comptime local_fields: []const LocalField,
-) !Frame {
-    const default_frame = Frame{};
-    var frame = default_frame;
-    for (remote_fields) |*remote_field| {
-        const local_index = remote_field.local_index orelse {
-            reader.interface.discardAll(remote_field.size) catch |err| {
-                misc.error_context.append("Failed to discard unknown field's data.", .{});
-                return err;
-            };
-            continue;
-        };
-        inline for (local_fields, 0..) |*local_field, index| {
-            if (local_index == index) {
-                if (local_field.parent_index != null) {
-                    break; // Ancestors store the initial value of descendants.
-                }
-                const field_pointer = getFieldPointer(&frame, local_field) catch unreachable;
-                if (readValue(local_field.Type, reader)) |field_value| {
-                    field_pointer.* = field_value;
-                } else |err| {
-                    misc.error_context.append("Failed to read the value of field: {s}", .{local_field.path});
-                    if (err == error.InvalidValue) {
-                        if (!builtin.is_test) {
-                            misc.error_context.logWarning(err);
-                        }
-                        field_pointer.* = (getConstFieldPointer(&default_frame, local_field) catch unreachable).*;
-                    } else {
-                        return err;
-                    }
-                }
-                break;
-            }
-        } else unreachable;
-    }
-    return frame;
-}
-
 fn writeFrames(
     comptime Frame: type,
     writer: *std.fs.File.Writer,
-    initial_values: *const Frame,
     frames: []const Frame,
     comptime fields: []const LocalField,
 ) !void {
@@ -270,10 +198,12 @@ fn writeFrames(
         misc.error_context.new("Failed to write number of frames: {}", .{frames.len});
         return err;
     };
-    var last_frame: *const Frame = initial_values;
     for (frames, 0..) |*frame, frame_index| {
         errdefer misc.error_context.append("Failed to write frame: {}", .{frame_index});
-        const changes = findFieldChanges(Frame, frame, last_frame, fields);
+        const changes = switch (frame_index) {
+            0 => getInitialChanges(fields),
+            else => findFieldChanges(Frame, frame, &frames[frame_index - 1], fields),
+        };
         writer.interface.writeInt(FieldIndex, changes.number_of_changes, endian) catch |err| {
             misc.error_context.new("Failed to write number of changes: {}", .{changes.number_of_changes});
             return err;
@@ -292,7 +222,33 @@ fn writeFrames(
                 };
             }
         }
-        last_frame = frame;
+    }
+}
+
+fn Changes(comptime len: usize) type {
+    return struct {
+        number_of_changes: FieldIndex,
+        field_changed: [len]bool,
+    };
+}
+
+inline fn getInitialChanges(comptime fields: []const LocalField) Changes(fields.len) {
+    comptime {
+        var number_of_changes: FieldIndex = 0;
+        var field_changed: [fields.len]bool = undefined;
+        for (fields, 0..) |*field, field_index| {
+            // Ancestors already store the initial value for descendants.
+            // There is no need to duplicate that data in the descendants.
+            const changed = field.parent_index == null;
+            field_changed[field_index] = changed;
+            if (changed) {
+                number_of_changes += 1;
+            }
+        }
+        return .{
+            .number_of_changes = number_of_changes,
+            .field_changed = field_changed,
+        };
     }
 }
 
@@ -301,10 +257,7 @@ fn findFieldChanges(
     frame_1: *const Frame,
     frame_2: *const Frame,
     comptime fields: []const LocalField,
-) struct {
-    number_of_changes: FieldIndex,
-    field_changed: [fields.len]bool,
-} {
+) Changes(fields.len) {
     const parent_indices = comptime block: {
         var array: [fields.len]?FieldIndex = undefined;
         for (&array, fields) |*element, *field| {
@@ -366,7 +319,10 @@ fn findFieldChanges(
             }
         }
     }
-    return .{ .number_of_changes = number_of_changes, .field_changed = field_changed };
+    return .{
+        .number_of_changes = number_of_changes,
+        .field_changed = field_changed,
+    };
 }
 
 fn areValuesEqual(value_1: anytype, value_2: @TypeOf(value_1)) bool {
@@ -389,7 +345,6 @@ fn readFrames(
     comptime Frame: type,
     allocator: std.mem.Allocator,
     reader: *std.fs.File.Reader,
-    initial_values: *const Frame,
     remote_fields: []const RemoteField,
     comptime local_fields: []const LocalField,
 ) ![]Frame {
@@ -404,7 +359,7 @@ fn readFrames(
         );
         return err;
     };
-    var current_frame = initial_values.*;
+    var current_frame = Frame{};
     for (0..number_of_frames) |frame_index| {
         errdefer misc.error_context.append("Failed read frame: {}", .{frame_index});
         const number_of_changes = reader.interface.takeInt(FieldIndex, endian) catch |err| {
