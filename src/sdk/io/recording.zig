@@ -11,10 +11,14 @@ const LocalField = struct {
     path: []const u8,
     access: []const AccessElement,
     Type: type,
+    parent_index: ?FieldIndex,
+    has_children: bool,
 };
 const AccessElement = union(enum) {
-    name: []const u8,
-    index: usize,
+    struct_field: []const u8,
+    array_index: usize,
+    optional_payload: void,
+    union_field: []const u8,
 };
 const RemoteField = struct {
     local_index: ?usize,
@@ -25,8 +29,10 @@ const magic_number = "irony";
 const endian = std.builtin.Endian.little;
 const max_number_of_fields = std.math.maxInt(FieldIndex);
 const max_field_path_len = std.math.maxInt(FieldPathLength);
-const field_separator = '.';
-const field_separator_str = [1]u8{field_separator};
+const path_separator = '.';
+const path_separator_str = [1]u8{path_separator};
+const optional_payload_path_component = "payload";
+const pattern_wildcard = '?';
 
 pub const RecordingConfig = struct {
     atomic_types: []const type = &.{},
@@ -200,7 +206,10 @@ fn writeInitialValues(
     comptime fields: []const LocalField,
 ) !void {
     inline for (fields) |*field| {
-        const field_pointer = getConstFieldPointer(frame, field);
+        if (field.parent_index != null) {
+            continue; // Ancestors store the initial value of descendants.
+        }
+        const field_pointer = getConstFieldPointer(frame, field) catch unreachable;
         writeValue(writer, field_pointer) catch |err| {
             misc.error_context.append("Failed to write the value of field: {s}", .{field.path});
             return err;
@@ -226,7 +235,10 @@ fn readInitialValues(
         };
         inline for (local_fields, 0..) |*local_field, index| {
             if (local_index == index) {
-                const field_pointer = getFieldPointer(&frame, local_field);
+                if (local_field.parent_index != null) {
+                    break; // Ancestors store the initial value of descendants.
+                }
+                const field_pointer = getFieldPointer(&frame, local_field) catch unreachable;
                 if (readValue(local_field.Type, reader)) |field_value| {
                     field_pointer.* = field_value;
                 } else |err| {
@@ -235,7 +247,7 @@ fn readInitialValues(
                         if (!builtin.is_test) {
                             misc.error_context.logWarning(err);
                         }
-                        field_pointer.* = getConstFieldPointer(&default_frame, local_field).*;
+                        field_pointer.* = (getConstFieldPointer(&default_frame, local_field) catch unreachable).*;
                     } else {
                         return err;
                     }
@@ -261,27 +273,19 @@ fn writeFrames(
     var last_frame: *const Frame = initial_values;
     for (frames, 0..) |*frame, frame_index| {
         errdefer misc.error_context.append("Failed to write frame: {}", .{frame_index});
-        var number_of_changes: FieldIndex = 0;
-        inline for (fields) |*field| {
-            const field_pointer = getConstFieldPointer(frame, field);
-            const last_field_pointer = getConstFieldPointer(last_frame, field);
-            if (!areValuesEqual(field_pointer.*, last_field_pointer.*)) {
-                number_of_changes += 1;
-            }
-        }
-        writer.interface.writeInt(FieldIndex, number_of_changes, endian) catch |err| {
-            misc.error_context.new("Failed to write number of changes: {}", .{number_of_changes});
+        const changes = findFieldChanges(Frame, frame, last_frame, fields);
+        writer.interface.writeInt(FieldIndex, changes.number_of_changes, endian) catch |err| {
+            misc.error_context.new("Failed to write number of changes: {}", .{changes.number_of_changes});
             return err;
         };
         inline for (fields, 0..) |*field, field_index| {
-            errdefer misc.error_context.append("Failed to write change for field: {s}", .{field.path});
-            const field_pointer = getConstFieldPointer(frame, field);
-            const last_field_pointer = getConstFieldPointer(last_frame, field);
-            if (!areValuesEqual(field_pointer.*, last_field_pointer.*)) {
+            if (changes.field_changed[field_index]) {
+                errdefer misc.error_context.append("Failed to write change for field: {s}", .{field.path});
                 writer.interface.writeInt(FieldIndex, @intCast(field_index), endian) catch |err| {
                     misc.error_context.new("Failed to write field index: {}", .{field_index});
                     return err;
                 };
+                const field_pointer = getConstFieldPointer(frame, field) catch unreachable;
                 writeValue(writer, field_pointer) catch |err| {
                     misc.error_context.append("Failed to write the new value.", .{});
                     return err;
@@ -290,6 +294,75 @@ fn writeFrames(
         }
         last_frame = frame;
     }
+}
+
+fn findFieldChanges(
+    comptime Frame: type,
+    frame_1: *const Frame,
+    frame_2: *const Frame,
+    comptime fields: []const LocalField,
+) struct {
+    number_of_changes: FieldIndex,
+    field_changed: [fields.len]bool,
+} {
+    var number_of_changes: FieldIndex = 0;
+    var field_changed: [fields.len]bool = [1]bool{false} ** fields.len;
+    inline for (fields, 0..) |*field, field_index| {
+        var ancestor_changed = false;
+        var ancestor_index = field.parent_index;
+        while (ancestor_index) |index| {
+            if (field_changed[index]) {
+                ancestor_changed = true;
+                break;
+            }
+            inline for (fields, 0..) |*current_field, current_index| {
+                if (current_index == index) {
+                    ancestor_index = current_field.parent_index;
+                }
+            }
+        }
+        const maybe_field_pointer_1 = getConstFieldPointer(frame_1, field) catch null;
+        const maybe_field_pointer_2 = getConstFieldPointer(frame_2, field) catch null;
+        if (!ancestor_changed and // Ancestor change supplies changes for all descendants. No need to duplicate changes.
+            maybe_field_pointer_1 != null and // If the field is not accessible there is no way to store it's change.
+            maybe_field_pointer_2 != null) // Ancestor fields provide values when descendants change accessability.
+        {
+            const field_pointer_1 = maybe_field_pointer_1.?;
+            const field_pointer_2 = maybe_field_pointer_2.?;
+            if (!field.has_children) { // Leaf nodes are the regular nodes that change when their raw value changes.
+                if (!areValuesEqual(field_pointer_1.*, field_pointer_2.*)) {
+                    field_changed[field_index] = true;
+                    number_of_changes += 1;
+                }
+            } else switch (@typeInfo(field.Type)) { // Only optionals and tagged unions can have children.
+                .optional => {
+                    // Optional root nodes need to change only when transitioning from and to a null value.
+                    // If only the payload changes, descendant nodes are responsible to store these changes.
+                    const changed = (field_pointer_1.* == null and field_pointer_2.* != null) or
+                        (field_pointer_1.* != null and field_pointer_2.* == null);
+                    if (changed) {
+                        field_changed[field_index] = true;
+                        number_of_changes += 1;
+                    }
+                },
+                .@"union" => |*info| {
+                    // Tagged union root node needs to change only when union's tag changes.
+                    // If only the payload changes, descendant nodes are responsible to store these changes.
+                    if (info.tag_type == null) {
+                        @compileError("Expected optional type or a tagged union but got: " ++ @typeName(field.Type));
+                    }
+                    const tag_1 = std.meta.activeTag(field_pointer_1.*);
+                    const tag_2 = std.meta.activeTag(field_pointer_2.*);
+                    if (tag_1 != tag_2) {
+                        field_changed[field_index] = true;
+                        number_of_changes += 1;
+                    }
+                },
+                else => @compileError("Expected optional type or a tagged union but got: " ++ @typeName(field.Type)),
+            }
+        }
+    }
+    return .{ .number_of_changes = number_of_changes, .field_changed = field_changed };
 }
 
 fn areValuesEqual(value_1: anytype, value_2: @TypeOf(value_1)) bool {
@@ -327,7 +400,6 @@ fn readFrames(
         );
         return err;
     };
-    const default_frame = Frame{};
     var current_frame = initial_values.*;
     for (0..number_of_frames) |frame_index| {
         errdefer misc.error_context.append("Failed read frame: {}", .{frame_index});
@@ -358,16 +430,23 @@ fn readFrames(
             };
             inline for (local_fields, 0..) |*local_field, index| {
                 if (index == local_index) {
-                    const field_pointer = getFieldPointer(&current_frame, local_field);
                     if (readValue(local_field.Type, reader)) |field_value| {
-                        field_pointer.* = field_value;
+                        if (getFieldPointer(&current_frame, local_field)) |field_pointer| {
+                            field_pointer.* = field_value;
+                        } else |err| {
+                            misc.error_context.append("Failed to access field: {s}", .{local_field.path});
+                            if (!builtin.is_test) {
+                                misc.error_context.logWarning(err);
+                            }
+                            setFieldToDefaultValue(Frame, &current_frame, index, local_fields);
+                        }
                     } else |err| {
                         misc.error_context.append("Failed to read the new value of: {s}", .{local_field.path});
                         if (err == error.InvalidValue) {
                             if (!builtin.is_test) {
                                 misc.error_context.logWarning(err);
                             }
-                            field_pointer.* = getConstFieldPointer(&default_frame, local_field).*;
+                            setFieldToDefaultValue(Frame, &current_frame, index, local_fields);
                         } else {
                             return err;
                         }
@@ -379,6 +458,30 @@ fn readFrames(
         frames[frame_index] = current_frame;
     }
     return frames;
+}
+
+fn setFieldToDefaultValue(
+    comptime Frame: type,
+    frame: *Frame,
+    field_index: FieldIndex,
+    comptime fields: []const LocalField,
+) void {
+    const default_frame = Frame{};
+    var next_index: ?FieldIndex = field_index;
+    while (next_index) |current_index| {
+        inline for (fields, 0..) |*field, index| {
+            if (index == current_index) {
+                if (getFieldPointer(frame, field) catch null) |field_pointer| {
+                    if (getConstFieldPointer(&default_frame, field) catch null) |default_field_pointer| {
+                        field_pointer.* = default_field_pointer.*;
+                        return;
+                    }
+                }
+                next_index = field.parent_index;
+                break;
+            }
+        } else unreachable;
+    }
 }
 
 fn writeValue(writer: *std.fs.File.Writer, value_pointer: anytype) !void {
@@ -501,7 +604,7 @@ fn writeValue(writer: *std.fs.File.Writer, value_pointer: anytype) !void {
             const Tag = info.tag_type orelse {
                 @compileError("Union " ++ @typeName(Type) ++ " is not serializable. (Not tagged and not packed.)");
             };
-            const tag = @intFromEnum(value_pointer.*);
+            const tag = std.meta.activeTag(value_pointer.*);
             writeValue(writer, &tag) catch |err| {
                 misc.error_context.append("Failed to write union's tag: {s}", .{@tagName(value_pointer.*)});
                 return err;
@@ -721,11 +824,11 @@ fn serializedSizeOf(comptime Type: type) comptime_int {
     };
 }
 
-fn getFieldPointer(frame: anytype, comptime field: *const LocalField) *field.Type {
+fn getFieldPointer(frame: anytype, comptime field: *const LocalField) error{Inaccessible}!*field.Type {
     return getFieldPointerRecursive(*field.Type, frame, field.access);
 }
 
-fn getConstFieldPointer(frame: anytype, comptime field: *const LocalField) *const field.Type {
+fn getConstFieldPointer(frame: anytype, comptime field: *const LocalField) error{Inaccessible}!*const field.Type {
     return getFieldPointerRecursive(*const field.Type, frame, field.access);
 }
 
@@ -733,7 +836,7 @@ fn getFieldPointerRecursive(
     comptime Pointer: type,
     lhs_pointer: anytype,
     comptime access: []const AccessElement,
-) Pointer {
+) error{Inaccessible}!Pointer {
     if (@typeInfo(Pointer) != .pointer) {
         @compileError("Expected Pointer to be a pointer type but got: " ++ @typeName(Pointer));
     }
@@ -744,11 +847,38 @@ fn getFieldPointerRecursive(
         return lhs_pointer;
     }
     const next_pointer = switch (access[0]) {
-        .name => |name| &@field(lhs_pointer, name),
-        .index => |index| &lhs_pointer[index],
+        .struct_field => |name| &@field(lhs_pointer, name),
+        .array_index => |index| &lhs_pointer[index],
+        .optional_payload => if (lhs_pointer.*) |*pointer| pointer else {
+            misc.error_context.new("Optional value is null.", .{});
+            misc.error_context.append("Failed to access the optional's payload.", .{});
+            return error.Inaccessible;
+        },
+        .union_field => |name| block: {
+            const expected_tag = @field(std.meta.Tag(@TypeOf(lhs_pointer.*)), name);
+            const actual_tag = std.meta.activeTag(lhs_pointer.*);
+            if (actual_tag == expected_tag) {
+                break :block &@field(lhs_pointer, name);
+            } else {
+                misc.error_context.new(
+                    "Expected tagged union to have tag {s}, but actual tag is {s}.",
+                    .{ @tagName(expected_tag), @tagName(actual_tag) },
+                );
+                misc.error_context.append("Failed to access tagged union field: {s}", .{name});
+                return error.Inaccessible;
+            }
+        },
     };
     const next_access = access[1..];
-    return getFieldPointerRecursive(Pointer, next_pointer, next_access);
+    return getFieldPointerRecursive(Pointer, next_pointer, next_access) catch |err| {
+        switch (access[0]) {
+            .struct_field => |name| misc.error_context.append("Access failure inside struct field: {s}", .{name}),
+            .array_index => |index| misc.error_context.append("Access failure inside array index: {}", .{index}),
+            .optional_payload => misc.error_context.append("Access failure inside optional payload.", .{}),
+            .union_field => |name| misc.error_context.append("Access failure inside tagged union field: {s}", .{name}),
+        }
+        return err;
+    };
 }
 
 const GetLocalFieldsState = struct {
@@ -771,6 +901,8 @@ inline fn getLocalFields(comptime Frame: type, comptime config: *const Recording
             .path = "",
             .access = &.{},
             .Type = Frame,
+            .parent_index = null,
+            .has_children = false,
         };
         const state = GetLocalFieldsState{
             .fields_buffer = &fields_buffer,
@@ -821,7 +953,7 @@ fn getLocalFieldsRecursive(
     }
     switch (@typeInfo(field.Type)) {
         .void => {},
-        .bool, .int, .float, .@"enum", .optional, .@"union" => {
+        .bool, .int, .float, .@"enum" => {
             addLocalField(field, state);
         },
         .@"struct" => |*info| if (info.layout == .@"packed") {
@@ -832,10 +964,12 @@ fn getLocalFieldsRecursive(
                     .path = if (field.path.len == 0) block: {
                         break :block struct_field.name;
                     } else block: {
-                        break :block field.path ++ field_separator_str ++ struct_field.name;
+                        break :block field.path ++ path_separator_str ++ struct_field.name;
                     },
-                    .access = field.access ++ &[1]AccessElement{.{ .name = struct_field.name }},
+                    .access = field.access ++ &[1]AccessElement{.{ .struct_field = struct_field.name }},
                     .Type = struct_field.type,
+                    .parent_index = field.parent_index,
+                    .has_children = false,
                 };
                 getLocalFieldsRecursive(config, &sub_field, state);
             }
@@ -846,10 +980,65 @@ fn getLocalFieldsRecursive(
                     .path = if (field.path.len == 0) block: {
                         break :block std.fmt.comptimePrint("{}", .{index});
                     } else block: {
-                        break :block std.fmt.comptimePrint("{s}{s}{}", .{ field.path, field_separator_str, index });
+                        break :block std.fmt.comptimePrint("{s}{s}{}", .{ field.path, path_separator_str, index });
                     },
-                    .access = field.access ++ &[1]AccessElement{.{ .index = index }},
+                    .access = field.access ++ &[1]AccessElement{.{ .array_index = index }},
                     .Type = info.child,
+                    .parent_index = field.parent_index,
+                    .has_children = false,
+                };
+                getLocalFieldsRecursive(config, &sub_field, state);
+            }
+        },
+        .optional => |*info| {
+            const root_index = state.fields_len.*;
+            const root_field = LocalField{
+                .path = field.path,
+                .access = field.access,
+                .Type = field.Type,
+                .parent_index = field.parent_index,
+                .has_children = true,
+            };
+            addLocalField(&root_field, state);
+            const sub_field = LocalField{
+                .path = if (field.path.len == 0) block: {
+                    break :block optional_payload_path_component;
+                } else block: {
+                    break :block field.path ++ path_separator_str ++ optional_payload_path_component;
+                },
+                .access = field.access ++ &[1]AccessElement{.optional_payload},
+                .Type = info.child,
+                .parent_index = root_index,
+                .has_children = false,
+            };
+            getLocalFieldsRecursive(config, &sub_field, state);
+        },
+        .@"union" => |*info| if (info.layout == .@"packed") {
+            addLocalField(field, state);
+        } else {
+            if (info.tag_type == null) {
+                @compileError("Union " ++ @typeName(field.Type) ++ " is not serializable. (Not tagged and not packed.)");
+            }
+            const root_index = state.fields_len.*;
+            const root_field = LocalField{
+                .path = field.path,
+                .access = field.access,
+                .Type = field.Type,
+                .parent_index = field.parent_index,
+                .has_children = true,
+            };
+            addLocalField(&root_field, state);
+            for (info.fields) |*union_field| {
+                const sub_field = LocalField{
+                    .path = if (field.path.len == 0) block: {
+                        break :block union_field.name;
+                    } else block: {
+                        break :block field.path ++ path_separator_str ++ union_field.name;
+                    },
+                    .access = field.access ++ &[1]AccessElement{.{ .union_field = union_field.name }},
+                    .Type = union_field.type,
+                    .parent_index = root_index,
+                    .has_children = false,
                 };
                 getLocalFieldsRecursive(config, &sub_field, state);
             }
@@ -880,7 +1069,7 @@ fn doesPathMatchPattern(path: []const u8, pattern: []const u8) bool {
                     return false;
                 }
                 const pattern_char = pattern[pattern_index];
-                if (pattern_char == '?') {
+                if (pattern_char == pattern_wildcard) {
                     state = .wildcard;
                 } else if (path_char != pattern_char) {
                     return false;
@@ -888,7 +1077,7 @@ fn doesPathMatchPattern(path: []const u8, pattern: []const u8) bool {
                 pattern_index += 1;
             },
             .wildcard => {
-                if (path_char == field_separator) {
+                if (path_char == path_separator) {
                     state = .normal;
                     pattern_index += 1;
                 }
@@ -1093,7 +1282,7 @@ test "loadRecording should use default value when encountering invalid int value
 }
 
 test "loadRecording should use default value when encountering invalid enum value" {
-    const Enum = enum(u8) { a = 1, b = 2 };
+    const Enum = enum(u8) { a = 0, b = 1 };
     const SavedFrame = struct { a: u8 = 0, b: ?u8 = null };
     const LoadedFrame = struct { a: Enum = .a, b: ?Enum = null };
     try saveRecording(SavedFrame, &.{
@@ -1101,13 +1290,11 @@ test "loadRecording should use default value when encountering invalid enum valu
         .{ .a = 0, .b = 0 },
         .{ .a = 1, .b = 1 },
         .{ .a = 2, .b = 2 },
-        .{ .a = 3, .b = 3 },
     }, "./test_assets/recording.irony", &.{});
     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
     const recording = try loadRecording(LoadedFrame, testing.allocator, "./test_assets/recording.irony", &.{});
     defer testing.allocator.free(recording);
     try testing.expectEqualSlices(LoadedFrame, &.{
-        .{ .a = .a, .b = null },
         .{ .a = .a, .b = null },
         .{ .a = .a, .b = .a },
         .{ .a = .b, .b = .b },

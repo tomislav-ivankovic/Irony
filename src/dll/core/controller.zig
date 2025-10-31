@@ -67,7 +67,7 @@ pub const Controller = struct {
     pub const max_scrub_speed = 6.0;
     pub const scrub_ramp_up_time = 10.0;
     pub const serialization_config = sdk.io.RecordingConfig{
-        .atomic_types = &.{model.HitLine},
+        .atomic_types = &.{ ?u32, ?f32, ?i32, sdk.math.Vec3, model.HitLine },
     };
 
     pub fn init(allocator: std.mem.Allocator) Self {
