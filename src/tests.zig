@@ -106,7 +106,7 @@ test {
     _ = @import("dll/ui/main_window.zig");
     _ = @import("dll/ui/message_window.zig");
     _ = @import("dll/ui/navigation_layout.zig");
-    _ = @import("dll/ui/quadrant-layout.zig");
+    _ = @import("dll/ui/quadrant_layout.zig");
     _ = @import("dll/ui/settings_window.zig");
     _ = @import("dll/ui/shapes.zig");
     _ = @import("dll/ui/skeletons.zig");
