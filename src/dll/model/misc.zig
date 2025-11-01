@@ -22,7 +22,7 @@ pub const F32MinMax = struct {
     max: ?f32,
 };
 
-pub const MovePhase = enum(u8) {
+pub const MovePhase = enum(u3) {
     neutral = 0,
     start_up = 1,
     active = 2,
@@ -30,7 +30,7 @@ pub const MovePhase = enum(u8) {
     recovery = 4,
 };
 
-pub const AttackType = enum(u8) {
+pub const AttackType = enum(u4) {
     not_attack = 0,
     high = 1,
     mid = 2,
@@ -44,7 +44,7 @@ pub const AttackType = enum(u8) {
     antiair_only = 10,
 };
 
-pub const HitOutcome = enum(u8) {
+pub const HitOutcome = enum(u5) {
     none = 0,
     blocked_standing = 1,
     blocked_crouching = 2,
@@ -64,7 +64,7 @@ pub const HitOutcome = enum(u8) {
     normal_hit_crouching_right = 16,
 };
 
-pub const Posture = enum(u8) {
+pub const Posture = enum(u3) {
     standing = 0,
     crouching = 1,
     downed_face_up = 2,
@@ -72,7 +72,7 @@ pub const Posture = enum(u8) {
     airborne = 4,
 };
 
-pub const Blocking = enum(u8) {
+pub const Blocking = enum(u3) {
     not_blocking = 0,
     neutral_blocking_mids = 1,
     fully_blocking_mids = 2,
@@ -116,7 +116,7 @@ pub const Heat = union(HeatTag) {
     used_up: void,
 };
 
-pub const HeatTag = enum(u8) {
+pub const HeatTag = enum(u2) {
     available = 0,
     activated = 1,
     used_up = 2,

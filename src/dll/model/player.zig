@@ -2,7 +2,7 @@ const std = @import("std");
 const sdk = @import("../../sdk/root.zig");
 const model = @import("root.zig");
 
-pub const PlayerId = enum(u8) {
+pub const PlayerId = enum(u1) {
     player_1 = 0,
     player_2 = 1,
 
@@ -17,7 +17,7 @@ pub const PlayerId = enum(u8) {
     }
 };
 
-pub const PlayerSide = enum(u8) {
+pub const PlayerSide = enum(u1) {
     left = 0,
     right = 1,
 
@@ -32,7 +32,7 @@ pub const PlayerSide = enum(u8) {
     }
 };
 
-pub const PlayerRole = enum(u8) {
+pub const PlayerRole = enum(u1) {
     main = 0,
     secondary = 1,
 
