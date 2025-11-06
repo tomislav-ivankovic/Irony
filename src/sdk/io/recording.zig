@@ -32,6 +32,7 @@ const path_separator = '.';
 const path_separator_str = [1]u8{path_separator};
 const optional_payload_path_component = "payload";
 const pattern_wildcard = '?';
+const buffer_size = 4096;
 
 pub const RecordingConfig = struct {
     atomic_types: []const type = &.{},
@@ -40,6 +41,7 @@ pub const RecordingConfig = struct {
 
 pub fn saveRecording(
     comptime Frame: type,
+    allocator: std.mem.Allocator,
     frames: []const Frame,
     file_path: []const u8,
     comptime config: *const RecordingConfig,
@@ -49,27 +51,36 @@ pub fn saveRecording(
         return err;
     };
     defer file.close();
-    var buffer: [1024]u8 = undefined;
-    var file_writer = file.writer(&buffer);
-    var writer = io.BitWriter{ .byte_writer = &file_writer.interface };
 
-    writer.writeBytes(magic_number) catch |err| {
+    var file_buffer: [buffer_size]u8 = undefined;
+    var file_writer = file.writer(&file_buffer);
+
+    file_writer.interface.writeAll(magic_number) catch |err| {
         misc.error_context.new("Failed to write magic number.", .{});
         return err;
     };
 
+    var encoder = io.XzEncoder.init(allocator, &file_writer.interface) catch |err| {
+        misc.error_context.append("Failed to initialize XZ encoder.", .{});
+        return err;
+    };
+    defer encoder.deinit();
+    var encoded_buffer: [buffer_size]u8 = undefined;
+    var encoder_writer = encoder.writer(&encoded_buffer);
+    var bit_writer = io.BitWriter{ .byte_writer = &encoder_writer };
+
     const fields = getLocalFields(Frame, config);
-    writeFieldList(&writer, fields) catch |err| {
+    writeFieldList(&bit_writer, fields) catch |err| {
         misc.error_context.append("Failed to write field list.", .{});
         return err;
     };
 
-    writeFrames(Frame, &writer, frames, fields) catch |err| {
+    writeFrames(Frame, &bit_writer, frames, fields) catch |err| {
         misc.error_context.append("Failed to write frames.", .{});
         return err;
     };
 
-    writer.flush() catch |err| {
+    bit_writer.flush() catch |err| {
         misc.error_context.new("Failed to flush bit writer.", .{});
         return err;
     };
@@ -90,12 +101,12 @@ pub fn loadRecording(
         return err;
     };
     defer file.close();
-    var buffer: [1024]u8 = undefined;
-    var file_reader = file.reader(&buffer);
-    var reader = io.BitReader{ .byte_reader = &file_reader.interface };
+
+    var file_buffer: [buffer_size]u8 = undefined;
+    var file_reader = file.reader(&file_buffer);
 
     var magic_buffer: [magic_number.len]u8 = undefined;
-    reader.readBytes(&magic_buffer) catch |err| {
+    file_reader.interface.readSliceAll(&magic_buffer) catch |err| {
         misc.error_context.new("Failed to read magic number.", .{});
         return err;
     };
@@ -104,14 +115,23 @@ pub fn loadRecording(
         return error.MagicNumber;
     }
 
+    var decoder = io.XzDecoder.init(allocator, &file_reader.interface) catch |err| {
+        misc.error_context.append("Failed to initialize XZ decoder.", .{});
+        return err;
+    };
+    defer decoder.deinit();
+    var decoder_buffer: [buffer_size]u8 = undefined;
+    var decoder_reader = decoder.reader(&decoder_buffer);
+    var bit_reader = io.BitReader{ .byte_reader = &decoder_reader };
+
     const local_fields = getLocalFields(Frame, config);
     var remote_fields_buffer: [max_number_of_fields]RemoteField = undefined;
-    const remote_fields = readFieldList(&reader, &remote_fields_buffer, local_fields) catch |err| {
+    const remote_fields = readFieldList(&bit_reader, &remote_fields_buffer, local_fields) catch |err| {
         misc.error_context.append("Failed to read fields list.", .{});
         return err;
     };
 
-    const frames = readFrames(Frame, allocator, &reader, remote_fields, local_fields) catch |err| {
+    const frames = readFrames(Frame, allocator, &bit_reader, remote_fields, local_fields) catch |err| {
         misc.error_context.append("Failed to read frames.", .{});
         return err;
     };
@@ -1081,7 +1101,7 @@ test "loadRecording should load the same recording that saveRecording saved" {
             .struct_of_array = .{ .a = .{ 4, 3 }, .b = .{ 2, 1 } },
         },
     };
-    try saveRecording(Frame, &saved_recording, "./test_assets/recording.irony", &.{});
+    try saveRecording(Frame, testing.allocator, &saved_recording, "./test_assets/recording.irony", &.{});
     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
     const loaded_recording = try loadRecording(Frame, testing.allocator, "./test_assets/recording.irony", &.{});
     defer testing.allocator.free(loaded_recording);
@@ -1090,13 +1110,13 @@ test "loadRecording should load the same recording that saveRecording saved" {
 
 test "saveRecording should overwrite the file if it already exists" {
     const Frame = struct { a: f32 = 0 };
-    try saveRecording(Frame, &.{
+    try saveRecording(Frame, testing.allocator, &.{
         .{ .a = 1 },
         .{ .a = 2 },
         .{ .a = 3 },
     }, "./test_assets/recording.irony", &.{});
     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
-    try saveRecording(Frame, &.{
+    try saveRecording(Frame, testing.allocator, &.{
         .{ .a = 2 },
         .{ .a = 3 },
         .{ .a = 4 },
@@ -1113,7 +1133,7 @@ test "saveRecording should overwrite the file if it already exists" {
 test "loadRecording should succeed when when recording has more fields then expected" {
     const SavedFrame = struct { a: f32 = -1, b: f32 = -2 };
     const LoadedFrame = struct { a: f32 = -3 };
-    try saveRecording(SavedFrame, &.{
+    try saveRecording(SavedFrame, testing.allocator, &.{
         .{ .a = 1, .b = 2 },
         .{ .a = 3, .b = 4 },
         .{ .a = 5, .b = 6 },
@@ -1131,7 +1151,7 @@ test "loadRecording should succeed when when recording has more fields then expe
 test "loadRecording should load default value when recording does not contain a value" {
     const SavedFrame = struct { a: f32 = -1 };
     const LoadedFrame = struct { a: f32 = -2, b: f32 = -3 };
-    try saveRecording(SavedFrame, &.{
+    try saveRecording(SavedFrame, testing.allocator, &.{
         .{ .a = 1 },
         .{ .a = 2 },
         .{ .a = 3 },
@@ -1149,7 +1169,7 @@ test "loadRecording should load default value when recording does not contain a 
 test "loadRecording should use default value when a field has different size then expected" {
     const SavedFrame = struct { a: f32 = -1, b: f64 = -2 };
     const LoadedFrame = struct { a: f32 = -3, b: f32 = -4 };
-    try saveRecording(SavedFrame, &.{
+    try saveRecording(SavedFrame, testing.allocator, &.{
         .{ .a = 1, .b = 2 },
         .{ .a = 3, .b = 4 },
         .{ .a = 5, .b = 6 },
@@ -1168,7 +1188,7 @@ test "loadRecording should use default value when encountering invalid enum valu
     const Enum = enum(u8) { a = 0, b = 1 };
     const SavedFrame = struct { a: u8 = 0, b: ?u8 = null };
     const LoadedFrame = struct { a: Enum = .a, b: ?Enum = null };
-    try saveRecording(SavedFrame, &.{
+    try saveRecording(SavedFrame, testing.allocator, &.{
         .{ .a = 0, .b = null },
         .{ .a = 0, .b = 0 },
         .{ .a = 1, .b = 1 },
@@ -1192,7 +1212,7 @@ test "loadRecording should use default value when encountering invalid tagged un
     const SavedFrame = struct { f1: TagAndPayload = .{}, f2: TagAndPayload = .{} };
     const LoadedFrame = struct { f1: Union = .{ .a = 128 }, f2: Union = .{ .b = 129 } };
     try testing.expectEqual(serializedBitSizeOf(Union), serializedBitSizeOf(TagAndPayload));
-    try saveRecording(SavedFrame, &.{
+    try saveRecording(SavedFrame, testing.allocator, &.{
         .{ .f1 = .{ .tag = 0, .payload = 0 }, .f2 = .{ .tag = 0, .payload = 0 } },
         .{ .f1 = .{ .tag = 1, .payload = 0 }, .f2 = .{ .tag = 1, .payload = 0 } },
         .{ .f1 = .{ .tag = 1, .payload = 1 }, .f2 = .{ .tag = 1, .payload = 1 } },
@@ -1250,7 +1270,7 @@ test "loadRecording should load the same recording that saveRecording saved when
             .union_of_structs = .{ .b = .{ .f1 = 1, .f2 = 1 } },
         },
     };
-    try saveRecording(Frame, &saved_recording, "./test_assets/recording.irony", &.{});
+    try saveRecording(Frame, testing.allocator, &saved_recording, "./test_assets/recording.irony", &.{});
     defer std.fs.cwd().deleteFile("./test_assets/recording.irony") catch @panic("Failed to cleanup test file.");
     const loaded_recording = try loadRecording(Frame, testing.allocator, "./test_assets/recording.irony", &.{});
     defer testing.allocator.free(loaded_recording);

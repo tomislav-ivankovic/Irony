@@ -433,13 +433,14 @@ pub const Controller = struct {
         std.log.debug("Spawning save recording task...", .{});
         const task = SaveTask.spawn(self.allocator, struct {
             fn call(
+                allocator: std.mem.Allocator,
                 frames: []const model.Frame,
                 path_buffer: [sdk.os.max_file_path_length]u8,
                 path_len: usize,
             ) ?void {
                 std.log.debug("Save recording task spawned.", .{});
                 const path = path_buffer[0..path_len];
-                if (sdk.io.saveRecording(model.Frame, frames, path, &serialization_config)) {
+                if (sdk.io.saveRecording(model.Frame, allocator, frames, path, &serialization_config)) {
                     std.log.info("Recording saved.", .{});
                     sdk.ui.toasts.send(.success, null, "Recording saved successfully.", .{});
                 } else |err| {
@@ -448,7 +449,7 @@ pub const Controller = struct {
                     return null;
                 }
             }
-        }.call, .{ self.recording.items, file_path_buffer, file_path_copy.len }) catch |err| {
+        }.call, .{ self.allocator, self.recording.items, file_path_buffer, file_path_copy.len }) catch |err| {
             sdk.misc.error_context.append("Failed to spawn save recording task.", .{});
             sdk.misc.error_context.append("Failed to save recording: {s}", .{file_path});
             sdk.misc.error_context.logError(err);
