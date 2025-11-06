@@ -92,6 +92,10 @@
         .cimgui_test_engine = .{
             .path = "./dep/cimgui_test_engine",
         },
+        .xz = .{
+            .url = "https://github.com/tukaani-project/xz/archive/refs/tags/v5.8.1.tar.gz",
+            .hash = "N-V-__8AAC2UXgAIp8JDVDigmv1aBXc9kCnoOQji9MYxzz2K",
+        },
     },
 
     // Specifies the set of files and directories that are included in this package.
