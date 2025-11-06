@@ -6,3 +6,5 @@ pub const RecordingConfig = @import("recording.zig").RecordingConfig;
 pub const saveSettings = @import("settings.zig").saveSettings;
 pub const loadSettings = @import("settings.zig").loadSettings;
 pub const settingsInnerParse = @import("settings.zig").settingsInnerParse;
+pub const XzEncoder = @import("xz.zig").XzEncoder;
+pub const XzDecoder = @import("xz.zig").XzDecoder;
