@@ -97,7 +97,7 @@ pub const BitWriter = struct {
             self.absolute_position += std.mem.byte_size_in_bits - @as(usize, self.bit_offset);
             self.bit_offset = 0;
         }
-        return self.dest_writer.flush();
+        try self.dest_writer.flush();
     }
 };
 
