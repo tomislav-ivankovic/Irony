@@ -1,5 +1,6 @@
 const std = @import("std");
 const imgui = @import("imgui");
+const build_info = @import("build_info");
 const sdk = @import("../../sdk/root.zig");
 const core = @import("../core/root.zig");
 const model = @import("../model/root.zig");
@@ -50,12 +51,12 @@ pub const MainWindow = struct {
 
         var title_buffer: [260]u8 = undefined;
         const asterisk = if (controller.contains_unsaved_changes) "*" else "";
-        const file_name = if (self.file_menu.getFilePath()) |path| sdk.os.pathToFileName(path) else "untitled.irony";
+        const file_name = if (self.file_menu.getFilePath()) |path| sdk.os.pathToFileName(path) else "Untitled";
         const title = std.fmt.bufPrintZ(
             &title_buffer,
-            "Irony - {s}{s}###main_window",
+            build_info.display_name ++ " - {s}{s}###main_window",
             .{ asterisk, file_name },
-        ) catch "Irony###main_window";
+        ) catch build_info.display_name ++ "###main_window";
 
         const render_content = imgui.igBegin(title, &ui_instance.is_open, imgui.ImGuiWindowFlags_MenuBar);
         defer imgui.igEnd();

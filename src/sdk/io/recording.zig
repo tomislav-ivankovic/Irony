@@ -1,5 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const build_info = @import("build_info");
 const misc = @import("../misc/root.zig");
 const io = @import("root.zig");
 
@@ -25,7 +26,7 @@ const RemoteField = struct {
     size: FieldSize,
 };
 
-const magic_number = "irony";
+const magic_number = @tagName(build_info.name);
 const max_number_of_fields = std.math.maxInt(FieldIndex);
 const max_field_path_len = std.math.maxInt(FieldPathLength);
 const path_separator = '.';

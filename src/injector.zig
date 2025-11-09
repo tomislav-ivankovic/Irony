@@ -1,4 +1,5 @@
 const std = @import("std");
+const build_info = @import("build_info");
 const sdk = @import("sdk/root.zig");
 const injector = @import("injector/root.zig");
 
@@ -12,10 +13,10 @@ const access_rights = sdk.os.Process.AccessRights{
     .QUERY_LIMITED_INFORMATION = 1,
     .SYNCHRONIZE = 1,
 };
-const module_name = "irony.dll";
+const module_name = @tagName(build_info.name) ++ ".dll";
 const interval_ns = 1_000_000_000;
 
-const log_file_name = "irony_injector.log";
+const log_file_name = @tagName(build_info.name) ++ "_injector.log";
 const console_logger = sdk.log.ConsoleLogger(.{});
 const file_logger = sdk.log.FileLogger(.{});
 const composite_logger = sdk.log.CompositeLogger(&.{ console_logger.logFn, file_logger.logFn });
@@ -40,6 +41,8 @@ pub fn main() !void {
         sdk.misc.error_context.append("Failed to start file logging.", .{});
         sdk.misc.error_context.logError(err);
     }
+
+    std.log.info("{s} Injector version {s}", .{ build_info.display_name, build_info.version });
 
     std.log.debug("Checking for only inject mode...", .{});
     only_inject_mode = getOnlyInjectMode();

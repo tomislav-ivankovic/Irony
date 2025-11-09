@@ -1,5 +1,6 @@
 const std = @import("std");
 const imgui = @import("imgui");
+const build_info = @import("build_info");
 const dll = @import("../../dll.zig");
 const sdk = @import("../../sdk/root.zig");
 const core = @import("../core/root.zig");
@@ -229,7 +230,7 @@ const MenuBar = struct {
             action = .close_ui;
         }
         imgui.igBeginDisabled(!is_idle);
-        if (imgui.igMenuItem_Bool("Exit Irony", null, false, true)) {
+        if (imgui.igMenuItem_Bool("Exit " ++ build_info.display_name, null, false, true)) {
             action = .exit;
         }
         imgui.igEndDisabled();
@@ -298,7 +299,7 @@ const FileDialog = struct {
     pub const Type = enum { save, open };
 
     const directory_name = "recordings";
-    const file_extension = ".irony";
+    const file_extension = "." ++ @tagName(build_info.name);
 
     pub fn draw(
         self: *Self,
@@ -351,7 +352,7 @@ const FileDialog = struct {
                     .save => "Save AS",
                     .open => "Open",
                 },
-                "irony recordings (*" ++ file_extension ++ "){" ++ file_extension ++ "}",
+                build_info.display_name ++ " recordings (*" ++ file_extension ++ "){" ++ file_extension ++ "}",
                 config,
             );
         }

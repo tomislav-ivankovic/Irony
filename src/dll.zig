@@ -1,10 +1,11 @@
 const std = @import("std");
 const w32 = @import("win32").everything;
+const build_info = @import("build_info");
 const sdk = @import("sdk/root.zig");
 const dll = @import("dll/root.zig");
 
-pub const module_name = "irony.dll";
-pub const log_file_name = "irony.log";
+pub const module_name = @tagName(build_info.name) ++ ".dll";
+pub const log_file_name = @tagName(build_info.name) ++ ".log";
 pub const buffer_logger = sdk.log.BufferLogger(.{});
 pub const file_logger = sdk.log.FileLogger(.{});
 pub const std_options = std.Options{
@@ -168,6 +169,8 @@ pub fn main() void {
         file_logger.stop();
         std.log.info("File logging stopped.", .{});
     }
+
+    std.log.info("{s} version {s}", .{ build_info.display_name, build_info.version });
 
     std.log.debug("Initializing main allocator...", .{});
     var main_allocator = MainAllocator.init;

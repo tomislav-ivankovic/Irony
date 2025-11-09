@@ -1,5 +1,6 @@
 const std = @import("std");
 const imgui = @import("imgui");
+const build_info = @import("build_info");
 const dll = @import("../../dll.zig");
 const sdk = @import("../../sdk/root.zig");
 const core = @import("../core/root.zig");
@@ -76,7 +77,7 @@ pub const Ui = struct {
         if (!self.is_first_draw) {
             return;
         }
-        sdk.ui.toasts.send(.success, null, "Irony initialized. Press [Tab] to open the UI.", .{});
+        sdk.ui.toasts.send(.success, null, "{s} initialized. Press [Tab] to open the UI.", .{build_info.display_name});
         self.is_first_draw = false;
     }
 
