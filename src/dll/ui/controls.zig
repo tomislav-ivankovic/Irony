@@ -26,7 +26,6 @@ pub fn Controls(comptime config: ControlsConfig) type {
             handlePreviousFrameKey(controller);
             handleNextFrameKey(controller);
             self.handleFastForwardKey(controller);
-            handleClearKey(controller);
             handleDecreaseSpeedKey(controller);
             handleIncreaseSpeedKey(controller);
         }
@@ -74,10 +73,6 @@ pub fn Controls(comptime config: ControlsConfig) type {
             drawNextFrameButton(controller);
             imgui.igSameLine(0, spacing);
             self.drawFastForwardButton(controller);
-
-            imgui.igSameLine(0, 2 * spacing);
-
-            drawClearButton(controller);
 
             imgui.igSameLine(0, 2 * spacing);
             const speed_button_x = @max(
@@ -455,34 +450,6 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn drawClearButton(controller: *config.Controller) void {
-            const disabled = isClearDisabled(controller);
-            if (disabled) imgui.igBeginDisabled(true);
-            defer if (disabled) imgui.igEndDisabled();
-            if (imgui.igButton(" 🗑 ###clear", .{})) {
-                controller.clear();
-            }
-            if (imgui.igIsItemHovered(0)) {
-                imgui.igSetTooltip("Clear Recording [F9]");
-            }
-        }
-
-        fn handleClearKey(controller: *config.Controller) void {
-            if (isClearDisabled(controller)) {
-                return;
-            }
-            if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F9, false)) {
-                controller.clear();
-            }
-        }
-
-        fn isClearDisabled(controller: *const config.Controller) bool {
-            return controller.mode == .scrub or
-                controller.mode == .save or
-                controller.mode == .load or
-                controller.getTotalFrames() == 0;
-        }
-
         fn drawSpeedButton(controller: *config.Controller) void {
             var buffer: [32]u8 = undefined;
             const button_text = std.fmt.bufPrintZ(
@@ -494,7 +461,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
                 imgui.igOpenPopup_Str("speed_popup", 0);
             }
             if (imgui.igIsItemHovered(0)) {
-                imgui.igSetTooltip("Playback Speed [F10 and F11]");
+                imgui.igSetTooltip("Playback Speed [F9 and F10]");
             }
             if (imgui.igBeginPopup("speed_popup", 0)) {
                 defer imgui.igEndPopup();
@@ -509,14 +476,14 @@ pub fn Controls(comptime config: ControlsConfig) type {
         }
 
         fn handleDecreaseSpeedKey(controller: *config.Controller) void {
-            if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F10, true)) {
+            if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F9, true)) {
                 return;
             }
             controller.playback_speed = @max(controller.playback_speed - 0.1, 0.1);
         }
 
         fn handleIncreaseSpeedKey(controller: *config.Controller) void {
-            if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F11, true)) {
+            if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F10, true)) {
                 return;
             }
             controller.playback_speed = @min(controller.playback_speed + 0.1, 4.0);
@@ -1360,31 +1327,6 @@ test "should disable next frame when already on last frame" {
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should call clear when clear button is clicked or F9 button is pressed" {
-    const Test = struct {
-        var controller = MockController{ .mode = .live };
-        var controls = Controls(.{ .Controller = MockController }){};
-
-        fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, 0);
-            defer imgui.igEnd();
-            controls.handleKeybinds(&controller);
-            controls.draw(&controller);
-        }
-
-        fn testFunction(ctx: sdk.ui.TestContext) !void {
-            ctx.setRef("Window");
-            try testing.expectEqual(0, controller.clear_call_count);
-            ctx.itemClick("###clear", 0, 0);
-            try testing.expectEqual(1, controller.clear_call_count);
-            ctx.keyPress(imgui.ImGuiKey_F9, 1);
-            try testing.expectEqual(2, controller.clear_call_count);
-        }
-    };
-    const context = try sdk.ui.getTestingContext();
-    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
-}
-
 test "should disable all buttons/keys except record when nothing is recorded" {
     const Test = struct {
         var controller = MockController{
@@ -1447,12 +1389,6 @@ test "should disable all buttons/keys except record when nothing is recorded" {
             try testing.expectEqual(0, controller.set_current_index_call_count);
             ctx.keyPress(imgui.ImGuiKey_F7, 1);
             try testing.expectEqual(0, controller.set_current_index_call_count);
-
-            try testing.expectEqual(0, controller.clear_call_count);
-            ctx.itemClick("###clear", 0, 0);
-            try testing.expectEqual(0, controller.clear_call_count);
-            ctx.keyPress(imgui.ImGuiKey_F9, 1);
-            try testing.expectEqual(0, controller.clear_call_count);
         }
     };
     const context = try sdk.ui.getTestingContext();
@@ -1517,19 +1453,13 @@ test "should disable all buttons/keys except rewind and fast forward while scrub
             try testing.expectEqual(0, controller.set_current_index_call_count);
             ctx.keyPress(imgui.ImGuiKey_F7, 1);
             try testing.expectEqual(0, controller.set_current_index_call_count);
-
-            try testing.expectEqual(0, controller.clear_call_count);
-            ctx.itemClick("###clear", 0, 0);
-            try testing.expectEqual(0, controller.clear_call_count);
-            ctx.keyPress(imgui.ImGuiKey_F9, 1);
-            try testing.expectEqual(0, controller.clear_call_count);
         }
     };
     const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should change playback speed when speed UI and F10,F11 keys are used" {
+test "should change playback speed when speed UI and F9,F10 keys are used" {
     const Test = struct {
         var controller = MockController{ .mode = .playback };
         var controls = Controls(.{ .Controller = MockController }){};
@@ -1560,16 +1490,16 @@ test "should change playback speed when speed UI and F10,F11 keys are used" {
             ctx.itemInputValueFloat("###speed_slider", 1.23);
             try testing.expectEqual(1.23, controller.playback_speed);
 
-            ctx.keyPress(imgui.ImGuiKey_F10, 1);
+            ctx.keyPress(imgui.ImGuiKey_F9, 1);
             try testing.expectEqual(1.13, controller.playback_speed);
 
-            ctx.keyPress(imgui.ImGuiKey_F11, 1);
+            ctx.keyPress(imgui.ImGuiKey_F10, 1);
             try testing.expectEqual(1.23, controller.playback_speed);
 
-            ctx.keyPress(imgui.ImGuiKey_F10, 100);
+            ctx.keyPress(imgui.ImGuiKey_F9, 100);
             try testing.expectEqual(0.1, controller.playback_speed);
 
-            ctx.keyPress(imgui.ImGuiKey_F11, 100);
+            ctx.keyPress(imgui.ImGuiKey_F10, 100);
             try testing.expectEqual(4.0, controller.playback_speed);
         }
     };
