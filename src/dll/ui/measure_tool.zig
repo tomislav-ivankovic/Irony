@@ -1,6 +1,7 @@
 const std = @import("std");
 const imgui = @import("imgui");
 const sdk = @import("../../sdk/root.zig");
+const model = @import("../model/root.zig");
 const ui = @import("../ui/root.zig");
 
 pub const MeasureTool = struct {
@@ -26,15 +27,12 @@ pub const MeasureTool = struct {
         point_2,
     };
 
-    const line_color = sdk.math.Vec4.fromArray(.{ 1.0, 0.5, 0.0, 1.0 });
-    const line_thickness = 2;
-    const point_color = sdk.math.Vec4.fromArray(.{ 1.0, 0.5, 0.0, 1.0 });
-    const point_thickness = 8;
-    const hovered_point_color = sdk.math.Vec4.fromArray(.{ 1, 1, 1, 1 });
-    const hover_distance = 8;
-    const text_color = sdk.math.Vec4.fromArray(.{ 1.0, 0.5, 0.0, 1.0 });
-
-    pub fn processInput(self: *Self, matrix: sdk.math.Mat4, inverse_matrix: sdk.math.Mat4) void {
+    pub fn processInput(
+        self: *Self,
+        settings: *const model.MeasureToolSettings,
+        matrix: sdk.math.Mat4,
+        inverse_matrix: sdk.math.Mat4,
+    ) void {
         if (!imgui.igIsWindowHovered(imgui.ImGuiHoveredFlags_ChildWindows)) {
             return;
         }
@@ -74,6 +72,7 @@ pub const MeasureTool = struct {
                 const screen_point_2 = state.line.point_2.pointTransform(matrix).swizzle("xy");
                 const point_1_distance = screen_point_1.distanceTo(screen_mouse);
                 const point_2_distance = screen_point_2.distanceTo(screen_mouse);
+                const hover_distance = settings.hover_distance;
                 if (point_1_distance <= hover_distance or point_2_distance <= hover_distance) {
                     if (point_1_distance <= point_2_distance) {
                         state.hovered_point = .point_1;
@@ -97,24 +96,28 @@ pub const MeasureTool = struct {
         }
     }
 
-    pub fn draw(self: *Self, matrix: sdk.math.Mat4) void {
+    pub fn draw(self: *Self, settings: *const model.MeasureToolSettings, matrix: sdk.math.Mat4) void {
         const line, const hovered_point = switch (self.state) {
             .idle => return,
             .moving => |*state| .{ state.line, state.moving_point },
             .completed => |*state| .{ state.line, state.hovered_point },
         };
-        const point_1_color = if (hovered_point == .point_1) hovered_point_color else point_color;
-        const point_2_color = if (hovered_point == .point_2) hovered_point_color else point_color;
+        const hovered = &settings.hovered_point;
+        const normal = &settings.normal_point;
+        const point_1_color = if (hovered_point == .point_1) hovered.color else normal.color;
+        const point_2_color = if (hovered_point == .point_2) hovered.color else normal.color;
+        const point_1_thickness = if (hovered_point == .point_1) hovered.thickness else normal.thickness;
+        const point_2_thickness = if (hovered_point == .point_2) hovered.thickness else normal.thickness;
         if (hovered_point != null) {
             imgui.igSetMouseCursor(imgui.ImGuiMouseCursor_Hand);
         }
-        ui.drawLine(line, line_color, line_thickness, matrix);
-        ui.drawPoint(line.point_1, point_1_color, point_thickness, matrix);
-        ui.drawPoint(line.point_2, point_2_color, point_thickness, matrix);
-        drawLineText(line, matrix);
+        ui.drawLine(line, settings.line.color, settings.line.thickness, matrix);
+        ui.drawPoint(line.point_1, point_1_color, point_1_thickness, matrix);
+        ui.drawPoint(line.point_2, point_2_color, point_2_thickness, matrix);
+        drawLineText(line, settings.text_color, matrix);
     }
 
-    fn drawLineText(line: sdk.math.LineSegment3, matrix: sdk.math.Mat4) void {
+    fn drawLineText(line: sdk.math.LineSegment3, color: sdk.math.Vec4, matrix: sdk.math.Mat4) void {
         const point_1 = line.point_1.pointTransform(matrix).swizzle("xy");
         const point_2 = line.point_2.pointTransform(matrix).swizzle("xy");
         var difference = point_2.subtract(point_1);
@@ -141,7 +144,7 @@ pub const MeasureTool = struct {
         const position = midpoint.add(away_from_line_spacing).add(text_offset);
 
         const draw_list = imgui.igGetWindowDrawList();
-        const u32_color = imgui.igGetColorU32_Vec4(text_color.toImVec());
+        const u32_color = imgui.igGetColorU32_Vec4(color.toImVec());
         imgui.ImDrawList_AddText_Vec2(draw_list, position.toImVec(), u32_color, text, null);
     }
 };

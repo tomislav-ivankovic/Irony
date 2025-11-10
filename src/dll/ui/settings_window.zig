@@ -139,6 +139,14 @@ pub const SettingsWindow = struct {
                 }.call,
             },
             .{
+                .name = "Measure Tool",
+                .content = struct {
+                    fn call(c: *const Context) void {
+                        drawMeasureToolSettings(&c.settings.measure_tool, &default_settings.measure_tool);
+                    }
+                }.call,
+            },
+            .{
                 .name = "Miscellaneous",
                 .content = struct {
                     fn call(c: *const Context) void {
@@ -602,6 +610,30 @@ fn drawIngameCameraSettings(value: *model.IngameCameraSettings, default: *const 
     drawColor("Color", &value.color, &default.color);
     drawLength("Length", &value.length, &default.length);
     drawThickness("Thickness", &value.thickness, &default.thickness);
+}
+
+fn drawMeasureToolSettings(value: *model.MeasureToolSettings, default: *const model.MeasureToolSettings) void {
+    const drawColorAndThickness = struct {
+        fn call(
+            label: [:0]const u8,
+            v: *model.MeasureToolSettings.ColorAndThickness,
+            d: *const model.MeasureToolSettings.ColorAndThickness,
+        ) void {
+            imgui.igText("%s", label.ptr);
+            imgui.igPushID_Str(label);
+            defer imgui.igPopID();
+            imgui.igIndent(0);
+            defer imgui.igUnindent(0);
+            drawColor("Color", &v.color, &d.color);
+            drawThickness("Thickness", &v.thickness, &d.thickness);
+        }
+    }.call;
+
+    drawColorAndThickness("Line", &value.line, &default.line);
+    drawColorAndThickness("Normal Point", &value.normal_point, &default.normal_point);
+    drawColorAndThickness("Hovered Point", &value.hovered_point, &default.hovered_point);
+    drawColor("Text Color", &value.text_color, &default.text_color);
+    drawThickness("Hover Distance", &value.hover_distance, &default.hover_distance);
 }
 
 fn drawMiscSettings(value: *model.MiscSettings, default: *const model.MiscSettings) void {

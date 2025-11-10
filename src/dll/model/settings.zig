@@ -10,6 +10,7 @@ pub const Settings = struct {
     forward_directions: PlayerSettings(ForwardDirectionSettings) = .{ .mode = .same, .players = .{ .{}, .{} } },
     floor: FloorSettings = .{},
     ingame_camera: IngameCameraSettings = .{},
+    measure_tool: MeasureToolSettings = .{},
     misc: MiscSettings = .{},
 
     const Self = @This();
@@ -282,6 +283,28 @@ pub const IngameCameraSettings = struct {
     color: sdk.math.Vec4 = .fromArray(.{ 1.0, 1.0, 1.0, 0.05 }),
     length: f32 = 800.0,
     thickness: f32 = 1.0,
+};
+
+pub const MeasureToolSettings = struct {
+    line: ColorAndThickness = .{
+        .color = .fromArray(.{ 1.0, 0.5, 0.0, 1.0 }),
+        .thickness = 2,
+    },
+    normal_point: ColorAndThickness = .{
+        .color = .fromArray(.{ 1.0, 0.5, 0.0, 1.0 }),
+        .thickness = 8,
+    },
+    hovered_point: ColorAndThickness = .{
+        .color = .fromArray(.{ 1, 1, 1, 1 }),
+        .thickness = 8,
+    },
+    text_color: sdk.math.Vec4 = .fromArray(.{ 1.0, 0.5, 0.0, 1.0 }),
+    hover_distance: f32 = 8,
+
+    pub const ColorAndThickness = struct {
+        color: sdk.math.Vec4,
+        thickness: f32,
+    };
 };
 
 pub const MiscSettings = struct {

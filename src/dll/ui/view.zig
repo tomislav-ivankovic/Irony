@@ -38,7 +38,7 @@ pub const View = struct {
         const matrix = self.camera.calculateMatrix(frame, direction) orelse return;
         const inverse_matrix = matrix.inverse() orelse sdk.math.Mat4.identity;
 
-        self.measure_tool.processInput(matrix, inverse_matrix);
+        self.measure_tool.processInput(&settings.measure_tool, matrix, inverse_matrix);
         self.camera.processInput(direction, inverse_matrix);
 
         ui.drawIngameCamera(&settings.ingame_camera, frame, direction, matrix);
@@ -48,6 +48,6 @@ pub const View = struct {
         ui.drawForwardDirections(&settings.forward_directions, frame, direction, matrix);
         ui.drawSkeletons(&settings.skeletons, frame, matrix);
         self.hit_lines.draw(&settings.hit_lines, frame, matrix);
-        self.measure_tool.draw(matrix);
+        self.measure_tool.draw(&settings.measure_tool, matrix);
     }
 };
