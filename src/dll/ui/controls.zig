@@ -14,8 +14,10 @@ pub fn Controls(comptime config: ControlsConfig) type {
         was_playing_before_scrubbing: bool = false,
         total_frames_width: f32 = 0.0,
         speed_button_width: f32 = 0.0,
+        clear_confirm_open: bool = false,
 
         const Self = @This();
+        const total_frames_for_clear_confirm = 600;
 
         pub fn handleKeybinds(self: *Self, controller: *config.Controller) void {
             handlePlayKey(controller);
@@ -26,7 +28,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
             handlePreviousFrameKey(controller);
             handleNextFrameKey(controller);
             self.handleFastForwardKey(controller);
-            handleClearKey(controller);
+            self.handleClearKey(controller);
             handleDecreaseSpeedKey(controller);
             handleIncreaseSpeedKey(controller);
         }
@@ -77,7 +79,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
 
             imgui.igSameLine(0, 2 * spacing);
 
-            drawClearButton(controller);
+            self.drawClearButton(controller);
 
             imgui.igSameLine(0, 2 * spacing);
             const speed_button_x = @max(
@@ -455,24 +457,56 @@ pub fn Controls(comptime config: ControlsConfig) type {
             }
         }
 
-        fn drawClearButton(controller: *config.Controller) void {
+        fn drawClearButton(self: *Self, controller: *config.Controller) void {
             const disabled = isClearDisabled(controller);
             if (disabled) imgui.igBeginDisabled(true);
             defer if (disabled) imgui.igEndDisabled();
             if (imgui.igButton(" 🗑 ###clear", .{})) {
-                controller.clear();
+                if (controller.getTotalFrames() < total_frames_for_clear_confirm) {
+                    controller.clear();
+                } else {
+                    self.clear_confirm_open = true;
+                }
             }
             if (imgui.igIsItemHovered(0)) {
                 imgui.igSetTooltip("Clear Recording [F9]");
             }
+            if (self.clear_confirm_open) {
+                imgui.igOpenPopup_Str("Clear recording?", 0);
+            }
+            if (imgui.igBeginPopupModal(
+                "Clear recording?",
+                &self.clear_confirm_open,
+                imgui.ImGuiWindowFlags_AlwaysAutoResize,
+            )) {
+                defer imgui.igEndPopup();
+                imgui.igText("Are you sure you want to clear the recording?");
+                imgui.igText("Any unsaved recorded data will be lost.");
+                imgui.igSeparator();
+                if (imgui.igButton("Clear", .{})) {
+                    controller.clear();
+                    imgui.igCloseCurrentPopup();
+                    self.clear_confirm_open = false;
+                }
+                imgui.igSameLine(0, -1);
+                imgui.igSetItemDefaultFocus();
+                if (imgui.igButton("Cancel", .{})) {
+                    imgui.igCloseCurrentPopup();
+                    self.clear_confirm_open = false;
+                }
+            }
         }
 
-        fn handleClearKey(controller: *config.Controller) void {
+        fn handleClearKey(self: *Self, controller: *config.Controller) void {
             if (isClearDisabled(controller)) {
                 return;
             }
             if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F9, false)) {
-                controller.clear();
+                if (controller.getTotalFrames() < total_frames_for_clear_confirm) {
+                    controller.clear();
+                } else {
+                    self.clear_confirm_open = true;
+                }
             }
         }
 
@@ -1379,6 +1413,37 @@ test "should call clear when clear button is clicked or F9 button is pressed" {
             try testing.expectEqual(1, controller.clear_call_count);
             ctx.keyPress(imgui.ImGuiKey_F9, 1);
             try testing.expectEqual(2, controller.clear_call_count);
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should open confirm dialog when clear button is clicked or F9 button is pressed and total frames is large enough" {
+    const Test = struct {
+        var controller = MockController{ .mode = .live, .total_frames = 1000 };
+        var controls = Controls(.{ .Controller = MockController }){};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            controls.handleKeybinds(&controller);
+            controls.draw(&controller);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window");
+            try testing.expectEqual(0, controller.clear_call_count);
+            ctx.itemClick("###clear", 0, 0);
+            try testing.expectEqual(0, controller.clear_call_count);
+            ctx.setRef("//$FOCUSED");
+            ctx.itemClick("Cancel", 0, 0);
+            try testing.expectEqual(0, controller.clear_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F9, 1);
+            try testing.expectEqual(0, controller.clear_call_count);
+            ctx.setRef("//$FOCUSED");
+            ctx.itemClick("Clear", 0, 0);
+            try testing.expectEqual(1, controller.clear_call_count);
         }
     };
     const context = try sdk.ui.getTestingContext();

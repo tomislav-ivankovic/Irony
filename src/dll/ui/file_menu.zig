@@ -41,6 +41,12 @@ pub const FileMenu = struct {
         var progress = self.progress;
         defer self.progress = progress;
 
+        if (controller.getTotalFrames() == 0) {
+            // Recording can become empty with File -> New menu and with Clear Recording control.
+            // This makes sure that the empty recording is never linked to a file, no matter the way it becomes empty.
+            self.file_path_len = 0;
+        }
+
         if (action == .idle) {
             switch (self.menu_bar.action) {
                 .no_action, .close_ui => {},
@@ -147,10 +153,7 @@ pub const FileMenu = struct {
             switch (action) {
                 .idle => unreachable,
                 .open, .save, .save_as => {},
-                .new => {
-                    controller.clear();
-                    self.file_path_len = 0;
-                },
+                .new => controller.clear(),
                 .exit => dll.selfShutDown(),
             }
             action = .idle;
