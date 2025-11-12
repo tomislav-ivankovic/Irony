@@ -23,7 +23,7 @@ pub const MainWindow = struct {
 
     pub fn processFrame(self: *Self, settings: *const model.Settings, frame: *const model.Frame) void {
         self.view.processFrame(settings, frame);
-        self.details.processFrame(frame, settings.misc.details_columns);
+        self.details.processFrame(&settings.details, frame);
     }
 
     pub fn update(self: *Self, delta_time: f32, controller: *core.Controller) void {
@@ -150,6 +150,6 @@ pub const MainWindow = struct {
     }
 
     fn drawDetails(context: QuadrantContext) void {
-        context.self.details.draw(context.settings.misc.details_columns);
+        context.self.details.draw(&context.settings.details);
     }
 };

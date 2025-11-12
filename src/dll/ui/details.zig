@@ -38,56 +38,61 @@ pub const Details = struct {
 
     const Self = @This();
 
-    pub fn processFrame(self: *Self, frame: *const model.Frame, columns: model.MiscSettings.DetailsColumns) void {
-        const left, const right = switch (columns) {
-            .id_based => .{
-                frame.getPlayerById(.player_1),
-                frame.getPlayerById(.player_2),
-            },
-            .side_based => .{
-                frame.getPlayerBySide(.left),
-                frame.getPlayerBySide(.right),
-            },
-            .role_based => .{
-                frame.getPlayerByRole(.main),
-                frame.getPlayerByRole(.secondary),
-            },
+    pub fn processFrame(self: *Self, settings: *const model.DetailsSettings, frame: *const model.Frame) void {
+        const c1 = switch (settings.column_1) {
+            .player_1 => frame.getPlayerById(.player_1),
+            .player_2 => frame.getPlayerById(.player_2),
+            .left_player => frame.getPlayerBySide(.left),
+            .right_player => frame.getPlayerBySide(.right),
+            .main_player => frame.getPlayerByRole(.main),
+            .secondary_player => frame.getPlayerByRole(.secondary),
         };
-        self.frames_since_round_start.processFrame(frame.frames_since_round_start, frame.frames_since_round_start);
-        self.character_id.processFrame(left.character_id, right.character_id);
-        self.animation_id.processFrame(left.animation_id, right.animation_id);
-        self.animation_frame.processFrame(left.animation_frame, right.animation_frame);
-        self.animation_total_frames.processFrame(left.animation_total_frames, right.animation_total_frames);
-        self.move_phase.processFrame(left.move_phase, right.move_phase);
-        self.move_frame.processFrame(left.getMoveFrame(), right.getMoveFrame());
-        self.startup_frames.processFrame(left.getStartupFrames(), right.getStartupFrames());
-        self.active_frames.processFrame(left.getActiveFrames(), right.getActiveFrames());
-        self.recovery_frames.processFrame(left.getRecoveryFrames(), right.getRecoveryFrames());
-        self.total_frames.processFrame(left.getTotalFrames(), right.getTotalFrames());
-        self.frame_advantage.processFrame(left.getFrameAdvantage(right), right.getFrameAdvantage(left));
-        self.attack_type.processFrame(left.attack_type, right.attack_type);
-        self.attack_range.processFrame(left.attack_range, right.attack_range);
-        self.attack_height.processFrame(left.getAttackHeight(frame.floor_z), right.getAttackHeight(frame.floor_z));
-        self.recovery_range.processFrame(left.recovery_range, right.recovery_range);
-        self.attack_damage.processFrame(left.attack_damage, right.attack_damage);
-        self.hit_outcome.processFrame(left.hit_outcome, right.hit_outcome);
-        self.posture.processFrame(left.posture, right.posture);
-        self.blocking.processFrame(left.blocking, right.blocking);
-        self.crushing.processFrame(left.crushing, right.crushing);
-        self.can_move.processFrame(left.can_move, right.can_move);
-        self.input.processFrame(left.input, right.input);
-        self.health.processFrame(left.health, right.health);
-        self.rage.processFrame(left.rage, right.rage);
-        self.heat.processFrame(left.heat, right.heat);
-        self.distance_to_opponent.processFrame(left.getDistanceTo(right), right.getDistanceTo(left));
-        self.angle_to_opponent.processFrame(left.getAngleTo(right), right.getAngleTo(left));
+        const c2 = switch (settings.column_2) {
+            .player_1 => frame.getPlayerById(.player_1),
+            .player_2 => frame.getPlayerById(.player_2),
+            .left_player => frame.getPlayerBySide(.left),
+            .right_player => frame.getPlayerBySide(.right),
+            .main_player => frame.getPlayerByRole(.main),
+            .secondary_player => frame.getPlayerByRole(.secondary),
+        };
+        const s = settings;
+        self.frames_since_round_start.processFrame(s, frame.frames_since_round_start, frame.frames_since_round_start);
+        self.character_id.processFrame(s, c1.character_id, c2.character_id);
+        self.animation_id.processFrame(s, c1.animation_id, c2.animation_id);
+        self.animation_frame.processFrame(s, c1.animation_frame, c2.animation_frame);
+        self.animation_total_frames.processFrame(s, c1.animation_total_frames, c2.animation_total_frames);
+        self.move_phase.processFrame(s, c1.move_phase, c2.move_phase);
+        self.move_frame.processFrame(s, c1.getMoveFrame(), c2.getMoveFrame());
+        self.startup_frames.processFrame(s, c1.getStartupFrames(), c2.getStartupFrames());
+        self.active_frames.processFrame(s, c1.getActiveFrames(), c2.getActiveFrames());
+        self.recovery_frames.processFrame(s, c1.getRecoveryFrames(), c2.getRecoveryFrames());
+        self.total_frames.processFrame(s, c1.getTotalFrames(), c2.getTotalFrames());
+        self.frame_advantage.processFrame(s, c1.getFrameAdvantage(c2), c2.getFrameAdvantage(c1));
+        self.attack_type.processFrame(s, c1.attack_type, c2.attack_type);
+        self.attack_range.processFrame(s, c1.attack_range, c2.attack_range);
+        self.attack_height.processFrame(s, c1.getAttackHeight(frame.floor_z), c2.getAttackHeight(frame.floor_z));
+        self.recovery_range.processFrame(s, c1.recovery_range, c2.recovery_range);
+        self.attack_damage.processFrame(s, c1.attack_damage, c2.attack_damage);
+        self.hit_outcome.processFrame(s, c1.hit_outcome, c2.hit_outcome);
+        self.posture.processFrame(s, c1.posture, c2.posture);
+        self.blocking.processFrame(s, c1.blocking, c2.blocking);
+        self.crushing.processFrame(s, c1.crushing, c2.crushing);
+        self.can_move.processFrame(s, c1.can_move, c2.can_move);
+        self.input.processFrame(s, c1.input, c2.input);
+        self.health.processFrame(s, c1.health, c2.health);
+        self.rage.processFrame(s, c1.rage, c2.rage);
+        self.heat.processFrame(s, c1.heat, c2.heat);
+        self.distance_to_opponent.processFrame(s, c1.getDistanceTo(c2), c2.getDistanceTo(c1));
+        self.angle_to_opponent.processFrame(s, c1.getAngleTo(c2), c2.getAngleTo(c1));
         self.hit_lines_height.processFrame(
-            left.getHitLinesHeight(frame.floor_z),
-            right.getHitLinesHeight(frame.floor_z),
+            s,
+            c1.getHitLinesHeight(frame.floor_z),
+            c2.getHitLinesHeight(frame.floor_z),
         );
         self.hurt_cylinders_height.processFrame(
-            left.getHurtCylindersHeight(frame.floor_z),
-            right.getHurtCylindersHeight(frame.floor_z),
+            s,
+            c1.getHurtCylindersHeight(frame.floor_z),
+            c2.getHurtCylindersHeight(frame.floor_z),
         );
     }
 
@@ -97,7 +102,7 @@ pub const Details = struct {
         }
     }
 
-    pub fn draw(self: Self, columns: model.MiscSettings.DetailsColumns) void {
+    pub fn draw(self: Self, settings: *const model.DetailsSettings) void {
         const table_flags = imgui.ImGuiTableFlags_RowBg |
             imgui.ImGuiTableFlags_BordersInner |
             imgui.ImGuiTableFlags_PadOuterX |
@@ -111,24 +116,30 @@ pub const Details = struct {
 
         imgui.igTableSetupScrollFreeze(0, 1);
         imgui.igTableSetupColumn("Property", 0, 0, 0);
-        switch (columns) {
-            .id_based => {
-                imgui.igTableSetupColumn("Player 1", 0, 0, 0);
-                imgui.igTableSetupColumn("Player 2", 0, 0, 0);
-            },
-            .side_based => {
-                imgui.igTableSetupColumn("Left Player", 0, 0, 0);
-                imgui.igTableSetupColumn("Right Player", 0, 0, 0);
-            },
-            .role_based => {
-                imgui.igTableSetupColumn("Main Player", 0, 0, 0);
-                imgui.igTableSetupColumn("Secondary Player", 0, 0, 0);
-            },
-        }
+        const column_1_name = switch (settings.column_1) {
+            .player_1 => "Player 1",
+            .player_2 => "Player 2",
+            .left_player => "Left Player",
+            .right_player => "Right Player",
+            .main_player => "Main Player",
+            .secondary_player => "Secondary Player",
+        };
+        imgui.igTableSetupColumn(column_1_name, 0, 0, 0);
+        const column_2_name = switch (settings.column_2) {
+            .player_1 => "Player 1",
+            .player_2 => "Player 2",
+            .left_player => "Left Player",
+            .right_player => "Right Player",
+            .main_player => "Main Player",
+            .secondary_player => "Secondary Player",
+        };
+        imgui.igTableSetupColumn(column_2_name, 0, 0, 0);
         imgui.igTableHeadersRow();
 
         inline for (@typeInfo(Self).@"struct".fields) |*field| {
-            @field(self, field.name).draw();
+            if (@field(settings.rows_enabled, field.name)) {
+                @field(self, field.name).draw(settings);
+            }
         }
     }
 };
@@ -140,30 +151,36 @@ fn Row(
     comptime drawCellContent: *const fn (value: Type, alpha: f32) void,
 ) type {
     return struct {
-        left_cell: Cell(Type, empty_value, drawCellContent) = .{},
-        right_cell: Cell(Type, empty_value, drawCellContent) = .{},
+        cell_1: Cell(Type, empty_value, drawCellContent) = .{},
+        cell_2: Cell(Type, empty_value, drawCellContent) = .{},
 
         const Self = @This();
+        pub const display_name = name;
 
-        pub fn processFrame(self: *Self, left_value: ?Type, right_value: ?Type) void {
-            self.left_cell.processFrame(left_value);
-            self.right_cell.processFrame(right_value);
+        pub fn processFrame(
+            self: *Self,
+            settings: *const model.DetailsSettings,
+            value_1: ?Type,
+            value_2: ?Type,
+        ) void {
+            self.cell_1.processFrame(settings, value_1);
+            self.cell_2.processFrame(settings, value_2);
         }
 
         pub fn update(self: *Self, delta_time: f32) void {
-            self.left_cell.update(delta_time);
-            self.right_cell.update(delta_time);
+            self.cell_1.update(delta_time);
+            self.cell_2.update(delta_time);
         }
 
-        pub fn draw(self: Self) void {
+        pub fn draw(self: Self, settings: *const model.DetailsSettings) void {
             if (imgui.igTableNextColumn()) {
                 drawText(name, 1.0);
             }
             if (imgui.igTableNextColumn()) {
-                self.left_cell.draw();
+                self.cell_1.draw(settings);
             }
             if (imgui.igTableNextColumn()) {
-                self.right_cell.draw();
+                self.cell_2.draw(settings);
             }
         }
     };
@@ -180,14 +197,13 @@ fn Cell(
         remaining_time: f32 = 0.0,
 
         const Self = @This();
-        const lingering_duration = 0.2;
 
-        pub fn processFrame(self: *Self, value_maybe: ?Type) void {
+        pub fn processFrame(self: *Self, settings: *const model.DetailsSettings, value_maybe: ?Type) void {
             if (value_maybe) |value| {
                 self.is_currently_present = !std.meta.eql(value_maybe, empty_value);
                 if (self.is_currently_present) {
                     self.last_value = value;
-                    self.remaining_time = lingering_duration;
+                    self.remaining_time = settings.fade_out_duration;
                 }
             } else {
                 self.is_currently_present = false;
@@ -200,11 +216,15 @@ fn Cell(
             }
         }
 
-        pub fn draw(self: Self) void {
+        pub fn draw(self: Self, settings: *const model.DetailsSettings) void {
+            if (self.is_currently_present) {
+                drawCellContent(self.last_value, 1.0);
+                return;
+            }
             if (self.remaining_time <= 0.0) {
                 return;
             }
-            const completion = 1.0 - (self.remaining_time / lingering_duration);
+            const completion = 1.0 - (self.remaining_time / settings.fade_out_duration);
             const alpha = 1.0 - (completion * completion * completion * completion);
             drawCellContent(self.last_value, alpha);
         }

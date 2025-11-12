@@ -167,10 +167,10 @@ pub const Memory = struct {
 
 fn structOffsets(
     comptime Struct: type,
-    offsets: sdk.misc.FieldMap(Struct, anyerror!usize),
-) sdk.misc.FieldMap(Struct, ?usize) {
+    offsets: sdk.misc.FieldMap(Struct, anyerror!usize, null),
+) sdk.misc.FieldMap(Struct, ?usize, null) {
     var last_error: ?struct { err: anyerror, field_name: []const u8 } = null;
-    var mapped_offsets: sdk.misc.FieldMap(Struct, ?usize) = undefined;
+    var mapped_offsets: sdk.misc.FieldMap(Struct, ?usize, null) = undefined;
     inline for (@typeInfo(Struct).@"struct".fields) |*field| {
         const offset = @field(offsets, field.name);
         if (offset) |o| {
@@ -222,7 +222,7 @@ fn structProxy(
     name: []const u8,
     comptime Struct: type,
     base_offsets: anytype,
-    field_offsets: sdk.misc.FieldMap(Struct, ?usize),
+    field_offsets: sdk.misc.FieldMap(Struct, ?usize, null),
 ) sdk.memory.StructProxy(Struct) {
     if (@typeInfo(@TypeOf(base_offsets)) != .array) {
         const coerced: [base_offsets.len]anyerror!usize = base_offsets;

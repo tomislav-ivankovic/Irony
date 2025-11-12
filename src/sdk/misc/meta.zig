@@ -27,7 +27,11 @@ pub fn Partial(comptime Struct: type) type {
     return @Type(.{ .@"struct" = partial_struct });
 }
 
-pub fn FieldMap(comptime KeysStruct: type, comptime Value: type) type {
+pub fn FieldMap(
+    comptime KeysStruct: type,
+    comptime Value: type,
+    comptime default_value_ptr: ?*const Value,
+) type {
     const key_fields: []const std.builtin.Type.StructField = switch (@typeInfo(KeysStruct)) {
         .@"struct" => |info| info.fields,
         else => @compileError("FieldMap expects a struct type as argument."),
@@ -37,7 +41,7 @@ pub fn FieldMap(comptime KeysStruct: type, comptime Value: type) type {
         map_fields[index] = .{
             .name = field.name,
             .type = Value,
-            .default_value_ptr = null,
+            .default_value_ptr = default_value_ptr,
             .is_comptime = false,
             .alignment = @alignOf(Value),
         };
@@ -100,10 +104,23 @@ test "FieldMap should make every field typed with the specified type" {
         field_2: u16,
         field_3: u32,
     };
-    const Map = FieldMap(Struct, usize);
+    const Map = FieldMap(Struct, usize, null);
     try testing.expect(@FieldType(Map, "field_1") == usize);
     try testing.expect(@FieldType(Map, "field_2") == usize);
     try testing.expect(@FieldType(Map, "field_3") == usize);
+}
+
+test "FieldMap should have correct default values when provided" {
+    const Struct = struct {
+        field_1: u8,
+        field_2: u16,
+        field_3: u32,
+    };
+    const Map = FieldMap(Struct, usize, &123);
+    const map = Map{};
+    try testing.expectEqual(123, map.field_1);
+    try testing.expectEqual(123, map.field_2);
+    try testing.expectEqual(123, map.field_3);
 }
 
 test "Partial should make every field optional" {

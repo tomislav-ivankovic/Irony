@@ -12,7 +12,7 @@ pub fn StructProxy(comptime Struct: type) type {
     };
     return struct {
         base_trail: memory.PointerTrail,
-        field_offsets: misc.FieldMap(Struct, ?usize),
+        field_offsets: misc.FieldMap(Struct, ?usize, null),
 
         const Self = @This();
         pub const tag = struct_proxy_tag;

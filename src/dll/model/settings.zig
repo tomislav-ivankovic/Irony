@@ -1,6 +1,7 @@
 const std = @import("std");
 const sdk = @import("../../sdk/root.zig");
 const model = @import("../model/root.zig");
+const ui = @import("../ui/root.zig");
 
 pub const Settings = struct {
     hit_lines: PlayerSettings(HitLinesSettings) = .{ .mode = .same, .players = .{ .{}, .{} } },
@@ -11,7 +12,7 @@ pub const Settings = struct {
     floor: FloorSettings = .{},
     ingame_camera: IngameCameraSettings = .{},
     measure_tool: MeasureToolSettings = .{},
-    misc: MiscSettings = .{},
+    details: DetailsSettings = .{},
 
     const Self = @This();
     const file_name = "settings.json";
@@ -307,14 +308,21 @@ pub const MeasureToolSettings = struct {
     };
 };
 
-pub const MiscSettings = struct {
-    details_columns: DetailsColumns = .id_based,
+pub const DetailsSettings = struct {
+    column_1: Column = .player_1,
+    column_2: Column = .player_2,
+    fade_out_duration: f32 = 0.2,
+    rows_enabled: RowsEnabled = .{},
 
-    pub const DetailsColumns = enum {
-        id_based,
-        side_based,
-        role_based,
+    pub const Column = enum {
+        player_1,
+        player_2,
+        left_player,
+        right_player,
+        main_player,
+        secondary_player,
     };
+    pub const RowsEnabled = sdk.misc.FieldMap(ui.Details, bool, &true);
 };
 
 pub const PlayerSettingsMode = enum {

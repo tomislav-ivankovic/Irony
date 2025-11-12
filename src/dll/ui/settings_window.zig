@@ -147,6 +147,14 @@ pub const SettingsWindow = struct {
                 }.call,
             },
             .{
+                .name = "Details Table",
+                .content = struct {
+                    fn call(c: *const Context) void {
+                        drawDetailsSettings(&c.settings.details, &default_settings.details);
+                    }
+                }.call,
+            },
+            .{
                 .name = "Miscellaneous",
                 .content = struct {
                     fn call(c: *const Context) void {
@@ -170,8 +178,6 @@ const MiscSettings = struct {
         settings: *model.Settings,
         default_settings: *const model.Settings,
     ) void {
-        drawMiscSettings(&settings.misc, &default_settings.misc);
-        imgui.igSeparator();
         self.reload_button.draw(base_dir, settings);
         self.defaults_button.draw(settings, default_settings);
     }
@@ -636,18 +642,35 @@ fn drawMeasureToolSettings(value: *model.MeasureToolSettings, default: *const mo
     drawThickness("Hover Distance", &value.hover_distance, &default.hover_distance);
 }
 
-fn drawMiscSettings(value: *model.MiscSettings, default: *const model.MiscSettings) void {
-    drawEnum(
-        model.MiscSettings.DetailsColumns,
-        "Details Table Columns",
-        &.{
-            .id_based = "Player 1 / Player 2",
-            .side_based = "Left Player / Right Player",
-            .role_based = "Main Player / Secondary Player",
-        },
-        &value.details_columns,
-        &default.details_columns,
-    );
+fn drawDetailsSettings(value: *model.DetailsSettings, default: *const model.DetailsSettings) void {
+    const drawRowsEnabled = struct {
+        fn call(
+            label: [:0]const u8,
+            v: *model.DetailsSettings.RowsEnabled,
+            d: *const model.DetailsSettings.RowsEnabled,
+        ) void {
+            imgui.igText("%s", label.ptr);
+            imgui.igPushID_Str(label);
+            defer imgui.igPopID();
+            imgui.igIndent(0);
+            defer imgui.igUnindent(0);
+            inline for (@typeInfo(ui.Details).@"struct".fields) |*field| {
+                drawBool(field.type.display_name, &@field(v, field.name), &@field(d, field.name));
+            }
+        }
+    }.call;
+    const column_names = std.enums.EnumFieldStruct(model.DetailsSettings.Column, [:0]const u8, null){
+        .player_1 = "Player 1",
+        .player_2 = "Player 2",
+        .left_player = "Left Player",
+        .right_player = "Right Player",
+        .main_player = "Main Player ",
+        .secondary_player = "Secondary Player",
+    };
+    drawEnum(model.DetailsSettings.Column, "Column 1", &column_names, &value.column_1, &default.column_1);
+    drawEnum(model.DetailsSettings.Column, "Column 2", &column_names, &value.column_2, &default.column_2);
+    drawFloat("Fade Out Duration", &value.fade_out_duration, &default.fade_out_duration, 0.01, 0, 10, "%.2f s", 0);
+    drawRowsEnabled("Enabled Rows", &value.rows_enabled, &default.rows_enabled);
 }
 
 fn drawBool(label: [:0]const u8, value: *bool, default: *const bool) void {
