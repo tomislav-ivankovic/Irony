@@ -1642,4 +1642,142 @@ test "should change playback speed when speed UI and F10,F11 keys are used" {
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-// TODO test with save/load controller mode.
+test "should disable all buttons/keys while recording is being saved" {
+    const Test = struct {
+        var controller = MockController{ .mode = .save };
+        var controls = Controls(.{ .Controller = MockController }){};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            controls.handleKeybinds(&controller);
+            controls.draw(&controller);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window");
+
+            try testing.expectEqual(0, controller.play_call_count);
+            ctx.itemClick("###play", 0, 0);
+            try testing.expectEqual(0, controller.play_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F1, 1);
+            try testing.expectEqual(0, controller.play_call_count);
+
+            try testing.expectEqual(0, controller.pause_call_count);
+            ctx.itemClick("###pause", 0, 0);
+            try testing.expectEqual(0, controller.pause_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F2, 1);
+            try testing.expectEqual(0, controller.pause_call_count);
+
+            try testing.expectEqual(0, controller.stop_call_count);
+            ctx.itemClick("###stop", 0, 0);
+            try testing.expectEqual(0, controller.stop_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F3, 1);
+            try testing.expectEqual(0, controller.stop_call_count);
+
+            try testing.expectEqual(0, controller.record_call_count);
+            ctx.itemClick("###record", 0, 0);
+            try testing.expectEqual(0, controller.record_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F4, 1);
+            try testing.expectEqual(0, controller.record_call_count);
+
+            try testing.expectEqual(0, controller.play_call_count);
+            ctx.itemClick("###rewind", 0, 0);
+            try testing.expectEqual(0, controller.play_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F5, 1);
+            try testing.expectEqual(0, controller.play_call_count);
+            ctx.itemClick("###fast_forward", 0, 0);
+            try testing.expectEqual(0, controller.play_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F8, 1);
+            try testing.expectEqual(0, controller.play_call_count);
+
+            try testing.expectEqual(0, controller.set_current_index_call_count);
+            ctx.itemClick("###previous_frame", 0, 0);
+            try testing.expectEqual(0, controller.set_current_index_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F6, 1);
+            try testing.expectEqual(0, controller.set_current_index_call_count);
+            ctx.itemClick("###next_frame", 0, 0);
+            try testing.expectEqual(0, controller.set_current_index_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F7, 1);
+            try testing.expectEqual(0, controller.set_current_index_call_count);
+
+            try testing.expectEqual(0, controller.clear_call_count);
+            ctx.itemClick("###clear", 0, 0);
+            try testing.expectEqual(0, controller.clear_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F9, 1);
+            try testing.expectEqual(0, controller.clear_call_count);
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should disable all buttons/keys while recording is being loaded" {
+    const Test = struct {
+        var controller = MockController{ .mode = .load };
+        var controls = Controls(.{ .Controller = MockController }){};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            controls.handleKeybinds(&controller);
+            controls.draw(&controller);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window");
+
+            try testing.expectEqual(0, controller.play_call_count);
+            ctx.itemClick("###play", 0, 0);
+            try testing.expectEqual(0, controller.play_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F1, 1);
+            try testing.expectEqual(0, controller.play_call_count);
+
+            try testing.expectEqual(0, controller.pause_call_count);
+            ctx.itemClick("###pause", 0, 0);
+            try testing.expectEqual(0, controller.pause_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F2, 1);
+            try testing.expectEqual(0, controller.pause_call_count);
+
+            try testing.expectEqual(0, controller.stop_call_count);
+            ctx.itemClick("###stop", 0, 0);
+            try testing.expectEqual(0, controller.stop_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F3, 1);
+            try testing.expectEqual(0, controller.stop_call_count);
+
+            try testing.expectEqual(0, controller.record_call_count);
+            ctx.itemClick("###record", 0, 0);
+            try testing.expectEqual(0, controller.record_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F4, 1);
+            try testing.expectEqual(0, controller.record_call_count);
+
+            try testing.expectEqual(0, controller.play_call_count);
+            ctx.itemClick("###rewind", 0, 0);
+            try testing.expectEqual(0, controller.play_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F5, 1);
+            try testing.expectEqual(0, controller.play_call_count);
+            ctx.itemClick("###fast_forward", 0, 0);
+            try testing.expectEqual(0, controller.play_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F8, 1);
+            try testing.expectEqual(0, controller.play_call_count);
+
+            try testing.expectEqual(0, controller.set_current_index_call_count);
+            ctx.itemClick("###previous_frame", 0, 0);
+            try testing.expectEqual(0, controller.set_current_index_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F6, 1);
+            try testing.expectEqual(0, controller.set_current_index_call_count);
+            ctx.itemClick("###next_frame", 0, 0);
+            try testing.expectEqual(0, controller.set_current_index_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F7, 1);
+            try testing.expectEqual(0, controller.set_current_index_call_count);
+
+            try testing.expectEqual(0, controller.clear_call_count);
+            ctx.itemClick("###clear", 0, 0);
+            try testing.expectEqual(0, controller.clear_call_count);
+            ctx.keyPress(imgui.ImGuiKey_F9, 1);
+            try testing.expectEqual(0, controller.clear_call_count);
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
