@@ -70,7 +70,41 @@ pub const LogsWindow = struct {
 
 const testing = std.testing;
 
-test "should render every log message" {
+test "should not draw anything when window is closed" {
+    const nanoTimestamp = struct {
+        fn call() i128 {
+            return 1577934245123456789;
+        }
+    }.call;
+    const logger = sdk.log.BufferLogger(.{
+        .level = .debug,
+        .time_zone = .utc,
+        .buffer_size = 4096,
+        .max_entries = 64,
+        .nanoTimestamp = nanoTimestamp,
+    });
+
+    logger.logFn(.debug, std.log.default_log_scope, "Message: 1", .{});
+    logger.logFn(.info, std.log.default_log_scope, "Message: 2", .{});
+    logger.logFn(.warn, std.log.default_log_scope, "Message: 3", .{});
+    logger.logFn(.err, std.log.default_log_scope, "Message: 4", .{});
+
+    const Test = struct {
+        var window = LogsWindow{ .is_open = false };
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(logger);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            try ctx.expectItemNotExists("//" ++ LogsWindow.name);
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw every log message when window is open" {
     const nanoTimestamp = struct {
         fn call() i128 {
             return 1577934245123456789;
