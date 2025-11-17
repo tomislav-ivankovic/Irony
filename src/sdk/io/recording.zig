@@ -4,6 +4,7 @@ const build_info = @import("build_info");
 const misc = @import("../misc/root.zig");
 const io = @import("root.zig");
 
+const VersionNumber = u16;
 const FieldIndex = u8;
 const FieldPathLength = u8;
 const FieldSize = u16;
@@ -26,7 +27,9 @@ const RemoteField = struct {
     size: FieldSize,
 };
 
+const endian = std.builtin.Endian.little;
 const magic_number = @tagName(build_info.name);
+const version_number = build_info.recording_version;
 const max_number_of_fields = std.math.maxInt(FieldIndex);
 const max_field_path_len = std.math.maxInt(FieldPathLength);
 const path_separator = '.';
@@ -61,6 +64,11 @@ pub fn saveRecording(
         return err;
     };
 
+    file_writer.interface.writeInt(VersionNumber, version_number, endian) catch |err| {
+        misc.error_context.new("Failed to write version number.", .{});
+        return err;
+    };
+
     var encoder = io.XzEncoder.init(allocator, &file_writer.interface) catch |err| {
         misc.error_context.append("Failed to initialize XZ encoder.", .{});
         return err;
@@ -68,7 +76,7 @@ pub fn saveRecording(
     defer encoder.deinit();
     var encoded_buffer: [buffer_size]u8 = undefined;
     var encoder_writer = encoder.writer(&encoded_buffer);
-    var byte_writer = io.ByteWriter{ .dest_writer = &encoder_writer };
+    var byte_writer = io.ByteWriter{ .dest_writer = &encoder_writer, .endian = endian };
 
     const fields = getLocalFields(Frame, config);
     writeFieldList(&byte_writer, fields) catch |err| {
@@ -116,6 +124,17 @@ pub fn loadRecording(
         return error.MagicNumber;
     }
 
+    const version = file_reader.interface.takeInt(VersionNumber, endian) catch |err| {
+        misc.error_context.new("Failed to read version number.", .{});
+        return err;
+    };
+    if (version > version_number) {
+        std.log.warn(
+            "File's version number {} is larger then expected {}. Expecting file parsing to fail but proceeding anyway.",
+            .{ version, version_number },
+        );
+    }
+
     var decoder = io.XzDecoder.init(allocator, &file_reader.interface) catch |err| {
         misc.error_context.append("Failed to initialize XZ decoder.", .{});
         return err;
@@ -123,7 +142,7 @@ pub fn loadRecording(
     defer decoder.deinit();
     var decoder_buffer: [buffer_size]u8 = undefined;
     var decoder_reader = decoder.reader(&decoder_buffer);
-    var byte_reader = io.ByteReader{ .src_reader = &decoder_reader };
+    var byte_reader = io.ByteReader{ .src_reader = &decoder_reader, .endian = endian };
 
     const local_fields = getLocalFields(Frame, config);
     var remote_fields_buffer: [max_number_of_fields]RemoteField = undefined;

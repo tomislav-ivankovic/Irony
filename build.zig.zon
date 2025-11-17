@@ -20,6 +20,10 @@
     // Not a standard build.zig.zon field.
     .game_version = "2.06.02",
 
+    // Version number to put inside the recordings files to more easily maintain backwards compatibility.
+    // Not a standard build.zig.zon field.
+    .recording_version = 0,
+
     // Tracks the earliest Zig version that the package considers to be a supported use case.
     // In this application, this indicates the major version of Zig that is successfully going to compile the project.
     .minimum_zig_version = "0.15.0",
