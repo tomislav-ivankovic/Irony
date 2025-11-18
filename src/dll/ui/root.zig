@@ -5,6 +5,7 @@ pub const ControlsConfig = @import("controls.zig").ControlsConfig;
 pub const Controls = @import("controls.zig").Controls;
 pub const drawData = @import("data.zig").drawData;
 pub const Details = @import("details.zig").Details;
+pub const FileMenuConfig = @import("file_menu.zig").FileMenuConfig;
 pub const FileMenu = @import("file_menu.zig").FileMenu;
 pub const drawFloor = @import("floor.zig").drawFloor;
 pub const drawForwardDirections = @import("forward_directions.zig").drawForwardDirections;

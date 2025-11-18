@@ -11,7 +11,7 @@ pub const MainWindow = struct {
     view: ui.View = .{},
     details: ui.Details = .{},
     controls: ui.Controls(.{}) = .{},
-    file_menu: ui.FileMenu = .{},
+    file_menu: ui.FileMenu(.{}) = .{},
     controls_height: f32 = 0,
 
     const Self = @This();
