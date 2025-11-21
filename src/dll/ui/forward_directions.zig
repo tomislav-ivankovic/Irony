@@ -61,8 +61,7 @@ test "should draw lines correctly when direction is top" {
         }
 
         fn testFunction(_: sdk.ui.TestContext) !void {
-            const items = ui.testing_shapes.getAll();
-            try testing.expectEqual(2, items.len);
+            try testing.expectEqual(2, ui.testing_shapes.getAll().len);
             const line_1 = ui.testing_shapes.findLineWithWorldPoints(
                 .fromArray(.{ 1, 2, 3 }),
                 .fromArray(.{ 2, 2, 3 }),
@@ -149,8 +148,7 @@ test "should not draw the line for the player disabled in settings" {
         }
 
         fn testFunction(_: sdk.ui.TestContext) !void {
-            const items = ui.testing_shapes.getAll();
-            try testing.expectEqual(1, items.len);
+            try testing.expectEqual(1, ui.testing_shapes.getAll().len);
             const line_1 = ui.testing_shapes.findLineWithWorldPoints(
                 .fromArray(.{ 1, 2, 3 }),
                 .fromArray(.{ 2, 2, 3 }),

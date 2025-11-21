@@ -173,12 +173,31 @@ pub const TestingShapes = struct {
         for (self.list.items) |*shape| {
             switch (shape.*) {
                 .line => |*line| {
-                    const l = line.world_line;
+                    const l = &line.world_line;
                     const t = tolerance;
                     const is_equal = (l.point_1.equals(point_1, t) and l.point_2.equals(point_2, t)) or
                         (l.point_1.equals(point_2, t) and l.point_2.equals(point_1, t));
                     if (is_equal) {
                         return line;
+                    }
+                },
+                else => continue,
+            }
+        }
+        return null;
+    }
+
+    pub fn findSphereWithWorldCenter(
+        self: *const Self,
+        center: sdk.math.Vec3,
+        tolerance: f32,
+    ) ?*const Sphere {
+        for (self.list.items) |*shape| {
+            switch (shape.*) {
+                .sphere => |*sphere| {
+                    const s = &sphere.world_sphere;
+                    if (s.center.equals(center, tolerance)) {
+                        return sphere;
                     }
                 },
                 else => continue,
