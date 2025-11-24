@@ -116,7 +116,7 @@ pub const TestContext = struct {
     }
 
     pub fn setRef(self: Self, ref: anytype) void {
-        if (@TypeOf(ref) == *imgui.ImGuiWindow) {
+        if (@TypeOf(ref) == *imgui.ImGuiWindow or @TypeOf(ref) == ?*imgui.ImGuiWindow) {
             return imgui.ImGuiTestContext_SetRef2(self.raw, ref);
         }
         return imgui.ImGuiTestContext_SetRef1(self.raw, anyToRef(ref));

@@ -15,7 +15,7 @@ pub const Settings = struct {
     details: DetailsSettings = .{},
 
     const Self = @This();
-    const file_name = "settings.json";
+    pub const file_name = "settings.json";
 
     pub fn load(base_dir: *const sdk.misc.BaseDir) !Self {
         var buffer: [sdk.os.max_file_path_length]u8 = undefined;
@@ -412,7 +412,7 @@ test "Settings.load should load the same settings that Settings.save saves" {
     };
     const base_dir = try sdk.misc.BaseDir.fromStr("./test_assets");
     try expected_settings.save(&base_dir);
-    defer std.fs.cwd().deleteFile("./test_assets/settings.json") catch @panic("Failed to cleanup test file.");
+    defer std.fs.cwd().deleteFile("./test_assets/" ++ Settings.file_name) catch @panic("Failed to cleanup test file.");
     const actual_settings = try Settings.load(&base_dir);
     try testing.expectEqual(expected_settings, actual_settings);
 }

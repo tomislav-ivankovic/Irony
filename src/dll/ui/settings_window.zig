@@ -51,7 +51,7 @@ pub const SettingsWindow = struct {
         imgui.igGetContentRegionAvail(&content_size);
 
         const navigation_layout_height = content_size.y - self.save_button.height - imgui.igGetStyle().*.ItemSpacing.y;
-        if (imgui.igBeginChild_Str("navigation_layout", .{ .y = navigation_layout_height }, 0, 0)) {
+        if (imgui.igBeginChild_Str("layout", .{ .y = navigation_layout_height }, 0, 0)) {
             self.drawNavigationLayout(base_dir, settings);
         }
         imgui.igEndChild();
@@ -59,7 +59,7 @@ pub const SettingsWindow = struct {
         self.save_button.draw(base_dir, settings);
     }
 
-    pub fn drawNavigationLayout(self: *Self, base_dir: *const sdk.misc.BaseDir, settings: *model.Settings) void {
+    fn drawNavigationLayout(self: *Self, base_dir: *const sdk.misc.BaseDir, settings: *model.Settings) void {
         const Context = struct {
             self: *Self,
             base_dir: *const sdk.misc.BaseDir,
@@ -418,7 +418,7 @@ fn drawPlayerSettings(
         .role_separated => .{ "Main Player", "Secondary Player" },
     };
     const flags = imgui.ImGuiTableFlags_Resizable | imgui.ImGuiTableFlags_BordersInner;
-    if (!imgui.igBeginTable("players", 2, flags, .{}, 0)) {
+    if (!imgui.igBeginTable("table", 2, flags, .{}, 0)) {
         return;
     }
     defer imgui.igEndTable();
@@ -806,4 +806,799 @@ fn drawDefaultButton(value: anytype, default: *const @TypeOf(value.*)) void {
     if (imgui.igIsItemHovered(0)) {
         imgui.igSetTooltip("Reset To Default Value");
     }
+}
+
+const testing = std.testing;
+
+test "should not draw anything when window is closed" {
+    const Test = struct {
+        var settings = model.Settings{};
+        var window: SettingsWindow = undefined;
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(&.working_dir, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            try ctx.expectItemNotExists("//" ++ SettingsWindow.name);
+        }
+    };
+    Test.window = .init(testing.allocator);
+    defer Test.window.deinit();
+    Test.window.is_open = false;
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "reset settings to defaults button should set settings to default value when clicked and confirmed" {
+    const Test = struct {
+        const default_settings = model.Settings{};
+        var settings = default_settings;
+        var window: SettingsWindow = undefined;
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(&.working_dir, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef(SettingsWindow.name);
+            ctx.itemClick("**/Miscellaneous", imgui.ImGuiMouseButton_Left, 0);
+            ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
+
+            settings.floor.thickness = 123;
+            try testing.expect(!std.meta.eql(default_settings, settings));
+
+            ctx.itemClick("Reset Settings To Defaults", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Cancel", imgui.ImGuiMouseButton_Left, 0);
+
+            try testing.expect(!std.meta.eql(default_settings, settings));
+
+            ctx.itemClick("Reset Settings To Defaults", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Reset", imgui.ImGuiMouseButton_Left, 0);
+
+            try testing.expectEqual(default_settings, settings);
+        }
+    };
+    Test.window = .init(testing.allocator);
+    defer Test.window.deinit();
+    Test.window.is_open = true;
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "reload settings button should load the same settings that the save button saved" {
+    const Test = struct {
+        var settings = model.Settings{};
+        var window: SettingsWindow = undefined;
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            const base_dir = try sdk.misc.BaseDir.fromStr("./test_assets");
+            window.draw(&base_dir, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            settings.floor.thickness = 123;
+
+            ctx.setRef(SettingsWindow.name);
+            ctx.itemClick("Save", imgui.ImGuiMouseButton_Left, 0);
+            while (ctx.itemExists("Saving...")) {
+                ctx.yield(1);
+            }
+            defer std.fs.cwd().deleteFile("./test_assets/" ++ model.Settings.file_name) catch {
+                @panic("Failed to cleanup test file.");
+            };
+            try ctx.expectItemExists("Save");
+
+            const saved_settings = settings;
+            settings.floor.thickness = 456;
+            try testing.expect(!std.meta.eql(settings, saved_settings));
+
+            ctx.itemClick("**/Miscellaneous", imgui.ImGuiMouseButton_Left, 0);
+            ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
+            ctx.itemClick("Reload Settings", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Cancel", imgui.ImGuiMouseButton_Left, 0);
+
+            try testing.expect(!std.meta.eql(settings, saved_settings));
+
+            ctx.itemClick("Reload Settings", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Reload", imgui.ImGuiMouseButton_Left, 0);
+            while (ctx.itemExists("Reloading settings...")) {
+                ctx.yield(1);
+            }
+            try ctx.expectItemExists("Reload Settings");
+
+            try testing.expectEqual(saved_settings, settings);
+        }
+    };
+    Test.window = .init(testing.allocator);
+    defer Test.window.deinit();
+    Test.window.is_open = true;
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "player settings separation should function correctly" {
+    const Test = struct {
+        var settings = model.Settings{};
+        var window: SettingsWindow = undefined;
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(&.working_dir, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            const current = &settings.skeletons;
+
+            ctx.setRef(SettingsWindow.name);
+            ctx.itemClick("**/Skeletons", imgui.ImGuiMouseButton_Left, 0);
+            ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
+
+            ctx.itemClick("Player Separation", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Same Settings", imgui.ImGuiMouseButton_Left, 0);
+
+            try testing.expectEqual(.same, current.mode);
+            ctx.itemUncheck("Enabled", 0);
+            try testing.expectEqual(false, current.players[0].enabled);
+            ctx.itemCheck("Enabled", 0);
+            try testing.expectEqual(true, current.players[0].enabled);
+
+            ctx.itemClick("Player Separation", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Player 1 \\/ Player 2", imgui.ImGuiMouseButton_Left, 0);
+
+            try testing.expectEqual(.id_separated, current.mode);
+            ctx.itemUncheck("**/Player 1/Enabled", 0);
+            try testing.expectEqual(false, current.players[0].enabled);
+            ctx.itemCheck("**/Player 1/Enabled", 0);
+            try testing.expectEqual(true, current.players[0].enabled);
+            ctx.itemUncheck("**/Player 2/Enabled", 0);
+            try testing.expectEqual(false, current.players[1].enabled);
+            ctx.itemCheck("**/Player 2/Enabled", 0);
+            try testing.expectEqual(true, current.players[1].enabled);
+
+            ctx.itemClick("Player Separation", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Left Player \\/ Right Player", imgui.ImGuiMouseButton_Left, 0);
+
+            try testing.expectEqual(.side_separated, current.mode);
+            ctx.itemUncheck("**/Left Player/Enabled", 0);
+            try testing.expectEqual(false, current.players[0].enabled);
+            ctx.itemCheck("**/Left Player/Enabled", 0);
+            try testing.expectEqual(true, current.players[0].enabled);
+            ctx.itemUncheck("**/Right Player/Enabled", 0);
+            try testing.expectEqual(false, current.players[1].enabled);
+            ctx.itemCheck("**/Right Player/Enabled", 0);
+            try testing.expectEqual(true, current.players[1].enabled);
+
+            ctx.itemClick("Player Separation", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Main Player \\/ Secondary Player", imgui.ImGuiMouseButton_Left, 0);
+
+            try testing.expectEqual(.role_separated, current.mode);
+            ctx.itemUncheck("**/Main Player/Enabled", 0);
+            try testing.expectEqual(false, current.players[0].enabled);
+            ctx.itemCheck("**/Main Player/Enabled", 0);
+            try testing.expectEqual(true, current.players[0].enabled);
+            ctx.itemUncheck("**/Secondary Player/Enabled", 0);
+            try testing.expectEqual(false, current.players[1].enabled);
+            ctx.itemCheck("**/Secondary Player/Enabled", 0);
+            try testing.expectEqual(true, current.players[1].enabled);
+        }
+    };
+    Test.window = .init(testing.allocator);
+    defer Test.window.deinit();
+    Test.window.is_open = true;
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "hit line settings should function correctly" {
+    const Test = struct {
+        const default_settings = model.Settings{};
+        var settings = default_settings;
+        var window: SettingsWindow = undefined;
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(&.working_dir, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            const current = &settings.hit_lines.players[0];
+            const default = &default_settings.hit_lines.players[0];
+
+            ctx.setRef(SettingsWindow.name);
+            ctx.itemClick("**/Hit Lines", imgui.ImGuiMouseButton_Left, 0);
+            ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
+            ctx.itemClick("Player Separation", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Same Settings", imgui.ImGuiMouseButton_Left, 0);
+
+            ctx.itemUncheck("Enabled", 0);
+            try testing.expectEqual(false, current.enabled);
+            ctx.itemClick("Enabled/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.enabled, current.enabled);
+            ctx.itemCheck("Enabled", 0);
+            try testing.expectEqual(true, current.enabled);
+
+            ctx.itemInputValueFloat("Lingering Duration", 123);
+            try testing.expectEqual(123, current.duration);
+            ctx.itemClick("Lingering Duration/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.duration, current.duration);
+
+            ctx.itemUncheck("Normal Hit Lines/Enabled", 0);
+            try testing.expectEqual(false, current.normal.enabled);
+            ctx.itemClick("Normal Hit Lines/Enabled/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.normal.enabled, current.normal.enabled);
+            ctx.itemCheck("Normal Hit Lines/Enabled", 0);
+            try testing.expectEqual(true, current.normal.enabled);
+
+            ctx.itemInputValueFloat("Normal Hit Lines/Fill/Colors/High/##X", 153);
+            try testing.expectEqual(0.6, current.normal.fill.colors.get(.high).x());
+            ctx.itemClick("Normal Hit Lines/Fill/Colors/High/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.normal.fill.colors.get(.high), current.normal.fill.colors.get(.high));
+
+            ctx.itemInputValueFloat("Normal Hit Lines/Fill/Thickness", 123);
+            try testing.expectEqual(123, current.normal.fill.thickness);
+            ctx.itemClick("Normal Hit Lines/Fill/Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.normal.fill.thickness, current.normal.fill.thickness);
+
+            ctx.itemInputValueFloat("Normal Hit Lines/Outline/Colors/Mid/##Y", 153);
+            try testing.expectEqual(0.6, current.normal.outline.colors.get(.mid).y());
+            ctx.itemClick("Normal Hit Lines/Outline/Colors/Mid/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.normal.outline.colors.get(.mid), current.normal.outline.colors.get(.mid));
+
+            ctx.itemInputValueFloat("Normal Hit Lines/Outline/Thickness", 123);
+            try testing.expectEqual(123, current.normal.outline.thickness);
+            ctx.itemClick("Normal Hit Lines/Outline/Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.normal.outline.thickness, current.normal.outline.thickness);
+
+            ctx.itemInputValueFloat("Inactive Or Crushed Hit Lines/Fill/Colors/Low/##Z", 153);
+            try testing.expectEqual(0.6, current.inactive_or_crushed.fill.colors.get(.low).z());
+            ctx.itemClick("Inactive Or Crushed Hit Lines/Fill/Colors/Low/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(
+                default.inactive_or_crushed.fill.colors.get(.low),
+                current.inactive_or_crushed.fill.colors.get(.low),
+            );
+
+            ctx.itemInputValueFloat("Inactive Or Crushed Hit Lines/Fill/Thickness", 123);
+            try testing.expectEqual(123, current.inactive_or_crushed.fill.thickness);
+            ctx.itemClick("Inactive Or Crushed Hit Lines/Fill/Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(
+                default.inactive_or_crushed.fill.thickness,
+                current.inactive_or_crushed.fill.thickness,
+            );
+
+            ctx.itemInputValueFloat("Inactive Or Crushed Hit Lines/Outline/Colors/Special Low/##W", 153);
+            try testing.expectEqual(0.6, current.inactive_or_crushed.outline.colors.get(.special_low).w());
+            ctx.itemClick(
+                "Inactive Or Crushed Hit Lines/Outline/Colors/Special Low/###default",
+                imgui.ImGuiMouseButton_Left,
+                0,
+            );
+            try testing.expectEqual(
+                default.inactive_or_crushed.outline.colors.get(.special_low),
+                current.inactive_or_crushed.outline.colors.get(.special_low),
+            );
+
+            ctx.itemInputValueFloat("Inactive Or Crushed Hit Lines/Outline/Thickness", 123);
+            try testing.expectEqual(123, current.inactive_or_crushed.outline.thickness);
+            ctx.itemClick("Inactive Or Crushed Hit Lines/Outline/Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(
+                default.inactive_or_crushed.outline.thickness,
+                current.inactive_or_crushed.outline.thickness,
+            );
+        }
+    };
+    Test.window = .init(testing.allocator);
+    defer Test.window.deinit();
+    Test.window.is_open = true;
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "hurt cylinders settings should function correctly" {
+    const Test = struct {
+        const default_settings = model.Settings{};
+        var settings = default_settings;
+        var window: SettingsWindow = undefined;
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(&.working_dir, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            const current = &settings.hurt_cylinders.players[0];
+            const default = &default_settings.hurt_cylinders.players[0];
+
+            ctx.setRef(SettingsWindow.name);
+            ctx.itemClick("**/Hurt Cylinders", imgui.ImGuiMouseButton_Left, 0);
+            ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
+            ctx.itemClick("Player Separation", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Same Settings", imgui.ImGuiMouseButton_Left, 0);
+
+            ctx.itemUncheck("Enabled", 0);
+            try testing.expectEqual(false, current.enabled);
+            ctx.itemClick("Enabled/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.enabled, current.enabled);
+            ctx.itemCheck("Enabled", 0);
+            try testing.expectEqual(true, current.enabled);
+
+            ctx.itemUncheck("Normal Hurt Cylinders/Enabled", 0);
+            try testing.expectEqual(false, current.normal.enabled);
+            ctx.itemClick("Normal Hurt Cylinders/Enabled/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.normal.enabled, current.normal.enabled);
+            ctx.itemCheck("Normal Hurt Cylinders/Enabled", 0);
+            try testing.expectEqual(true, current.normal.enabled);
+
+            ctx.itemInputValueFloat("Normal Hurt Cylinders/Normal/Color/##X", 153);
+            try testing.expectEqual(0.6, current.normal.normal.color.x());
+            ctx.itemClick("Normal Hurt Cylinders/Normal/Color/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.normal.normal.color, current.normal.normal.color);
+
+            ctx.itemInputValueFloat("Normal Hurt Cylinders/High Crushing/Thickness", 123);
+            try testing.expectEqual(123, current.normal.high_crushing.thickness);
+            ctx.itemClick("Normal Hurt Cylinders/High Crushing/Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.normal.high_crushing.thickness, current.normal.high_crushing.thickness);
+
+            ctx.itemUncheck("Power-Crushing Hurt Cylinders/Enabled", 0);
+            try testing.expectEqual(false, current.power_crushing.enabled);
+            ctx.itemClick("Power-Crushing Hurt Cylinders/Enabled/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.power_crushing.enabled, current.power_crushing.enabled);
+            ctx.itemCheck("Power-Crushing Hurt Cylinders/Enabled", 0);
+            try testing.expectEqual(true, current.power_crushing.enabled);
+
+            ctx.itemInputValueFloat("Power-Crushing Hurt Cylinders/Low Crushing/Color/##Y", 153);
+            try testing.expectEqual(0.6, current.power_crushing.low_crushing.color.y());
+            ctx.itemClick("Power-Crushing Hurt Cylinders/Low Crushing/Color/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(
+                default.power_crushing.low_crushing.color,
+                current.power_crushing.low_crushing.color,
+            );
+
+            ctx.itemInputValueFloat("Power-Crushing Hurt Cylinders/Invincible/Thickness", 123);
+            try testing.expectEqual(123, current.power_crushing.invincible.thickness);
+            ctx.itemClick("Power-Crushing Hurt Cylinders/Invincible/Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(
+                default.power_crushing.invincible.thickness,
+                current.power_crushing.invincible.thickness,
+            );
+
+            ctx.itemUncheck("Connected (Hit) Hurt Cylinders/Enabled", 0);
+            try testing.expectEqual(false, current.connected.enabled);
+            ctx.itemClick("Connected (Hit) Hurt Cylinders/Enabled/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.connected.enabled, current.connected.enabled);
+            ctx.itemCheck("Connected (Hit) Hurt Cylinders/Enabled", 0);
+            try testing.expectEqual(true, current.connected.enabled);
+
+            ctx.itemInputValueFloat("Connected (Hit) Hurt Cylinders/Color/##Z", 153);
+            try testing.expectEqual(0.6, current.connected.color.z());
+            ctx.itemClick("Connected (Hit) Hurt Cylinders/Color/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.connected.color, current.connected.color);
+
+            ctx.itemInputValueFloat("Connected (Hit) Hurt Cylinders/Thickness", 123);
+            try testing.expectEqual(123, current.connected.thickness);
+            ctx.itemClick("Connected (Hit) Hurt Cylinders/Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.connected.thickness, current.connected.thickness);
+
+            ctx.itemInputValueFloat("Connected (Hit) Hurt Cylinders/Duration", 123);
+            try testing.expectEqual(123, current.connected.duration);
+            ctx.itemClick("Connected (Hit) Hurt Cylinders/Duration/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.connected.duration, current.connected.duration);
+
+            ctx.itemUncheck("Lingering Hurt Cylinders/Enabled", 0);
+            try testing.expectEqual(false, current.lingering.enabled);
+            ctx.itemClick("Lingering Hurt Cylinders/Enabled/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.lingering.enabled, current.lingering.enabled);
+            ctx.itemCheck("Lingering Hurt Cylinders/Enabled", 0);
+            try testing.expectEqual(true, current.lingering.enabled);
+
+            ctx.itemInputValueFloat("Lingering Hurt Cylinders/Color/##W", 153);
+            try testing.expectEqual(0.6, current.lingering.color.w());
+            ctx.itemClick("Lingering Hurt Cylinders/Color/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.lingering.color, current.lingering.color);
+
+            ctx.itemInputValueFloat("Lingering Hurt Cylinders/Thickness", 123);
+            try testing.expectEqual(123, current.lingering.thickness);
+            ctx.itemClick("Lingering Hurt Cylinders/Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.lingering.thickness, current.lingering.thickness);
+
+            ctx.itemInputValueFloat("Lingering Hurt Cylinders/Duration", 123);
+            try testing.expectEqual(123, current.lingering.duration);
+            ctx.itemClick("Lingering Hurt Cylinders/Duration/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.lingering.duration, current.lingering.duration);
+        }
+    };
+    Test.window = .init(testing.allocator);
+    defer Test.window.deinit();
+    Test.window.is_open = true;
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "collision spheres settings should function correctly" {
+    const Test = struct {
+        const default_settings = model.Settings{};
+        var settings = default_settings;
+        var window: SettingsWindow = undefined;
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(&.working_dir, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            const current = &settings.collision_spheres.players[0];
+            const default = &default_settings.collision_spheres.players[0];
+
+            ctx.setRef(SettingsWindow.name);
+            ctx.itemClick("**/Collision Spheres", imgui.ImGuiMouseButton_Left, 0);
+            ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
+            ctx.itemClick("Player Separation", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Same Settings", imgui.ImGuiMouseButton_Left, 0);
+
+            ctx.itemUncheck("Enabled", 0);
+            try testing.expectEqual(false, current.enabled);
+            ctx.itemClick("Enabled/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.enabled, current.enabled);
+            ctx.itemCheck("Enabled", 0);
+            try testing.expectEqual(true, current.enabled);
+
+            ctx.itemInputValueFloat("Color/##X", 153);
+            try testing.expectEqual(0.6, current.color.x());
+            ctx.itemClick("Color/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.color, current.color);
+
+            ctx.itemInputValueFloat("Thickness", 123);
+            try testing.expectEqual(123, current.thickness);
+            ctx.itemClick("Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.thickness, current.thickness);
+        }
+    };
+    Test.window = .init(testing.allocator);
+    defer Test.window.deinit();
+    Test.window.is_open = true;
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "skeletons settings should function correctly" {
+    const Test = struct {
+        const default_settings = model.Settings{};
+        var settings = default_settings;
+        var window: SettingsWindow = undefined;
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(&.working_dir, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            const current = &settings.skeletons.players[0];
+            const default = &default_settings.skeletons.players[0];
+
+            ctx.setRef(SettingsWindow.name);
+            ctx.itemClick("**/Skeletons", imgui.ImGuiMouseButton_Left, 0);
+            ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
+            ctx.itemClick("Player Separation", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Same Settings", imgui.ImGuiMouseButton_Left, 0);
+
+            ctx.itemUncheck("Enabled", 0);
+            try testing.expectEqual(false, current.enabled);
+            ctx.itemClick("Enabled/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.enabled, current.enabled);
+            ctx.itemCheck("Enabled", 0);
+            try testing.expectEqual(true, current.enabled);
+
+            ctx.itemInputValueFloat("Colors/Not Blocking/##X", 153);
+            try testing.expectEqual(0.6, current.colors.get(.not_blocking).x());
+            ctx.itemClick("Colors/Not Blocking/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.colors.get(.not_blocking), current.colors.get(.not_blocking));
+
+            ctx.itemInputValueFloat("Colors/Neutral Blocking Mids/##Y", 153);
+            try testing.expectEqual(0.6, current.colors.get(.neutral_blocking_mids).y());
+            ctx.itemClick("Colors/Neutral Blocking Mids/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(
+                default.colors.get(.neutral_blocking_mids),
+                current.colors.get(.neutral_blocking_mids),
+            );
+
+            ctx.itemInputValueFloat("Colors/Fully Blocking Mids/##Z", 153);
+            try testing.expectEqual(0.6, current.colors.get(.fully_blocking_mids).z());
+            ctx.itemClick("Colors/Fully Blocking Mids/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.colors.get(.fully_blocking_mids), current.colors.get(.fully_blocking_mids));
+
+            ctx.itemInputValueFloat("Colors/Neutral Blocking Lows/##W", 153);
+            try testing.expectEqual(0.6, current.colors.get(.neutral_blocking_lows).w());
+            ctx.itemClick("Colors/Neutral Blocking Lows/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(
+                default.colors.get(.neutral_blocking_lows),
+                current.colors.get(.neutral_blocking_lows),
+            );
+
+            ctx.itemInputValueFloat("Colors/Fully Blocking Lows/##X", 153);
+            try testing.expectEqual(0.6, current.colors.get(.fully_blocking_lows).x());
+            ctx.itemClick("Colors/Fully Blocking Lows/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.colors.get(.fully_blocking_lows), current.colors.get(.fully_blocking_lows));
+
+            ctx.itemInputValueFloat("Thickness", 123);
+            try testing.expectEqual(123, current.thickness);
+            ctx.itemClick("Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.thickness, current.thickness);
+
+            ctx.itemInputValueFloat("Can't Move Alpha", 0.123);
+            try testing.expectEqual(0.123, current.cant_move_alpha);
+            ctx.itemClick("Can't Move Alpha/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.cant_move_alpha, current.cant_move_alpha);
+        }
+    };
+    Test.window = .init(testing.allocator);
+    defer Test.window.deinit();
+    Test.window.is_open = true;
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "forward directions settings should function correctly" {
+    const Test = struct {
+        const default_settings = model.Settings{};
+        var settings = default_settings;
+        var window: SettingsWindow = undefined;
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(&.working_dir, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            const current = &settings.forward_directions.players[0];
+            const default = &default_settings.forward_directions.players[0];
+
+            ctx.setRef(SettingsWindow.name);
+            ctx.itemClick("**/Forward Directions", imgui.ImGuiMouseButton_Left, 0);
+            ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
+            ctx.itemClick("Player Separation", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Same Settings", imgui.ImGuiMouseButton_Left, 0);
+
+            ctx.itemUncheck("Enabled", 0);
+            try testing.expectEqual(false, current.enabled);
+            ctx.itemClick("Enabled/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.enabled, current.enabled);
+            ctx.itemCheck("Enabled", 0);
+            try testing.expectEqual(true, current.enabled);
+
+            ctx.itemInputValueFloat("Color/##X", 153);
+            try testing.expectEqual(0.6, current.color.x());
+            ctx.itemClick("Color/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.color, current.color);
+
+            ctx.itemInputValueFloat("Length", 123);
+            try testing.expectEqual(123, current.length);
+            ctx.itemClick("Length/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.length, current.length);
+
+            ctx.itemInputValueFloat("Thickness", 123);
+            try testing.expectEqual(123, current.thickness);
+            ctx.itemClick("Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.thickness, current.thickness);
+        }
+    };
+    Test.window = .init(testing.allocator);
+    defer Test.window.deinit();
+    Test.window.is_open = true;
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "floor settings should function correctly" {
+    const Test = struct {
+        const default_settings = model.Settings{};
+        var settings = default_settings;
+        var window: SettingsWindow = undefined;
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(&.working_dir, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            const current = &settings.floor;
+            const default = &default_settings.floor;
+
+            ctx.setRef(SettingsWindow.name);
+            ctx.itemClick("**/Floor", imgui.ImGuiMouseButton_Left, 0);
+            ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
+
+            ctx.itemUncheck("Enabled", 0);
+            try testing.expectEqual(false, current.enabled);
+            ctx.itemClick("Enabled/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.enabled, current.enabled);
+            ctx.itemCheck("Enabled", 0);
+            try testing.expectEqual(true, current.enabled);
+
+            ctx.itemInputValueFloat("Color/##X", 153);
+            try testing.expectEqual(0.6, current.color.x());
+            ctx.itemClick("Color/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.color, current.color);
+
+            ctx.itemInputValueFloat("Thickness", 123);
+            try testing.expectEqual(123, current.thickness);
+            ctx.itemClick("Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.thickness, current.thickness);
+        }
+    };
+    Test.window = .init(testing.allocator);
+    defer Test.window.deinit();
+    Test.window.is_open = true;
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "ingame camera settings should function correctly" {
+    const Test = struct {
+        const default_settings = model.Settings{};
+        var settings = default_settings;
+        var window: SettingsWindow = undefined;
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(&.working_dir, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            const current = &settings.ingame_camera;
+            const default = &default_settings.ingame_camera;
+
+            ctx.setRef(SettingsWindow.name);
+            ctx.itemClick("**/Ingame Camera", imgui.ImGuiMouseButton_Left, 0);
+            ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
+
+            ctx.itemUncheck("Enabled", 0);
+            try testing.expectEqual(false, current.enabled);
+            ctx.itemClick("Enabled/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.enabled, current.enabled);
+            ctx.itemCheck("Enabled", 0);
+            try testing.expectEqual(true, current.enabled);
+
+            ctx.itemInputValueFloat("Color/##X", 153);
+            try testing.expectEqual(0.6, current.color.x());
+            ctx.itemClick("Color/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.color, current.color);
+
+            ctx.itemInputValueFloat("Length", 123);
+            try testing.expectEqual(123, current.length);
+            ctx.itemClick("Length/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.length, current.length);
+
+            ctx.itemInputValueFloat("Thickness", 123);
+            try testing.expectEqual(123, current.thickness);
+            ctx.itemClick("Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.thickness, current.thickness);
+        }
+    };
+    Test.window = .init(testing.allocator);
+    defer Test.window.deinit();
+    Test.window.is_open = true;
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "measure tool settings should function correctly" {
+    const Test = struct {
+        const default_settings = model.Settings{};
+        var settings = default_settings;
+        var window: SettingsWindow = undefined;
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(&.working_dir, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            const current = &settings.measure_tool;
+            const default = &default_settings.measure_tool;
+
+            ctx.setRef(SettingsWindow.name);
+            ctx.itemClick("**/Measure Tool", imgui.ImGuiMouseButton_Left, 0);
+            ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
+
+            ctx.itemInputValueFloat("Line/Color/##X", 153);
+            try testing.expectEqual(0.6, current.line.color.x());
+            ctx.itemClick("Line/Color/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.line.color, current.line.color);
+
+            ctx.itemInputValueFloat("Line/Thickness", 123);
+            try testing.expectEqual(123, current.line.thickness);
+            ctx.itemClick("Line/Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.line.thickness, current.line.thickness);
+
+            ctx.itemInputValueFloat("Normal Point/Color/##Y", 153);
+            try testing.expectEqual(0.6, current.normal_point.color.y());
+            ctx.itemClick("Normal Point/Color/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.normal_point.color, current.normal_point.color);
+
+            ctx.itemInputValueFloat("Normal Point/Thickness", 123);
+            try testing.expectEqual(123, current.normal_point.thickness);
+            ctx.itemClick("Normal Point/Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.normal_point.thickness, current.normal_point.thickness);
+
+            ctx.itemInputValueFloat("Hovered Point/Color/##Z", 153);
+            try testing.expectEqual(0.6, current.hovered_point.color.z());
+            ctx.itemClick("Hovered Point/Color/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.hovered_point.color, current.hovered_point.color);
+
+            ctx.itemInputValueFloat("Hovered Point/Thickness", 123);
+            try testing.expectEqual(123, current.hovered_point.thickness);
+            ctx.itemClick("Hovered Point/Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.hovered_point.thickness, current.hovered_point.thickness);
+
+            ctx.itemInputValueFloat("Text Color/##W", 153);
+            try testing.expectEqual(0.6, current.text_color.w());
+            ctx.itemClick("Text Color/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.text_color, current.text_color);
+
+            ctx.itemInputValueFloat("Hover Distance", 123);
+            try testing.expectEqual(123, current.hover_distance);
+            ctx.itemClick("Hover Distance/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.hover_distance, current.hover_distance);
+        }
+    };
+    Test.window = .init(testing.allocator);
+    defer Test.window.deinit();
+    Test.window.is_open = true;
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "details table settings should function correctly" {
+    const Test = struct {
+        const default_settings = model.Settings{};
+        var settings = default_settings;
+        var window: SettingsWindow = undefined;
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(&.working_dir, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            const current = &settings.details;
+            const default = &default_settings.details;
+
+            ctx.setRef(SettingsWindow.name);
+            ctx.itemClick("**/Details Table", imgui.ImGuiMouseButton_Left, 0);
+            ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
+
+            ctx.itemClick("Column 1", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Left Player", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(.left_player, current.column_1);
+            ctx.itemClick("Column 1/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.column_1, current.column_1);
+
+            ctx.itemClick("Column 2", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Right Player", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(.right_player, current.column_2);
+            ctx.itemClick("Column 2/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.column_2, current.column_2);
+
+            ctx.itemInputValueFloat("Fade Out Duration", 123);
+            try testing.expectEqual(123, current.fade_out_duration);
+            ctx.itemClick("Fade Out Duration/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.fade_out_duration, current.fade_out_duration);
+
+            ctx.itemInputValueFloat("Fade Out Alpha", 123);
+            try testing.expectEqual(123, current.fade_out_alpha);
+            ctx.itemClick("Fade Out Alpha/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.fade_out_alpha, current.fade_out_alpha);
+
+            ctx.itemUncheck("Enabled Rows/Animation Frame", 0);
+            try testing.expectEqual(false, current.rows_enabled.animation_frame);
+            ctx.itemClick("Enabled Rows/Animation Frame/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.rows_enabled.animation_frame, current.rows_enabled.animation_frame);
+            ctx.itemCheck("Enabled Rows/Animation Frame", 0);
+            try testing.expectEqual(true, current.rows_enabled.animation_frame);
+
+            ctx.itemClick("Enabled Rows/Disable All", imgui.ImGuiMouseButton_Left, 0);
+            inline for (@typeInfo(model.DetailsSettings.RowsEnabled).@"struct".fields) |*field| {
+                try testing.expectEqual(false, @field(current.rows_enabled, field.name));
+            }
+            ctx.itemClick("Enabled Rows/Enable All", imgui.ImGuiMouseButton_Left, 0);
+            inline for (@typeInfo(model.DetailsSettings.RowsEnabled).@"struct".fields) |*field| {
+                try testing.expectEqual(true, @field(current.rows_enabled, field.name));
+            }
+        }
+    };
+    Test.window = .init(testing.allocator);
+    defer Test.window.deinit();
+    Test.window.is_open = true;
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
