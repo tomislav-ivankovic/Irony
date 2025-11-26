@@ -838,9 +838,11 @@ test "reset settings to defaults button should set settings to default value whe
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
             window.draw(&.working_dir, &settings);
+            sdk.ui.toasts.draw();
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
+            sdk.ui.toasts.update(100);
             ctx.setRef(SettingsWindow.name);
             ctx.itemClick("**/Miscellaneous", imgui.ImGuiMouseButton_Left, 0);
             ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
@@ -852,10 +854,12 @@ test "reset settings to defaults button should set settings to default value whe
             ctx.itemClick("//$FOCUSED/Cancel", imgui.ImGuiMouseButton_Left, 0);
 
             try testing.expect(!std.meta.eql(default_settings, settings));
+            try ctx.expectItemNotExists("//toast-0");
 
             ctx.itemClick("Reset Settings To Defaults", imgui.ImGuiMouseButton_Left, 0);
             ctx.itemClick("//$FOCUSED/Reset", imgui.ImGuiMouseButton_Left, 0);
 
+            try ctx.expectItemExists("//toast-0/Settings set to default values.");
             try testing.expectEqual(default_settings, settings);
         }
     };
@@ -874,9 +878,11 @@ test "reload settings button should load the same settings that the save button 
         fn guiFunction(_: sdk.ui.TestContext) !void {
             const base_dir = try sdk.misc.BaseDir.fromStr("./test_assets");
             window.draw(&base_dir, &settings);
+            sdk.ui.toasts.draw();
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
+            sdk.ui.toasts.update(100);
             settings.floor.thickness = 123;
 
             ctx.setRef(SettingsWindow.name);
@@ -892,6 +898,8 @@ test "reload settings button should load the same settings that the save button 
             const saved_settings = settings;
             settings.floor.thickness = 456;
             try testing.expect(!std.meta.eql(settings, saved_settings));
+            try ctx.expectItemExists("//toast-0/Settings saved successfully.");
+            sdk.ui.toasts.update(100);
 
             ctx.itemClick("**/Miscellaneous", imgui.ImGuiMouseButton_Left, 0);
             ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
@@ -899,6 +907,7 @@ test "reload settings button should load the same settings that the save button 
             ctx.itemClick("//$FOCUSED/Cancel", imgui.ImGuiMouseButton_Left, 0);
 
             try testing.expect(!std.meta.eql(settings, saved_settings));
+            try ctx.expectItemNotExists("//toast-0");
 
             ctx.itemClick("Reload Settings", imgui.ImGuiMouseButton_Left, 0);
             ctx.itemClick("//$FOCUSED/Reload", imgui.ImGuiMouseButton_Left, 0);
@@ -908,6 +917,7 @@ test "reload settings button should load the same settings that the save button 
             try ctx.expectItemExists("Reload Settings");
 
             try testing.expectEqual(saved_settings, settings);
+            try ctx.expectItemExists("//toast-0/Settings reloaded successfully.");
         }
     };
     Test.window = .init(testing.allocator);

@@ -2185,7 +2185,7 @@ test "should draw vector correctly" {
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should copy correct text to clipboard when left clicking text" {
+test "should copy correct text to clipboard when clicking text" {
     const Test = struct {
         var value: u8 = 97;
 

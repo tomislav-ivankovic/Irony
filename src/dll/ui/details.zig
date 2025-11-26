@@ -934,7 +934,7 @@ test "should draw correct table headers based on settings" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -990,7 +990,7 @@ test "should draw data in correct columns based on settings" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1053,13 +1053,66 @@ test "should draw data in correct columns based on settings" {
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
+test "should put text into clipboard when clicking text" {
+    const Test = struct {
+        var settings = model.DetailsSettings{};
+        var details = Details{};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            details.draw(&settings);
+            sdk.ui.toasts.draw();
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            const frame = model.Frame{
+                .players = .{
+                    .{ .animation_frame = 1 },
+                    .{ .animation_frame = 2 },
+                },
+                .left_player_id = .player_2,
+                .main_player_id = .player_1,
+            };
+            details.processFrame(&settings, &frame);
+            sdk.ui.toasts.update(100);
+            ctx.setRef("Window/table");
+
+            ctx.itemClick("Animation Frame", imgui.ImGuiMouseButton_Left, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+            try ctx.expectClipboardText("Animation Frame");
+            try ctx.expectItemExists("//toast-0/Copied to clipboard: Animation Frame");
+            sdk.ui.toasts.update(100);
+
+            ctx.itemClick(
+                "Animation Frame/cell_1/1",
+                imgui.ImGuiMouseButton_Left,
+                imgui.ImGuiTestOpFlags_NoCheckHoveredId,
+            );
+            try ctx.expectClipboardText("1");
+            try ctx.expectItemExists("//toast-0/Copied to clipboard: 1");
+            sdk.ui.toasts.update(100);
+
+            ctx.itemClick(
+                "Animation Frame/cell_2/2",
+                imgui.ImGuiMouseButton_Left,
+                imgui.ImGuiTestOpFlags_NoCheckHoveredId,
+            );
+            try ctx.expectClipboardText("2");
+            try ctx.expectItemExists("//toast-0/Copied to clipboard: 2");
+            sdk.ui.toasts.update(100);
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
 test "should should slowly fade out from last present value to null or empty value" {
     const Test = struct {
         var settings = model.DetailsSettings{};
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1104,7 +1157,7 @@ test "should not draw row when row is disabled in settings" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1138,7 +1191,7 @@ test "should draw frames since round start correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1172,7 +1225,7 @@ test "should draw character ID correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1207,7 +1260,7 @@ test "should draw animation ID correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1242,7 +1295,7 @@ test "should draw animation frame correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1277,7 +1330,7 @@ test "should draw animation total frames correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1312,7 +1365,7 @@ test "should draw move frame correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1347,7 +1400,7 @@ test "should draw startup frames correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1382,7 +1435,7 @@ test "should draw active frames correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1417,7 +1470,7 @@ test "should draw recovery frames correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1476,7 +1529,7 @@ test "should draw frame advantage correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1521,7 +1574,7 @@ test "should draw attack type correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1588,7 +1641,7 @@ test "should draw attack range correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1623,7 +1676,7 @@ test "should draw attack height correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1664,7 +1717,7 @@ test "should draw recovery range correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1699,7 +1752,7 @@ test "should draw attack damage correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1734,7 +1787,7 @@ test "should draw hit outcome correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1825,7 +1878,7 @@ test "should draw posture correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1868,7 +1921,7 @@ test "should draw blocking correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1911,7 +1964,7 @@ test "should draw crushing correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1962,7 +2015,7 @@ test "should draw can move correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -1997,7 +2050,7 @@ test "should draw input correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -2089,7 +2142,7 @@ test "should draw health correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -2124,7 +2177,7 @@ test "should draw rage correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -2159,7 +2212,7 @@ test "should draw heat correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -2194,7 +2247,7 @@ test "should draw distance to opponent correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -2246,7 +2299,7 @@ test "should draw angle to opponent correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -2290,7 +2343,7 @@ test "should draw hit lines height correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
@@ -2338,7 +2391,7 @@ test "should draw hurt cylinders height correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
         }
