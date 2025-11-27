@@ -809,6 +809,7 @@ fn drawDefaultButton(value: anytype, default: *const @TypeOf(value.*)) void {
 }
 
 const testing = std.testing;
+const testing_base_dir = sdk.misc.BaseDir.fromStr("test_assets") catch unreachable;
 
 test "should not draw anything when window is closed" {
     const Test = struct {
@@ -816,7 +817,7 @@ test "should not draw anything when window is closed" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(&.working_dir, &settings);
+            window.draw(&testing_base_dir, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -837,7 +838,7 @@ test "reset settings to defaults button should set settings to default value whe
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(&.working_dir, &settings);
+            window.draw(&testing_base_dir, &settings);
             sdk.ui.toasts.draw();
         }
 
@@ -876,8 +877,7 @@ test "reload settings button should load the same settings that the save button 
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            const base_dir = try sdk.misc.BaseDir.fromStr("./test_assets");
-            window.draw(&base_dir, &settings);
+            window.draw(&testing_base_dir, &settings);
             sdk.ui.toasts.draw();
         }
 
@@ -933,7 +933,7 @@ test "player settings separation should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(&.working_dir, &settings);
+            window.draw(&testing_base_dir, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1006,7 +1006,7 @@ test "hit line settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(&.working_dir, &settings);
+            window.draw(&testing_base_dir, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1109,7 +1109,7 @@ test "hurt cylinders settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(&.working_dir, &settings);
+            window.draw(&testing_base_dir, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1228,7 +1228,7 @@ test "collision spheres settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(&.working_dir, &settings);
+            window.draw(&testing_base_dir, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1273,7 +1273,7 @@ test "skeletons settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(&.working_dir, &settings);
+            window.draw(&testing_base_dir, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1349,7 +1349,7 @@ test "forward directions settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(&.working_dir, &settings);
+            window.draw(&testing_base_dir, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1399,7 +1399,7 @@ test "floor settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(&.working_dir, &settings);
+            window.draw(&testing_base_dir, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1442,7 +1442,7 @@ test "ingame camera settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(&.working_dir, &settings);
+            window.draw(&testing_base_dir, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1490,7 +1490,7 @@ test "measure tool settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(&.working_dir, &settings);
+            window.draw(&testing_base_dir, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1556,7 +1556,7 @@ test "details table settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(&.working_dir, &settings);
+            window.draw(&testing_base_dir, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {

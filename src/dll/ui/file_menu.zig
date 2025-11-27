@@ -452,6 +452,7 @@ const FileDialog = struct {
 };
 
 const testing = std.testing;
+const testing_base_dir = sdk.misc.BaseDir.fromStr("test_assets") catch unreachable;
 
 const MockController = struct {
     mode: Mode = .live,
@@ -504,7 +505,6 @@ const MockController = struct {
 
 test "should call clear on controller when new is clicked without unsaved changes" {
     const Test = struct {
-        const base_dir = sdk.misc.BaseDir.working_dir;
         var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
         var controller: MockController = .{ .contains_unsaved_changes = false };
         var is_ui_open: bool = true;
@@ -517,7 +517,7 @@ test "should call clear on controller when new is clicked without unsaved change
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(&controller);
         }
 
@@ -536,7 +536,6 @@ test "should call clear on controller when new is clicked without unsaved change
 
 test "new should be disabled when total frames is zero" {
     const Test = struct {
-        const base_dir = sdk.misc.BaseDir.working_dir;
         var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
         var controller: MockController = .{ .total_frames = 0 };
         var is_ui_open: bool = true;
@@ -549,7 +548,7 @@ test "new should be disabled when total frames is zero" {
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(&controller);
         }
 
@@ -570,7 +569,6 @@ test "new should be disabled when total frames is zero" {
 
 test "should show correctly working unsaved changes dialog when new is clicked with unsaved changes" {
     const Test = struct {
-        const base_dir = sdk.misc.BaseDir.working_dir;
         var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
         var controller: MockController = .{ .contains_unsaved_changes = true };
         var is_ui_open: bool = true;
@@ -583,7 +581,7 @@ test "should show correctly working unsaved changes dialog when new is clicked w
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(&controller);
         }
 
@@ -650,7 +648,6 @@ test "should show correctly working unsaved changes dialog when new is clicked w
 
 test "should call load on controller when open is clicked without unsaved changes and file is selected" {
     const Test = struct {
-        const base_dir = sdk.misc.BaseDir.working_dir;
         var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
         var controller: MockController = .{ .contains_unsaved_changes = false };
         var is_ui_open: bool = true;
@@ -663,7 +660,7 @@ test "should call load on controller when open is clicked without unsaved change
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(&controller);
         }
 
@@ -700,7 +697,6 @@ test "should call load on controller when open is clicked without unsaved change
 
 test "should show correctly working unsaved changes dialog when open is clicked with unsaved changes" {
     const Test = struct {
-        const base_dir = sdk.misc.BaseDir.working_dir;
         var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
         var controller: MockController = .{ .contains_unsaved_changes = true };
         var is_ui_open: bool = true;
@@ -713,7 +709,7 @@ test "should show correctly working unsaved changes dialog when open is clicked 
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(&controller);
         }
 
@@ -831,7 +827,6 @@ test "should show correctly working unsaved changes dialog when open is clicked 
 
 test "should call save on controller when save is clicked and file is selected" {
     const Test = struct {
-        const base_dir = sdk.misc.BaseDir.working_dir;
         var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
         var controller: MockController = .{};
         var is_ui_open: bool = true;
@@ -844,7 +839,7 @@ test "should call save on controller when save is clicked and file is selected" 
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(&controller);
         }
 
@@ -889,7 +884,6 @@ test "should call save on controller when save is clicked and file is selected" 
 
 test "save should be disabled when total frames is zero" {
     const Test = struct {
-        const base_dir = sdk.misc.BaseDir.working_dir;
         var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
         var controller: MockController = .{ .total_frames = 0 };
         var is_ui_open: bool = true;
@@ -902,7 +896,7 @@ test "save should be disabled when total frames is zero" {
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(&controller);
         }
 
@@ -923,7 +917,6 @@ test "save should be disabled when total frames is zero" {
 
 test "should call save on controller when save as is clicked and file is selected" {
     const Test = struct {
-        const base_dir = sdk.misc.BaseDir.working_dir;
         var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
         var controller: MockController = .{};
         var is_ui_open: bool = true;
@@ -936,7 +929,7 @@ test "should call save on controller when save as is clicked and file is selecte
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(&controller);
         }
 
@@ -986,7 +979,6 @@ test "should call save on controller when save as is clicked and file is selecte
 
 test "save as should be disabled when total frames is zero" {
     const Test = struct {
-        const base_dir = sdk.misc.BaseDir.working_dir;
         var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
         var controller: MockController = .{ .total_frames = 0 };
         var is_ui_open: bool = true;
@@ -999,7 +991,7 @@ test "save as should be disabled when total frames is zero" {
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(&controller);
         }
 
@@ -1020,7 +1012,6 @@ test "save as should be disabled when total frames is zero" {
 
 test "should set is_ui_open to false when close ui button is clicked" {
     const Test = struct {
-        const base_dir = sdk.misc.BaseDir.working_dir;
         var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
         var controller: MockController = .{};
         var is_ui_open: bool = true;
@@ -1033,7 +1024,7 @@ test "should set is_ui_open to false when close ui button is clicked" {
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(&controller);
         }
 
@@ -1052,7 +1043,6 @@ test "should set is_ui_open to false when close ui button is clicked" {
 
 test "should call self shutdown when exit is clicked without unsaved changes" {
     const Test = struct {
-        const base_dir = sdk.misc.BaseDir.working_dir;
         var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
         var controller: MockController = .{ .contains_unsaved_changes = false };
         var is_ui_open: bool = true;
@@ -1068,7 +1058,7 @@ test "should call self shutdown when exit is clicked without unsaved changes" {
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(&controller);
         }
 
@@ -1087,7 +1077,6 @@ test "should call self shutdown when exit is clicked without unsaved changes" {
 
 test "should show correctly working unsaved changes dialog when exit is clicked with unsaved changes" {
     const Test = struct {
-        const base_dir = sdk.misc.BaseDir.working_dir;
         var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
         var controller: MockController = .{ .contains_unsaved_changes = true };
         var is_ui_open: bool = true;
@@ -1103,7 +1092,7 @@ test "should show correctly working unsaved changes dialog when exit is clicked 
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(&controller);
         }
 
