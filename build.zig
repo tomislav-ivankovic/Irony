@@ -205,10 +205,22 @@ fn imguiDependency(
     optimize: std.builtin.OptimizeMode,
     use_test_engine: bool,
 ) ModuleAndLibrary {
+    const file_dialog_patcher = b.addExecutable(.{
+        .name = "imgui_file_dialog_patcher",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("dep/imgui_file_dialog/patcher.zig"),
+            .target = b.graph.host,
+        }),
+    });
+    const file_dialog_patcher_run = b.addRunArtifact(file_dialog_patcher);
+    file_dialog_patcher_run.addFileArg(b.dependency("imgui_file_dialog", .{}).path("ImGuiFileDialog.cpp"));
+    const patched_file_dialog = file_dialog_patcher_run.captureStdOut();
+
     const files = b.addWriteFiles();
     _ = files.addCopyDirectory(b.dependency("cimgui", .{}).path("."), ".", .{});
     _ = files.addCopyDirectory(b.dependency("imgui", .{}).path("."), "./imgui", .{});
     _ = files.addCopyDirectory(b.dependency("imgui_file_dialog", .{}).path("."), "./imgui_file_dialog", .{});
+    _ = files.addCopyFile(patched_file_dialog, "./imgui_file_dialog/ImGuiFileDialog_patched.cpp");
     if (use_test_engine) {
         _ = files.addCopyDirectory(
             b.dependency("imgui_test_engine", .{}).path("./imgui_test_engine"),
@@ -253,7 +265,7 @@ fn imguiDependency(
         "./imgui/imgui_widgets.cpp",
         "./imgui/backends/imgui_impl_dx12.cpp",
         "./imgui/backends/imgui_impl_win32.cpp",
-        "./imgui_file_dialog/ImGuiFileDialog.cpp",
+        "./imgui_file_dialog/ImGuiFileDialog_patched.cpp",
     } });
     if (use_test_engine) {
         library.root_module.addCSourceFiles(.{ .root = directory, .files = &.{
