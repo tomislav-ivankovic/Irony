@@ -14,7 +14,7 @@ const access_rights = sdk.os.Process.AccessRights{
     .SYNCHRONIZE = 1,
 };
 const module_name = @tagName(build_info.name) ++ ".dll";
-const interval_ns = 1_000_000_000;
+const interval_ns = 1 * std.time.ns_per_s;
 
 const log_file_name = @tagName(build_info.name) ++ "_injector.log";
 const console_logger = sdk.log.ConsoleLogger(.{});
@@ -25,7 +25,11 @@ pub const std_options = std.Options{
     .logFn = composite_logger.logFn,
 };
 
-var only_inject_mode = false;
+pub const Mode = enum {
+    normal,
+    only_inject,
+};
+var mode = Mode.normal;
 
 pub fn main() !void {
     std.log.info("Application started up.", .{});
@@ -45,11 +49,14 @@ pub fn main() !void {
     std.log.info("{s} Injector version {s}", .{ build_info.display_name, build_info.version });
 
     std.log.debug("Checking for only inject mode...", .{});
-    only_inject_mode = getOnlyInjectMode();
-    if (only_inject_mode) {
-        std.log.info("Only inject mode activated.", .{});
-    } else {
-        std.log.debug("Not using only inject mode.", .{});
+    mode = getGetMode() catch |err| {
+        sdk.misc.error_context.append("Failed to get the injector mode.", .{});
+        sdk.misc.error_context.logError(err);
+        return;
+    };
+    switch (mode) {
+        .normal => std.log.info("Using normal mode.", .{}),
+        .only_inject => std.log.info("Using only inject mode.", .{}),
     }
 
     std.log.debug("Setting console close handler...", .{});
@@ -70,14 +77,32 @@ pub fn main() !void {
     );
 }
 
-fn getOnlyInjectMode() bool {
+fn getGetMode() !Mode {
     const allocator = std.heap.page_allocator;
     const args = std.process.argsAlloc(allocator) catch |err| {
         sdk.misc.error_context.new("Failed to get process command line arguments.", .{});
-        sdk.misc.error_context.logError(err);
-        return false;
+        return err;
     };
-    defer allocator.free(args);
+    defer std.process.argsFree(allocator, args);
+    switch (args.len) {
+        0, 1 => return .normal,
+        2 => {
+            const arg = args[1];
+            if (std.mem.eql(u8, arg, "only_inject")) {
+                return .only_inject;
+            } else {
+                sdk.misc.error_context.new(
+                    "Expecting command line argument to be \"only_inject\" but got: \"{s}\"",
+                    .{arg},
+                );
+                return error.UnexpectedArg;
+            }
+        },
+        else => {
+            sdk.misc.error_context.new("Expecting 0 or 1 command line arguments but got: {}", .{args.len - 1});
+            return error.UnexpectedArgsLen;
+        },
+    }
     return args.len >= 2;
 }
 
@@ -130,7 +155,7 @@ pub fn onProcessOpen(base_dir: *const sdk.misc.BaseDir, process: *const sdk.os.P
     };
     std.log.info("Module injected successfully.", .{});
 
-    if (only_inject_mode) {
+    if (mode == .only_inject) {
         std.log.info("Closing process (PID = {f})...", .{process.id});
         if (process.close()) {
             std.log.info("Process closed successfully.", .{});
