@@ -106,6 +106,14 @@ To run the project's tests execute:
 zig build test
 ```
 
+If you are on Linux, the tests will run inside Wine.
+Make sure you have Wine installed and make sure that your default Wine prefix has `dxvk` and `vkd3d` installed.
+You can use the following command to install these:
+
+```bash
+winetricks dxvk vkd3d
+```
+
 ## Not Open Source
 
 While this application is free to download and it's source code is publicly available for inspection, the license that the code is under limits the legal rights of the public in a way that makes this software NOT open source.
