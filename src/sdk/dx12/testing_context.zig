@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const w32 = @import("win32").everything;
+const misc = @import("../misc/root.zig");
 const os = @import("../os/root.zig");
 const dx12 = @import("root.zig");
 const w = std.unicode.utf8ToUtf16LeStringLiteral;
@@ -43,6 +44,8 @@ pub const TestingContext = struct {
         };
         const register_success = w32.RegisterClassExW(&window_class);
         if (register_success == 0) {
+            misc.error_context.new("{f}", .{os.Error.getLast()});
+            misc.error_context.append("RegisterClassExW returned 0.", .{});
             return error.OsError;
         }
         errdefer _ = w32.UnregisterClassW(window_class.lpszClassName, window_class.hInstance);
@@ -61,20 +64,26 @@ pub const TestingContext = struct {
             window_class.hInstance,
             null,
         ) orelse {
+            misc.error_context.new("{f}", .{os.Error.getLast()});
+            misc.error_context.append("CreateWindowExW returned 0.", .{});
             return error.OsError;
         };
         errdefer _ = w32.DestroyWindow(window);
 
         var factory: *w32.IDXGIFactory4 = undefined;
         const factory_result = w32.CreateDXGIFactory(w32.IID_IDXGIFactory4, @ptrCast(&factory));
-        if (dx12.Error.from(factory_result) != null) {
+        if (dx12.Error.from(factory_result)) |err| {
+            misc.error_context.new("{f}", .{err});
+            misc.error_context.append("CreateDXGIFactory returned a failure value.", .{});
             return error.Dx12Error;
         }
         errdefer _ = factory.IUnknown.Release();
 
         var adapter: *w32.IDXGIAdapter = undefined;
         const adapter_result = factory.EnumWarpAdapter(w32.IID_IDXGIAdapter, @ptrCast(&adapter));
-        if (dx12.Error.from(adapter_result) != null) {
+        if (dx12.Error.from(adapter_result)) |err| {
+            misc.error_context.new("{f}", .{err});
+            misc.error_context.append("IDXGIFactory4.EnumWarpAdapter returned a failure value.", .{});
             return error.Dx12Error;
         }
         errdefer _ = adapter.IUnknown.Release();
@@ -86,7 +95,9 @@ pub const TestingContext = struct {
             w32.IID_ID3D12Device,
             @ptrCast(&device),
         );
-        if (dx12.Error.from(device_result) != null) {
+        if (dx12.Error.from(device_result)) |err| {
+            misc.error_context.new("{f}", .{err});
+            misc.error_context.append("D3D12CreateDevice returned a failure value.", .{});
             return error.Dx12Error;
         }
         errdefer _ = device.IUnknown.Release();
@@ -102,7 +113,9 @@ pub const TestingContext = struct {
             w32.IID_ID3D12CommandQueue,
             @ptrCast(&command_queue),
         );
-        if (dx12.Error.from(command_queue_result) != null) {
+        if (dx12.Error.from(command_queue_result)) |err| {
+            misc.error_context.new("{f}", .{err});
+            misc.error_context.append("ID3D12Device.CreateCommandQueue returned a failure value.", .{});
             return error.Dx12Error;
         }
         errdefer _ = command_queue.IUnknown.Release();
@@ -130,7 +143,9 @@ pub const TestingContext = struct {
             &swap_chain_desc,
             @ptrCast(&swap_chain),
         );
-        if (dx12.Error.from(swap_chain_result) != null) {
+        if (dx12.Error.from(swap_chain_result)) |err| {
+            misc.error_context.new("{f}", .{err});
+            misc.error_context.append("IDXGIFactory.CreateSwapChain returned a failure value.", .{});
             return error.Dx12Error;
         }
         errdefer _ = swap_chain.IUnknown.Release();
