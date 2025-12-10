@@ -181,6 +181,7 @@ pub const SettingsWindow = struct {
 };
 
 const MiscSettings = struct {
+    ui_font_size_input: UiFontSizeInput,
     reload_button: ReloadButton,
     defaults_button: DefaultsButton,
 
@@ -188,6 +189,7 @@ const MiscSettings = struct {
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return .{
+            .ui_font_size_input = .{},
             .reload_button = .init(allocator),
             .defaults_button = .{},
         };
@@ -203,8 +205,35 @@ const MiscSettings = struct {
         settings: *model.Settings,
         default_settings: *const model.Settings,
     ) void {
+        self.ui_font_size_input.draw(&settings.misc.ui_font_size, &default_settings.misc.ui_font_size);
+        imgui.igSeparator();
         self.reload_button.draw(base_dir, settings);
         self.defaults_button.draw(settings, default_settings);
+    }
+};
+
+const UiFontSizeInput = struct {
+    previous_frame_value: f32 = 0.0,
+    input_value: f32 = 0.0,
+
+    const Self = @This();
+    pub const min_value = 8;
+    pub const max_value = 64;
+
+    pub fn draw(self: *Self, value: *f32, default: *const f32) void {
+        if (self.previous_frame_value != value.*) {
+            self.input_value = value.*;
+        }
+        self.previous_frame_value = value.*;
+
+        imgui.igPushID_Str("UI Font Size");
+        drawDefaultButton(value, default);
+        imgui.igPopID();
+        imgui.igSameLine(0, -1);
+        _ = imgui.igInputFloat("UI Font Size", &self.input_value, 0, 0, "%.0f px", 0);
+        if (imgui.igIsItemDeactivatedAfterEdit()) {
+            value.* = std.math.clamp(self.input_value, min_value, max_value);
+        }
     }
 };
 
@@ -1604,6 +1633,41 @@ test "details table settings should function correctly" {
             inline for (@typeInfo(model.DetailsSettings.RowsEnabled).@"struct".fields) |*field| {
                 try testing.expectEqual(true, @field(current.rows_enabled, field.name));
             }
+        }
+    };
+    Test.window = .init(testing.allocator);
+    defer Test.window.deinit();
+    Test.window.is_open = true;
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "misc settings should function correctly" {
+    const Test = struct {
+        const default_settings = model.Settings{};
+        var settings = default_settings;
+        var window: SettingsWindow = undefined;
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(&testing_base_dir, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            const current = &settings.misc;
+            const default = &default_settings.misc;
+
+            ctx.setRef(SettingsWindow.name);
+            ctx.itemClick("**/Miscellaneous", imgui.ImGuiMouseButton_Left, 0);
+            ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
+
+            ctx.itemInputValueFloat("UI Font Size", UiFontSizeInput.min_value + 5);
+            try testing.expectEqual(UiFontSizeInput.min_value + 5, current.ui_font_size);
+            ctx.itemInputValueFloat("UI Font Size", UiFontSizeInput.min_value - 100);
+            try testing.expectEqual(UiFontSizeInput.min_value, current.ui_font_size);
+            ctx.itemInputValueFloat("UI Font Size", UiFontSizeInput.max_value + 100);
+            try testing.expectEqual(UiFontSizeInput.max_value, current.ui_font_size);
+            ctx.itemClick("UI Font Size/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.ui_font_size, current.ui_font_size);
         }
     };
     Test.window = .init(testing.allocator);

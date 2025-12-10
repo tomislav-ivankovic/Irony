@@ -54,6 +54,10 @@ pub const Ui = struct {
         game_memory_maybe: ?*const game.Memory,
         controller: *core.Controller,
     ) void {
+        const font_size = if (settings_maybe) |s| s.misc.ui_font_size else sdk.ui.Context.default_font_size;
+        imgui.igPushFont(null, font_size);
+        defer imgui.igPopFont();
+
         sdk.ui.toasts.draw();
 
         const game_memory = game_memory_maybe orelse {

@@ -17,6 +17,7 @@ pub const Context = struct {
     test_allocation: if (builtin.is_test) *u8 else void,
 
     const Self = @This();
+    pub const default_font_size = 18;
 
     pub fn init(
         comptime buffer_count: usize,
@@ -63,7 +64,7 @@ pub const Context = struct {
             imgui.igGetIO_Nil().*.Fonts,
             @constCast(font_file.ptr),
             font_file.len,
-            18.0,
+            default_font_size,
             font_config,
             null,
         )) |font| {

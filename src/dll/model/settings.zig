@@ -13,6 +13,7 @@ pub const Settings = struct {
     ingame_camera: IngameCameraSettings = .{},
     measure_tool: MeasureToolSettings = .{},
     details: DetailsSettings = .{},
+    misc: MiscSettings = .{},
 
     const Self = @This();
     pub const file_name = "settings.json";
@@ -324,6 +325,10 @@ pub const DetailsSettings = struct {
         secondary_player,
     };
     pub const RowsEnabled = sdk.misc.FieldMap(ui.Details, bool, &true);
+};
+
+pub const MiscSettings = struct {
+    ui_font_size: f32 = sdk.ui.Context.default_font_size,
 };
 
 pub const PlayerSettingsMode = enum {
