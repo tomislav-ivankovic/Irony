@@ -32,19 +32,19 @@ pub const Controller = struct {
     };
     pub const PauseState = struct {
         frame_index: usize,
-        is_frame_processed: bool,
+        unprocessed_frames_start: ?usize,
     };
     pub const PlaybackState = struct {
         frame_index: usize,
         frame_progress: f32,
-        is_frame_processed: bool,
+        unprocessed_frames_start: ?usize,
     };
     pub const ScrubState = struct {
         direction: ScrubDirection,
         frame_index: usize,
         frame_progress: f32,
         scrubbing_time: f32,
-        is_frame_processed: bool,
+        unprocessed_frames_start: ?usize,
     };
     pub const ScrubDirection = enum {
         forward,
@@ -66,6 +66,7 @@ pub const Controller = struct {
     pub const min_scrub_speed = 1.0;
     pub const max_scrub_speed = 6.0;
     pub const scrub_ramp_up_time = 10.0;
+    pub const max_number_of_unprocessed_frames = 300;
     pub const serialization_config = sdk.io.RecordingConfig{
         .atomic_types = &.{
             ?bool,
@@ -136,14 +137,29 @@ pub const Controller = struct {
         onFrameChange: ?*const fn (context: @TypeOf(context), frame: *const model.Frame) void,
     ) void {
         switch (self.mode) {
-            .pause => |*state| self.processUnprocessedFrame(&state.is_frame_processed, context, onFrameChange),
+            .pause => |*state| self.processUnprocessedFrames(
+                &state.unprocessed_frames_start,
+                state.frame_index,
+                context,
+                onFrameChange,
+            ),
             .playback => |*state| {
-                self.processUnprocessedFrame(&state.is_frame_processed, context, onFrameChange);
+                self.processUnprocessedFrames(
+                    &state.unprocessed_frames_start,
+                    state.frame_index,
+                    context,
+                    onFrameChange,
+                );
                 state.frame_progress += self.playback_speed * delta_time / frame_time;
                 self.applyFrameProgress(&state.frame_progress, &state.frame_index, context, onFrameChange);
             },
             .scrub => |*state| {
-                self.processUnprocessedFrame(&state.is_frame_processed, context, onFrameChange);
+                self.processUnprocessedFrames(
+                    &state.unprocessed_frames_start,
+                    state.frame_index,
+                    context,
+                    onFrameChange,
+                );
                 const abs_speed = std.math.lerp(
                     min_scrub_speed,
                     max_scrub_speed,
@@ -163,13 +179,13 @@ pub const Controller = struct {
                     self.cleanUpModeState();
                     self.mode = .{ .pause = .{
                         .frame_index = self.recording.items.len -| 1,
-                        .is_frame_processed = false,
+                        .unprocessed_frames_start = self.recording.items.len -| 1,
                     } };
                 } else if (state.frame_index) |frame_index| {
                     self.cleanUpModeState();
                     self.mode = .{ .pause = .{
                         .frame_index = frame_index,
-                        .is_frame_processed = false,
+                        .unprocessed_frames_start = frame_index,
                     } };
                 } else {
                     self.cleanUpModeState();
@@ -181,7 +197,7 @@ pub const Controller = struct {
                     self.cleanUpModeState();
                     self.mode = .{ .pause = .{
                         .frame_index = frame_index,
-                        .is_frame_processed = false,
+                        .unprocessed_frames_start = frame_index,
                     } };
                 } else {
                     self.cleanUpModeState();
@@ -192,21 +208,37 @@ pub const Controller = struct {
         }
     }
 
-    fn processUnprocessedFrame(
+    fn processUnprocessedFrames(
         self: *const Self,
-        is_frame_processed: *bool,
+        unprocessed_frames_start: *?usize,
+        target_frame_index: usize,
         context: anytype,
         onFrameChange: ?*const fn (context: @TypeOf(context), frame: *const model.Frame) void,
     ) void {
-        if (is_frame_processed.*) {
-            return;
-        }
-        if (onFrameChange) |callback| {
-            if (self.getCurrentFrame()) |frame| {
-                callback(context, frame);
+        defer unprocessed_frames_start.* = null;
+        const callback = onFrameChange orelse return;
+        var index = unprocessed_frames_start.* orelse return;
+        if (index <= target_frame_index) {
+            while (index <= target_frame_index) {
+                if (self.getFrameAt(index)) |frame| {
+                    callback(context, frame);
+                }
+                if (index == std.math.maxInt(usize)) {
+                    break;
+                }
+                index += 1;
+            }
+        } else {
+            while (index >= target_frame_index) {
+                if (self.getFrameAt(index)) |frame| {
+                    callback(context, frame);
+                }
+                if (index == 0) {
+                    break;
+                }
+                index -= 1;
             }
         }
-        is_frame_processed.* = true;
     }
 
     fn applyFrameProgress(
@@ -245,38 +277,38 @@ pub const Controller = struct {
         if (total_frames == 0) {
             return;
         }
-        const index, const is_frame_processed = switch (self.mode) {
+        const index, const unprocessed_frames_start = switch (self.mode) {
             .live => block: {
                 if (self.playback_speed >= 0) {
-                    break :block .{ 0, false };
+                    break :block .{ 0, 0 };
                 } else {
-                    break :block .{ total_frames - 1, false };
+                    break :block .{ total_frames - 1, total_frames - 1 };
                 }
             },
             .record => |*state| block: {
                 if (self.playback_speed >= 0) {
-                    break :block .{ state.segment_start_index, false };
+                    break :block .{ state.segment_start_index, state.segment_start_index };
                 } else {
-                    break :block .{ state.segment_start_index + state.segment.items.len - 1, true };
+                    break :block .{ state.segment_start_index + state.segment.items.len - 1, null };
                 }
             },
             .pause => |*state| block: {
                 if (self.playback_speed >= 0 and state.frame_index >= total_frames - 1) {
-                    break :block .{ 0, false };
+                    break :block .{ 0, 0 };
                 } else if (self.playback_speed <= 0 and state.frame_index == 0) {
-                    break :block .{ total_frames - 1, false };
+                    break :block .{ total_frames - 1, total_frames - 1 };
                 } else {
-                    break :block .{ state.frame_index, state.is_frame_processed };
+                    break :block .{ state.frame_index, state.unprocessed_frames_start };
                 }
             },
-            .scrub => |*state| .{ state.frame_index, state.is_frame_processed },
+            .scrub => |*state| .{ state.frame_index, state.unprocessed_frames_start },
             .playback, .load, .save => return,
         };
         self.cleanUpModeState();
         self.mode = .{ .playback = .{
             .frame_index = index,
             .frame_progress = 0.5,
-            .is_frame_processed = is_frame_processed,
+            .unprocessed_frames_start = unprocessed_frames_start,
         } };
     }
 
@@ -284,18 +316,18 @@ pub const Controller = struct {
         if (self.getTotalFrames() == 0) {
             return;
         }
-        const is_frame_processed = switch (self.mode) {
-            .live => false,
-            .record => true,
-            .playback => |*state| state.is_frame_processed,
-            .scrub => |*state| state.is_frame_processed,
+        const index = self.getCurrentFrameIndex() orelse 0;
+        const unprocessed_frames_start = switch (self.mode) {
+            .live => index,
+            .record => null,
+            .playback => |*state| state.unprocessed_frames_start,
+            .scrub => |*state| state.unprocessed_frames_start,
             .pause, .load, .save => return,
         };
-        const index = self.getCurrentFrameIndex() orelse 0;
         self.cleanUpModeState();
         self.mode = .{ .pause = .{
             .frame_index = index,
-            .is_frame_processed = is_frame_processed,
+            .unprocessed_frames_start = unprocessed_frames_start,
         } };
     }
 
@@ -328,25 +360,25 @@ pub const Controller = struct {
         if (total_frames == 0) {
             return;
         }
-        const index, const is_frame_processed = switch (self.mode) {
+        const index, const unprocessed_frames_start = switch (self.mode) {
             .live => switch (direction) {
-                .forward, .neutral => .{ 0, false },
-                .backward => .{ total_frames - 1, false },
+                .forward, .neutral => .{ 0, 0 },
+                .backward => .{ total_frames - 1, total_frames - 1 },
             },
             .record => |*state| switch (direction) {
-                .forward, .neutral => .{ state.segment_start_index, false },
-                .backward => .{ state.segment_start_index + state.segment.items.len - 1, true },
+                .forward, .neutral => .{ state.segment_start_index, state.segment_start_index },
+                .backward => .{ state.segment_start_index + state.segment.items.len - 1, null },
             },
             .pause => |*state| block: {
                 if (direction == .forward and state.frame_index >= total_frames - 1) {
-                    break :block .{ 0, false };
+                    break :block .{ 0, 0 };
                 } else if (direction == .backward and state.frame_index == 0) {
-                    break :block .{ total_frames - 1, false };
+                    break :block .{ total_frames - 1, total_frames - 1 };
                 } else {
-                    break :block .{ state.frame_index, state.is_frame_processed };
+                    break :block .{ state.frame_index, state.unprocessed_frames_start };
                 }
             },
-            .playback => |*state| .{ state.frame_index, state.is_frame_processed },
+            .playback => |*state| .{ state.frame_index, state.unprocessed_frames_start },
             .scrub => |*state| {
                 state.direction = direction;
                 return;
@@ -359,7 +391,7 @@ pub const Controller = struct {
             .frame_index = index,
             .frame_progress = 0.5,
             .scrubbing_time = 0.0,
-            .is_frame_processed = is_frame_processed,
+            .unprocessed_frames_start = unprocessed_frames_start,
         } };
     }
 
@@ -502,18 +534,47 @@ pub const Controller = struct {
     }
 
     pub fn setCurrentFrameIndex(self: *Self, index: usize) void {
+        const calculateUnprocessedFramesStart = struct {
+            fn call(
+                current_index: usize,
+                target_index: usize,
+                previous_start: ?usize,
+            ) ?usize {
+                if (previous_start) |i| {
+                    return i;
+                } else if (target_index > current_index) {
+                    return @max(current_index +| 1, target_index -| max_number_of_unprocessed_frames);
+                } else if (target_index < current_index) {
+                    return @min(current_index -| 1, target_index +| max_number_of_unprocessed_frames);
+                } else {
+                    return null;
+                }
+            }
+        }.call;
         switch (self.mode) {
             .pause => |*state| {
-                state.is_frame_processed = index == state.frame_index;
+                state.unprocessed_frames_start = calculateUnprocessedFramesStart(
+                    state.frame_index,
+                    index,
+                    state.unprocessed_frames_start,
+                );
                 state.frame_index = index;
             },
             .playback => |*state| {
-                state.is_frame_processed = index == state.frame_index;
+                state.unprocessed_frames_start = calculateUnprocessedFramesStart(
+                    state.frame_index,
+                    index,
+                    state.unprocessed_frames_start,
+                );
                 state.frame_progress = 0.5;
                 state.frame_index = index;
             },
             .scrub => |*state| {
-                state.is_frame_processed = index == state.frame_index;
+                state.unprocessed_frames_start = calculateUnprocessedFramesStart(
+                    state.frame_index,
+                    index,
+                    state.unprocessed_frames_start,
+                );
                 state.frame_progress = 0.5;
                 state.frame_index = index;
             },
@@ -521,7 +582,7 @@ pub const Controller = struct {
                 self.cleanUpModeState();
                 self.mode = .{ .pause = .{
                     .frame_index = index,
-                    .is_frame_processed = false,
+                    .unprocessed_frames_start = index,
                 } };
             },
             .load, .save => return,
@@ -1023,28 +1084,28 @@ test "should play recording from current frame to end when playing with positive
 
     controller.update(0.0, {}, Callback.call);
 
-    try testing.expectEqual(5, Callback.times_called);
+    try testing.expectEqual(6, Callback.times_called);
     try testing.expectEqual(frame_2, Callback.last_frame);
     try testing.expect(controller.getCurrentFrame() != null);
     try testing.expectEqual(frame_2, controller.getCurrentFrame().?.*);
 
     controller.update(Controller.frame_time, {}, Callback.call);
 
-    try testing.expectEqual(6, Callback.times_called);
+    try testing.expectEqual(7, Callback.times_called);
     try testing.expectEqual(frame_3, Callback.last_frame);
     try testing.expect(controller.getCurrentFrame() != null);
     try testing.expectEqual(frame_3, controller.getCurrentFrame().?.*);
 
     controller.update(Controller.frame_time, {}, Callback.call);
 
-    try testing.expectEqual(7, Callback.times_called);
+    try testing.expectEqual(8, Callback.times_called);
     try testing.expectEqual(frame_4, Callback.last_frame);
     try testing.expect(controller.getCurrentFrame() != null);
     try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
 
     controller.update(Controller.frame_time, {}, Callback.call);
 
-    try testing.expectEqual(7, Callback.times_called);
+    try testing.expectEqual(8, Callback.times_called);
     try testing.expectEqual(frame_4, Callback.last_frame);
     try testing.expect(controller.getCurrentFrame() != null);
     try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
@@ -1240,70 +1301,70 @@ test "should play recording from end to beginning when playing with negative spe
     controller.playback_speed = -1.0;
     controller.play();
 
-    try testing.expectEqual(5, Callback.times_called);
+    try testing.expectEqual(7, Callback.times_called);
     try testing.expectEqual(frame_1, Callback.last_frame);
     try testing.expect(controller.getCurrentFrame() != null);
     try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
 
     controller.update(0.0, {}, Callback.call);
 
-    try testing.expectEqual(6, Callback.times_called);
+    try testing.expectEqual(8, Callback.times_called);
     try testing.expectEqual(frame_4, Callback.last_frame);
     try testing.expect(controller.getCurrentFrame() != null);
     try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
 
     controller.update(Controller.frame_time, {}, Callback.call);
 
-    try testing.expectEqual(7, Callback.times_called);
+    try testing.expectEqual(9, Callback.times_called);
     try testing.expectEqual(frame_3, Callback.last_frame);
     try testing.expect(controller.getCurrentFrame() != null);
     try testing.expectEqual(frame_3, controller.getCurrentFrame().?.*);
 
     controller.update(2.0 * Controller.frame_time, {}, Callback.call);
 
-    try testing.expectEqual(9, Callback.times_called);
+    try testing.expectEqual(11, Callback.times_called);
     try testing.expectEqual(frame_1, Callback.last_frame);
     try testing.expect(controller.getCurrentFrame() != null);
     try testing.expectEqual(frame_1, controller.getCurrentFrame().?.*);
 
     controller.update(Controller.frame_time, {}, Callback.call);
 
-    try testing.expectEqual(9, Callback.times_called);
+    try testing.expectEqual(11, Callback.times_called);
     try testing.expectEqual(frame_1, Callback.last_frame);
     try testing.expect(controller.getCurrentFrame() != null);
     try testing.expectEqual(frame_1, controller.getCurrentFrame().?.*);
 
     controller.play();
 
-    try testing.expectEqual(9, Callback.times_called);
+    try testing.expectEqual(11, Callback.times_called);
     try testing.expectEqual(frame_1, Callback.last_frame);
     try testing.expect(controller.getCurrentFrame() != null);
     try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
 
     controller.update(0.0, {}, Callback.call);
 
-    try testing.expectEqual(10, Callback.times_called);
+    try testing.expectEqual(12, Callback.times_called);
     try testing.expectEqual(frame_4, Callback.last_frame);
     try testing.expect(controller.getCurrentFrame() != null);
     try testing.expectEqual(frame_4, controller.getCurrentFrame().?.*);
 
     controller.update(Controller.frame_time, {}, Callback.call);
 
-    try testing.expectEqual(11, Callback.times_called);
+    try testing.expectEqual(13, Callback.times_called);
     try testing.expectEqual(frame_3, Callback.last_frame);
     try testing.expect(controller.getCurrentFrame() != null);
     try testing.expectEqual(frame_3, controller.getCurrentFrame().?.*);
 
     controller.update(2.0 * Controller.frame_time, {}, Callback.call);
 
-    try testing.expectEqual(13, Callback.times_called);
+    try testing.expectEqual(15, Callback.times_called);
     try testing.expectEqual(frame_1, Callback.last_frame);
     try testing.expect(controller.getCurrentFrame() != null);
     try testing.expectEqual(frame_1, controller.getCurrentFrame().?.*);
 
     controller.update(Controller.frame_time, {}, Callback.call);
 
-    try testing.expectEqual(13, Callback.times_called);
+    try testing.expectEqual(15, Callback.times_called);
     try testing.expectEqual(frame_1, Callback.last_frame);
     try testing.expect(controller.getCurrentFrame() != null);
     try testing.expectEqual(frame_1, controller.getCurrentFrame().?.*);
