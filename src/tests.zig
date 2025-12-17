@@ -1,4 +1,10 @@
 test {
+    _ = @import("sdk/dx11/error.zig");
+    _ = @import("sdk/dx11/functions.zig");
+    _ = @import("sdk/dx11/hooks.zig");
+    _ = @import("sdk/dx11/misc.zig");
+    _ = @import("sdk/dx11/testing_context.zig");
+
     _ = @import("sdk/dx12/context.zig");
     _ = @import("sdk/dx12/descriptor_heap_allocator.zig");
     _ = @import("sdk/dx12/error.zig");
