@@ -2,29 +2,43 @@ const std = @import("std");
 const sdk = @import("../sdk/root.zig");
 
 pub fn runProcessLoop(
-    process_name: []const u8,
+    comptime process_names: []const []const u8,
     access_rights: sdk.os.Process.AccessRights,
     interval_ns: u64,
     context: anytype,
-    onProcessOpen: *const fn (context: @TypeOf(context), process: *const sdk.os.Process) bool,
-    onProcessClose: *const fn (context: @TypeOf(context)) void,
+    onProcessOpen: *const fn (context: @TypeOf(context), index: usize, process: *const sdk.os.Process) bool,
+    onProcessClose: *const fn (context: @TypeOf(context), index: usize) void,
 ) void {
-    var opened_process: ?sdk.os.Process = null;
+    var open_processes = [1]?sdk.os.Process{null} ** process_names.len;
     while (true) {
-        runLoopLogic(&opened_process, access_rights, process_name, context, onProcessOpen, onProcessClose);
+        runLoopLogic(&open_processes, process_names, access_rights, context, onProcessOpen, onProcessClose);
         std.Thread.sleep(interval_ns);
     }
 }
 
 fn runLoopLogic(
-    opened_process: *?sdk.os.Process,
+    open_processes: []?sdk.os.Process,
+    process_names: []const []const u8,
     access_rights: sdk.os.Process.AccessRights,
-    process_name: []const u8,
     context: anytype,
-    onProcessOpen: *const fn (context: @TypeOf(context), process: *const sdk.os.Process) bool,
-    onProcessClose: *const fn (context: @TypeOf(context)) void,
+    onProcessOpen: *const fn (context: @TypeOf(context), index: usize, process: *const sdk.os.Process) bool,
+    onProcessClose: *const fn (context: @TypeOf(context), index: usize) void,
 ) void {
-    if (opened_process.*) |process| {
+    for (open_processes, process_names, 0..) |*open_process, process_name, index| {
+        runProcessLogic(index, open_process, process_name, access_rights, context, onProcessOpen, onProcessClose);
+    }
+}
+
+fn runProcessLogic(
+    index: usize,
+    open_process: *?sdk.os.Process,
+    process_name: []const u8,
+    access_rights: sdk.os.Process.AccessRights,
+    context: anytype,
+    onProcessOpen: *const fn (context: @TypeOf(context), index: usize, process: *const sdk.os.Process) bool,
+    onProcessClose: *const fn (context: @TypeOf(context), index: usize) void,
+) void {
+    if (open_process.*) |process| {
         std.log.debug("Checking if the process (PID = {f}) is still running...", .{process.id});
         const still_running = process.isStillRunning() catch |err| c: {
             sdk.misc.error_context.append("Failed to figure out if process (PID={f}) is still running.", .{process.id});
@@ -37,7 +51,7 @@ fn runLoopLogic(
         }
         std.log.info("Process (PID = {f}) stopped running.", .{process.id});
 
-        onProcessClose(context);
+        onProcessClose(context, index);
 
         std.log.info("Closing process (PID = {f})...", .{process.id});
         if (process.close()) {
@@ -46,7 +60,7 @@ fn runLoopLogic(
             sdk.misc.error_context.append("Failed close process with PID: {f}", .{process.id});
             sdk.misc.error_context.logError(err);
         }
-        opened_process.* = null;
+        open_process.* = null;
     } else {
         std.log.debug("Searching for process ID of \"{s}\"...", .{process_name});
         const process_id = sdk.os.ProcessId.findByFileName(process_name) catch |err| switch (err) {
@@ -70,9 +84,9 @@ fn runLoopLogic(
         };
         std.log.info("Process opened successfully.", .{});
 
-        const success = onProcessOpen(context, &process);
+        const success = onProcessOpen(context, index, &process);
         if (success) {
-            opened_process.* = process;
+            open_process.* = process;
         } else {
             std.log.info("Closing process (PID = {f})...", .{process.id});
             if (process.close()) {
@@ -89,35 +103,37 @@ const testing = std.testing;
 const w32 = @import("win32").everything;
 const w = std.unicode.utf8ToUtf16LeStringLiteral;
 
-test "should do nothing when process is not found" {
-    var opened_process: ?sdk.os.Process = null;
+test "should do nothing when process no process is found" {
     const OnProcessOpen = struct {
         var times_called: usize = 0;
-        fn call(context: void, process: *const sdk.os.Process) bool {
+        fn call(context: void, index: usize, process: *const sdk.os.Process) bool {
             times_called += 1;
             _ = context;
+            _ = index;
             _ = process;
             return true;
         }
     };
     const OnProcessClose = struct {
         var times_called: usize = 0;
-        fn call(context: void) void {
+        fn call(context: void, index: usize) void {
             times_called += 1;
             _ = context;
+            _ = index;
         }
     };
 
+    var open_processes = [2]?sdk.os.Process{ null, null };
     runLoopLogic(
-        &opened_process,
+        &open_processes,
+        &.{ "not_found_1.exe", "not_found_2.exe" },
         .{ .QUERY_INFORMATION = 1 },
-        "not_found.exe",
         {},
         OnProcessOpen.call,
         OnProcessClose.call,
     );
 
-    try testing.expectEqual(null, opened_process);
+    try testing.expectEqual(.{ null, null }, open_processes);
     try testing.expectEqual(0, OnProcessOpen.times_called);
     try testing.expectEqual(0, OnProcessClose.times_called);
 }
@@ -128,42 +144,50 @@ test "should open process when process exists and onProcessOpen returns true" {
     defer _ = wait_process.kill() catch @panic("Failed to kill the wait process.");
     const pid = w32.GetProcessId(wait_process.id);
 
-    var opened_process: ?sdk.os.Process = null;
     const OnProcessOpen = struct {
         var times_called: usize = 0;
+        var last_context: ?i32 = null;
+        var last_index: ?usize = null;
         var process_id: ?sdk.os.ProcessId = null;
-        var context_value: ?i32 = null;
-        fn call(context: i32, process: *const sdk.os.Process) bool {
+        fn call(context: i32, index: usize, process: *const sdk.os.Process) bool {
             times_called += 1;
+            last_context = context;
+            last_index = index;
             process_id = process.id;
-            context_value = context;
             return true;
         }
     };
     const OnProcessClose = struct {
         var times_called: usize = 0;
-        fn call(context: i32) void {
+        var last_context: ?i32 = null;
+        var last_index: ?usize = null;
+        fn call(context: i32, index: usize) void {
             times_called += 1;
-            _ = context;
+            last_context = context;
+            last_index = index;
         }
     };
 
+    var open_processes = [2]?sdk.os.Process{ null, null };
     for (0..3) |_| {
         runLoopLogic(
-            &opened_process,
+            &open_processes,
+            &.{ "not_found.exe", "wait.exe" },
             .{ .QUERY_INFORMATION = 1 },
-            "wait.exe",
             @as(i32, 123),
             OnProcessOpen.call,
             OnProcessClose.call,
         );
     }
-    defer opened_process.?.close() catch @panic("Failed to close process.");
+    defer open_processes[1].?.close() catch @panic("Failed to close process.");
 
-    try testing.expectEqual(pid, opened_process.?.id.raw);
+    try testing.expectEqual(null, open_processes[0]);
+    try testing.expect(open_processes[1] != null);
+    try testing.expectEqual(pid, open_processes[1].?.id.raw);
     try testing.expectEqual(1, OnProcessOpen.times_called);
+    try testing.expectEqual(123, OnProcessOpen.last_context);
+    try testing.expectEqual(1, OnProcessOpen.last_index);
     try testing.expectEqual(pid, OnProcessOpen.process_id.?.raw);
-    try testing.expectEqual(123, OnProcessOpen.context_value);
     try testing.expectEqual(0, OnProcessClose.times_called);
 }
 
@@ -173,39 +197,46 @@ test "should open and close process when process exists and onProcessOpen return
     defer _ = wait_process.kill() catch @panic("Failed to kill the wait process.");
     const pid = w32.GetProcessId(wait_process.id);
 
-    var opened_process: ?sdk.os.Process = null;
     const OnProcessOpen = struct {
         var times_called: usize = 0;
+        var last_context: ?i32 = null;
+        var last_index: ?usize = null;
         var process_id: ?sdk.os.ProcessId = null;
-        var context_value: ?i32 = null;
-        fn call(context: i32, process: *const sdk.os.Process) bool {
+        fn call(context: i32, index: usize, process: *const sdk.os.Process) bool {
             times_called += 1;
+            last_context = context;
+            last_index = index;
             process_id = process.id;
-            context_value = context;
             return false;
         }
     };
     const OnProcessClose = struct {
         var times_called: usize = 0;
-        fn call(context: i32) void {
+        var last_context: ?i32 = null;
+        var last_index: ?usize = null;
+        fn call(context: i32, index: usize) void {
             times_called += 1;
-            _ = context;
+            last_context = context;
+            last_index = index;
         }
     };
 
+    var open_processes = [2]?sdk.os.Process{ null, null };
     runLoopLogic(
-        &opened_process,
+        &open_processes,
+        &.{ "wait.exe", "not_found.exe" },
         .{ .QUERY_INFORMATION = 1 },
-        "wait.exe",
         @as(i32, 123),
         OnProcessOpen.call,
         OnProcessClose.call,
     );
 
-    try testing.expectEqual(null, opened_process);
+    try testing.expectEqual(null, open_processes[0]);
+    try testing.expectEqual(null, open_processes[1]);
     try testing.expectEqual(1, OnProcessOpen.times_called);
+    try testing.expectEqual(123, OnProcessOpen.last_context);
+    try testing.expectEqual(0, OnProcessOpen.last_index);
     try testing.expectEqual(pid, OnProcessOpen.process_id.?.raw);
-    try testing.expectEqual(123, OnProcessOpen.context_value);
     try testing.expectEqual(0, OnProcessClose.times_called);
 }
 
@@ -214,32 +245,36 @@ test "should close process when process stops running" {
     try wait_process.spawn();
     const pid = w32.GetProcessId(wait_process.id);
 
-    var opened_process: ?sdk.os.Process = null;
     const OnProcessOpen = struct {
         var times_called: usize = 0;
+        var last_context: ?i32 = null;
+        var last_index: ?usize = null;
         var process_id: ?sdk.os.ProcessId = null;
-        var context_value: ?i32 = null;
-        fn call(context: i32, process: *const sdk.os.Process) bool {
+        fn call(context: i32, index: usize, process: *const sdk.os.Process) bool {
             times_called += 1;
+            last_context = context;
+            last_index = index;
             process_id = process.id;
-            context_value = context;
             return true;
         }
     };
     const OnProcessClose = struct {
         var times_called: usize = 0;
-        var context_value: ?i32 = null;
-        fn call(context: i32) void {
+        var last_context: ?i32 = null;
+        var last_index: ?usize = null;
+        fn call(context: i32, index: usize) void {
             times_called += 1;
-            context_value = context;
+            last_context = context;
+            last_index = index;
         }
     };
 
+    var open_processes = [2]?sdk.os.Process{ null, null };
     for (0..3) |_| {
         runLoopLogic(
-            &opened_process,
+            &open_processes,
+            &.{ "not_found.exe", "wait.exe" },
             .{ .QUERY_INFORMATION = 1 },
-            "wait.exe",
             @as(i32, 123),
             OnProcessOpen.call,
             OnProcessClose.call,
@@ -248,19 +283,22 @@ test "should close process when process stops running" {
     _ = try wait_process.kill();
     for (0..3) |_| {
         runLoopLogic(
-            &opened_process,
+            &open_processes,
+            &.{ "not_found.exe", "wait.exe" },
             .{ .QUERY_INFORMATION = 1 },
-            "wait.exe",
             @as(i32, 123),
             OnProcessOpen.call,
             OnProcessClose.call,
         );
     }
 
-    try testing.expectEqual(null, opened_process);
+    try testing.expectEqual(null, open_processes[0]);
+    try testing.expectEqual(null, open_processes[1]);
     try testing.expectEqual(1, OnProcessOpen.times_called);
+    try testing.expectEqual(123, OnProcessOpen.last_context);
+    try testing.expectEqual(1, OnProcessOpen.last_index);
     try testing.expectEqual(pid, OnProcessOpen.process_id.?.raw);
-    try testing.expectEqual(123, OnProcessOpen.context_value);
     try testing.expectEqual(1, OnProcessClose.times_called);
-    try testing.expectEqual(123, OnProcessClose.context_value);
+    try testing.expectEqual(123, OnProcessClose.last_context);
+    try testing.expectEqual(1, OnProcessClose.last_index);
 }

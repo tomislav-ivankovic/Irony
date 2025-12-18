@@ -3,7 +3,15 @@ const build_info = @import("build_info");
 const sdk = @import("sdk/root.zig");
 const injector = @import("injector/root.zig");
 
-const process_name = "Polaris-Win64-Shipping.exe";
+const log_file_name = @tagName(build_info.name) ++ "_injector.log";
+const console_logger = sdk.log.ConsoleLogger(.{});
+const file_logger = sdk.log.FileLogger(.{});
+const composite_logger = sdk.log.CompositeLogger(&.{ console_logger.logFn, file_logger.logFn });
+pub const std_options = std.Options{
+    .log_level = .info,
+    .logFn = composite_logger.logFn,
+};
+
 const access_rights = sdk.os.Process.AccessRights{
     .CREATE_THREAD = 1,
     .VM_OPERATION = 1,
@@ -13,17 +21,21 @@ const access_rights = sdk.os.Process.AccessRights{
     .QUERY_LIMITED_INFORMATION = 1,
     .SYNCHRONIZE = 1,
 };
-const module_name = @tagName(build_info.name) ++ "_t8.dll";
-const interval_ns = 1 * std.time.ns_per_s;
-
-const log_file_name = @tagName(build_info.name) ++ "_injector.log";
-const console_logger = sdk.log.ConsoleLogger(.{});
-const file_logger = sdk.log.FileLogger(.{});
-const composite_logger = sdk.log.CompositeLogger(&.{ console_logger.logFn, file_logger.logFn });
-pub const std_options = std.Options{
-    .log_level = .info,
-    .logFn = composite_logger.logFn,
+const Target = struct {
+    process_name: []const u8,
+    module_name: []const u8,
 };
+const targets = [_]Target{
+    .{
+        .process_name = "Polaris-Win64-Shipping.exe",
+        .module_name = @tagName(build_info.name) ++ "_t8.dll",
+    },
+    .{
+        .process_name = "TekkenGame-Win64-Shipping.exe",
+        .module_name = @tagName(build_info.name) ++ "_t7.dll",
+    },
+};
+const interval_ns = 1 * std.time.ns_per_s;
 
 pub const Mode = enum {
     normal,
@@ -67,8 +79,15 @@ pub fn main() !void {
     std.log.debug("Console close handler set.", .{});
 
     std.log.debug("Running process loop...", .{});
+    const process_names = comptime block: {
+        var names: [targets.len]([]const u8) = undefined;
+        for (targets, 0..) |target, index| {
+            names[index] = target.process_name;
+        }
+        break :block names;
+    };
     injector.runProcessLoop(
-        process_name,
+        &process_names,
         access_rights,
         interval_ns,
         &base_dir,
@@ -135,9 +154,11 @@ fn startFileLogging(base_dir: *const sdk.misc.BaseDir) !void {
     };
 }
 
-var injected_module: ?injector.InjectedModule = null;
+var injected_modules = [1]?injector.InjectedModule{null} ** targets.len;
 
-pub fn onProcessOpen(base_dir: *const sdk.misc.BaseDir, process: *const sdk.os.Process) bool {
+pub fn onProcessOpen(base_dir: *const sdk.misc.BaseDir, index: usize, process: *const sdk.os.Process) bool {
+    const module_name = targets[index].module_name;
+
     std.log.debug("Getting full path of \"{s}\"...", .{module_name});
     var buffer: [sdk.os.max_file_path_length]u8 = undefined;
     const full_path = base_dir.getPath(&buffer, module_name) catch |err| {
@@ -148,7 +169,7 @@ pub fn onProcessOpen(base_dir: *const sdk.misc.BaseDir, process: *const sdk.os.P
     std.log.debug("Full path found: {s}", .{full_path});
 
     std.log.info("Injecting module \"{s}\"...", .{module_name});
-    injected_module = injector.InjectedModule.inject(process.*, full_path) catch |err| {
+    injected_modules[index] = injector.InjectedModule.inject(process.*, full_path) catch |err| {
         sdk.misc.error_context.append("Failed to inject module: {s}", .{full_path});
         sdk.misc.error_context.logError(err);
         return false;
@@ -174,9 +195,10 @@ pub fn onProcessOpen(base_dir: *const sdk.misc.BaseDir, process: *const sdk.os.P
     return true;
 }
 
-pub fn onProcessClose(base_dir: *const sdk.misc.BaseDir) void {
+pub fn onProcessClose(base_dir: *const sdk.misc.BaseDir, index: usize) void {
     _ = base_dir;
-    const module = injected_module orelse {
+    const module_name = targets[index].module_name;
+    const module = if (injected_modules[index]) |*m| m else {
         std.log.info("Nothing to eject.", .{});
         return;
     };
@@ -186,12 +208,16 @@ pub fn onProcessClose(base_dir: *const sdk.misc.BaseDir) void {
     } else |_| {
         std.log.info("Module ejection failed. But this is expected.", .{});
     }
-    injected_module = null;
+    injected_modules[index] = null;
 }
 
 pub fn onConsoleClose() void {
     std.log.info("Detected close event.", .{});
-    if (injected_module) |module| {
+
+    for (0..targets.len) |index| {
+        const module_name = targets[index].module_name;
+        const module = if (injected_modules[index]) |*m| m else continue;
+
         std.log.info("Ejecting module \"{s}\"... ", .{module_name});
         if (module.eject()) {
             std.log.info("Module ejected successfully.", .{});
@@ -208,9 +234,7 @@ pub fn onConsoleClose() void {
             sdk.misc.error_context.logError(err);
         }
 
-        injected_module = null;
-    } else {
-        std.log.info("Nothing to eject.", .{});
+        injected_modules[index] = null;
     }
 
     std.log.info("Stopping file logging...", .{});
