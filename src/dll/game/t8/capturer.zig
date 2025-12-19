@@ -248,8 +248,8 @@ pub const Capturer = struct {
         const posture = capturePosture(state, player) orelse return null;
         const state_flags: t8.StateFlags = player.state_flags orelse return null;
         const airborne_state = state.airborne_state;
-        const power_crushing: t8.Boolean(.{}) = player.power_crushing orelse return null;
-        const invincible: t8.Boolean(.{}) = player.invincible orelse return null;
+        const power_crushing: sdk.memory.Boolean(.{}) = player.power_crushing orelse return null;
+        const invincible: sdk.memory.Boolean(.{}) = player.invincible orelse return null;
         return .{
             .high_crushing = posture == .crouching or posture == .downed_face_down or posture == .downed_face_up,
             .low_crushing = posture == .airborne and

@@ -1,5 +1,7 @@
 pub const BitfieldMember = @import("bitfield.zig").BitfieldMember;
 pub const Bitfield = @import("bitfield.zig").Bitfield;
+pub const BooleanConfig = @import("boolean.zig").BooleanConfig;
+pub const Boolean = @import("boolean.zig").Boolean;
 pub const converted_value_tag = @import("converted_value.zig").converted_value_tag;
 pub const ConvertedValue = @import("converted_value.zig").ConvertedValue;
 pub const hooking = @import("hooking.zig").hooking;

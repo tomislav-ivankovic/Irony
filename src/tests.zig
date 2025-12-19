@@ -32,6 +32,7 @@ test {
     _ = @import("sdk/math/matrix.zig");
 
     _ = @import("sdk/memory/bitfield.zig");
+    _ = @import("sdk/memory/boolean.zig");
     _ = @import("sdk/memory/converted_value.zig");
     _ = @import("sdk/memory/hooking.zig");
     _ = @import("sdk/memory/misc.zig");

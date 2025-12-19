@@ -2,48 +2,6 @@ const std = @import("std");
 const sdk = @import("../../../sdk/root.zig");
 const t8 = @import("root.zig");
 
-pub const BooleanConfig = struct {
-    BackingInt: type = u8,
-    false_value: comptime_int = 0,
-    true_value: comptime_int = 1,
-};
-
-pub fn Boolean(comptime config: BooleanConfig) type {
-    return enum(config.BackingInt) {
-        false = config.false_value,
-        true = config.true_value,
-        _,
-
-        const Self = @This();
-
-        pub fn fromBool(b: bool) Self {
-            return switch (b) {
-                false => .false,
-                true => .true,
-            };
-        }
-
-        pub fn toBool(self: Self) ?bool {
-            return switch (self) {
-                .false => false,
-                .true => true,
-                else => null,
-            };
-        }
-
-        comptime {
-            const false_v = config.false_value;
-            const true_v = config.true_value;
-            const third_v = if (false_v != 0 and true_v != 0) 0 else if (false_v != 1 and true_v != 1) 1 else 2;
-            std.debug.assert(Self.fromBool(false) == .false);
-            std.debug.assert(Self.fromBool(true) == .true);
-            std.debug.assert(@as(Self, @enumFromInt(false_v)).toBool() == false);
-            std.debug.assert(@as(Self, @enumFromInt(true_v)).toBool() == true);
-            std.debug.assert(@as(Self, @enumFromInt(third_v)).toBool() == null);
-        }
-    };
-}
-
 pub const PlayerSide = enum(u8) {
     left = 0,
     right = 1,
@@ -277,7 +235,7 @@ pub const HitLinePoint = extern struct {
 pub const HitLine = extern struct {
     points: [3]HitLinePoint,
     _padding_1: [8]u8,
-    ignore: Boolean(.{}),
+    ignore: sdk.memory.Boolean(.{}),
     _padding_2: [7]u8,
 
     comptime {
@@ -394,7 +352,7 @@ pub const CollisionSpheres = extern struct {
 pub const EncryptedHealth = [16]u64;
 
 pub const Player = struct {
-    is_picked_by_main_player: Boolean(.{}),
+    is_picked_by_main_player: sdk.memory.Boolean(.{}),
     character_id: u32,
     transform_matrix: sdk.memory.ConvertedValue(
         sdk.math.Mat4,
@@ -419,15 +377,15 @@ pub const Player = struct {
     attack_damage: i32,
     attack_type: AttackType,
     animation_id: u32,
-    can_move: Boolean(.{}),
+    can_move: sdk.memory.Boolean(.{}),
     animation_total_frames: u32,
     hit_outcome: HitOutcome,
-    invincible: Boolean(.{}),
-    is_a_parry_move: Boolean(.{ .true_value = 2 }),
-    power_crushing: Boolean(.{}),
+    invincible: sdk.memory.Boolean(.{}),
+    is_a_parry_move: sdk.memory.Boolean(.{ .true_value = 2 }),
+    power_crushing: sdk.memory.Boolean(.{}),
     airborne_flags: AirborneFlags,
-    in_rage: Boolean(.{}),
-    used_rage: Boolean(.{}),
+    in_rage: sdk.memory.Boolean(.{}),
+    used_rage: sdk.memory.Boolean(.{}),
     frames_since_round_start: u32,
     heat_gauge: sdk.memory.ConvertedValue(
         u32,
@@ -435,8 +393,8 @@ pub const Player = struct {
         t8.decryptHeatGauge,
         t8.encryptHeatGauge,
     ),
-    used_heat: Boolean(.{}),
-    in_heat: Boolean(.{}),
+    used_heat: sdk.memory.Boolean(.{}),
+    in_heat: sdk.memory.Boolean(.{}),
     input_side: PlayerSide,
     input: Input,
     hit_lines: HitLines,
