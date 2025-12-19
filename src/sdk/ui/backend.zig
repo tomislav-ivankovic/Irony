@@ -23,10 +23,10 @@ pub const ImGui_ImplDX12_InitInfo = extern struct {
     font_srv_gpu_desc_handle: w32.D3D12_GPU_DESCRIPTOR_HANDLE,
 };
 
-pub extern fn ImGui_ImplDX11_Init(device: *w32.ID3D11Device, device_context: *w32.ID3D11DeviceContext) bool;
+pub extern fn ImGui_ImplDX11_Init(device: *const w32.ID3D11Device, device_context: *const w32.ID3D11DeviceContext) bool;
 pub extern fn ImGui_ImplDX11_Shutdown() void;
 pub extern fn ImGui_ImplDX11_NewFrame() void;
-pub extern fn ImGui_ImplDX11_RenderDrawData(draw_data: *w32.ImDrawData) void;
+pub extern fn ImGui_ImplDX11_RenderDrawData(draw_data: *const imgui.ImDrawData) void;
 pub extern fn ImGui_ImplDX11_CreateDeviceObjects() bool;
 pub extern fn ImGui_ImplDX11_InvalidateDeviceObjects() void;
 

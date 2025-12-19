@@ -1,6 +1,7 @@
 pub const setAllocator = @import("allocator.zig").setAllocator;
 pub const getAllocator = @import("allocator.zig").getAllocator;
 pub const backend = @import("backend.zig");
+pub const default_font_size = @import("context.zig").default_font_size;
 pub const Context = @import("context.zig").Context;
 pub const getTestingContext = @import("testing_context.zig").getTestingContext;
 pub const deinitTestingContextAndDetectLeaks = @import("testing_context.zig").deinitTestingContextAndDetectLeaks;

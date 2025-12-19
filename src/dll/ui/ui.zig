@@ -48,13 +48,13 @@ pub const Ui = struct {
 
     pub fn draw(
         self: *Self,
-        ui_context: *const sdk.ui.Context,
         base_dir: *const sdk.misc.BaseDir,
+        file_dialog_context: *imgui.ImGuiFileDialog,
         settings_maybe: ?*model.Settings,
         game_memory_maybe: ?*const game.Memory,
         controller: *core.Controller,
     ) void {
-        const font_size = if (settings_maybe) |s| s.misc.ui_font_size else sdk.ui.Context.default_font_size;
+        const font_size = if (settings_maybe) |s| s.misc.ui_font_size else sdk.ui.default_font_size;
         imgui.igPushFont(null, font_size);
         defer imgui.igPopFont();
 
@@ -88,7 +88,7 @@ pub const Ui = struct {
         imgui.igPushStyleVar_Vec2(imgui.ImGuiStyleVar_WindowMinSize, .{ .x = 240, .y = 200 });
         defer imgui.igPopStyleVar(1);
 
-        self.main_window.draw(self, base_dir, ui_context.file_dialog_context, controller, settings);
+        self.main_window.draw(self, base_dir, file_dialog_context, controller, settings);
         self.settings_window.draw(base_dir, settings);
         self.logs_window.draw(dll.buffer_logger);
         self.game_memory_window.draw(game_memory);

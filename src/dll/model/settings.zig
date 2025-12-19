@@ -328,7 +328,7 @@ pub const DetailsSettings = struct {
 };
 
 pub const MiscSettings = struct {
-    ui_font_size: f32 = sdk.ui.Context.default_font_size,
+    ui_font_size: f32 = sdk.ui.default_font_size,
 };
 
 pub const PlayerSettingsMode = enum {

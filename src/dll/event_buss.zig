@@ -10,13 +10,14 @@ const game = @import("game/root.zig");
 pub const EventBuss = struct {
     timer: sdk.misc.Timer(.{}),
     managed_dx12_context: ?sdk.dx12.ManagedContext,
-    ui_context: ?sdk.ui.Context,
+    ui_context: ?UiContext,
     settings_task: SettingsTask,
     core: core.Core,
     ui: ui.Ui,
 
     const Self = @This();
     const SettingsTask = sdk.misc.Task(model.Settings);
+    const UiContext = sdk.ui.Context(.dx12);
 
     const buffer_count = 3;
     const srv_heap_size = 64;
@@ -42,7 +43,7 @@ pub const EventBuss = struct {
 
         const ui_context = if (dx_12_context) |*dxc| block: {
             std.log.debug("Initializing UI context...", .{});
-            if (sdk.ui.Context.init(allocator, base_dir, dxc)) |context| {
+            if (UiContext.init(allocator, base_dir, dxc)) |context| {
                 std.log.info("UI context initialized.", .{});
                 break :block context;
             } else |err| {
@@ -165,8 +166,8 @@ pub const EventBuss = struct {
         ui_context.newFrame();
         imgui.igGetIO_Nil().*.MouseDrawCursor = true;
         self.ui.draw(
-            ui_context,
             base_dir,
+            ui_context.file_dialog_context,
             self.settings_task.peek(),
             game_memory,
             &self.core.controller,
@@ -178,7 +179,7 @@ pub const EventBuss = struct {
             sdk.misc.error_context.logError(err);
             return;
         };
-        ui_context.render(buffer_context.command_list);
+        ui_context.render(buffer_context);
         dx12_context.afterRender(buffer_context) catch |err| {
             sdk.misc.error_context.append("Failed to execute DX12 after render code.", .{});
             sdk.misc.error_context.logError(err);
