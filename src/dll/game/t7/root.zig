@@ -1,3 +1,17 @@
 pub const FrameDetectCapturer = @import("frame_detect_capturer.zig").FrameDetectCapturer;
 pub const Hooks = @import("hooks.zig").Hooks;
 pub const Memory = @import("memory.zig").Memory;
+pub const PlayerSide = @import("types.zig").PlayerSide;
+pub const StateFlags = @import("types.zig").StateFlags;
+pub const AirborneFlags = @import("types.zig").AirborneFlags;
+pub const AttackType = @import("types.zig").AttackType;
+pub const HitOutcome = @import("types.zig").HitOutcome;
+pub const Input = @import("types.zig").Input;
+pub const HitLinePoint = @import("types.zig").HitLinePoint;
+pub const HitLines = @import("types.zig").HitLines;
+pub const HurtCylinder = @import("types.zig").HurtCylinder;
+pub const HurtCylinders = @import("types.zig").HurtCylinders;
+pub const CollisionSphere = @import("types.zig").CollisionSphere;
+pub const CollisionSpheres = @import("types.zig").CollisionSpheres;
+pub const EncryptedHealth = @import("types.zig").EncryptedHealth;
+pub const Player = @import("types.zig").Player;
