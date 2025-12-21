@@ -86,6 +86,7 @@ test {
 
     _ = @import("dll/game/t7/conversions.zig");
     _ = @import("dll/game/t7/frame_detect_capturer.zig");
+    _ = @import("dll/game/t7/frame_detector.zig");
     _ = @import("dll/game/t7/hooks.zig");
     _ = @import("dll/game/t7/memory.zig");
     _ = @import("dll/game/t7/types.zig");

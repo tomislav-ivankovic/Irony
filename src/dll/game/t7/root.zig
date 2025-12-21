@@ -13,6 +13,7 @@ pub const hurtCylinderFromUnrealSpace = @import("conversions.zig").hurtCylinderF
 pub const collisionSphereToUnrealSpace = @import("conversions.zig").collisionSphereToUnrealSpace;
 pub const collisionSphereFromUnrealSpace = @import("conversions.zig").collisionSphereFromUnrealSpace;
 pub const FrameDetectCapturer = @import("frame_detect_capturer.zig").FrameDetectCapturer;
+pub const FrameDetector = @import("frame_detector.zig").FrameDetector;
 pub const Hooks = @import("hooks.zig").Hooks;
 pub const Memory = @import("memory.zig").Memory;
 pub const PlayerSide = @import("types.zig").PlayerSide;
