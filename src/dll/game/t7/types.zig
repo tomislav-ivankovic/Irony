@@ -350,3 +350,5 @@ pub const Player = struct {
     collision_spheres: CollisionSpheres,
     health: EncryptedHealth,
 };
+
+pub const TickFunction = fn (game_mode_address: usize, delta_time: f32) callconv(.c) void;

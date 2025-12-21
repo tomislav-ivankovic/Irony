@@ -9,7 +9,9 @@ pub const Memory = struct {
     functions: Functions,
 
     const Self = @This();
-    pub const Functions = struct {};
+    pub const Functions = struct {
+        tick: ?*const t7.TickFunction = null,
+    };
 
     const pattern_cache_file_name = "pattern_cache_t7.json";
 
@@ -18,6 +20,7 @@ pub const Memory = struct {
         base_dir: ?*const sdk.misc.BaseDir,
         comptime game_hooks: type,
     ) Self {
+        _ = game_hooks;
         var cache = initPatternCache(allocator, base_dir) catch |err| block: {
             sdk.misc.error_context.append("Failed to initialize pattern cache.", .{});
             sdk.misc.error_context.logError(err);
@@ -52,7 +55,6 @@ pub const Memory = struct {
             .collision_spheres = 0x10D0,
             .health = 0x14E8,
         });
-        _ = game_hooks;
         return .{
             .player_1 = structProxy("player_1", t7.Player, .{
                 relativeOffset(u32, add(0x3, pattern(&cache, "48 8B 15 ?? ?? ?? ?? 44 8B C3"))),
@@ -62,7 +64,13 @@ pub const Memory = struct {
                 relativeOffset(u32, add(0xD, pattern(&cache, "48 8B 15 ?? ?? ?? ?? 44 8B C3"))),
                 0x0,
             }, player_offsets),
-            .functions = .{},
+            .functions = .{
+                .tick = functionPointer(
+                    "tick",
+                    t7.TickFunction,
+                    pattern(&cache, "4C 8B DC 55 41 57 49 8D 6B A1 48 81 EC E8"),
+                ),
+            },
         };
     }
 

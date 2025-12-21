@@ -85,17 +85,17 @@ pub const Memory = struct {
             }),
             .functions = .{
                 .tick = functionPointer(
-                    "tick_function",
+                    "tick",
                     t8.TickFunction,
                     pattern(&cache, "48 8B 0D ?? ?? ?? ?? 48 85 C9 74 0A 48 8B 01 0F 28 C8"),
                 ),
                 .updateCamera = functionPointer(
-                    "update_camera_function",
+                    "updateCamera",
                     t8.UpdateCameraFunction,
                     pattern(&cache, "48 8B C4 48 89 58 18 55 56 57 48 81 EC 50"),
                 ),
                 .decryptHealth = functionPointer(
-                    "decrypt_health_function",
+                    "decryptHealth",
                     t8.DecryptHealthFunction,
                     pattern(&cache, "48 89 5C 24 08 57 48 83 EC ?? 48 8D 79 08 48 8B D9 48 8B CF E8 ?? ?? ?? ?? 85 C0"),
                 ),

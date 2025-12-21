@@ -15,3 +15,4 @@ pub const CollisionSphere = @import("types.zig").CollisionSphere;
 pub const CollisionSpheres = @import("types.zig").CollisionSpheres;
 pub const EncryptedHealth = @import("types.zig").EncryptedHealth;
 pub const Player = @import("types.zig").Player;
+pub const TickFunction = @import("types.zig").TickFunction;
