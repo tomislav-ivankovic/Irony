@@ -231,7 +231,15 @@ pub const HitLinePoint = extern struct {
     }
 };
 
-pub const HitLines = [6]HitLinePoint;
+pub const HitLines = [6]sdk.memory.ConvertedValue(
+    HitLinePoint,
+    HitLinePoint,
+    t7.hitLinePointToUnrealSpace,
+    t7.hitLinePointFromUnrealSpace,
+);
+comptime {
+    std.debug.assert(@sizeOf(HitLines) == 96);
+}
 
 pub const HurtCylinder = extern struct {
     center: sdk.math.Vec3,
@@ -263,7 +271,12 @@ pub const HurtCylinders = extern struct {
     right_pelvis: Element,
 
     const Self = @This();
-    pub const Element = HurtCylinder;
+    pub const Element = sdk.memory.ConvertedValue(
+        HurtCylinder,
+        HurtCylinder,
+        t7.hurtCylinderToUnrealSpace,
+        t7.hurtCylinderFromUnrealSpace,
+    );
 
     pub const len = @typeInfo(Self).@"struct".fields.len;
 
@@ -302,7 +315,12 @@ pub const CollisionSpheres = extern struct {
     right_ankle: Element,
 
     const Self = @This();
-    pub const Element = CollisionSphere;
+    pub const Element = sdk.memory.ConvertedValue(
+        CollisionSphere,
+        CollisionSphere,
+        t7.collisionSphereToUnrealSpace,
+        t7.collisionSphereFromUnrealSpace,
+    );
 
     pub const len = @typeInfo(Self).@"struct".fields.len;
 
@@ -327,9 +345,24 @@ pub const EncryptedHealth = extern struct {
 pub const Player = struct {
     is_picked_by_main_player: sdk.memory.Boolean(.{}),
     character_id: u32,
-    transform_matrix: sdk.math.Mat4,
-    floor_z: f32,
-    rotation: u16,
+    transform_matrix: sdk.memory.ConvertedValue(
+        sdk.math.Mat4,
+        sdk.math.Mat4,
+        t7.matrixToUnrealSpace,
+        t7.matrixFromUnrealSpace,
+    ),
+    floor_z: sdk.memory.ConvertedValue(
+        f32,
+        f32,
+        t7.scaleToUnrealSpace,
+        t7.scaleFromUnrealSpace,
+    ),
+    rotation: sdk.memory.ConvertedValue(
+        u16,
+        f32,
+        t7.u16ToRadians,
+        t7.u16FromRadians,
+    ),
     animation_frame: u32,
     state_flags: StateFlags,
     attack_damage: i32,

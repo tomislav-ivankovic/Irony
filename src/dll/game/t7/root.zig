@@ -1,3 +1,17 @@
+pub const scaleToUnrealSpace = @import("conversions.zig").scaleToUnrealSpace;
+pub const scaleFromUnrealSpace = @import("conversions.zig").scaleFromUnrealSpace;
+pub const pointToUnrealSpace = @import("conversions.zig").pointToUnrealSpace;
+pub const pointFromUnrealSpace = @import("conversions.zig").pointFromUnrealSpace;
+pub const matrixToUnrealSpace = @import("conversions.zig").matrixToUnrealSpace;
+pub const matrixFromUnrealSpace = @import("conversions.zig").matrixFromUnrealSpace;
+pub const u16ToRadians = @import("conversions.zig").u16ToRadians;
+pub const u16FromRadians = @import("conversions.zig").u16FromRadians;
+pub const hitLinePointToUnrealSpace = @import("conversions.zig").hitLinePointToUnrealSpace;
+pub const hitLinePointFromUnrealSpace = @import("conversions.zig").hitLinePointFromUnrealSpace;
+pub const hurtCylinderToUnrealSpace = @import("conversions.zig").hurtCylinderToUnrealSpace;
+pub const hurtCylinderFromUnrealSpace = @import("conversions.zig").hurtCylinderFromUnrealSpace;
+pub const collisionSphereToUnrealSpace = @import("conversions.zig").collisionSphereToUnrealSpace;
+pub const collisionSphereFromUnrealSpace = @import("conversions.zig").collisionSphereFromUnrealSpace;
 pub const FrameDetectCapturer = @import("frame_detect_capturer.zig").FrameDetectCapturer;
 pub const Hooks = @import("hooks.zig").Hooks;
 pub const Memory = @import("memory.zig").Memory;

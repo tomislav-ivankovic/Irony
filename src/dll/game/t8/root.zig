@@ -1,6 +1,4 @@
 pub const Capturer = @import("capturer.zig").Capturer;
-pub const FrameDetectCapturer = @import("frame_detect_capturer.zig").FrameDetectCapturer;
-pub const FrameDetector = @import("frame_detector.zig").FrameDetector;
 pub const conversion_globals = @import("conversions.zig").conversion_globals;
 pub const scaleToUnrealSpace = @import("conversions.zig").scaleToUnrealSpace;
 pub const scaleFromUnrealSpace = @import("conversions.zig").scaleFromUnrealSpace;
@@ -21,6 +19,8 @@ pub const encryptHeatGauge = @import("conversions.zig").encryptHeatGauge;
 pub const decryptHealth = @import("conversions.zig").decryptHealth;
 pub const rawToConvertedCamera = @import("conversions.zig").rawToConvertedCamera;
 pub const convertedToRawCamera = @import("conversions.zig").convertedToRawCamera;
+pub const FrameDetectCapturer = @import("frame_detect_capturer.zig").FrameDetectCapturer;
+pub const FrameDetector = @import("frame_detector.zig").FrameDetector;
 pub const Hooks = @import("hooks.zig").Hooks;
 pub const Memory = @import("memory.zig").Memory;
 pub const StateFlags = @import("types.zig").StateFlags;
