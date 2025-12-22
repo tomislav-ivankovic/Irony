@@ -7,12 +7,13 @@ const h = @import("../memory_helpers.zig");
 pub const Memory = struct {
     player_1: sdk.memory.StructProxy(t7.Player),
     player_2: sdk.memory.StructProxy(t7.Player),
-    world_to_clip_matrix: sdk.memory.Proxy(sdk.math.Mat4),
+    camera: sdk.memory.Proxy(t7.Camera),
     functions: Functions,
 
     const Self = @This();
     pub const Functions = struct {
         tick: ?*const t7.TickFunction = null,
+        updateCamera: ?*const t7.UpdateCameraFunction = null,
     };
 
     const pattern_cache_file_name = "pattern_cache_t7.json";
@@ -22,7 +23,6 @@ pub const Memory = struct {
         base_dir: ?*const sdk.misc.BaseDir,
         comptime game_hooks: type,
     ) Self {
-        _ = game_hooks;
         var cache = h.initPatternCache(allocator, base_dir, pattern_cache_file_name) catch |err| block: {
             sdk.misc.error_context.append("Failed to initialize pattern cache.", .{});
             sdk.misc.error_context.logError(err);
@@ -66,20 +66,20 @@ pub const Memory = struct {
                 h.relativeOffset(u32, h.add(0xD, h.pattern(&cache, "48 8B 15 ?? ?? ?? ?? 44 8B C3"))),
                 0x0,
             }, player_offsets),
-            .world_to_clip_matrix = h.proxy("world_to_clip_matrix", sdk.math.Mat4, .{
-                h.relativeOffset(u32, h.add(
-                    0x7,
-                    h.pattern(&cache, "48 83 EC 28 48 8B 05 ?? ?? ?? ?? 48 85 C0 0F 85 AD 00 00 00"),
-                )),
-                0x70,
-                0xE0,
-                0x260,
+            .camera = h.proxy("camera", t7.Camera, .{
+                @intFromPtr(&game_hooks.last_camera_manager_address),
+                0x03F0 + 0x0008,
             }),
             .functions = .{
                 .tick = h.functionPointer(
                     "tick",
                     t7.TickFunction,
                     h.pattern(&cache, "4C 8B DC 55 41 57 49 8D 6B A1 48 81 EC E8"),
+                ),
+                .updateCamera = h.functionPointer(
+                    "updateCamera",
+                    t7.UpdateCameraFunction,
+                    h.pattern(&cache, "4C 8B DC 55 49 8D AB 68 FC"),
                 ),
             },
         };

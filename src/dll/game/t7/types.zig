@@ -389,4 +389,20 @@ pub const Player = struct {
     ),
 };
 
+pub const CameraData = extern struct {
+    position: sdk.math.Vec3,
+    pitch: f32,
+    yaw: f32,
+    roll: f32,
+};
+
+pub const Camera = sdk.memory.ConvertedValue(
+    CameraData,
+    CameraData,
+    t7.rawToConvertedCamera,
+    t7.convertedToRawCamera,
+);
+
 pub const TickFunction = fn (game_mode_address: usize, delta_time: f32) callconv(.c) void;
+
+pub const UpdateCameraFunction = fn (camera_manager_address: usize, delta_time: f32) callconv(.c) void;

@@ -250,6 +250,24 @@ fn sub_1451dd670_encrypt(decrypted_value: i32, encryption_key: i64) i64 {
     return cc(i64, v6 +% (v11 << 28));
 }
 
+pub fn rawToConvertedCamera(value: t7.CameraData) t7.CameraData {
+    return .{
+        .position = value.position,
+        .pitch = std.math.degreesToRadians(value.pitch),
+        .yaw = std.math.degreesToRadians(value.yaw),
+        .roll = std.math.degreesToRadians(value.roll),
+    };
+}
+
+pub fn convertedToRawCamera(value: t7.CameraData) t7.CameraData {
+    return .{
+        .position = value.position,
+        .pitch = std.math.radiansToDegrees(value.pitch),
+        .yaw = std.math.radiansToDegrees(value.yaw),
+        .roll = std.math.radiansToDegrees(value.roll),
+    };
+}
+
 const testing = std.testing;
 
 test "scaleToUnrealSpace and scaleFromUnrealSpace should cancel out" {
@@ -330,4 +348,21 @@ test "encryptHealth and decryptHealth should return correct value" {
     };
     try testing.expectEqual(encrypted, encryptHealth(clear_text));
     try testing.expectEqual(clear_text, decryptHealth(encrypted));
+}
+
+test "rawToConvertedCamera and convertedToRawCamera should cancel out" {
+    const converted = t7.CameraData{
+        .position = .fromArray(.{ 1, 2, 3 }),
+        .pitch = 0.25 * std.math.pi,
+        .roll = 0.5 * std.math.pi,
+        .yaw = 0.75 * std.math.pi,
+    };
+    try testing.expectEqual(converted, rawToConvertedCamera(convertedToRawCamera(converted)));
+    const raw = t7.CameraData{
+        .position = .fromArray(.{ 1, 2, 3 }),
+        .pitch = 45,
+        .roll = 90,
+        .yaw = 135,
+    };
+    try testing.expectEqual(raw, convertedToRawCamera(rawToConvertedCamera(raw)));
 }
