@@ -7,6 +7,7 @@ const h = @import("../memory_helpers.zig");
 pub const Memory = struct {
     player_1: sdk.memory.StructProxy(t7.Player),
     player_2: sdk.memory.StructProxy(t7.Player),
+    world_to_clip_matrix: sdk.memory.Proxy(sdk.math.Mat4),
     functions: Functions,
 
     const Self = @This();
@@ -65,6 +66,15 @@ pub const Memory = struct {
                 h.relativeOffset(u32, h.add(0xD, h.pattern(&cache, "48 8B 15 ?? ?? ?? ?? 44 8B C3"))),
                 0x0,
             }, player_offsets),
+            .world_to_clip_matrix = h.proxy("world_to_clip_matrix", sdk.math.Mat4, .{
+                h.relativeOffset(u32, h.add(
+                    0x7,
+                    h.pattern(&cache, "48 83 EC 28 48 8B 05 ?? ?? ?? ?? 48 85 C0 0F 85 AD 00 00 00"),
+                )),
+                0x70,
+                0xE0,
+                0x260,
+            }),
             .functions = .{
                 .tick = h.functionPointer(
                     "tick",
