@@ -1,7 +1,7 @@
 # Irony
 
-Application that gives it's users the ability to examine T8 situations and inner workings of the T8 game in forensic detail.
-The application only works with the PC version of the game.
+Application that gives it's users the ability to examine situations and inner workings of the T8 and T7 game in forensic detail.
+The application only works with the PC version of both games.
 
 ## Features
 
@@ -98,6 +98,13 @@ To run the application while developing execute:
 
 ```bash
 zig build run
+```
+
+If you have only one of the games running you can disable the compilation of the other game's DLL by game using `-Dt7=false` or `-Dt8=false` command line arguments:
+
+```bash
+zig build run -Dt7=false
+zig build run -Dt8=false
 ```
 
 To run the project's tests execute:
