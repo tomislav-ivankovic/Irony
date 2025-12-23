@@ -1,9 +1,15 @@
 const std = @import("std");
-const sdk = @import("../../../sdk/root.zig");
-const t7 = @import("root.zig");
+const build_info = @import("build_info");
+const sdk = @import("../../sdk/root.zig");
+const game = @import("root.zig");
+const cc = std.zig.c_translation.cast;
 
 const to_unreal_scale = 0.1;
 const from_unreal_scale = 1.0 / to_unreal_scale;
+
+pub const conversion_globals = struct {
+    pub var decryptT8Health: ?*const game.DecryptT8HealthFunction = null;
+};
 
 pub fn scaleToUnrealSpace(value: f32) f32 {
     return value * to_unreal_scale;
@@ -75,63 +81,103 @@ pub fn u16FromRadians(value: f32) u16 {
     return @intFromFloat(normalized * conversion_factor);
 }
 
-pub fn hitLinePointToUnrealSpace(value: t7.HitLinePoint) t7.HitLinePoint {
+pub fn hitLinePointToUnrealSpace(value: game.HitLinePoint) game.HitLinePoint {
     var converted = value;
     converted.position = pointToUnrealSpace(value.position);
     return converted;
 }
 
-pub fn hitLinePointFromUnrealSpace(value: t7.HitLinePoint) t7.HitLinePoint {
+pub fn hitLinePointFromUnrealSpace(value: game.HitLinePoint) game.HitLinePoint {
     var converted = value;
     converted.position = pointFromUnrealSpace(value.position);
     return converted;
 }
 
-pub fn hurtCylinderToUnrealSpace(value: t7.HurtCylinder) t7.HurtCylinder {
+pub fn hitLineToUnrealSpace(value: game.HitLine) game.HitLine {
+    var converted = value;
+    for (value.points, 0..) |element, index| {
+        converted.points[index] = hitLinePointToUnrealSpace(element);
+    }
+    return converted;
+}
+
+pub fn hitLineFromUnrealSpace(value: game.HitLine) game.HitLine {
+    var converted = value;
+    for (value.points, 0..) |element, index| {
+        converted.points[index] = hitLinePointFromUnrealSpace(element);
+    }
+    return converted;
+}
+
+pub fn hurtCylinderToUnrealSpace(
+    comptime game_id: build_info.Game,
+) *const fn (value: game.HurtCylinder(game_id)) game.HurtCylinder(game_id) {
+    return struct {
+        fn hurtCylinderToUnrealSpace(value: game.HurtCylinder(game_id)) game.HurtCylinder(game_id) {
+            var converted = value;
+            converted.center = pointToUnrealSpace(value.center);
+            converted.half_height = scaleToUnrealSpace(value.half_height);
+            converted.squared_radius = scaleToUnrealSpace(scaleToUnrealSpace(value.squared_radius));
+            converted.radius = scaleToUnrealSpace(value.radius);
+            return converted;
+        }
+    }.hurtCylinderToUnrealSpace;
+}
+
+pub fn hurtCylinderFromUnrealSpace(
+    comptime game_id: build_info.Game,
+) *const fn (value: game.HurtCylinder(game_id)) game.HurtCylinder(game_id) {
+    return struct {
+        fn hurtCylinderFromUnrealSpace(value: game.HurtCylinder(game_id)) game.HurtCylinder(game_id) {
+            var converted = value;
+            converted.center = pointFromUnrealSpace(value.center);
+            converted.half_height = scaleFromUnrealSpace(value.half_height);
+            converted.squared_radius = scaleFromUnrealSpace(scaleFromUnrealSpace(value.squared_radius));
+            converted.radius = scaleFromUnrealSpace(value.radius);
+            return converted;
+        }
+    }.hurtCylinderFromUnrealSpace;
+}
+
+pub fn collisionSphereToUnrealSpace(value: game.CollisionSphere) game.CollisionSphere {
     var converted = value;
     converted.center = pointToUnrealSpace(value.center);
-    converted.half_height = scaleToUnrealSpace(value.half_height);
-    converted.squared_radius = scaleToUnrealSpace(scaleToUnrealSpace(value.squared_radius));
     converted.radius = scaleToUnrealSpace(value.radius);
     return converted;
 }
 
-pub fn hurtCylinderFromUnrealSpace(value: t7.HurtCylinder) t7.HurtCylinder {
-    var converted = value;
-    converted.center = pointFromUnrealSpace(value.center);
-    converted.half_height = scaleFromUnrealSpace(value.half_height);
-    converted.squared_radius = scaleFromUnrealSpace(scaleFromUnrealSpace(value.squared_radius));
-    converted.radius = scaleFromUnrealSpace(value.radius);
-    return converted;
-}
-
-pub fn collisionSphereToUnrealSpace(value: t7.CollisionSphere) t7.CollisionSphere {
-    var converted = value;
-    converted.center = pointToUnrealSpace(value.center);
-    converted.radius = scaleToUnrealSpace(value.radius);
-    return converted;
-}
-
-pub fn collisionSphereFromUnrealSpace(value: t7.CollisionSphere) t7.CollisionSphere {
+pub fn collisionSphereFromUnrealSpace(value: game.CollisionSphere) game.CollisionSphere {
     var converted = value;
     converted.center = pointFromUnrealSpace(value.center);
     converted.radius = scaleFromUnrealSpace(value.radius);
     return converted;
 }
 
-const cc = std.zig.c_translation.cast;
+const max_int_heat_gauge = 23039456;
 
-pub fn decryptHealth(value: t7.HealthWithEncryptionKey) t7.HealthWithEncryptionKey {
+pub fn decryptHeatGauge(value: u32) f32 {
+    const int_value = std.math.rotl(u32, value, @as(usize, 8));
+    const float_value: f32 = @floatFromInt(int_value);
+    return float_value / max_int_heat_gauge;
+}
+
+pub fn encryptHeatGauge(value: f32) u32 {
+    const float_value = value * max_int_heat_gauge;
+    const int_value: u32 = @intFromFloat(float_value);
+    return std.math.rotr(u32, int_value, @as(usize, 8));
+}
+
+pub fn decryptT7Health(value: game.Health(.t7)) game.Health(.t7) {
     var converted = value;
-    converted.health = cc(u32, sub_14504f430_decrypt(cc(i32, converted.health), cc(i64, converted.encryption_key)));
-    converted.health = converted.health >> 16;
+    converted.value = cc(u32, sub_14504f430_decrypt(cc(i32, converted.value), cc(i64, converted.encryption_key)));
+    converted.value = converted.value >> 16;
     return converted;
 }
 
-pub fn encryptHealth(value: t7.HealthWithEncryptionKey) t7.HealthWithEncryptionKey {
+pub fn encryptT7Health(value: game.Health(.t7)) game.Health(.t7) {
     var converted = value;
-    converted.health = converted.health << 16;
-    converted.health = cc(u32, sub_1451dd670_encrypt(cc(i32, converted.health), cc(i64, converted.encryption_key)));
+    converted.value = converted.value << 16;
+    converted.value = cc(u32, sub_1451dd670_encrypt(cc(i32, converted.value), cc(i64, converted.encryption_key)));
     return converted;
 }
 
@@ -250,22 +296,51 @@ fn sub_1451dd670_encrypt(decrypted_value: i32, encryption_key: i64) i64 {
     return cc(i64, v6 +% (v11 << 28));
 }
 
-pub fn rawToConvertedCamera(value: t7.CameraData) t7.CameraData {
-    return .{
-        .position = value.position,
-        .pitch = std.math.degreesToRadians(value.pitch),
-        .yaw = std.math.degreesToRadians(value.yaw),
-        .roll = std.math.degreesToRadians(value.roll),
-    };
+pub fn decryptT8Health(value: game.Health(.t8)) ?i32 {
+    if (value[0] != 0 and value[0] != 1) {
+        return null; // Decrypting invalid encrypted health value can cause a crash. This prevents it.
+    }
+    const decrypt = conversion_globals.decryptT8Health orelse return null;
+    const shifted = decrypt(&value);
+    return @intCast(shifted >> 16);
 }
 
-pub fn convertedToRawCamera(value: t7.CameraData) t7.CameraData {
-    return .{
-        .position = value.position,
-        .pitch = std.math.radiansToDegrees(value.pitch),
-        .yaw = std.math.radiansToDegrees(value.yaw),
-        .roll = std.math.radiansToDegrees(value.roll),
-    };
+pub fn rawToConvertedCamera(
+    comptime game_id: build_info.Game,
+) *const fn (value: game.RawCamera(game_id)) game.ConvertedCamera {
+    return struct {
+        fn rawToConvertedCamera(value: game.RawCamera(game_id)) game.ConvertedCamera {
+            return .{
+                .position = .fromArray(.{
+                    @floatCast(value.position.array[0]),
+                    @floatCast(value.position.array[1]),
+                    @floatCast(value.position.array[2]),
+                }),
+                .pitch = @floatCast(std.math.degreesToRadians(value.pitch)),
+                .yaw = @floatCast(std.math.degreesToRadians(value.yaw)),
+                .roll = @floatCast(std.math.degreesToRadians(value.roll)),
+            };
+        }
+    }.rawToConvertedCamera;
+}
+
+pub fn convertedToRawCamera(
+    comptime game_id: build_info.Game,
+) *const fn (value: game.ConvertedCamera) game.RawCamera(game_id) {
+    return struct {
+        fn convertedToRawCamera(value: game.ConvertedCamera) game.RawCamera(game_id) {
+            return .{
+                .position = .fromArray(.{
+                    @floatCast(value.position.array[0]),
+                    @floatCast(value.position.array[1]),
+                    @floatCast(value.position.array[2]),
+                }),
+                .pitch = @floatCast(std.math.radiansToDegrees(value.pitch)),
+                .yaw = @floatCast(std.math.radiansToDegrees(value.yaw)),
+                .roll = @floatCast(std.math.radiansToDegrees(value.roll)),
+            };
+        }
+    }.convertedToRawCamera;
 }
 
 const testing = std.testing;
@@ -305,7 +380,7 @@ test "u16ToRadians and u16FromRadians should cancel out" {
 }
 
 test "hitLinePointToUnrealSpace and hitLinePointFromUnrealSpace should cancel out" {
-    const value = t7.HitLinePoint{
+    const value = game.HitLinePoint{
         .position = .fromArray(.{ 1, 2, 3 }),
         ._padding = undefined,
     };
@@ -313,8 +388,23 @@ test "hitLinePointToUnrealSpace and hitLinePointFromUnrealSpace should cancel ou
     try testing.expectEqual(value, hitLinePointFromUnrealSpace(hitLinePointToUnrealSpace(value)));
 }
 
-test "hurtCylinderToUnrealSpace and hurtCylinderFromUnrealSpace should cancel out" {
-    const value = t7.HurtCylinder{
+test "hitLineToUnrealSpace and hitLineFromUnrealSpace should cancel out" {
+    const value = game.HitLine{
+        .points = .{
+            .{ .position = .fromArray(.{ 1, 2, 3 }), ._padding = undefined },
+            .{ .position = .fromArray(.{ 4, 5, 6 }), ._padding = undefined },
+            .{ .position = .fromArray(.{ 7, 8, 9 }), ._padding = undefined },
+        },
+        ._padding_1 = undefined,
+        .ignore = .true,
+        ._padding_2 = undefined,
+    };
+    try testing.expectEqual(value, hitLineToUnrealSpace(hitLineFromUnrealSpace(value)));
+    try testing.expectEqual(value, hitLineFromUnrealSpace(hitLineToUnrealSpace(value)));
+}
+
+test "hurtCylinderToUnrealSpace and hurtCylinderFromUnrealSpace should cancel out in T7" {
+    const value = game.HurtCylinder(.t7){
         .center = .fromArray(.{ 1, 2, 3 }),
         .multiplier = 4,
         .half_height = 5,
@@ -322,12 +412,25 @@ test "hurtCylinderToUnrealSpace and hurtCylinderFromUnrealSpace should cancel ou
         .radius = 7,
         ._padding = undefined,
     };
-    try testing.expectEqual(value, hurtCylinderToUnrealSpace(hurtCylinderFromUnrealSpace(value)));
-    try testing.expectEqual(value, hurtCylinderFromUnrealSpace(hurtCylinderToUnrealSpace(value)));
+    try testing.expectEqual(value, hurtCylinderToUnrealSpace(.t7)(hurtCylinderFromUnrealSpace(.t7)(value)));
+    try testing.expectEqual(value, hurtCylinderFromUnrealSpace(.t7)(hurtCylinderToUnrealSpace(.t7)(value)));
+}
+
+test "hurtCylinderToUnrealSpace and hurtCylinderFromUnrealSpace should cancel out in T8" {
+    const value = game.HurtCylinder(.t8){
+        .center = .fromArray(.{ 1, 2, 3 }),
+        .multiplier = 4,
+        .half_height = 5,
+        .squared_radius = 6,
+        .radius = 7,
+        ._padding = undefined,
+    };
+    try testing.expectEqual(value, hurtCylinderToUnrealSpace(.t8)(hurtCylinderFromUnrealSpace(.t8)(value)));
+    try testing.expectEqual(value, hurtCylinderFromUnrealSpace(.t8)(hurtCylinderToUnrealSpace(.t8)(value)));
 }
 
 test "collisionSphereToUnrealSpace and collisionSphereFromUnrealSpace should cancel out" {
-    const value = t7.CollisionSphere{
+    const value = game.CollisionSphere{
         .center = .fromArray(.{ 1, 2, 3 }),
         .multiplier = 4,
         .radius = 5,
@@ -337,32 +440,20 @@ test "collisionSphereToUnrealSpace and collisionSphereFromUnrealSpace should can
     try testing.expectEqual(value, collisionSphereFromUnrealSpace(collisionSphereToUnrealSpace(value)));
 }
 
-test "encryptHealth and decryptHealth should return correct value" {
-    const clear_text = t7.HealthWithEncryptionKey{
-        .health = 175,
-        .encryption_key = 0xBD20A1539B61342F,
-    };
-    const encrypted = t7.HealthWithEncryptionKey{
-        .health = 0xABCE343D,
-        .encryption_key = 0xBD20A1539B61342F,
-    };
-    try testing.expectEqual(encrypted, encryptHealth(clear_text));
-    try testing.expectEqual(clear_text, decryptHealth(encrypted));
+test "decryptHeatGauge and encryptHeatGauge should cancel out" {
+    try testing.expectEqual(0.12345, decryptHeatGauge(encryptHeatGauge(0.12345)));
+    try testing.expectEqual(12345, encryptHeatGauge(decryptHeatGauge(12345)));
 }
 
-test "rawToConvertedCamera and convertedToRawCamera should cancel out" {
-    const converted = t7.CameraData{
-        .position = .fromArray(.{ 1, 2, 3 }),
-        .pitch = 0.25 * std.math.pi,
-        .roll = 0.5 * std.math.pi,
-        .yaw = 0.75 * std.math.pi,
+test "encryptT7Health and decryptT7Health should return correct value" {
+    const clear_text = game.Health(.t7){
+        .value = 175,
+        .encryption_key = 0xBD20A1539B61342F,
     };
-    try testing.expectEqual(converted, rawToConvertedCamera(convertedToRawCamera(converted)));
-    const raw = t7.CameraData{
-        .position = .fromArray(.{ 1, 2, 3 }),
-        .pitch = 45,
-        .roll = 90,
-        .yaw = 135,
+    const encrypted = game.Health(.t7){
+        .value = 0xABCE343D,
+        .encryption_key = 0xBD20A1539B61342F,
     };
-    try testing.expectEqual(raw, convertedToRawCamera(rawToConvertedCamera(raw)));
+    try testing.expectEqual(encrypted, encryptT7Health(clear_text));
+    try testing.expectEqual(clear_text, decryptT7Health(encrypted));
 }

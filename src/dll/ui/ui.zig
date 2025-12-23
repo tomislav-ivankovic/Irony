@@ -51,7 +51,7 @@ pub const Ui = struct {
         base_dir: *const sdk.misc.BaseDir,
         file_dialog_context: *imgui.ImGuiFileDialog,
         settings_maybe: ?*model.Settings,
-        game_memory_maybe: ?*const game.Memory,
+        game_memory_maybe: ?*const game.Memory(build_info.game),
         controller: *core.Controller,
     ) void {
         const font_size = if (settings_maybe) |s| s.misc.ui_font_size else sdk.ui.default_font_size;
@@ -91,7 +91,7 @@ pub const Ui = struct {
         self.main_window.draw(self, base_dir, file_dialog_context, controller, settings);
         self.settings_window.draw(base_dir, settings);
         self.logs_window.draw(dll.buffer_logger);
-        self.game_memory_window.draw(game_memory);
+        self.game_memory_window.draw(build_info.game, game_memory);
         self.frame_window.draw(controller.getCurrentFrame());
         self.about_window.draw();
     }

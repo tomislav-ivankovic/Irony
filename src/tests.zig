@@ -84,23 +84,12 @@ test {
     _ = @import("dll/core/move_measurer.zig");
     _ = @import("dll/core/pause_detector.zig");
 
-    _ = @import("dll/game/t7/capturer.zig");
-    _ = @import("dll/game/t7/conversions.zig");
-    _ = @import("dll/game/t7/frame_detect_capturer.zig");
-    _ = @import("dll/game/t7/frame_detector.zig");
-    _ = @import("dll/game/t7/hooks.zig");
-    _ = @import("dll/game/t7/memory.zig");
-    _ = @import("dll/game/t7/types.zig");
-
-    _ = @import("dll/game/t8/capturer.zig");
-    _ = @import("dll/game/t8/conversions.zig");
-    _ = @import("dll/game/t8/frame_detect_capturer.zig");
-    _ = @import("dll/game/t8/frame_detector.zig");
-    _ = @import("dll/game/t8/hooks.zig");
-    _ = @import("dll/game/t8/memory.zig");
-    _ = @import("dll/game/t8/types.zig");
-
-    _ = @import("dll/game/memory_helpers.zig");
+    _ = @import("dll/game/capturer.zig");
+    _ = @import("dll/game/conversions.zig");
+    _ = @import("dll/game/frame_detector.zig");
+    _ = @import("dll/game/hooks.zig");
+    _ = @import("dll/game/memory.zig");
+    _ = @import("dll/game/types.zig");
 
     _ = @import("dll/model/collision_sphere.zig");
     _ = @import("dll/model/frame.zig");

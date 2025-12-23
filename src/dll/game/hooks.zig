@@ -1,22 +1,27 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const sdk = @import("../../../sdk/root.zig");
-const t7 = @import("root.zig");
+const build_info = @import("build_info");
+const sdk = @import("../../sdk/root.zig");
+const game = @import("root.zig");
 
-pub fn Hooks(onTick: *const fn () void) type {
+pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () void) type {
     return struct {
         var tick_hook: ?TickHook = null;
         var update_camera_hook: ?UpdateCameraHook = null;
         pub var last_camera_manager_address: usize = 0;
         var active_hook_calls = std.atomic.Value(u8).init(0);
 
-        const TickHook = sdk.memory.Hook(t7.TickFunction);
-        const UpdateCameraHook = sdk.memory.Hook(t7.UpdateCameraFunction);
+        const TickHook = sdk.memory.Hook(game.TickFunction(game_id));
+        const UpdateCameraHook = sdk.memory.Hook(game.UpdateCameraFunction);
 
-        pub fn init(game_functions: *const t7.Memory.Functions) void {
+        pub fn init(game_functions: *const game.Memory(game_id).Functions) void {
             std.log.debug("Creating tick hook...", .{});
             if (game_functions.tick) |function| {
-                if (TickHook.create(function, onTickInternal)) |hook| {
+                const detour = switch (game_id) {
+                    .t7 => onT7Tick,
+                    .t8 => onT8Tick,
+                };
+                if (TickHook.create(function, detour)) |hook| {
                     tick_hook = hook;
                     std.log.info("Tick hook created.", .{});
                 } else |err| {
@@ -99,10 +104,17 @@ pub fn Hooks(onTick: *const fn () void) type {
             }
         }
 
-        fn onTickInternal(game_mode_address: usize, delta_time: f32) callconv(.c) void {
+        fn onT7Tick(game_mode_address: usize, delta_time: f32) callconv(.c) void {
             _ = active_hook_calls.fetchAdd(1, .seq_cst);
             defer _ = active_hook_calls.fetchSub(1, .seq_cst);
             tick_hook.?.original(game_mode_address, delta_time);
+            onTick();
+        }
+
+        fn onT8Tick(delta_time: f64) callconv(.c) void {
+            _ = active_hook_calls.fetchAdd(1, .seq_cst);
+            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
+            tick_hook.?.original(delta_time);
             onTick();
         }
 
@@ -117,7 +129,7 @@ pub fn Hooks(onTick: *const fn () void) type {
 
 const testing = std.testing;
 
-test "should call onTick and original when tick function is called" {
+test "should call onTick and original when tick function is called in T7" {
     const Tick = struct {
         var times_called: usize = 0;
         var last_game_mode_address: ?usize = null;
@@ -134,7 +146,7 @@ test "should call onTick and original when tick function is called" {
             times_called += 1;
         }
     };
-    const hooks = Hooks(OnTick.call);
+    const hooks = Hooks(.t7, OnTick.call);
 
     try sdk.memory.hooking.init();
     defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");
@@ -147,6 +159,36 @@ test "should call onTick and original when tick function is called" {
     try testing.expectEqual(1, Tick.times_called);
     try testing.expectEqual(123, Tick.last_game_mode_address);
     try testing.expectEqual(456, Tick.last_delta_time);
+    try testing.expectEqual(1, OnTick.times_called);
+}
+
+test "should call onTick and original when tick function is called in T8" {
+    const Tick = struct {
+        var times_called: usize = 0;
+        var last_delta_time: ?f64 = null;
+        fn call(delta_time: f64) callconv(.c) void {
+            times_called += 1;
+            last_delta_time = delta_time;
+        }
+    };
+    const OnTick = struct {
+        var times_called: usize = 0;
+        fn call() void {
+            times_called += 1;
+        }
+    };
+    const hooks = Hooks(.t8, OnTick.call);
+
+    try sdk.memory.hooking.init();
+    defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");
+    hooks.init(&.{ .tick = Tick.call });
+    defer hooks.deinit();
+
+    try testing.expectEqual(0, Tick.times_called);
+    try testing.expectEqual(0, OnTick.times_called);
+    Tick.call(123.456);
+    try testing.expectEqual(1, Tick.times_called);
+    try testing.expectEqual(123.456, Tick.last_delta_time);
     try testing.expectEqual(1, OnTick.times_called);
 }
 
@@ -164,7 +206,7 @@ test "should call original and set last_camera_manager_address to the latest val
     const onTick = struct {
         fn call() void {}
     }.call;
-    const hooks = Hooks(onTick);
+    const hooks = Hooks(.t8, onTick);
 
     try sdk.memory.hooking.init();
     defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");

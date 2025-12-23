@@ -1,4 +1,5 @@
 const std = @import("std");
+const build_info = @import("build_info");
 const imgui = @import("imgui");
 const sdk = @import("../../sdk/root.zig");
 const game = @import("../game/root.zig");
@@ -10,7 +11,7 @@ pub const GameMemoryWindow = struct {
     const Self = @This();
     pub const name = "Game Memory";
 
-    pub fn draw(self: *Self, game_memory: *const game.Memory) void {
+    pub fn draw(self: *Self, comptime game_id: build_info.Game, game_memory: *const game.Memory(game_id)) void {
         if (!self.is_open) {
             return;
         }
@@ -29,7 +30,7 @@ pub const GameMemoryWindow = struct {
             return;
         }
 
-        inline for (@typeInfo(game.Memory).@"struct".fields) |*field| {
+        inline for (@typeInfo(game.Memory(game_id)).@"struct".fields) |*field| {
             ui.drawData(field.name, &@field(game_memory, field.name));
         }
         // if (game_memory.player_1.findBaseAddress()) |address| {
@@ -48,10 +49,10 @@ const testing = std.testing;
 test "should not draw anything when window is closed" {
     const Test = struct {
         var window: GameMemoryWindow = .{ .is_open = false };
-        const memory = std.mem.zeroes(game.Memory);
+        const memory = std.mem.zeroes(game.Memory(.t8));
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(&memory);
+            window.draw(.t8, &memory);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -62,18 +63,38 @@ test "should not draw anything when window is closed" {
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should draw game memory struct fields when window is opened" {
+test "should draw game memory struct fields when window is opened in T7" {
     const Test = struct {
         var window: GameMemoryWindow = .{ .is_open = true };
-        const memory = std.mem.zeroes(game.Memory);
+        const memory = std.mem.zeroes(game.Memory(.t7));
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(&memory);
+            window.draw(.t7, &memory);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
             ctx.setRef(GameMemoryWindow.name);
-            inline for (@typeInfo(game.Memory).@"struct".fields) |*field| {
+            inline for (@typeInfo(game.Memory(.t7)).@"struct".fields) |*field| {
+                try ctx.expectItemExists(field.name);
+            }
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw game memory struct fields when window is opened in T8" {
+    const Test = struct {
+        var window: GameMemoryWindow = .{ .is_open = true };
+        const memory = std.mem.zeroes(game.Memory(.t8));
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(.t8, &memory);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef(GameMemoryWindow.name);
+            inline for (@typeInfo(game.Memory(.t8)).@"struct".fields) |*field| {
                 try ctx.expectItemExists(field.name);
             }
         }

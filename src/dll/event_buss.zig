@@ -152,7 +152,7 @@ pub const EventBuss = struct {
         self.ui.processFrame(settings, frame);
     }
 
-    pub fn tick(self: *Self, game_memory: *const game.Memory) void {
+    pub fn tick(self: *Self, game_memory: *const game.Memory(build_info.game)) void {
         self.core.tick(game_memory, self, processFrame);
     }
 
@@ -160,7 +160,7 @@ pub const EventBuss = struct {
         self: *Self,
         base_dir: *const sdk.misc.BaseDir,
         host_dx_context: *const dx.HostContext,
-        game_memory: ?*const game.Memory,
+        game_memory: ?*const game.Memory(build_info.game),
     ) void {
         const delta_time = self.timer.measureDeltaTime();
         self.core.update(delta_time, self, processFrame);

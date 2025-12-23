@@ -22,7 +22,7 @@ const dx = switch (build_info.rendering_api) {
 };
 
 const MainAllocator = std.heap.GeneralPurposeAllocator(.{});
-const MemorySearchTask = sdk.misc.Task(dll.game.Memory);
+const MemorySearchTask = sdk.misc.Task(dll.game.Memory(build_info.game));
 const Event = union(enum) {
     present: dx.HostContext,
     tick: void,
@@ -33,7 +33,7 @@ const Event = union(enum) {
 const ListeningToEvents = enum(u8) { none, all, only_present };
 
 const dx_hooks = dx.Hooks(onPresent, beforeResize, afterResize);
-const game_hooks = dll.game.Hooks(onTick);
+const game_hooks = dll.game.Hooks(build_info.game, onTick);
 const number_of_hooking_retries = 10;
 const hooking_retry_sleep_time = 100 * std.time.ns_per_ms;
 
@@ -366,9 +366,9 @@ fn startFileLogging(base_dir: *const sdk.misc.BaseDir) !void {
     };
 }
 
-fn performMemorySearch(allocator: std.mem.Allocator, dir: *const sdk.misc.BaseDir) dll.game.Memory {
+fn performMemorySearch(allocator: std.mem.Allocator, dir: *const sdk.misc.BaseDir) dll.game.Memory(build_info.game) {
     std.log.debug("Initializing game memory...", .{});
-    const game_memory = dll.game.Memory.init(allocator, dir, game_hooks);
+    const game_memory = dll.game.Memory(build_info.game).init(allocator, dir, &game_hooks.last_camera_manager_address);
     std.log.info("Game memory initialized.", .{});
 
     std.log.debug("Initializing game hooks...", .{});
