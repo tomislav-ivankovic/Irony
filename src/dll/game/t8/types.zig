@@ -125,6 +125,56 @@ pub const AirborneFlags = packed struct(u32) {
     }
 };
 
+pub const PhaseFlags = packed struct(u32) {
+    _0: bool = false,
+    _1: bool = false,
+    _2: bool = false,
+    _3: bool = false,
+    _4: bool = false,
+    _5: bool = false,
+    _6: bool = false,
+    _7: bool = false,
+    is_active: bool = false,
+    _9: bool = false,
+    is_recovery: bool = false,
+    _11: bool = false,
+    _12: bool = false,
+    _13: bool = false,
+    _14: bool = false,
+    _15: bool = false,
+    _16: bool = false,
+    _17: bool = false,
+    _18: bool = false,
+    _19: bool = false,
+    _20: bool = false,
+    _21: bool = false,
+    _22: bool = false,
+    _23: bool = false,
+    _24: bool = false,
+    _25: bool = false,
+    _26: bool = false,
+    _27: bool = false,
+    _28: bool = false,
+    _29: bool = false,
+    _30: bool = false,
+    _31: bool = false,
+
+    const Self = @This();
+
+    pub fn fromInt(int: u32) Self {
+        return @bitCast(int);
+    }
+
+    pub fn toInt(self: Self) u32 {
+        return @bitCast(self);
+    }
+
+    comptime {
+        std.debug.assert((Self{ .is_active = true }).toInt() == 256);
+        std.debug.assert((Self{ .is_recovery = true }).toInt() == 1024);
+    }
+};
+
 pub const AttackType = enum(u32) {
     not_attack = 0xC000001D,
     high = 0xA000050F,
@@ -387,6 +437,7 @@ pub const Player = struct {
     in_rage: sdk.memory.Boolean(.{}),
     used_rage: sdk.memory.Boolean(.{}),
     frames_since_round_start: u32,
+    phase_flags: PhaseFlags,
     heat_gauge: sdk.memory.ConvertedValue(
         u32,
         f32,

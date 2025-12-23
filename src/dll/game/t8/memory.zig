@@ -59,6 +59,7 @@ pub const Memory = struct {
             .in_rage = 0xF51,
             .used_rage = 0xF88,
             .frames_since_round_start = 0x1590,
+            .phase_flags = 0x1BC4,
             .heat_gauge = 0x2440,
             .used_heat = 0x2450,
             .in_heat = 0x2471,
