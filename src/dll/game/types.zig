@@ -215,6 +215,30 @@ pub const HitOutcome = enum(u32) {
     _,
 };
 
+pub const SimpleState = enum(u32) {
+    uninitialized = 0,
+    standing_forward = 1,
+    standing_back = 2,
+    standing = 3,
+    steve = 4,
+    crouch_forward = 5,
+    crouch_back = 6,
+    crouch = 7,
+    ground_face_up = 12,
+    ground_face_down = 13,
+    juggled = 14,
+    knockdown = 15,
+    off_axis_getup = 8,
+    wall_splat_18 = 18,
+    wall_splat_19 = 19,
+    invincible = 20,
+    airborne_24 = 24,
+    airborne = 25,
+    airborne_26 = 26,
+    fly = 27,
+    _,
+};
+
 pub fn Input(comptime game_id: build_info.Game) type {
     return switch (game_id) {
         .t7 => packed struct(u32) {
@@ -528,7 +552,7 @@ pub fn Player(comptime game_id: build_info.Game) type {
             can_move: sdk.memory.Boolean(.{}),
             animation_total_frames: u32,
             hit_outcome: HitOutcome,
-            invincible: sdk.memory.Boolean(.{}),
+            simple_state: SimpleState,
             power_crushing: sdk.memory.Boolean(.{}),
             airborne_flags: AirborneFlags,
             frames_since_round_start: u32,
@@ -575,7 +599,7 @@ pub fn Player(comptime game_id: build_info.Game) type {
             can_move: sdk.memory.Boolean(.{}),
             animation_total_frames: u32,
             hit_outcome: HitOutcome,
-            invincible: sdk.memory.Boolean(.{}),
+            simple_state: SimpleState,
             is_a_parry_move: sdk.memory.Boolean(.{ .true_value = 2 }),
             power_crushing: sdk.memory.Boolean(.{}),
             airborne_flags: AirborneFlags,

@@ -32,6 +32,7 @@ pub const AirborneFlags = @import("types.zig").AirborneFlags;
 pub const PhaseFlags = @import("types.zig").PhaseFlags;
 pub const AttackType = @import("types.zig").AttackType;
 pub const HitOutcome = @import("types.zig").HitOutcome;
+pub const SimpleState = @import("types.zig").SimpleState;
 pub const Input = @import("types.zig").Input;
 pub const HitLinePoint = @import("types.zig").HitLinePoint;
 pub const HitLine = @import("types.zig").HitLine;

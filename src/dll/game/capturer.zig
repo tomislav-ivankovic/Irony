@@ -278,9 +278,9 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
         fn captureCrushing(state: *PlayerState, player: *const PartialPlayer) ?model.Crushing {
             const posture = capturePosture(state, player) orelse return null;
             const state_flags: game.StateFlags = player.state_flags orelse return null;
+            const simple_state: game.SimpleState = player.simple_state orelse return null;
             const airborne_state = state.airborne_state;
             const power_crushing: sdk.memory.Boolean(.{}) = player.power_crushing orelse return null;
-            const invincible: sdk.memory.Boolean(.{}) = player.invincible orelse return null;
             return .{
                 .high_crushing = posture == .crouching or posture == .downed_face_down or posture == .downed_face_up,
                 .low_crushing = posture == .airborne and
@@ -289,7 +289,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                     !state_flags.being_juggled,
                 .anti_air_only_crushing = posture != .airborne,
                 .power_crushing = power_crushing.toBool() orelse return null,
-                .invincibility = invincible.toBool() orelse return null,
+                .invincibility = simple_state == .invincible,
             };
         }
 

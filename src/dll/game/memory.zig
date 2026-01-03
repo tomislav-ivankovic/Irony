@@ -55,7 +55,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                     .can_move = 0x390,
                     .animation_total_frames = 0x39C,
                     .hit_outcome = 0x3D8,
-                    .invincible = 0x630, // TODO Find a better value that works with Akuma invincible moves.
+                    .simple_state = 0x428,
                     .power_crushing = 0x6C0,
                     .airborne_flags = 0x8D8,
                     .frames_since_round_start = 0x95C,
@@ -88,7 +88,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                     .can_move = 0x5C8,
                     .animation_total_frames = 0x5D4,
                     .hit_outcome = 0x610,
-                    .invincible = 0x8F8, // TODO Probably incorrect because the same value does not work with T7 Akuma moves.
+                    .simple_state = 0x660,
                     .is_a_parry_move = 0xA2C,
                     .power_crushing = 0xBEC,
                     .airborne_flags = 0xF1C,
