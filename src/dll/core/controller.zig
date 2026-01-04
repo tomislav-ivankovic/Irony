@@ -219,6 +219,7 @@ pub const Controller = struct {
         const callback = onFrameChange orelse return;
         var index = unprocessed_frames_start.* orelse return;
         if (index <= target_frame_index) {
+            index = @max(index, target_frame_index -| max_number_of_unprocessed_frames);
             while (index <= target_frame_index) {
                 if (self.getFrameAt(index)) |frame| {
                     callback(context, frame);
@@ -229,6 +230,7 @@ pub const Controller = struct {
                 index += 1;
             }
         } else {
+            index = @min(index, target_frame_index +| max_number_of_unprocessed_frames);
             while (index >= target_frame_index) {
                 if (self.getFrameAt(index)) |frame| {
                     callback(context, frame);
@@ -543,9 +545,9 @@ pub const Controller = struct {
                 if (previous_start) |i| {
                     return i;
                 } else if (target_index > current_index) {
-                    return @max(current_index +| 1, target_index -| max_number_of_unprocessed_frames);
+                    return current_index +| 1;
                 } else if (target_index < current_index) {
-                    return @min(current_index -| 1, target_index +| max_number_of_unprocessed_frames);
+                    return current_index -| 1;
                 } else {
                     return null;
                 }
