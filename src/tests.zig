@@ -103,6 +103,7 @@ test {
     _ = @import("dll/ui/about_window.zig");
     _ = @import("dll/ui/camera.zig");
     _ = @import("dll/ui/collision_spheres.zig");
+    _ = @import("dll/ui/control_hints.zig");
     _ = @import("dll/ui/controls.zig");
     _ = @import("dll/ui/data.zig");
     _ = @import("dll/ui/details.zig");

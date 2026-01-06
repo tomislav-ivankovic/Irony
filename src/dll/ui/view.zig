@@ -15,6 +15,7 @@ pub const View = struct {
     hurt_cylinders: ui.HurtCylinders = .{},
     hit_lines: ui.HitLines = .{},
     measure_tool: ui.MeasureTool = .{},
+    control_hints: ui.ControlHints = .{},
 
     const Self = @This();
 
@@ -24,9 +25,10 @@ pub const View = struct {
     }
 
     pub fn update(self: *Self, delta_time: f32) void {
+        self.camera.flushWindowMeasurements();
         self.hurt_cylinders.update(delta_time);
         self.hit_lines.update(delta_time);
-        self.camera.flushWindowMeasurements();
+        self.control_hints.update(delta_time);
     }
 
     pub fn draw(
@@ -50,5 +52,6 @@ pub const View = struct {
         ui.drawSkeletons(&settings.skeletons, frame, matrix);
         self.hit_lines.draw(&settings.hit_lines, frame, matrix);
         self.measure_tool.draw(&settings.measure_tool, matrix);
+        self.control_hints.draw(direction);
     }
 };

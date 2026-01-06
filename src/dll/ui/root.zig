@@ -2,6 +2,7 @@ pub const AboutWindowConfig = @import("about_window.zig").AboutWindowConfig;
 pub const AboutWindow = @import("about_window.zig").AboutWindow;
 pub const Camera = @import("camera.zig").Camera;
 pub const drawCollisionSpheres = @import("collision_spheres.zig").drawCollisionSpheres;
+pub const ControlHints = @import("control_hints.zig").ControlHints;
 pub const ControlsConfig = @import("controls.zig").ControlsConfig;
 pub const Controls = @import("controls.zig").Controls;
 pub const drawData = @import("data.zig").drawData;
