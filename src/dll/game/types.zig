@@ -363,8 +363,8 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x2C80, "hurt_cylinders", HurtCylinders(.t8), &.{}),
             field(0x30C0, "collision_spheres", CollisionSpheres, &.{}),
             field(0x3858, "health", HealthValue, &.fromRaw(.{})),
-            field(0x3868, "max_health", HealthValue, &.fromRaw(.{})),
-            field(0x3878, "health_recover_limit", HealthValue, &.fromRaw(.{})),
+            field(0x3868, "health_recover_limit", HealthValue, &.fromRaw(.{})),
+            field(0x3878, "max_health", HealthValue, &.fromRaw(.{})),
         }),
     };
 }
