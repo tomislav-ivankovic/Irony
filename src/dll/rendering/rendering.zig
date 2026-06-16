@@ -116,10 +116,10 @@ pub const Rendering = struct {
             break :block @as(f32, @floatFromInt(size.x())) / @as(f32, @floatFromInt(size.y()));
         };
         const horizontal_fov: f32 = camera.horizontal_fov.convert();
-        if (horizontal_fov == 0) {
+        const vertical_fov = 2 * std.math.atan2(std.math.tan(0.5 * horizontal_fov), aspect_ratio);
+        if (vertical_fov < 1 * std.math.rad_per_deg) {
             return null; // Camera not fully initialized.
         }
-        const vertical_fov = 2 * std.math.atan2(std.math.tan(0.5 * horizontal_fov), aspect_ratio);
         const projection = sdk.math.Mat4.fromZInfinitePerspective(vertical_fov, aspect_ratio, 10);
 
         return view.multiply(projection);
