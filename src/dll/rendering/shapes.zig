@@ -135,14 +135,17 @@ pub const Shapes = struct {
         camera_position: sdk.math.Vec3,
     ) void {
         const camera_to_sphere = camera_position.distanceTo(sphere.center);
-        if (camera_to_sphere < sphere.radius) {
-            return;
-        }
-        const camera_to_edge = std.math.sqrt(
-            (camera_to_sphere * camera_to_sphere) - (sphere.radius * sphere.radius),
-        );
-        const circle_radius = sphere.radius * camera_to_edge / camera_to_sphere;
-        const camera_to_circle = circle_radius * camera_to_edge / sphere.radius;
+        const circle_radius, const camera_to_circle = if (sphere.radius != 0) block: {
+            if (camera_to_sphere < sphere.radius) {
+                return;
+            }
+            const camera_to_edge = std.math.sqrt(
+                (camera_to_sphere * camera_to_sphere) - (sphere.radius * sphere.radius),
+            );
+            const circle_radius = sphere.radius * camera_to_edge / camera_to_sphere;
+            const camera_to_circle = circle_radius * camera_to_edge / sphere.radius;
+            break :block .{ circle_radius, camera_to_circle };
+        } else .{ 0, camera_to_sphere };
 
         const forward = sphere.center.subtract(camera_position).normalize();
         const arbitrary: sdk.math.Vec3 = if (forward.z() < 0.999) .plus_z else .plus_x;
@@ -181,11 +184,14 @@ pub const Shapes = struct {
 
         const camera_to_center = camera_position.swizzle("xy").distanceTo(center.swizzle("xy"));
         if (camera_to_center > radius) {
-            const camera_to_edge = std.math.sqrt(
-                (camera_to_center * camera_to_center) - (radius * radius),
-            );
-            const edge_offset = radius * camera_to_edge / camera_to_center;
-            const camera_to_edges_base = edge_offset * camera_to_edge / radius;
+            const edge_offset, const camera_to_edges_base = if (radius != 0) block: {
+                const camera_to_edge = std.math.sqrt(
+                    (camera_to_center * camera_to_center) - (radius * radius),
+                );
+                const edge_offset = radius * camera_to_edge / camera_to_center;
+                const camera_to_edges_base = edge_offset * camera_to_edge / radius;
+                break :block .{ edge_offset, camera_to_edges_base };
+            } else .{ 0, camera_to_center };
 
             const forward = center.swizzle("xy").subtract(camera_position.swizzle("xy")).normalize();
             const right = sdk.math.Vec2.fromArray(.{ -forward.y(), forward.x() });
