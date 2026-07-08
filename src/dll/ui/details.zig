@@ -349,9 +349,16 @@ pub const Details = struct {
         null,
         drawCrushing,
     ) = .{},
+    can_interact: Row(
+        "Can Interact",
+        "Whether the player is able to influence the game simulation using inputs.",
+        bool,
+        null,
+        drawYesNo,
+    ) = .{},
     can_move: Row(
         "Can Move",
-        "Whether the player is free to move or stuck in a recovery animation.",
+        "Whether the player is free to move using normal directional input.",
         bool,
         null,
         drawYesNo,
@@ -488,6 +495,7 @@ pub const Details = struct {
         self.posture.processFrame(s, c1.posture, c2.posture);
         self.blocking.processFrame(s, c1.blocking, c2.blocking);
         self.crushing.processFrame(s, c1.crushing, c2.crushing);
+        self.can_interact.processFrame(s, c1.can_interact, c2.can_interact);
         self.can_move.processFrame(s, c1.can_move, c2.can_move);
         self.input.processFrame(s, c1.input, c2.input);
         self.distance_to_opponent.processFrame(s, c1.getDistanceTo(c2), c2.getDistanceTo(c1));
@@ -2720,6 +2728,41 @@ test "should draw crushing correctly" {
             ctx.yield(1);
             try ctx.expectItemExists("cell_1/Power-Crushing");
             try ctx.expectItemExists("cell_2/Everything, Power-Crushing");
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw can interact correctly" {
+    const Test = struct {
+        var settings = model.DetailsSettings{ .rows_enabled = .{} };
+        var details = Details{};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            details.draw(&settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window/table/Can Interact");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .can_interact = null },
+                .{ .can_interact = false },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/---");
+            try ctx.expectItemExists("cell_2/No");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .can_interact = true },
+                .{ .can_interact = false },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/Yes");
+            try ctx.expectItemExists("cell_2/No");
         }
     };
     const context = try sdk.ui.getTestingContext();
