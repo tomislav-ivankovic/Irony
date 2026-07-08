@@ -265,6 +265,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                 .posture = capturePosture(player),
                 .blocking = captureBlocking(player),
                 .crushing = captureCrushing(player),
+                .can_interact = captureCanInteract(player),
                 .can_move = if (player) |p| p.can_move.toBool() else null,
                 .input = captureInput(player),
                 .health = if (player) |p| p.health.convert().value else null,
@@ -418,6 +419,14 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                 .power_crushing = power_crushing,
                 .invincibility = simple_state == .invincible,
             };
+        }
+
+        fn captureCanInteract(player_maybe: ?*const GamePlayer) ?bool {
+            const player = player_maybe orelse return null;
+            if (player.simple_state == .juggled) {
+                return false;
+            }
+            return player.cancel_flags.can_interact;
         }
 
         fn captureInput(player_maybe: ?*const GamePlayer) ?model.Input {
@@ -1830,6 +1839,23 @@ test "should capture crushing correctly" {
         model.Crushing{ .anti_air_only_crushing = true, .invincibility = true },
         frame_5.getPlayerById(.player_2).crushing,
     );
+}
+
+test "should capture can interact correctly" {
+    const gm = game.Memory(.t8).testingInit;
+    var capturer = Capturer(.t8){};
+    const frame_1 = capturer.captureFrame(&gm(.{
+        .player_1 = &.{ .cancel_flags = .{ .can_interact = false }, .simple_state = .standing_forward },
+        .player_2 = &.{ .cancel_flags = .{ .can_interact = true }, .simple_state = .standing_forward },
+    }));
+    const frame_2 = capturer.captureFrame(&gm(.{
+        .player_1 = &.{ .cancel_flags = .{ .can_interact = true }, .simple_state = .juggled },
+        .player_2 = null,
+    }));
+    try testing.expectEqual(false, frame_1.getPlayerById(.player_1).can_interact);
+    try testing.expectEqual(true, frame_1.getPlayerById(.player_2).can_interact);
+    try testing.expectEqual(false, frame_2.getPlayerById(.player_1).can_interact);
+    try testing.expectEqual(null, frame_2.getPlayerById(.player_2).can_interact);
 }
 
 test "should capture can move correctly" {

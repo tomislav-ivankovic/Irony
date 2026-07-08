@@ -72,6 +72,7 @@ pub const Player = struct {
     posture: ?model.Posture = null,
     blocking: ?model.Blocking = null,
     crushing: ?model.Crushing = null,
+    can_interact: ?bool = null,
     can_move: ?bool = null,
     input: ?model.Input = null,
     health: ?u32 = null,
