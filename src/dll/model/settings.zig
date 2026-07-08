@@ -248,7 +248,7 @@ pub const SkeletonSettings = struct {
         .fully_blocking_lows = .fromArray(.{ 0.5, 0.75, 1.0, 1.0 }),
     }),
     thickness: f32 = 2.0,
-    cant_move_alpha: f32 = 0.5,
+    cant_interact_alpha: f32 = 0.5,
 };
 
 pub const ForwardDirectionSettings = struct {

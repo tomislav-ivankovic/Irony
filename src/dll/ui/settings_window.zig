@@ -751,7 +751,7 @@ fn drawSkeletonSettings(value: *model.SkeletonSettings, default: *const model.Sk
 
     drawColors("Colors", &value.colors, &default.colors);
     drawThickness("Thickness", &value.thickness, &default.thickness);
-    drawFloat("Can't Move Alpha", &value.cant_move_alpha, &default.cant_move_alpha, 0.01, 0, 1, "%.2f", 0);
+    drawFloat("Can't Interact Alpha", &value.cant_interact_alpha, &default.cant_interact_alpha, 0.01, 0, 1, "%.2f", 0);
 }
 
 fn drawForwardDirectionsSettings(
@@ -1751,10 +1751,10 @@ test "skeletons settings should function correctly" {
             ctx.itemClick("Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
             try testing.expectEqual(default.thickness, current.thickness);
 
-            ctx.itemInputValueFloat("Can't Move Alpha", 0.123);
-            try testing.expectEqual(0.123, current.cant_move_alpha);
-            ctx.itemClick("Can't Move Alpha/###default", imgui.ImGuiMouseButton_Left, 0);
-            try testing.expectEqual(default.cant_move_alpha, current.cant_move_alpha);
+            ctx.itemInputValueFloat("Can't Interact Alpha", 0.123);
+            try testing.expectEqual(0.123, current.cant_interact_alpha);
+            ctx.itemClick("Can't Interact Alpha/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.cant_interact_alpha, current.cant_interact_alpha);
         }
     };
     Test.window = .init(testing.allocator);

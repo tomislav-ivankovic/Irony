@@ -17,10 +17,10 @@ pub fn drawSkeletons(
         const player = frame.getPlayerById(player_id);
         const skeleton = player.getSkeleton() orelse continue;
         const blocking = player.blocking orelse .not_blocking;
-        const can_move = player.can_move orelse true;
+        const can_interact = player.can_interact orelse true;
         var color = player_settings.colors.get(blocking);
-        if (!can_move) {
-            color.asColor().a *= player_settings.cant_move_alpha;
+        if (!can_interact) {
+            color.asColor().a *= player_settings.cant_interact_alpha;
         }
         drawSkeleton(shapes, &skeleton, color, player_settings.thickness);
     }
@@ -78,13 +78,13 @@ test "should draw lines correctly" {
                 .enabled = true,
                 .colors = .initFill(.fromArray(.{ 0.1, 0.2, 0.3, 0.4 })),
                 .thickness = 1,
-                .cant_move_alpha = 1.0,
+                .cant_interact_alpha = 1.0,
             },
             .{
                 .enabled = true,
                 .colors = .initFill(.fromArray(.{ 0.5, 0.6, 0.7, 0.8 })),
                 .thickness = 2,
-                .cant_move_alpha = 1.0,
+                .cant_interact_alpha = 1.0,
             },
         },
     };
@@ -322,7 +322,7 @@ test "should draw with correct color depending on blocking property" {
                     .neutral_blocking_lows = .fill(0.4),
                     .fully_blocking_lows = .fill(0.5),
                 }),
-                .cant_move_alpha = 1.0,
+                .cant_interact_alpha = 1.0,
             },
             .{
                 .enabled = true,
@@ -333,7 +333,7 @@ test "should draw with correct color depending on blocking property" {
                     .neutral_blocking_lows = .fill(0.9),
                     .fully_blocking_lows = .fill(1.0),
                 }),
-                .cant_move_alpha = 1.0,
+                .cant_interact_alpha = 1.0,
             },
         },
     };
@@ -382,7 +382,7 @@ test "should draw with correct color depending on blocking property" {
     try testing.expectEqual(sdk.math.Vec4.fill(1.0), player_2_line.?.color);
 }
 
-test "should draw with correct alpha depending on can move property" {
+test "should draw with correct alpha depending on can interact property" {
     ui.testing_shapes.begin(testing.allocator);
     defer ui.testing_shapes.end();
 
@@ -394,13 +394,13 @@ test "should draw with correct alpha depending on can move property" {
                 .enabled = true,
                 .colors = .initFill(.fromArray(.{ 0.1, 0.2, 0.3, 0.4 })),
                 .thickness = 1,
-                .cant_move_alpha = 0.1,
+                .cant_interact_alpha = 0.1,
             },
             .{
                 .enabled = true,
                 .colors = .initFill(.fromArray(.{ 0.5, 0.6, 0.7, 0.8 })),
                 .thickness = 2,
-                .cant_move_alpha = 0.2,
+                .cant_interact_alpha = 0.2,
             },
         },
     };
@@ -408,12 +408,12 @@ test "should draw with correct alpha depending on can move property" {
         .{
             .collision_spheres = .initFill(.{ .center = .fill(1), .radius = 0 }),
             .hurt_cylinders = .initFill(.{ .cylinder = .{ .center = .fill(1), .radius = 0, .half_height = 0 } }),
-            .can_move = true,
+            .can_interact = true,
         },
         .{
             .collision_spheres = .initFill(.{ .center = .fill(-1), .radius = 0 }),
             .hurt_cylinders = .initFill(.{ .cylinder = .{ .center = .fill(-1), .radius = 0, .half_height = 0 } }),
-            .can_move = false,
+            .can_interact = false,
         },
     } };
     drawSkeletons(&shapes, &settings, &frame);
