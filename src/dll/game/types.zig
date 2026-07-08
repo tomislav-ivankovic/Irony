@@ -50,6 +50,13 @@ pub const StateFlags = sdk.memory.Bitfield(u32, &.{
     .{ .name = "crouched_but_not_fully", .backing_value = 262144 },
 });
 
+pub const CancelFlags = sdk.memory.Bitfield(u32, &.{
+    .{ .name = "in_active_frame_1", .backing_value = 1 },
+    .{ .name = "in_active_frame_2", .backing_value = 2 },
+    .{ .name = "can_interact", .backing_value = 65536 },
+    .{ .name = "can_cancel_recovery", .backing_value = 16777216 },
+});
+
 pub const AttackType = enum(u32) {
     not_attack = 0xC000001D,
     high = 0xA000050F,
@@ -324,6 +331,7 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x03D8, "hit_outcome", HitOutcome, &.none),
             field(0x0428, "simple_state", SimpleState, &.standing),
             field(0x06C0, "power_crushing", Bool, &.false),
+            field(0x0788, "cancel_flags", CancelFlags, &.{}),
             field(0x095C, "frames_since_round_start", u32, &0),
             field(0x0AE0, "floor_number", u32, &0),
             field(0x0C00, "in_rage", Bool, &.false),
@@ -351,6 +359,7 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x0670, "simple_state", SimpleState, &.standing),
             field(0x0C1D, "power_crushing", Bool, &.false),
             field(0x0F81, "in_rage", Bool, &.false),
+            field(0x0F88, "cancel_flags", CancelFlags, &.{}),
             field(0x15C0, "frames_since_round_start", u32, &0),
             field(0x19A0, "floor_number", u32, &0),
             field(0x2470, "heat_gauge", HeatGauge, &.fromRaw(0)),
