@@ -12,6 +12,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
         secondary_player_info: Proxy(game.PlayerInfo(game_id)),
         match: Pointer(game.Match(game_id)),
         ruleset: Pointer(game.Ruleset(game_id)),
+        cancel_requirements: Pointer(game.CancelRequirements),
         replay_mode: Proxy(game.ReplayMode),
         depth_buffer: Proxy(game.DepthBuffer(game_id)),
         camera_manager: Pointer(game.CameraManager(game_id)) = .fromPointer(null),
@@ -28,12 +29,14 @@ pub fn Memory(comptime game_id: build_info.Game) type {
         pub const Functions = switch (game_id) {
             .t7 => struct {
                 tick: ?*const game.TickFunction(.t7) = null,
+                processCancelRequirement: ?*const game.ProcessCancelRequirementFunction = null,
                 unrealFree: ?*const game.UnrealFreeFunction = null,
                 findUnrealClass: ?*const game.FindUnrealClassFunction = null,
                 findUnrealObjectsOfClass: ?*const game.FindUnrealObjectsOfClassFunction = null,
             },
             .t8 => struct {
                 tick: ?*const game.TickFunction(.t8) = null,
+                processCancelRequirement: ?*const game.ProcessCancelRequirementFunction = null,
                 unrealFree: ?*const game.UnrealFreeFunction = null,
                 findUnrealClass: ?*const game.FindUnrealClassFunction = null,
                 findUnrealObjectsOfClass: ?*const game.FindUnrealObjectsOfClassFunction = null,
@@ -76,7 +79,6 @@ pub fn Memory(comptime game_id: build_info.Game) type {
         }
 
         fn t7Init(cache: *?sdk.memory.PatternCache, comptime game_hooks: type) Self {
-            _ = game_hooks;
             return .{
                 .player_1 = proxy("player_1", game.Player(.t7), .{
                     relativeOffset(i32, add(0x3, pattern(cache, "48 8B 15 ?? ?? ?? ?? 44 8B C3"))),
@@ -117,6 +119,11 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                     game.Ruleset(.t7),
                     relativeOffset(i32, add(0x2, pattern(cache, "8B 05 ?? ?? ?? ?? 83 C0 9C"))),
                 ),
+                .cancel_requirements = pointer(
+                    "cancel_requirements",
+                    game.CancelRequirements,
+                    @intFromPtr(&game_hooks.cancel_requirements),
+                ),
                 .replay_mode = proxy("replay_mode", game.ReplayMode, .{
                     add(0x1, relativeOffset(i32, add(0x3, pattern(
                         cache,
@@ -139,6 +146,11 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                         "tick",
                         game.TickFunction(.t7),
                         pattern(cache, "48 83 EC 58 84 C9"),
+                    ),
+                    .processCancelRequirement = functionPointer(
+                        "processCancelRequirement",
+                        game.ProcessCancelRequirementFunction,
+                        pattern(cache, "40 53 56 57 41 56 48 81 EC B8 00 00 00"),
                     ),
                     .unrealFree = functionPointer(
                         "unrealFree",
@@ -196,6 +208,11 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                 }),
                 .match = .fromPointer(null), // Continuously updated address.
                 .ruleset = .fromPointer(null), // Continuously updated address.
+                .cancel_requirements = pointer(
+                    "cancel_requirements",
+                    game.CancelRequirements,
+                    @intFromPtr(&game_hooks.cancel_requirements),
+                ),
                 .replay_mode = proxy("replay_mode", game.ReplayMode, .{
                     0x0, // Continuously updated address.
                     0x98,
@@ -210,6 +227,11 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                         "tick",
                         game.TickFunction(.t8),
                         pattern(cache, "48 8B C4 48 89 58 08 48 89 68 10 48 89 70 18 57 48 81 EC ?? 01 00 00 48 8B 1D"),
+                    ),
+                    .processCancelRequirement = functionPointer(
+                        "processCancelRequirement",
+                        game.ProcessCancelRequirementFunction,
+                        pattern(cache, "48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 48 8D AC 24 30 FF FF FF 48 81 EC D0 01 00 00 8B 39"),
                     ),
                     .unrealFree = functionPointer(
                         "unrealFree",
@@ -263,6 +285,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
             secondary_player_info: ?*const game.PlayerInfo(game_id) = null,
             match: ?*const game.Match(game_id) = null,
             ruleset: ?*const game.Ruleset(game_id) = null,
+            cancel_requirements: ?*const game.CancelRequirements = null,
             replay_mode: ?*const game.ReplayMode = null,
             depth_buffer: ?*const game.DepthBuffer(game_id) = null,
             camera_manager: ?*const game.CameraManager(game_id) = null,
@@ -295,6 +318,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                 .secondary_player_info = .fromPointer(params.secondary_player_info),
                 .match = .fromPointer(params.match),
                 .ruleset = .fromPointer(params.ruleset),
+                .cancel_requirements = .fromPointer(params.cancel_requirements),
                 .replay_mode = .fromPointer(params.replay_mode),
                 .depth_buffer = .fromPointer(params.depth_buffer),
                 .camera_manager = .fromPointer(params.camera_manager),

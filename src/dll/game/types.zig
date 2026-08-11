@@ -57,6 +57,32 @@ pub const CancelFlags = sdk.memory.Bitfield(u32, &.{
     .{ .name = "can_cancel_recovery", .backing_value = 16777216 },
 });
 
+// MovesetExtractor: req
+pub const CancelRequirement = enum(u32) {
+    throw_escape_1 = 0x83, // MovesetExtractor: Pressed ONLY LP (1)
+    throw_escape_2 = 0x84, // MovesetExtractor: Pressed ONLY RP (2)
+    throw_escape_1_plus_2 = 0x85, // MovesetExtractor: Pressed ONLY RP+LP (1+2)
+    _,
+};
+
+pub const CancelRequirements = packed struct {
+    throw_escape_1: bool = false,
+    throw_escape_2: bool = false,
+    throw_escape_1_plus_2: bool = false,
+};
+
+pub const ThrowEscape = enum(u32) {
+    none = 0xC000001D,
+    one = 0xD000001C,
+    two = 0xE000001F,
+    one_plus_two = 0xF000001E,
+    _,
+};
+
+pub const ThrowEscapeFlags = sdk.memory.Bitfield(u32, &.{
+    .{ .name = "escape_success", .backing_value = 2048 },
+});
+
 pub const AttackType = enum(u32) {
     not_attack = 0xC000001D,
     high = 0xA000050F,
@@ -309,6 +335,7 @@ pub const Health = extern struct {
 };
 
 pub fn Player(comptime game_id: build_info.Game) type {
+    @setEvalBranchQuota(4000);
     const Transform = Converted(sdk.math.Mat4, sdk.math.Mat4, game.matrixToUnrealSpace, game.matrixFromUnrealSpace);
     const FloorZ = Converted(f32, f32, game.scaleToUnrealSpace, game.scaleFromUnrealSpace);
     const Rotation = Converted(u16, f32, game.u16ToRadians, game.u16FromRadians);
@@ -330,6 +357,8 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x039C, "animation_total_frames", u32, &0),
             field(0x03D8, "hit_outcome", HitOutcome, &.none),
             field(0x0428, "simple_state", SimpleState, &.standing),
+            field(0x0450, "throw_escape", ThrowEscape, &.none),
+            field(0x049C, "throw_escape_flags", ThrowEscapeFlags, &.{}),
             field(0x06C0, "power_crushing", Bool, &.false),
             field(0x0788, "cancel_flags", CancelFlags, &.{}),
             field(0x095C, "frames_since_round_start", u32, &0),
@@ -357,6 +386,8 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x05E0, "animation_total_frames", u32, &0),
             field(0x061C, "hit_outcome", HitOutcome, &.none),
             field(0x0670, "simple_state", SimpleState, &.standing),
+            field(0x0698, "throw_escape", ThrowEscape, &.none),
+            field(0x06F8, "throw_escape_flags", ThrowEscapeFlags, &.{}),
             field(0x0C1D, "power_crushing", Bool, &.false),
             field(0x0F81, "in_rage", Bool, &.false),
             field(0x0F88, "cancel_flags", CancelFlags, &.{}),
@@ -867,6 +898,12 @@ pub fn TickFunction(comptime game_id: build_info.Game) type {
     };
 }
 
+pub const ProcessCancelRequirementFunction = fn (
+    param_1: *const CancelRequirement,
+    param_2: i64,
+    param_3: i64,
+) callconv(.c) u64;
+
 // UE: FMemory::Free
 pub const UnrealFreeFunction = fn (original: *anyopaque) callconv(.c) void;
 
@@ -888,9 +925,6 @@ pub const FindUnrealObjectsOfClassFunction = fn (
 
 // UE5: FD3D12DescriptorCache::SetRenderTargets
 pub const SetRenderTargetsFunction = fn (this: usize, param_1: usize, param_2: u32, param_3: usize) callconv(.c) void;
-
-// T8
-pub const DecryptT8HealthFunction = fn (encrypted_health: *const Health(.t8)) callconv(.c) i64;
 
 // T8
 pub const GetGlobalsMapFunction = fn () callconv(.c) *GlobalsMap;

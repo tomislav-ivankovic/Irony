@@ -7,12 +7,15 @@ const game = @import("root.zig");
 pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () void) type {
     return struct {
         var tick_hook: ?TickHook = null;
+        var cancel_requirements_hook: ?CancelRequirementsHook = null;
         var render_targets_hook: ?RenderTargetsHook = null;
         var active_hook_calls = std.atomic.Value(u8).init(0);
 
+        pub var cancel_requirements: game.CancelRequirements = .{};
         pub var depth_buffer_address: usize = 0;
 
         const TickHook = sdk.memory.Hook(game.TickFunction(game_id));
+        const CancelRequirementsHook = sdk.memory.Hook(game.ProcessCancelRequirementFunction);
         const RenderTargetsHook = sdk.memory.Hook(game.SetRenderTargetsFunction);
 
         pub fn init(game_functions: *const game.Memory(game_id).Functions) void {
@@ -34,6 +37,23 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
             } else if (!builtin.is_test) {
                 sdk.misc.error_context.new("Tick function not found.", .{});
                 sdk.misc.error_context.append("Failed to create tick hook.", .{});
+                sdk.misc.error_context.logError(error.NotFound);
+            }
+
+            std.log.debug("Creating cancel requirements hook...", .{});
+            if (game_functions.processCancelRequirement) |function| {
+                if (CancelRequirementsHook.create(function, onProcessCancelRequirement)) |hook| {
+                    cancel_requirements_hook = hook;
+                    std.log.info("Cancel requirements hook created.", .{});
+                } else |err| {
+                    if (!builtin.is_test) {
+                        sdk.misc.error_context.append("Failed to create cancel requirements hook.", .{});
+                        sdk.misc.error_context.logError(err);
+                    }
+                }
+            } else if (!builtin.is_test) {
+                sdk.misc.error_context.new("Process cancel requirement function not found.", .{});
+                sdk.misc.error_context.append("Failed to create cancel requirements hook.", .{});
                 sdk.misc.error_context.logError(error.NotFound);
             }
 
@@ -67,6 +87,16 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
                 }
             }
 
+            if (cancel_requirements_hook) |*hook| {
+                std.log.debug("Enabling cancel requirements hook...", .{});
+                if (hook.enable()) {
+                    std.log.info("Cancel requirements hook enabled.", .{});
+                } else |err| {
+                    sdk.misc.error_context.append("Failed to enable cancel requirements hook.", .{});
+                    sdk.misc.error_context.logError(err);
+                }
+            }
+
             if (render_targets_hook) |*hook| {
                 std.log.debug("Enabling render targets hook...", .{});
                 if (hook.enable()) {
@@ -94,6 +124,19 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
                 }
             }
 
+            std.log.debug("Destroying cancel requirements hook...", .{});
+            if (cancel_requirements_hook) |*hook| {
+                if (hook.destroy()) {
+                    std.log.info("Cancel requirements hook destroyed.", .{});
+                    cancel_requirements_hook = null;
+                } else |err| {
+                    sdk.misc.error_context.append("Failed to destroy cancel requirements hook.", .{});
+                    sdk.misc.error_context.logError(err);
+                }
+            } else {
+                std.log.debug("Nothing to destroy.", .{});
+            }
+
             std.log.debug("Destroying tick hook...", .{});
             if (tick_hook) |*hook| {
                 if (hook.destroy()) {
@@ -115,6 +158,7 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
         fn onT7Tick(param_1: u8, param_2: u32) callconv(.c) void {
             _ = active_hook_calls.fetchAdd(1, .seq_cst);
             defer _ = active_hook_calls.fetchSub(1, .seq_cst);
+            cancel_requirements = .{};
             tick_hook.?.original(param_1, param_2);
             onTick();
         }
@@ -122,8 +166,26 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
         fn onT8Tick(param_1: u64, param_2: u8, param_3: u8, param_4: u8) callconv(.c) void {
             _ = active_hook_calls.fetchAdd(1, .seq_cst);
             defer _ = active_hook_calls.fetchSub(1, .seq_cst);
+            cancel_requirements = .{};
             tick_hook.?.original(param_1, param_2, param_3, param_4);
             onTick();
+        }
+
+        fn onProcessCancelRequirement(
+            param_1: *const game.CancelRequirement,
+            param_2: i64,
+            param_3: i64,
+        ) callconv(.c) u64 {
+            _ = active_hook_calls.fetchAdd(1, .seq_cst);
+            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
+            const requirement = param_1.*;
+            switch (requirement) {
+                .throw_escape_1 => cancel_requirements.throw_escape_1 = true,
+                .throw_escape_2 => cancel_requirements.throw_escape_2 = true,
+                .throw_escape_1_plus_2 => cancel_requirements.throw_escape_1_plus_2 = true,
+                else => {},
+            }
+            return cancel_requirements_hook.?.original(param_1, param_2, param_3);
         }
 
         fn onSetRenderTargets(this: usize, param_1: usize, param_2: u32, param_3: usize) callconv(.c) void {
@@ -211,6 +273,120 @@ test "should call onTick and original when tick function is called in T8" {
     try testing.expectEqual(4, Tick.last_param_3);
     try testing.expectEqual(5, Tick.last_param_4);
     try testing.expectEqual(1, OnTick.times_called);
+}
+
+test "should set cancel_requirements and call original when process cancel requirement is called" {
+    const ProcessCancelRequirement = struct {
+        var times_called: usize = 0;
+        var last_param_1: ?*const game.CancelRequirement = null;
+        var last_param_2: ?i64 = null;
+        var last_param_3: ?i64 = null;
+        var return_value: u64 = 0;
+        fn call(param_1: *const game.CancelRequirement, param_2: i64, param_3: i64) callconv(.c) u64 {
+            times_called += 1;
+            last_param_1 = param_1;
+            last_param_2 = param_2;
+            last_param_3 = param_3;
+            return return_value;
+        }
+    };
+    const OnTick = struct {
+        fn call() void {}
+    };
+    const hooks = Hooks(.t8, OnTick.call);
+
+    try sdk.memory.hooking.init();
+    defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");
+    hooks.init(&.{ .processCancelRequirement = ProcessCancelRequirement.call });
+    defer hooks.deinit();
+
+    try testing.expectEqual(game.CancelRequirements{}, hooks.cancel_requirements);
+    try testing.expectEqual(0, ProcessCancelRequirement.times_called);
+
+    const throw_escape_1 = game.CancelRequirement.throw_escape_1;
+    ProcessCancelRequirement.return_value = 10;
+    const return_1 = ProcessCancelRequirement.call(&throw_escape_1, 11, 12);
+    try testing.expectEqual(game.CancelRequirements{
+        .throw_escape_1 = true,
+    }, hooks.cancel_requirements);
+    try testing.expectEqual(1, ProcessCancelRequirement.times_called);
+    try testing.expectEqual(&throw_escape_1, ProcessCancelRequirement.last_param_1);
+    try testing.expectEqual(11, ProcessCancelRequirement.last_param_2);
+    try testing.expectEqual(12, ProcessCancelRequirement.last_param_3);
+    try testing.expectEqual(return_1, 10);
+
+    const throw_escape_2 = game.CancelRequirement.throw_escape_2;
+    ProcessCancelRequirement.return_value = 20;
+    const return_2 = ProcessCancelRequirement.call(&throw_escape_2, 21, 22);
+    try testing.expectEqual(game.CancelRequirements{
+        .throw_escape_1 = true,
+        .throw_escape_2 = true,
+    }, hooks.cancel_requirements);
+    try testing.expectEqual(2, ProcessCancelRequirement.times_called);
+    try testing.expectEqual(&throw_escape_2, ProcessCancelRequirement.last_param_1);
+    try testing.expectEqual(21, ProcessCancelRequirement.last_param_2);
+    try testing.expectEqual(22, ProcessCancelRequirement.last_param_3);
+    try testing.expectEqual(return_2, 20);
+
+    const throw_escape_1_plus_2 = game.CancelRequirement.throw_escape_1_plus_2;
+    ProcessCancelRequirement.return_value = 30;
+    const return_3 = ProcessCancelRequirement.call(&throw_escape_1_plus_2, 31, 32);
+    try testing.expectEqual(game.CancelRequirements{
+        .throw_escape_1 = true,
+        .throw_escape_2 = true,
+        .throw_escape_1_plus_2 = true,
+    }, hooks.cancel_requirements);
+    try testing.expectEqual(3, ProcessCancelRequirement.times_called);
+    try testing.expectEqual(&throw_escape_1_plus_2, ProcessCancelRequirement.last_param_1);
+    try testing.expectEqual(31, ProcessCancelRequirement.last_param_2);
+    try testing.expectEqual(32, ProcessCancelRequirement.last_param_3);
+    try testing.expectEqual(return_3, 30);
+}
+
+test "should reset cancel_requirements when tick function is called in T7" {
+    const Tick = struct {
+        fn call(_: u8, _: u32) callconv(.c) void {}
+    };
+    const OnTick = struct {
+        fn call() void {}
+    };
+    const hooks = Hooks(.t7, OnTick.call);
+
+    try sdk.memory.hooking.init();
+    defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");
+    hooks.init(&.{ .tick = Tick.call });
+    defer hooks.deinit();
+
+    hooks.cancel_requirements = .{
+        .throw_escape_1 = true,
+        .throw_escape_2 = true,
+        .throw_escape_1_plus_2 = true,
+    };
+    Tick.call(123, 456);
+    try testing.expectEqual(game.CancelRequirements{}, hooks.cancel_requirements);
+}
+
+test "should reset cancel_requirements when tick function is called in T8" {
+    const Tick = struct {
+        fn call(_: u64, _: u8, _: u8, _: u8) callconv(.c) void {}
+    };
+    const OnTick = struct {
+        fn call() void {}
+    };
+    const hooks = Hooks(.t8, OnTick.call);
+
+    try sdk.memory.hooking.init();
+    defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");
+    hooks.init(&.{ .tick = Tick.call });
+    defer hooks.deinit();
+
+    hooks.cancel_requirements = .{
+        .throw_escape_1 = true,
+        .throw_escape_2 = true,
+        .throw_escape_1_plus_2 = true,
+    };
+    Tick.call(2, 3, 4, 5);
+    try testing.expectEqual(game.CancelRequirements{}, hooks.cancel_requirements);
 }
 
 test "should set depth_buffer_address to correct value and call original when setRenderTargets function is called in T8" {
