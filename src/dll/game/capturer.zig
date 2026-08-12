@@ -31,6 +31,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
             const secondary_player_info = game_memory.secondary_player_info.toConstPointer();
             const match = game_memory.match.toConstPointer();
             const ruleset = game_memory.ruleset.toConstPointer();
+            const cancel_requirements = game_memory.cancel_requirements.toConstPointer();
             const replay_mode = game_memory.replay_mode.toConstPointer();
             const main_player_id = captureMainPlayerId(main_player_info, secondary_player_info);
             const left_player_id = captureLeftPlayerId(player_1, player_2, main_player_id);
@@ -46,8 +47,8 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
             const match_player_1 = if (match) |m| &m.players[0] else null;
             const match_player_2 = if (match) |m| &m.players[1] else null;
             const players = [2]model.Player{
-                capturePlayer(&self.player_1_state, player_1, player_1_info, match_player_1),
-                capturePlayer(&self.player_2_state, player_2, player_2_info, match_player_2),
+                capturePlayer(&self.player_1_state, player_1, player_1_info, match_player_1, cancel_requirements),
+                capturePlayer(&self.player_2_state, player_2, player_2_info, match_player_2, cancel_requirements),
             };
             const camera_manager = game_memory.camera_manager.toConstPointer();
             const camera = captureCamera(camera_manager);
@@ -249,6 +250,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
             player: ?*const GamePlayer,
             info: ?*const game.PlayerInfo(game_id),
             match: ?*const game.MatchPlayer(game_id),
+            cancel_requirements: ?*const game.CancelRequirements,
         ) model.Player {
             updateRageState(state, player);
             const captured_player = model.Player{
@@ -267,6 +269,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                 .crushing = captureCrushing(player),
                 .can_interact = captureCanInteract(player),
                 .can_move = if (player) |p| p.can_move.toBool() else null,
+                .throw_escape = captureThrowEscape(player, cancel_requirements),
                 .input = captureInput(player),
                 .health = if (player) |p| p.health.convert().value else null,
                 .health_recover_limit = if (player) |p| switch (game_id) {
@@ -427,6 +430,34 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                 return false;
             }
             return player.cancel_flags.can_interact;
+        }
+
+        fn captureThrowEscape(
+            player_maybe: ?*const GamePlayer,
+            cancel_requirements_maybe: ?*const game.CancelRequirements,
+        ) ?model.ThrowEscape {
+            const player = player_maybe orelse return null;
+            const cancel_requirements = if (cancel_requirements_maybe) |c| c.* else return null;
+            switch (player.throw_escape) {
+                .none => return .{ .phase = .not_being_thrown },
+                .one, .two, .one_plus_two => {},
+                else => return null,
+            }
+            const is_inside_escape_window = cancel_requirements.throw_escape_1 or
+                cancel_requirements.throw_escape_2 or
+                cancel_requirements.throw_escape_1_plus_2;
+            return .{
+                .phase = switch (player.throw_escape_flags.escape_success) {
+                    true => .escape_success,
+                    false => switch (is_inside_escape_window) {
+                        true => .in_escape_window,
+                        false => .escape_window_over,
+                    },
+                },
+                .escapable_with_1 = cancel_requirements.throw_escape_1,
+                .escapable_with_2 = cancel_requirements.throw_escape_2,
+                .escapable_with_1_plus_2 = cancel_requirements.throw_escape_1_plus_2,
+            };
         }
 
         fn captureInput(player_maybe: ?*const GamePlayer) ?model.Input {
@@ -1856,6 +1887,69 @@ test "should capture can interact correctly" {
     try testing.expectEqual(true, frame_1.getPlayerById(.player_2).can_interact);
     try testing.expectEqual(false, frame_2.getPlayerById(.player_1).can_interact);
     try testing.expectEqual(null, frame_2.getPlayerById(.player_2).can_interact);
+}
+
+test "should capture throw escape correctly" {
+    const gm = game.Memory(.t8).testingInit;
+    var capturer = Capturer(.t8){};
+    const frame_1 = capturer.captureFrame(&gm(.{
+        .player_1 = &.{ .throw_escape = .none, .throw_escape_flags = .{ .escape_success = false } },
+        .player_2 = &.{ .throw_escape = .one_plus_two, .throw_escape_flags = .{ .escape_success = false } },
+        .cancel_requirements = &.{
+            .throw_escape_1 = false,
+            .throw_escape_2 = false,
+            .throw_escape_1_plus_2 = true,
+        },
+    }));
+    const frame_2 = capturer.captureFrame(&gm(.{
+        .player_1 = &.{ .throw_escape = .one, .throw_escape_flags = .{ .escape_success = false } },
+        .player_2 = &.{ .throw_escape = .two, .throw_escape_flags = .{ .escape_success = true } },
+        .cancel_requirements = &.{
+            .throw_escape_1 = true,
+            .throw_escape_2 = true,
+            .throw_escape_1_plus_2 = false,
+        },
+    }));
+    const frame_3 = capturer.captureFrame(&gm(.{
+        .player_1 = &.{ .throw_escape = .one_plus_two, .throw_escape_flags = .{ .escape_success = false } },
+        .player_2 = &.{ .throw_escape = @enumFromInt(0), .throw_escape_flags = .{ .escape_success = false } },
+        .cancel_requirements = &.{
+            .throw_escape_1 = false,
+            .throw_escape_2 = false,
+            .throw_escape_1_plus_2 = false,
+        },
+    }));
+    try testing.expectEqual(model.ThrowEscape{
+        .phase = .not_being_thrown,
+        .escapable_with_1 = false,
+        .escapable_with_2 = false,
+        .escapable_with_1_plus_2 = false,
+    }, frame_1.getPlayerById(.player_1).throw_escape);
+    try testing.expectEqual(model.ThrowEscape{
+        .phase = .in_escape_window,
+        .escapable_with_1 = false,
+        .escapable_with_2 = false,
+        .escapable_with_1_plus_2 = true,
+    }, frame_1.getPlayerById(.player_2).throw_escape);
+    try testing.expectEqual(model.ThrowEscape{
+        .phase = .in_escape_window,
+        .escapable_with_1 = true,
+        .escapable_with_2 = true,
+        .escapable_with_1_plus_2 = false,
+    }, frame_2.getPlayerById(.player_1).throw_escape);
+    try testing.expectEqual(model.ThrowEscape{
+        .phase = .escape_success,
+        .escapable_with_1 = true,
+        .escapable_with_2 = true,
+        .escapable_with_1_plus_2 = false,
+    }, frame_2.getPlayerById(.player_2).throw_escape);
+    try testing.expectEqual(model.ThrowEscape{
+        .phase = .escape_window_over,
+        .escapable_with_1 = false,
+        .escapable_with_2 = false,
+        .escapable_with_1_plus_2 = false,
+    }, frame_3.getPlayerById(.player_1).throw_escape);
+    try testing.expectEqual(null, frame_3.getPlayerById(.player_2).throw_escape);
 }
 
 test "should capture can move correctly" {
