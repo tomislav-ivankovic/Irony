@@ -8,7 +8,12 @@ const model = @import("../model/root.zig");
 pub const Core = struct {
     frame_detector: game.FrameDetector,
     capturer: game.Capturer(build_info.game),
-    throw_escape_detector: core.ThrowEscapeDetector,
+    throw_escape_detector: core.ThrowEscapeDetector(.{
+        .one_plus_two_mode = switch (build_info.game) {
+            .t7 => .strict,
+            .t8 => .forgiving,
+        },
+    }),
     hit_detector: core.HitDetector,
     move_detector: core.MoveDetector,
     move_measurer: core.MoveMeasurer,

@@ -451,7 +451,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                     true => .escape_success,
                     false => switch (is_inside_escape_window) {
                         true => .in_escape_window,
-                        false => .escape_window_over,
+                        false => .escape_fail,
                     },
                 },
                 .escapable_with_1 = cancel_requirements.throw_escape_1,
@@ -1962,7 +1962,7 @@ test "should capture throw escape correctly" {
         .escapable_with_1_plus_2 = false,
     }, frame_2.getPlayerById(.player_2).throw_escape);
     try testing.expectEqual(model.ThrowEscape{
-        .phase = .escape_window_over,
+        .phase = .escape_fail,
         .escapable_with_1 = false,
         .escapable_with_2 = false,
         .escapable_with_1_plus_2 = false,

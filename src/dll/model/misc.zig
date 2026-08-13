@@ -114,21 +114,6 @@ pub const Crushing = packed struct {
     power_crushing: bool = false,
 };
 
-pub const ThrowEscape = packed struct {
-    phase: ThrowEscapePhase,
-    escapable_with_1: bool = false,
-    escapable_with_2: bool = false,
-    escapable_with_1_plus_2: bool = false,
-};
-
-pub const ThrowEscapePhase = enum(u3) {
-    not_being_thrown = 0,
-    in_escape_window = 1,
-    escape_success = 2,
-    escape_window_over = 3,
-    wrong_escape_input = 4,
-};
-
 pub const Input = packed struct {
     forward: bool = false,
     back: bool = false,

@@ -105,6 +105,7 @@ test {
     _ = @import("dll/model/recording.zig");
     _ = @import("dll/model/settings.zig");
     _ = @import("dll/model/skeleton.zig");
+    _ = @import("dll/model/throw_escape.zig");
     _ = @import("dll/model/walls.zig");
 
     _ = @import("dll/rendering/lines.zig");
