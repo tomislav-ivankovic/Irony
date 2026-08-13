@@ -71,7 +71,7 @@ pub const CancelRequirements = packed struct {
     throw_escape_1_plus_2: bool = false,
 };
 
-pub const ThrowEscape = enum(u32) {
+pub const ThrowEscapeInput = enum(u32) {
     none = 0xC000001D,
     one = 0xD000001C,
     two = 0xE000001F,
@@ -357,7 +357,7 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x039C, "animation_total_frames", u32, &0),
             field(0x03D8, "hit_outcome", HitOutcome, &.none),
             field(0x0428, "simple_state", SimpleState, &.standing),
-            field(0x0450, "throw_escape", ThrowEscape, &.none),
+            field(0x0450, "correct_throw_escape_input", ThrowEscapeInput, &.none),
             field(0x049C, "throw_escape_flags", ThrowEscapeFlags, &.{}),
             field(0x06C0, "power_crushing", Bool, &.false),
             field(0x0788, "cancel_flags", CancelFlags, &.{}),
@@ -386,7 +386,7 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x05E0, "animation_total_frames", u32, &0),
             field(0x061C, "hit_outcome", HitOutcome, &.none),
             field(0x0670, "simple_state", SimpleState, &.standing),
-            field(0x0698, "throw_escape", ThrowEscape, &.none),
+            field(0x0698, "correct_throw_escape_input", ThrowEscapeInput, &.none),
             field(0x06F8, "throw_escape_flags", ThrowEscapeFlags, &.{}),
             field(0x0C1D, "power_crushing", Bool, &.false),
             field(0x0F81, "in_rage", Bool, &.false),

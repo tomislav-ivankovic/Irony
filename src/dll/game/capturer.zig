@@ -438,7 +438,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
         ) ?model.ThrowEscape {
             const player = player_maybe orelse return null;
             const cancel_requirements = if (cancel_requirements_maybe) |c| c.* else return null;
-            switch (player.throw_escape) {
+            switch (player.correct_throw_escape_input) {
                 .none => return .{ .phase = .not_being_thrown },
                 .one, .two, .one_plus_two => {},
                 else => return null,
@@ -1893,8 +1893,14 @@ test "should capture throw escape correctly" {
     const gm = game.Memory(.t8).testingInit;
     var capturer = Capturer(.t8){};
     const frame_1 = capturer.captureFrame(&gm(.{
-        .player_1 = &.{ .throw_escape = .none, .throw_escape_flags = .{ .escape_success = false } },
-        .player_2 = &.{ .throw_escape = .one_plus_two, .throw_escape_flags = .{ .escape_success = false } },
+        .player_1 = &.{
+            .correct_throw_escape_input = .none,
+            .throw_escape_flags = .{ .escape_success = false },
+        },
+        .player_2 = &.{
+            .correct_throw_escape_input = .one_plus_two,
+            .throw_escape_flags = .{ .escape_success = false },
+        },
         .cancel_requirements = &.{
             .throw_escape_1 = false,
             .throw_escape_2 = false,
@@ -1902,8 +1908,14 @@ test "should capture throw escape correctly" {
         },
     }));
     const frame_2 = capturer.captureFrame(&gm(.{
-        .player_1 = &.{ .throw_escape = .one, .throw_escape_flags = .{ .escape_success = false } },
-        .player_2 = &.{ .throw_escape = .two, .throw_escape_flags = .{ .escape_success = true } },
+        .player_1 = &.{
+            .correct_throw_escape_input = .one,
+            .throw_escape_flags = .{ .escape_success = false },
+        },
+        .player_2 = &.{
+            .correct_throw_escape_input = .two,
+            .throw_escape_flags = .{ .escape_success = true },
+        },
         .cancel_requirements = &.{
             .throw_escape_1 = true,
             .throw_escape_2 = true,
@@ -1911,8 +1923,14 @@ test "should capture throw escape correctly" {
         },
     }));
     const frame_3 = capturer.captureFrame(&gm(.{
-        .player_1 = &.{ .throw_escape = .one_plus_two, .throw_escape_flags = .{ .escape_success = false } },
-        .player_2 = &.{ .throw_escape = @enumFromInt(0), .throw_escape_flags = .{ .escape_success = false } },
+        .player_1 = &.{
+            .correct_throw_escape_input = .one_plus_two,
+            .throw_escape_flags = .{ .escape_success = false },
+        },
+        .player_2 = &.{
+            .correct_throw_escape_input = @enumFromInt(0),
+            .throw_escape_flags = .{ .escape_success = false },
+        },
         .cancel_requirements = &.{
             .throw_escape_1 = false,
             .throw_escape_2 = false,
