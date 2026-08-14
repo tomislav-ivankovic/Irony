@@ -363,6 +363,50 @@ pub const Details = struct {
         null,
         drawYesNo,
     ) = .{},
+    throw_escape_phase: Row(
+        "Throw Escape Phase",
+        \\One of the following:
+        \\In Escape Window - Player is able input buttons to escape the throw.
+        \\Escape Success - Player succeeded in escaping the throw.
+        \\Escape Fail - Player failed in escaping the throw.
+    ,
+        model.ThrowEscapePhase,
+        model.ThrowEscapePhase.not_being_thrown,
+        drawThrowEscapePhase,
+    ) = .{},
+    correct_throw_escape: Row(
+        "Correct Throw Escape",
+        \\One of the following:
+        \\1 - The current throw can be escaped by inputting only left punch.
+        \\2 - The current throw can be escaped by inputting only right punch.
+        \\1+2 - The current throw can be escaped by inputting left and right punch simultaneously.
+        \\1 or 2 - The current throw can be escaped by inputting ether only left punch or only right punch.
+    ,
+        model.ThrowEscapeInputs,
+        .{},
+        drawThrowEscapeInputs,
+    ) = .{},
+    attempted_throw_escape: Row(
+        "Attempted Throw Escape",
+        \\One of the following:
+        \\1 - Player attempted to escape the throw by inputting only left punch.
+        \\2 - Player attempted to escape the throw by inputting only right punch.
+        \\1+2 - Player attempted to escape the throw by inputting left and right punch simultaneously.
+    ,
+        model.ThrowEscapeInput,
+        model.ThrowEscapeInput.none,
+        drawThrowEscapeInput,
+    ) = .{},
+    throw_escape_attempt_timing: Row(
+        "Throw Escape Attempt Timing",
+        \\One of the following:
+        \\On Time - Player inputted the escape attempt inside the escape window.
+        \\Late - Player inputted the escape attempt after the escape window ended.
+    ,
+        model.ThrowEscapeTiming,
+        null,
+        drawThrowEscapeTiming,
+    ) = .{},
     input: Row(
         "Input",
         \\Input that is being held down by the player at the current frame.
@@ -497,6 +541,32 @@ pub const Details = struct {
         self.crushing.processFrame(s, c1.crushing, c2.crushing);
         self.can_interact.processFrame(s, c1.can_interact, c2.can_interact);
         self.can_move.processFrame(s, c1.can_move, c2.can_move);
+        self.throw_escape_phase.processFrame(
+            s,
+            if (c1.throw_escape) |*t| t.phase else null,
+            if (c2.throw_escape) |*t| t.phase else null,
+        );
+        self.correct_throw_escape.processFrame(
+            s,
+            if (c1.throw_escape) |*t| t.correct_inputs else null,
+            if (c2.throw_escape) |*t| t.correct_inputs else null,
+        );
+        self.attempted_throw_escape.processFrame(
+            s,
+            if (c1.throw_escape) |*t| t.attempted_input else null,
+            if (c2.throw_escape) |*t| t.attempted_input else null,
+        );
+        self.throw_escape_attempt_timing.processFrame(
+            s,
+            if (c1.throw_escape) |*t| switch (t.attempted_input) {
+                .none => null,
+                else => t.attempt_timing,
+            } else null,
+            if (c2.throw_escape) |*t| switch (t.attempted_input) {
+                .none => null,
+                else => t.attempt_timing,
+            } else null,
+        );
         self.input.processFrame(s, c1.input, c2.input);
         self.distance_to_opponent.processFrame(s, c1.getDistanceTo(c2), c2.getDistanceTo(c1));
         self.angle_to_opponent.processFrame(s, c1.getAngleTo(c2), c2.getAngleTo(c1));
@@ -910,6 +980,68 @@ fn drawBlocking(value: model.Blocking, alpha: f32) void {
         .fully_blocking_lows => "Fully Lows",
     };
     drawText(text, alpha);
+}
+
+fn drawThrowEscapePhase(value: model.ThrowEscapePhase, alpha: f32) void {
+    const text = switch (value) {
+        .not_being_thrown => empty_value_string,
+        .in_escape_window => "In Escape Window",
+        .escape_success => "Escape Success",
+        .escape_fail => "Escape Fail",
+    };
+    drawText(text, alpha);
+}
+
+fn drawThrowEscapeInput(value: model.ThrowEscapeInput, alpha: f32) void {
+    const text = switch (value) {
+        .none => empty_value_string,
+        .one => "1",
+        .two => "2",
+        .one_plus_two => "1+2",
+    };
+    drawText(text, alpha);
+}
+
+fn drawThrowEscapeTiming(value: model.ThrowEscapeTiming, alpha: f32) void {
+    const text = switch (value) {
+        .on_time => "On Time",
+        .late => "Late",
+    };
+    drawText(text, alpha);
+}
+
+fn drawThrowEscapeInputs(value: model.ThrowEscapeInputs, alpha: f32) void {
+    var buffer: [string_buffer_size]u8 = [1]u8{0} ** string_buffer_size;
+    var writer = std.Io.Writer.fixed(&buffer);
+    var is_first = true;
+    if (value.one) {
+        if (!is_first) {
+            writer.writeAll(" or ") catch {};
+        }
+        writer.writeByte('1') catch {};
+        is_first = false;
+    }
+    if (value.two) {
+        if (!is_first) {
+            writer.writeAll(" or ") catch {};
+        }
+        writer.writeByte('2') catch {};
+        is_first = false;
+    }
+    if (value.one_plus_two) {
+        if (!is_first) {
+            writer.writeAll(" or ") catch {};
+        }
+        writer.writeAll("1+2") catch {};
+        is_first = false;
+    }
+    if (writer.end == 0) {
+        drawText(empty_value_string, alpha);
+    } else if (writer.end >= buffer.len - 1) {
+        drawText(error_string, alpha);
+    } else {
+        drawText(buffer[0..writer.end :0], alpha);
+    }
 }
 
 fn drawCrushing(value: model.Crushing, alpha: f32) void {
@@ -2763,6 +2895,212 @@ test "should draw can interact correctly" {
             ctx.yield(1);
             try ctx.expectItemExists("cell_1/Yes");
             try ctx.expectItemExists("cell_2/No");
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw throw escape phase correctly" {
+    const Test = struct {
+        var settings = model.DetailsSettings{ .rows_enabled = .{} };
+        var details = Details{};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            details.draw(&settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window/table/Throw Escape Phase");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .throw_escape = null },
+                .{ .throw_escape = null },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/---");
+            try ctx.expectItemExists("cell_2/---");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .throw_escape = .{ .phase = .not_being_thrown } },
+                .{ .throw_escape = .{ .phase = .in_escape_window } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/---");
+            try ctx.expectItemExists("cell_2/In Escape Window");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .throw_escape = .{ .phase = .escape_success } },
+                .{ .throw_escape = .{ .phase = .escape_fail } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/Escape Success");
+            try ctx.expectItemExists("cell_2/Escape Fail");
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw correct throw escape correctly" {
+    const Test = struct {
+        var settings = model.DetailsSettings{ .rows_enabled = .{} };
+        var details = Details{};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            details.draw(&settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window/table/Correct Throw Escape");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .throw_escape = null },
+                .{ .throw_escape = .{
+                    .phase = .in_escape_window,
+                    .correct_inputs = .{ .one = false, .two = false, .one_plus_two = false },
+                } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/---");
+            try ctx.expectItemExists("cell_2/---");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .throw_escape = .{
+                    .phase = .in_escape_window,
+                    .correct_inputs = .{ .one = true, .two = false, .one_plus_two = false },
+                } },
+                .{ .throw_escape = .{
+                    .phase = .in_escape_window,
+                    .correct_inputs = .{ .one = false, .two = true, .one_plus_two = false },
+                } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/1");
+            try ctx.expectItemExists("cell_2/2");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .throw_escape = .{
+                    .phase = .in_escape_window,
+                    .correct_inputs = .{ .one = false, .two = false, .one_plus_two = true },
+                } },
+                .{ .throw_escape = .{
+                    .phase = .in_escape_window,
+                    .correct_inputs = .{ .one = true, .two = true, .one_plus_two = false },
+                } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/1+2");
+            try ctx.expectItemExists("cell_2/1 or 2");
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw attempted throw escape correctly" {
+    const Test = struct {
+        var settings = model.DetailsSettings{ .rows_enabled = .{} };
+        var details = Details{};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            details.draw(&settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window/table/Attempted Throw Escape");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .throw_escape = null },
+                .{ .throw_escape = .{
+                    .phase = .in_escape_window,
+                    .attempted_input = .none,
+                } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/---");
+            try ctx.expectItemExists("cell_2/---");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .throw_escape = .{
+                    .phase = .in_escape_window,
+                    .attempted_input = .one,
+                } },
+                .{ .throw_escape = .{
+                    .phase = .in_escape_window,
+                    .attempted_input = .two,
+                } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/1");
+            try ctx.expectItemExists("cell_2/2");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .throw_escape = .{
+                    .phase = .in_escape_window,
+                    .attempted_input = .one_plus_two,
+                } },
+                .{ .throw_escape = .{
+                    .phase = .in_escape_window,
+                    .attempted_input = .one_plus_two,
+                } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/1+2");
+            try ctx.expectItemExists("cell_2/1+2");
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw throw escape attempt timing correctly" {
+    const Test = struct {
+        var settings = model.DetailsSettings{ .rows_enabled = .{} };
+        var details = Details{};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            details.draw(&settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window/table/Throw Escape Attempt Timing");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .throw_escape = null },
+                .{ .throw_escape = .{
+                    .phase = .in_escape_window,
+                    .attempted_input = .none,
+                    .attempt_timing = .on_time,
+                } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/---");
+            try ctx.expectItemExists("cell_2/---");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .throw_escape = .{
+                    .phase = .in_escape_window,
+                    .attempted_input = .one,
+                    .attempt_timing = .on_time,
+                } },
+                .{ .throw_escape = .{
+                    .phase = .in_escape_window,
+                    .attempted_input = .two,
+                    .attempt_timing = .late,
+                } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/On Time");
+            try ctx.expectItemExists("cell_2/Late");
         }
     };
     const context = try sdk.ui.getTestingContext();
