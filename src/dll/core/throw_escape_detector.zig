@@ -36,7 +36,7 @@ pub fn ThrowEscapeDetector(comptime config: ThrowEscapeDetectorConfig) type {
 
         fn detectSide(state: *PlayerState, player: *model.Player) void {
             prolongEscapeSuccess(state, player);
-            prolongEscapableWith(state, player);
+            prolongCorrectInputs(state, player);
             processInput(state, player);
             updatePreviousState(state, player);
         }
@@ -56,22 +56,21 @@ pub fn ThrowEscapeDetector(comptime config: ThrowEscapeDetectorConfig) type {
             }
         }
 
-        fn prolongEscapableWith(state: *const PlayerState, player: *model.Player) void {
+        fn prolongCorrectInputs(state: *const PlayerState, player: *model.Player) void {
             const escape = if (player.throw_escape) |*e| e else return;
             const previous_escape = state.previous_escape orelse return;
-            switch (escape.phase) {
-                .not_being_thrown => {
-                    escape.escapable_with_1 = false;
-                    escape.escapable_with_2 = false;
-                    escape.escapable_with_1_plus_2 = false;
+            escape.correct_inputs = switch (escape.phase) {
+                .not_being_thrown => .{
+                    .one = false,
+                    .two = false,
+                    .one_plus_two = false,
                 },
-                .in_escape_window, .escape_success, .escape_fail => {
-                    escape.escapable_with_1 = escape.escapable_with_1 or previous_escape.escapable_with_1;
-                    escape.escapable_with_2 = escape.escapable_with_2 or previous_escape.escapable_with_2;
-                    escape.escapable_with_1_plus_2 = escape.escapable_with_1_plus_2 or
-                        previous_escape.escapable_with_1_plus_2;
+                .in_escape_window, .escape_success, .escape_fail => .{
+                    .one = escape.correct_inputs.one or previous_escape.correct_inputs.one,
+                    .two = escape.correct_inputs.two or previous_escape.correct_inputs.two,
+                    .one_plus_two = escape.correct_inputs.one_plus_two or previous_escape.correct_inputs.one_plus_two,
                 },
-            }
+            };
         }
 
         fn processInput(state: *PlayerState, player: *model.Player) void {
@@ -239,7 +238,7 @@ test "should prolong escape success into the escape animation" {
     try testing.expectEqual(model.ThrowEscapePhase.not_being_thrown, frame.players[0].throw_escape.?.phase);
 }
 
-test "should prolong escapable with flags until the end of animation when escape fails" {
+test "should prolong correct inputs until the end of animation when escape fails" {
     var frame = model.Frame{};
     var detector = ThrowEscapeDetector(.{ .one_plus_two_mode = .strict }){};
 
@@ -248,105 +247,99 @@ test "should prolong escapable with flags until the end of animation when escape
             .animation_id = 1,
             .throw_escape = .{
                 .phase = .not_being_thrown,
-                .escapable_with_1 = false,
-                .escapable_with_2 = false,
-                .escapable_with_1_plus_2 = false,
+                .correct_inputs = .{ .one = false, .two = false, .one_plus_two = false },
             },
         }, .{} },
     };
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.escapable_with_1);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.escapable_with_2);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.escapable_with_1_plus_2);
+    try testing.expectEqual(
+        model.ThrowEscapeInputs{ .one = false, .two = false, .one_plus_two = false },
+        frame.players[0].throw_escape.?.correct_inputs,
+    );
 
     frame = .{ // first frame of escape window
         .players = .{ .{
             .animation_id = 2,
             .throw_escape = .{
                 .phase = .in_escape_window,
-                .escapable_with_1 = true,
-                .escapable_with_2 = true,
-                .escapable_with_1_plus_2 = false,
+                .correct_inputs = .{ .one = true, .two = true, .one_plus_two = false },
             },
         }, .{} },
     };
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
-    try testing.expectEqual(true, frame.players[0].throw_escape.?.escapable_with_1);
-    try testing.expectEqual(true, frame.players[0].throw_escape.?.escapable_with_2);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.escapable_with_1_plus_2);
+    try testing.expectEqual(
+        model.ThrowEscapeInputs{ .one = true, .two = true, .one_plus_two = false },
+        frame.players[0].throw_escape.?.correct_inputs,
+    );
 
     frame = .{ // one more frame inside escape window
         .players = .{ .{
             .animation_id = 2,
             .throw_escape = .{
                 .phase = .in_escape_window,
-                .escapable_with_1 = true,
-                .escapable_with_2 = true,
-                .escapable_with_1_plus_2 = false,
+                .correct_inputs = .{ .one = true, .two = true, .one_plus_two = false },
             },
         }, .{} },
     };
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
-    try testing.expectEqual(true, frame.players[0].throw_escape.?.escapable_with_1);
-    try testing.expectEqual(true, frame.players[0].throw_escape.?.escapable_with_2);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.escapable_with_1_plus_2);
+    try testing.expectEqual(
+        model.ThrowEscapeInputs{ .one = true, .two = true, .one_plus_two = false },
+        frame.players[0].throw_escape.?.correct_inputs,
+    );
 
     frame = .{ // escape window ends
         .players = .{ .{
             .animation_id = 2,
             .throw_escape = .{
                 .phase = .escape_fail,
-                .escapable_with_1 = false,
-                .escapable_with_2 = false,
-                .escapable_with_1_plus_2 = false,
+                .correct_inputs = .{ .one = false, .two = false, .one_plus_two = false },
             },
         }, .{} },
     };
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
-    try testing.expectEqual(true, frame.players[0].throw_escape.?.escapable_with_1);
-    try testing.expectEqual(true, frame.players[0].throw_escape.?.escapable_with_2);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.escapable_with_1_plus_2);
+    try testing.expectEqual(
+        model.ThrowEscapeInputs{ .one = true, .two = true, .one_plus_two = false },
+        frame.players[0].throw_escape.?.correct_inputs,
+    );
 
     frame = .{ // one more frame outside escape window
         .players = .{ .{
             .animation_id = 2,
             .throw_escape = .{
                 .phase = .escape_fail,
-                .escapable_with_1 = false,
-                .escapable_with_2 = false,
-                .escapable_with_1_plus_2 = false,
+                .correct_inputs = .{ .one = false, .two = false, .one_plus_two = false },
             },
         }, .{} },
     };
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
-    try testing.expectEqual(true, frame.players[0].throw_escape.?.escapable_with_1);
-    try testing.expectEqual(true, frame.players[0].throw_escape.?.escapable_with_2);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.escapable_with_1_plus_2);
+    try testing.expectEqual(
+        model.ThrowEscapeInputs{ .one = true, .two = true, .one_plus_two = false },
+        frame.players[0].throw_escape.?.correct_inputs,
+    );
 
     frame = .{ // throw animation ends
         .players = .{ .{
             .animation_id = 3,
             .throw_escape = .{
                 .phase = .not_being_thrown,
-                .escapable_with_1 = false,
-                .escapable_with_2 = false,
-                .escapable_with_1_plus_2 = false,
+                .correct_inputs = .{ .one = false, .two = false, .one_plus_two = false },
             },
         }, .{} },
     };
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.escapable_with_1);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.escapable_with_2);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.escapable_with_1_plus_2);
+    try testing.expectEqual(
+        model.ThrowEscapeInputs{ .one = false, .two = false, .one_plus_two = false },
+        frame.players[0].throw_escape.?.correct_inputs,
+    );
 }
 
-test "should prolong escapable with flags until the end of escape animation when escape succeeds" {
+test "should prolong correct inputs until the end of escape animation when escape succeeds" {
     var frame = model.Frame{};
     var detector = ThrowEscapeDetector(.{ .one_plus_two_mode = .strict }){};
 
@@ -355,102 +348,96 @@ test "should prolong escapable with flags until the end of escape animation when
             .animation_id = 1,
             .throw_escape = .{
                 .phase = .not_being_thrown,
-                .escapable_with_1 = false,
-                .escapable_with_2 = false,
-                .escapable_with_1_plus_2 = false,
+                .correct_inputs = .{ .one = false, .two = false, .one_plus_two = false },
             },
         } },
     };
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.escapable_with_1);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.escapable_with_2);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.escapable_with_1_plus_2);
+    try testing.expectEqual(
+        model.ThrowEscapeInputs{ .one = false, .two = false, .one_plus_two = false },
+        frame.players[1].throw_escape.?.correct_inputs,
+    );
 
     frame = .{ // first frame of escape window
         .players = .{ .{}, .{
             .animation_id = 2,
             .throw_escape = .{
                 .phase = .in_escape_window,
-                .escapable_with_1 = false,
-                .escapable_with_2 = false,
-                .escapable_with_1_plus_2 = true,
+                .correct_inputs = .{ .one = false, .two = false, .one_plus_two = true },
             },
         } },
     };
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.escapable_with_1);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.escapable_with_2);
-    try testing.expectEqual(true, frame.players[1].throw_escape.?.escapable_with_1_plus_2);
+    try testing.expectEqual(
+        model.ThrowEscapeInputs{ .one = false, .two = false, .one_plus_two = true },
+        frame.players[1].throw_escape.?.correct_inputs,
+    );
 
     frame = .{ // escape succeeds
         .players = .{ .{}, .{
             .animation_id = 2,
             .throw_escape = .{
                 .phase = .escape_success,
-                .escapable_with_1 = false,
-                .escapable_with_2 = false,
-                .escapable_with_1_plus_2 = true,
+                .correct_inputs = .{ .one = false, .two = false, .one_plus_two = true },
             },
         } },
     };
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.escapable_with_1);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.escapable_with_2);
-    try testing.expectEqual(true, frame.players[1].throw_escape.?.escapable_with_1_plus_2);
+    try testing.expectEqual(
+        model.ThrowEscapeInputs{ .one = false, .two = false, .one_plus_two = true },
+        frame.players[1].throw_escape.?.correct_inputs,
+    );
 
     frame = .{ // first frame of escape animation
         .players = .{ .{}, .{
             .animation_id = 3,
             .throw_escape = .{
                 .phase = .not_being_thrown,
-                .escapable_with_1 = false,
-                .escapable_with_2 = false,
-                .escapable_with_1_plus_2 = false,
+                .correct_inputs = .{ .one = false, .two = false, .one_plus_two = false },
             },
         } },
     };
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.escapable_with_1);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.escapable_with_2);
-    try testing.expectEqual(true, frame.players[1].throw_escape.?.escapable_with_1_plus_2);
+    try testing.expectEqual(
+        model.ThrowEscapeInputs{ .one = false, .two = false, .one_plus_two = true },
+        frame.players[1].throw_escape.?.correct_inputs,
+    );
 
     frame = .{ // one more frame of escape animation
         .players = .{ .{}, .{
             .animation_id = 3,
             .throw_escape = .{
                 .phase = .not_being_thrown,
-                .escapable_with_1 = false,
-                .escapable_with_2 = false,
-                .escapable_with_1_plus_2 = false,
+                .correct_inputs = .{ .one = false, .two = false, .one_plus_two = false },
             },
         } },
     };
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.escapable_with_1);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.escapable_with_2);
-    try testing.expectEqual(true, frame.players[1].throw_escape.?.escapable_with_1_plus_2);
+    try testing.expectEqual(
+        model.ThrowEscapeInputs{ .one = false, .two = false, .one_plus_two = true },
+        frame.players[1].throw_escape.?.correct_inputs,
+    );
 
     frame = .{ // escape animation ends
         .players = .{ .{}, .{
             .animation_id = 4,
             .throw_escape = .{
                 .phase = .not_being_thrown,
-                .escapable_with_1 = false,
-                .escapable_with_2 = false,
-                .escapable_with_1_plus_2 = false,
+                .correct_inputs = .{ .one = false, .two = false, .one_plus_two = false },
             },
         } },
     };
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.escapable_with_1);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.escapable_with_2);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.escapable_with_1_plus_2);
+    try testing.expectEqual(
+        model.ThrowEscapeInputs{ .one = false, .two = false, .one_plus_two = false },
+        frame.players[1].throw_escape.?.correct_inputs,
+    );
 }
 
 test "should correctly detect attempted input in strict one plus two mode" {

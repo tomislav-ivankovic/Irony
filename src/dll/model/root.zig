@@ -61,6 +61,7 @@ pub const SkeletonPoint = @import("skeleton.zig").SkeletonPoint;
 pub const Skeleton = @import("skeleton.zig").Skeleton;
 pub const ThrowEscapePhase = @import("throw_escape.zig").ThrowEscapePhase;
 pub const ThrowEscapeInput = @import("throw_escape.zig").ThrowEscapeInput;
+pub const ThrowEscapeInputs = @import("throw_escape.zig").ThrowEscapeInputs;
 pub const ThrowEscape = @import("throw_escape.zig").ThrowEscape;
 pub const Wall = @import("walls.zig").Wall;
 pub const WallProperties = @import("walls.zig").WallProperties;

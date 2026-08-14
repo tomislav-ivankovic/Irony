@@ -454,9 +454,11 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                         false => .escape_fail,
                     },
                 },
-                .escapable_with_1 = cancel_requirements.throw_escape_1,
-                .escapable_with_2 = cancel_requirements.throw_escape_2,
-                .escapable_with_1_plus_2 = cancel_requirements.throw_escape_1_plus_2,
+                .correct_inputs = .{
+                    .one = cancel_requirements.throw_escape_1,
+                    .two = cancel_requirements.throw_escape_2,
+                    .one_plus_two = cancel_requirements.throw_escape_1_plus_2,
+                },
             };
         }
 
@@ -1939,33 +1941,23 @@ test "should capture throw escape correctly" {
     }));
     try testing.expectEqual(model.ThrowEscape{
         .phase = .not_being_thrown,
-        .escapable_with_1 = false,
-        .escapable_with_2 = false,
-        .escapable_with_1_plus_2 = false,
+        .correct_inputs = .{ .one = false, .two = false, .one_plus_two = false },
     }, frame_1.getPlayerById(.player_1).throw_escape);
     try testing.expectEqual(model.ThrowEscape{
         .phase = .in_escape_window,
-        .escapable_with_1 = false,
-        .escapable_with_2 = false,
-        .escapable_with_1_plus_2 = true,
+        .correct_inputs = .{ .one = false, .two = false, .one_plus_two = true },
     }, frame_1.getPlayerById(.player_2).throw_escape);
     try testing.expectEqual(model.ThrowEscape{
         .phase = .in_escape_window,
-        .escapable_with_1 = true,
-        .escapable_with_2 = true,
-        .escapable_with_1_plus_2 = false,
+        .correct_inputs = .{ .one = true, .two = true, .one_plus_two = false },
     }, frame_2.getPlayerById(.player_1).throw_escape);
     try testing.expectEqual(model.ThrowEscape{
         .phase = .escape_success,
-        .escapable_with_1 = true,
-        .escapable_with_2 = true,
-        .escapable_with_1_plus_2 = false,
+        .correct_inputs = .{ .one = true, .two = true, .one_plus_two = false },
     }, frame_2.getPlayerById(.player_2).throw_escape);
     try testing.expectEqual(model.ThrowEscape{
         .phase = .escape_fail,
-        .escapable_with_1 = false,
-        .escapable_with_2 = false,
-        .escapable_with_1_plus_2 = false,
+        .correct_inputs = .{ .one = false, .two = false, .one_plus_two = false },
     }, frame_3.getPlayerById(.player_1).throw_escape);
     try testing.expectEqual(null, frame_3.getPlayerById(.player_2).throw_escape);
 }

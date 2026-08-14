@@ -15,22 +15,26 @@ pub const ThrowEscapeInput = enum(u2) {
     one_plus_two = 3,
 };
 
+pub const ThrowEscapeInputs = packed struct(u3) {
+    one: bool = false,
+    two: bool = false,
+    one_plus_two: bool = false,
+};
+
 pub const ThrowEscape = packed struct(u8) {
     phase: ThrowEscapePhase,
     attempted_input: ThrowEscapeInput = .none,
     attempted_in_time: bool = false,
-    escapable_with_1: bool = false,
-    escapable_with_2: bool = false,
-    escapable_with_1_plus_2: bool = false,
+    correct_inputs: ThrowEscapeInputs = .{},
 
     const Self = @This();
 
     pub fn isAttemptedWithCorrectInput(self: *const Self) bool {
         return switch (self.attempted_input) {
             .none => false,
-            .one => self.escapable_with_1,
-            .two => self.escapable_with_2,
-            .one_plus_two => self.escapable_with_1_plus_2,
+            .one => self.correct_inputs.one,
+            .two => self.correct_inputs.two,
+            .one_plus_two => self.correct_inputs.one_plus_two,
         };
     }
 };
@@ -41,50 +45,64 @@ test "ThrowEscape.isAttemptedWithCorrectInput should return correct value" {
     try testing.expectEqual(false, (ThrowEscape{
         .phase = .in_escape_window,
         .attempted_input = .none,
-        .escapable_with_1 = true,
-        .escapable_with_2 = true,
-        .escapable_with_1_plus_2 = true,
+        .correct_inputs = .{
+            .one = true,
+            .two = true,
+            .one_plus_two = true,
+        },
     }).isAttemptedWithCorrectInput());
     try testing.expectEqual(true, (ThrowEscape{
         .phase = .in_escape_window,
         .attempted_input = .one,
-        .escapable_with_1 = true,
-        .escapable_with_2 = true,
-        .escapable_with_1_plus_2 = false,
+        .correct_inputs = .{
+            .one = true,
+            .two = true,
+            .one_plus_two = false,
+        },
     }).isAttemptedWithCorrectInput());
     try testing.expectEqual(true, (ThrowEscape{
         .phase = .in_escape_window,
         .attempted_input = .two,
-        .escapable_with_1 = true,
-        .escapable_with_2 = true,
-        .escapable_with_1_plus_2 = false,
+        .correct_inputs = .{
+            .one = true,
+            .two = true,
+            .one_plus_two = false,
+        },
     }).isAttemptedWithCorrectInput());
     try testing.expectEqual(false, (ThrowEscape{
         .phase = .in_escape_window,
         .attempted_input = .one_plus_two,
-        .escapable_with_1 = true,
-        .escapable_with_2 = true,
-        .escapable_with_1_plus_2 = false,
+        .correct_inputs = .{
+            .one = true,
+            .two = true,
+            .one_plus_two = false,
+        },
     }).isAttemptedWithCorrectInput());
     try testing.expectEqual(false, (ThrowEscape{
         .phase = .in_escape_window,
         .attempted_input = .one,
-        .escapable_with_1 = false,
-        .escapable_with_2 = false,
-        .escapable_with_1_plus_2 = true,
+        .correct_inputs = .{
+            .one = false,
+            .two = false,
+            .one_plus_two = true,
+        },
     }).isAttemptedWithCorrectInput());
     try testing.expectEqual(false, (ThrowEscape{
         .phase = .in_escape_window,
         .attempted_input = .two,
-        .escapable_with_1 = false,
-        .escapable_with_2 = false,
-        .escapable_with_1_plus_2 = true,
+        .correct_inputs = .{
+            .one = false,
+            .two = false,
+            .one_plus_two = true,
+        },
     }).isAttemptedWithCorrectInput());
     try testing.expectEqual(true, (ThrowEscape{
         .phase = .in_escape_window,
         .attempted_input = .one_plus_two,
-        .escapable_with_1 = false,
-        .escapable_with_2 = false,
-        .escapable_with_1_plus_2 = true,
+        .correct_inputs = .{
+            .one = false,
+            .two = false,
+            .one_plus_two = true,
+        },
     }).isAttemptedWithCorrectInput());
 }
