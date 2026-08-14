@@ -38,6 +38,7 @@ pub fn ThrowEscapeDetector(comptime config: ThrowEscapeDetectorConfig) type {
             prolongEscapeSuccess(state, player);
             prolongCorrectInputs(state, player);
             processInput(state, player);
+            setAttemptTiming(state, player);
             updatePreviousState(state, player);
         }
 
@@ -77,11 +78,9 @@ pub fn ThrowEscapeDetector(comptime config: ThrowEscapeDetectorConfig) type {
             const input = player.input orelse return;
             const escape = if (player.throw_escape) |*e| e else return;
             const previous_input = state.previous_input orelse return;
-            const previous_escape = state.previous_escape orelse return;
             if (escape.phase == .not_being_thrown) {
                 state.input_state = .none;
                 escape.attempted_input = .none;
-                escape.attempted_in_time = false;
                 return;
             }
             switch (state.input_state) {
@@ -133,15 +132,22 @@ pub fn ThrowEscapeDetector(comptime config: ThrowEscapeDetectorConfig) type {
                 .confirmed_2 => .two,
                 .confirmed_1_plus_2 => .one_plus_two,
             };
-            if (previous_escape.attempted_input == .none and escape.attempted_input != .none) {
-                escape.attempted_in_time = switch (escape.phase) {
-                    .not_being_thrown => unreachable,
-                    .in_escape_window, .escape_success => true,
-                    .escape_fail => false,
-                };
-            } else {
-                escape.attempted_in_time = previous_escape.attempted_in_time;
+        }
+
+        fn setAttemptTiming(state: *PlayerState, player: *model.Player) void {
+            const escape = if (player.throw_escape) |*e| e else return;
+            const previous_escape = state.previous_escape orelse return;
+            if (escape.phase == .not_being_thrown) {
+                escape.attempt_timing = .on_time;
+                return;
             }
+            escape.attempt_timing = switch (previous_escape.attempted_input) {
+                .none => switch (escape.phase) {
+                    .not_being_thrown, .in_escape_window, .escape_success => .on_time,
+                    .escape_fail => .late,
+                },
+                .one, .two, .one_plus_two => previous_escape.attempt_timing,
+            };
         }
 
         fn updatePreviousState(state: *PlayerState, player: *const model.Player) void {
@@ -454,7 +460,6 @@ test "should correctly detect attempted input in strict one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.attempted_in_time);
 
     frame = .{ // first frame of escape window
         .players = .{ .{
@@ -466,7 +471,6 @@ test "should correctly detect attempted input in strict one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.attempted_in_time);
 
     frame = .{ // pressing button 4
         .players = .{ .{
@@ -478,7 +482,6 @@ test "should correctly detect attempted input in strict one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.attempted_in_time);
 
     frame = .{ // releasing button 1
         .players = .{ .{
@@ -490,7 +493,6 @@ test "should correctly detect attempted input in strict one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.attempted_in_time);
 
     frame = .{ // pressing button 2
         .players = .{ .{
@@ -502,7 +504,6 @@ test "should correctly detect attempted input in strict one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.two, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(true, frame.players[0].throw_escape.?.attempted_in_time);
 
     frame = .{ // pressing button 1
         .players = .{ .{
@@ -514,7 +515,6 @@ test "should correctly detect attempted input in strict one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.two, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(true, frame.players[0].throw_escape.?.attempted_in_time);
 
     frame = .{ // releasing everything
         .players = .{ .{
@@ -526,7 +526,6 @@ test "should correctly detect attempted input in strict one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.two, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(true, frame.players[0].throw_escape.?.attempted_in_time);
 
     frame = .{ // switching to escape animation
         .players = .{ .{
@@ -538,7 +537,6 @@ test "should correctly detect attempted input in strict one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.two, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(true, frame.players[0].throw_escape.?.attempted_in_time);
 
     frame = .{ // one more frame in escape animation
         .players = .{ .{
@@ -550,7 +548,6 @@ test "should correctly detect attempted input in strict one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.two, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(true, frame.players[0].throw_escape.?.attempted_in_time);
 
     frame = .{ // escape animation ends
         .players = .{ .{
@@ -562,7 +559,6 @@ test "should correctly detect attempted input in strict one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.attempted_in_time);
 }
 
 test "should correctly detect attempted input in forgiving one plus two mode" {
@@ -579,7 +575,6 @@ test "should correctly detect attempted input in forgiving one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.attempted_in_time);
 
     frame = .{ // first frame of escape window
         .players = .{ .{}, .{
@@ -591,7 +586,6 @@ test "should correctly detect attempted input in forgiving one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.attempted_in_time);
 
     frame = .{ // pressing button 4
         .players = .{ .{}, .{
@@ -603,7 +597,6 @@ test "should correctly detect attempted input in forgiving one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.attempted_in_time);
 
     frame = .{ // releasing button 1
         .players = .{ .{}, .{
@@ -615,7 +608,6 @@ test "should correctly detect attempted input in forgiving one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.attempted_in_time);
 
     frame = .{ // pressing button 2
         .players = .{ .{}, .{
@@ -627,7 +619,6 @@ test "should correctly detect attempted input in forgiving one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.attempted_in_time);
 
     frame = .{ // pressing button 1
         .players = .{ .{}, .{
@@ -639,7 +630,6 @@ test "should correctly detect attempted input in forgiving one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.one_plus_two, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(true, frame.players[1].throw_escape.?.attempted_in_time);
 
     frame = .{ // releasing everything
         .players = .{ .{}, .{
@@ -651,7 +641,6 @@ test "should correctly detect attempted input in forgiving one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.one_plus_two, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(true, frame.players[1].throw_escape.?.attempted_in_time);
 
     frame = .{ // switching to escape animation
         .players = .{ .{}, .{
@@ -663,7 +652,6 @@ test "should correctly detect attempted input in forgiving one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.one_plus_two, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(true, frame.players[1].throw_escape.?.attempted_in_time);
 
     frame = .{ // one more frame in escape animation
         .players = .{ .{}, .{
@@ -675,7 +663,6 @@ test "should correctly detect attempted input in forgiving one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.one_plus_two, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(true, frame.players[1].throw_escape.?.attempted_in_time);
 
     frame = .{ // escape animation ends
         .players = .{ .{}, .{
@@ -687,10 +674,9 @@ test "should correctly detect attempted input in forgiving one plus two mode" {
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.attempted_in_time);
 }
 
-test "should set attempted in time to false when escape is attempted outside escape window" {
+test "should set attempt timing to late when escape is attempted outside escape window" {
     var frame = model.Frame{};
     var detector = ThrowEscapeDetector(.{ .one_plus_two_mode = .strict }){};
 
@@ -704,7 +690,7 @@ test "should set attempted in time to false when escape is attempted outside esc
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.attempted_in_time);
+    try testing.expectEqual(model.ThrowEscapeTiming.on_time, frame.players[0].throw_escape.?.attempt_timing);
 
     frame = .{ // first frame of escape window
         .players = .{ .{
@@ -716,7 +702,7 @@ test "should set attempted in time to false when escape is attempted outside esc
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.attempted_in_time);
+    try testing.expectEqual(model.ThrowEscapeTiming.on_time, frame.players[0].throw_escape.?.attempt_timing);
 
     frame = .{ // one more frame in escape window
         .players = .{ .{
@@ -728,7 +714,7 @@ test "should set attempted in time to false when escape is attempted outside esc
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.attempted_in_time);
+    try testing.expectEqual(model.ThrowEscapeTiming.on_time, frame.players[0].throw_escape.?.attempt_timing);
 
     frame = .{ // escape window over, pressing button 1
         .players = .{ .{
@@ -740,7 +726,7 @@ test "should set attempted in time to false when escape is attempted outside esc
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.one, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.attempted_in_time);
+    try testing.expectEqual(model.ThrowEscapeTiming.late, frame.players[0].throw_escape.?.attempt_timing);
 
     frame = .{ // one more frame outside escape window
         .players = .{ .{
@@ -752,7 +738,7 @@ test "should set attempted in time to false when escape is attempted outside esc
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.one, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.attempted_in_time);
+    try testing.expectEqual(model.ThrowEscapeTiming.late, frame.players[0].throw_escape.?.attempt_timing);
 
     frame = .{ // escape animation ends
         .players = .{ .{
@@ -764,10 +750,10 @@ test "should set attempted in time to false when escape is attempted outside esc
     detector.detect(&frame);
     try testing.expect(frame.players[0].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[0].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[0].throw_escape.?.attempted_in_time);
+    try testing.expectEqual(model.ThrowEscapeTiming.on_time, frame.players[0].throw_escape.?.attempt_timing);
 }
 
-test "should set attempted in time to true when escape is attempted inside escape window" {
+test "should keep attempt timing to be on time when escape is attempted inside escape window" {
     var frame = model.Frame{};
     var detector = ThrowEscapeDetector(.{ .one_plus_two_mode = .strict }){};
 
@@ -781,7 +767,7 @@ test "should set attempted in time to true when escape is attempted inside escap
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.attempted_in_time);
+    try testing.expectEqual(model.ThrowEscapeTiming.on_time, frame.players[1].throw_escape.?.attempt_timing);
 
     frame = .{ // first frame of escape window
         .players = .{ .{}, .{
@@ -793,7 +779,7 @@ test "should set attempted in time to true when escape is attempted inside escap
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.attempted_in_time);
+    try testing.expectEqual(model.ThrowEscapeTiming.on_time, frame.players[1].throw_escape.?.attempt_timing);
 
     frame = .{ // pressing button 1
         .players = .{ .{}, .{
@@ -805,7 +791,7 @@ test "should set attempted in time to true when escape is attempted inside escap
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.one, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(true, frame.players[1].throw_escape.?.attempted_in_time);
+    try testing.expectEqual(model.ThrowEscapeTiming.on_time, frame.players[1].throw_escape.?.attempt_timing);
 
     frame = .{ // escape window over, 1 was wrong escape input
         .players = .{ .{}, .{
@@ -817,7 +803,7 @@ test "should set attempted in time to true when escape is attempted inside escap
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.one, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(true, frame.players[1].throw_escape.?.attempted_in_time);
+    try testing.expectEqual(model.ThrowEscapeTiming.on_time, frame.players[1].throw_escape.?.attempt_timing);
 
     frame = .{ // one more frame outside escape window
         .players = .{ .{}, .{
@@ -829,7 +815,7 @@ test "should set attempted in time to true when escape is attempted inside escap
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.one, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(true, frame.players[1].throw_escape.?.attempted_in_time);
+    try testing.expectEqual(model.ThrowEscapeTiming.on_time, frame.players[1].throw_escape.?.attempt_timing);
 
     frame = .{ // escape animation ends
         .players = .{ .{}, .{
@@ -841,5 +827,5 @@ test "should set attempted in time to true when escape is attempted inside escap
     detector.detect(&frame);
     try testing.expect(frame.players[1].throw_escape != null);
     try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[1].throw_escape.?.attempted_input);
-    try testing.expectEqual(false, frame.players[1].throw_escape.?.attempted_in_time);
+    try testing.expectEqual(model.ThrowEscapeTiming.on_time, frame.players[1].throw_escape.?.attempt_timing);
 }

@@ -21,10 +21,15 @@ pub const ThrowEscapeInputs = packed struct(u3) {
     one_plus_two: bool = false,
 };
 
+pub const ThrowEscapeTiming = enum(u1) {
+    on_time = 0,
+    late = 1,
+};
+
 pub const ThrowEscape = packed struct(u8) {
     phase: ThrowEscapePhase,
     attempted_input: ThrowEscapeInput = .none,
-    attempted_in_time: bool = false,
+    attempt_timing: ThrowEscapeTiming = .on_time,
     correct_inputs: ThrowEscapeInputs = .{},
 
     const Self = @This();
