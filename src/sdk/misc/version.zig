@@ -9,7 +9,7 @@ pub const Version = struct {
     snapshot: bool,
 
     const Self = @This();
-    const Element = u16;
+    const Element = u8;
 
     pub const current = Self.comptimeParse(build_info.version);
 
@@ -197,24 +197,24 @@ test "parse should correctly parse valid version strings" {
         Version.parse("1.2.3"),
     );
     try testing.expectEqual(
-        Version{ .major = 123, .minor = 456, .patch = 789, .snapshot = true },
-        Version.parse("123.456.789-SNAPSHOT"),
+        Version{ .major = 12, .minor = 34, .patch = 56, .snapshot = true },
+        Version.parse("12.34.56-SNAPSHOT"),
     );
 }
 
 test "parse should return error when parsing invalid version strings" {
     try testing.expectEqual(error.Incomplete, Version.parse(""));
-    try testing.expectEqual(error.Incomplete, Version.parse("123"));
-    try testing.expectEqual(error.Incomplete, Version.parse("123.456"));
+    try testing.expectEqual(error.Incomplete, Version.parse("12"));
+    try testing.expectEqual(error.Incomplete, Version.parse("12.34"));
     try testing.expectEqual(error.InvalidCharacter, Version.parse(".."));
-    try testing.expectEqual(error.InvalidCharacter, Version.parse(".456.789"));
-    try testing.expectEqual(error.InvalidCharacter, Version.parse("123..789"));
-    try testing.expectEqual(error.InvalidCharacter, Version.parse("123.456."));
-    try testing.expectEqual(error.InvalidCharacter, Version.parse("a23.456.789"));
-    try testing.expectEqual(error.InvalidCharacter, Version.parse("123.4b6.789"));
-    try testing.expectEqual(error.InvalidCharacter, Version.parse("123.456.78c"));
-    try testing.expectEqual(error.InvalidSnapshotString, Version.parse("123.456.789-"));
-    try testing.expectEqual(error.InvalidSnapshotString, Version.parse("123.456.789-abc"));
+    try testing.expectEqual(error.InvalidCharacter, Version.parse(".34.56"));
+    try testing.expectEqual(error.InvalidCharacter, Version.parse("12..56"));
+    try testing.expectEqual(error.InvalidCharacter, Version.parse("12.34."));
+    try testing.expectEqual(error.InvalidCharacter, Version.parse("a2.34.56"));
+    try testing.expectEqual(error.InvalidCharacter, Version.parse("12.3b.45"));
+    try testing.expectEqual(error.InvalidCharacter, Version.parse("12.34.c5"));
+    try testing.expectEqual(error.InvalidSnapshotString, Version.parse("12.34.45-"));
+    try testing.expectEqual(error.InvalidSnapshotString, Version.parse("12.34.45-abc"));
 }
 
 test "order should compare two versions correctly" {
@@ -233,8 +233,8 @@ test "order should compare two versions correctly" {
 test "should format correctly" {
     const test_cases = [_]([]const u8){
         "1.2.3",
-        "123.456.789",
-        "987.654.321-SNAPSHOT",
+        "12.34.45",
+        "67.78.90-SNAPSHOT",
     };
     for (test_cases) |expected| {
         const pattern = try Version.parse(expected);
