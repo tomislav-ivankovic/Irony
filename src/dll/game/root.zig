@@ -29,6 +29,7 @@ pub const convertEachVectorElement = @import("conversions.zig").convertEachVecto
 pub const FrameDetector = @import("frame_detector.zig").FrameDetector;
 pub const Hooks = @import("hooks.zig").Hooks;
 pub const Memory = @import("memory.zig").Memory;
+pub const Version = @import("types.zig").Version;
 pub const PlayerSide = @import("types.zig").PlayerSide;
 pub const StateFlags = @import("types.zig").StateFlags;
 pub const CancelFlags = @import("types.zig").CancelFlags;

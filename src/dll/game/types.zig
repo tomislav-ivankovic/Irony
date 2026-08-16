@@ -22,6 +22,13 @@ fn field(
     };
 }
 
+pub fn Version(comptime game_id: build_info.Game) type {
+    return switch (game_id) {
+        .t7 => [5]u8,
+        .t8 => [64]u8,
+    };
+}
+
 pub const PlayerSide = enum(u8) {
     left = 0,
     right = 1,

@@ -6,6 +6,7 @@ const game = @import("root.zig");
 
 pub fn Memory(comptime game_id: build_info.Game) type {
     return struct {
+        game_version: Pointer(game.Version(game_id)),
         player_1: Proxy(game.Player(game_id)),
         player_2: Proxy(game.Player(game_id)),
         main_player_info: Proxy(game.PlayerInfo(game_id)),
@@ -80,6 +81,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
 
         fn t7Init(cache: *?sdk.memory.PatternCache, comptime game_hooks: type) Self {
             return .{
+                .game_version = .fromPointer("5.10" ++ .{0}),
                 .player_1 = proxy("player_1", game.Player(.t7), .{
                     relativeOffset(i32, add(0x3, pattern(cache, "48 8B 15 ?? ?? ?? ?? 44 8B C3"))),
                     0x0,
@@ -176,6 +178,14 @@ pub fn Memory(comptime game_id: build_info.Game) type {
 
         fn t8Init(cache: *?sdk.memory.PatternCache, comptime game_hooks: type) Self {
             return .{
+                .game_version = pointer(
+                    "game_version",
+                    game.Version(.t8),
+                    relativeOffset(i32, add(0x3, pattern(
+                        cache,
+                        "4C 8D 2D ?? ?? ?? ?? 49 8B CD E8 ?? ?? ?? ?? 41 B9 3F 00 00 00",
+                    ))),
+                ),
                 .player_1 = proxy("player_1", game.Player(.t8), .{
                     relativeOffset(i32, add(0x3, pattern(cache, "4C 89 35 ?? ?? ?? ?? 41 88 5E 28"))),
                     0x30,
@@ -279,6 +289,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
         }
 
         pub fn testingInit(params: struct {
+            game_version: ?*const game.Version(game_id) = null,
             player_1: ?*const game.Player(game_id) = null,
             player_2: ?*const game.Player(game_id) = null,
             main_player_info: ?*const game.PlayerInfo(game_id) = null,
@@ -312,6 +323,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                 }
             }.call;
             return .{
+                .game_version = .fromPointer(params.game_version),
                 .player_1 = .fromPointer(params.player_1),
                 .player_2 = .fromPointer(params.player_2),
                 .main_player_info = .fromPointer(params.main_player_info),
