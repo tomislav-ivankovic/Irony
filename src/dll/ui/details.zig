@@ -5,6 +5,36 @@ const sdk = @import("../../sdk/root.zig");
 const model = @import("../model/root.zig");
 
 pub const Details = struct {
+    irony_version: Row(
+        "Irony Version",
+        \\Version of Irony that data was recorded with.
+        \\Can be used to check what version of Irony was used to record old recordings.
+        \\If blank, the data was recorded by version of Irony older then 2.4.0.
+    ,
+        model.IronyVersion,
+        null,
+        drawIronyVersion,
+    ) = .{},
+    game: Row(
+        "Game",
+        \\Game that the data was recorded from.
+        \\You can open recordings of T8 inside T7 and recordings of T7 inside T8.
+        \\If blank, the data was recorded by version of Irony older then 2.4.0.
+    ,
+        model.Game,
+        null,
+        drawGame,
+    ) = .{},
+    game_version: Row(
+        "Game Version",
+        \\Version of the game that the data was recorded from.
+        \\Can be used to check what the version the game was when an old recording was recorded.
+        \\If blank, Irony failed to read the game version or data was recorded by version of Irony older then 2.4.0.
+    ,
+        model.GameVersion,
+        .empty,
+        drawGameVersion,
+    ) = .{},
     source: Row(
         "Source",
         \\One of the following:
@@ -371,7 +401,7 @@ pub const Details = struct {
         \\Escape Fail - Player failed in escaping the throw.
     ,
         model.ThrowEscapePhase,
-        model.ThrowEscapePhase.not_being_thrown,
+        .not_being_thrown,
         drawThrowEscapePhase,
     ) = .{},
     correct_throw_escape: Row(
@@ -394,7 +424,7 @@ pub const Details = struct {
         \\1+2 - Player attempted to escape the throw by inputting left and right punch simultaneously.
     ,
         model.ThrowEscapeInput,
-        model.ThrowEscapeInput.none,
+        .none,
         drawThrowEscapeInput,
     ) = .{},
     throw_escape_attempt_timing: Row(
@@ -505,6 +535,9 @@ pub const Details = struct {
             .secondary_player => frame.getPlayerByRole(.secondary),
         };
         const s = settings;
+        self.irony_version.processFrame(s, frame.irony_version, frame.irony_version);
+        self.game.processFrame(s, frame.game, frame.game);
+        self.game_version.processFrame(s, frame.game_version, frame.game_version);
         self.source.processFrame(s, frame.source, frame.source);
         self.match_phase.processFrame(s, frame.match_phase, frame.match_phase);
         self.frames_since_round_start.processFrame(s, frame.frames_since_round_start, frame.frames_since_round_start);
@@ -770,6 +803,20 @@ fn drawF32Degrees(value: f32, alpha: f32) void {
     drawF32(std.math.radiansToDegrees(value), alpha);
 }
 
+fn drawIronyVersion(value: model.IronyVersion, alpha: f32) void {
+    var buffer: [string_buffer_size]u8 = undefined;
+    const text = std.fmt.bufPrintZ(&buffer, "{f}", .{value}) catch error_string;
+    drawText(text, alpha);
+}
+
+fn drawGameVersion(value: model.GameVersion, alpha: f32) void {
+    if (value.len == 0) {
+        drawText(empty_value_string, alpha);
+        return;
+    }
+    drawText(value.asSlice(), alpha);
+}
+
 fn drawPlayerName(value: model.PlayerName, alpha: f32) void {
     if (value.len == 0) {
         drawText(empty_value_string, alpha);
@@ -884,6 +931,14 @@ fn drawF32MinMax(value: model.F32MinMax, alpha: f32) void {
         return;
     }
     drawText(buffer[0..writer.end :0], alpha);
+}
+
+fn drawGame(value: model.Game, alpha: f32) void {
+    const text = switch (value) {
+        .t7 => "T7",
+        .t8 => "T8",
+    };
+    drawText(text, alpha);
 }
 
 fn drawSource(value: model.Source, alpha: f32) void {
@@ -1468,6 +1523,103 @@ test "should not draw row when row is disabled in settings" {
             try ctx.expectItemNotExists("table/Attack Type");
             try ctx.expectItemNotExists("table/Attack Type/cell_1/High");
             try ctx.expectItemNotExists("table/Attack Type/cell_2/Mid");
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw irony version correctly" {
+    const Test = struct {
+        var settings = model.DetailsSettings{ .rows_enabled = .{} };
+        var details = Details{};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            details.draw(&settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window/table/Irony Version");
+
+            details.processFrame(&settings, &.{ .irony_version = null });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/---");
+            try ctx.expectItemExists("cell_2/---");
+
+            details.processFrame(&settings, &.{ .irony_version = .comptimeParse("1.23.45") });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/1.23.45");
+            try ctx.expectItemExists("cell_2/1.23.45");
+
+            details.processFrame(&settings, &.{ .irony_version = .comptimeParse("98.76.54-SNAPSHOT") });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/98.76.54-SNAPSHOT");
+            try ctx.expectItemExists("cell_2/98.76.54-SNAPSHOT");
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw game correctly" {
+    const Test = struct {
+        var settings = model.DetailsSettings{ .rows_enabled = .{} };
+        var details = Details{};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            details.draw(&settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window/table/Game");
+
+            details.processFrame(&settings, &.{ .game = null });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/---");
+            try ctx.expectItemExists("cell_2/---");
+
+            details.processFrame(&settings, &.{ .game = .t7 });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/T7");
+            try ctx.expectItemExists("cell_2/T7");
+
+            details.processFrame(&settings, &.{ .game = .t8 });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/T8");
+            try ctx.expectItemExists("cell_2/T8");
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw game version correctly" {
+    const Test = struct {
+        var settings = model.DetailsSettings{ .rows_enabled = .{} };
+        var details = Details{};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            details.draw(&settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window/table/Game Version");
+
+            details.processFrame(&settings, &.{ .game_version = .empty });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/---");
+            try ctx.expectItemExists("cell_2/---");
+
+            details.processFrame(&settings, &.{ .game_version = .fromSliceTrimmed("12.34.56") });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/12.34.56");
+            try ctx.expectItemExists("cell_2/12.34.56");
         }
     };
     const context = try sdk.ui.getTestingContext();
