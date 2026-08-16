@@ -11,10 +11,17 @@ pub fn BoundedArray(
 ) type {
     return struct {
         buffer: [buffer_len]Element,
-        len: usize,
+        len: Length,
 
         const Self = @This();
         pub const Child = Element;
+        pub const Length = @Type(.{ .int = .{
+            .signedness = .unsigned,
+            .bits = switch (capacity) {
+                0 => 1,
+                else => std.math.log2_int_ceil(usize, capacity + 1),
+            },
+        } });
 
         pub const max_len = capacity;
         pub const buffer_len = if (sentinel) capacity + 1 else capacity;
@@ -54,12 +61,12 @@ pub fn BoundedArray(
             for (slice, 0..) |element, index| {
                 buffer[index] = element;
             }
-            return .{ .buffer = buffer, .len = slice.len };
+            return .{ .buffer = buffer, .len = @intCast(slice.len) };
         }
 
         pub fn fromSliceTrimmed(slice: []const Element) Self {
             var buffer = Self.empty.buffer;
-            var len: usize = 0;
+            var len: Length = 0;
             for (slice) |element| {
                 if (len >= capacity) {
                     break;
@@ -202,12 +209,12 @@ test "asSlice should return slice that point to the non empty elements inside th
 test "asSlice should return a slice to entire buffer when the bounded array length exceeds its capacity" {
     const array_1 = BoundedArray(4, u8, 123, false){
         .buffer = .{ 1, 2, 3, 4 },
-        .len = 8,
+        .len = 7,
     };
     try testing.expectEqual(array_1.buffer[0..4], array_1.asSlice());
     const array_2 = BoundedArray(4, u8, 123, true){
         .buffer = .{ 1, 2, 3, 4, 123 },
-        .len = 8,
+        .len = 7,
     };
     try testing.expectEqual(array_2.buffer[0..4 :123], array_2.asSlice());
 }

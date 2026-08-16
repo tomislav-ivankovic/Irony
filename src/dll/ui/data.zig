@@ -1960,7 +1960,7 @@ test "should draw bounded array correctly" {
             const size = @sizeOf(@TypeOf(value));
             const len_address = @intFromPtr(&value.len);
             const len_offset = @offsetOf(@TypeOf(value), "len");
-            const len_size = @sizeOf(@TypeOf(value.len));
+            const len_bit_size = @bitSizeOf(@TypeOf(value.len));
             const element_1_address = @intFromPtr(&value.buffer[1]);
             const element_1_offset = element_1_address - address;
             const element_1_size = @sizeOf(@TypeOf(value.buffer[1]));
@@ -1990,7 +1990,7 @@ test "should draw bounded array correctly" {
             try ctx.expectItemExistsFmt("type: {s}", .{@typeName(@TypeOf(value.len))});
             try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ len_address, len_address });
             try ctx.expectItemExistsFmt("offset: {} (0x{X}) bytes", .{ len_offset, len_offset });
-            try ctx.expectItemExistsFmt("size: {} (0x{X}) bytes", .{ len_size, len_size });
+            try ctx.expectItemExistsFmt("size: {} (0x{X}) bits", .{ len_bit_size, len_bit_size });
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
 
             ctx.setRef("Window");
