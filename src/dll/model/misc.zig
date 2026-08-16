@@ -48,6 +48,15 @@ pub const F32MinMax = struct {
     };
 };
 
+pub const IronyVersion = sdk.misc.Version;
+
+pub const Game = enum(u1) {
+    t7 = 0,
+    t8 = 1,
+};
+
+pub const GameVersion = sdk.misc.BoundedArray(8, u8, 0, true);
+
 pub const MovePhase = enum(u3) {
     neutral = 0,
     start_up = 1,

@@ -25,6 +25,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
         };
 
         pub fn captureFrame(self: *Self, game_memory: *const game.Memory(game_id)) model.Frame {
+            const game_version = game_memory.game_version.toConstPointer();
             const player_1 = game_memory.player_1.toConstPointer();
             const player_2 = game_memory.player_2.toConstPointer();
             const main_player_info = game_memory.main_player_info.toConstPointer();
@@ -68,6 +69,12 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                 walls.asSlice(),
             );
             return .{
+                .irony_version = .current,
+                .game = switch (game_id) {
+                    .t7 => .t7,
+                    .t8 => .t8,
+                },
+                .game_version = captureGameVersion(game_version),
                 .source = captureSource(match, replay_mode, &game_memory.functions),
                 .match_phase = captureMatchPhase(match),
                 .rounds_needed_to_win = if (ruleset) |r| r.rounds_needed_to_win else null,
@@ -81,6 +88,20 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                 .walls = walls,
                 .floor_gimmicks = floor_gimmicks,
             };
+        }
+
+        fn captureGameVersion(version_maybe: ?*const game.Version(game_id)) model.GameVersion {
+            const buffer = version_maybe orelse return .empty;
+            const string = std.mem.sliceTo(buffer, 0);
+            const trimmed_front = block: {
+                var temp = string;
+                while (temp.len > 0 and temp[0] == ' ') {
+                    temp = temp[1..];
+                }
+                break :block temp;
+            };
+            const fully_trimmed = std.mem.sliceTo(trimmed_front, ' ');
+            return .fromSliceTrimmed(fully_trimmed);
         }
 
         pub fn captureSource(
@@ -1065,6 +1086,82 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
 }
 
 const testing = std.testing;
+
+test "should capture irony version correctly" {
+    const gm = game.Memory(.t8).testingInit;
+    var capturer = Capturer(.t8){};
+    try testing.expectEqual(
+        model.IronyVersion.current,
+        capturer.captureFrame(&gm(.{})).irony_version,
+    );
+}
+
+test "should capture game correctly" {
+    const gm7 = game.Memory(.t7).testingInit;
+    var capturer_7 = Capturer(.t7){};
+    try testing.expectEqual(
+        model.Game.t7,
+        capturer_7.captureFrame(&gm7(.{})).game,
+    );
+    const gm8 = game.Memory(.t8).testingInit;
+    var capturer_8 = Capturer(.t8){};
+    try testing.expectEqual(
+        model.Game.t8,
+        capturer_8.captureFrame(&gm8(.{})).game,
+    );
+}
+
+test "should capture game version correctly" {
+    const makeVersion = struct {
+        fn call(comptime str: []const u8) game.Version(.t8) {
+            return (str ++ ([1]u8{0} ** (@sizeOf(game.Version(.t8)) - str.len))).*;
+        }
+    }.call;
+    const gm = game.Memory(.t8).testingInit;
+    var capturer = Capturer(.t8){};
+    try testing.expectEqualStrings(
+        "",
+        capturer.captureFrame(&gm(.{
+            .game_version = null,
+        })).game_version.asSlice(),
+    );
+    try testing.expectEqualStrings(
+        "",
+        capturer.captureFrame(&gm(.{
+            .game_version = &makeVersion(""),
+        })).game_version.asSlice(),
+    );
+    try testing.expectEqualStrings(
+        "",
+        capturer.captureFrame(&gm(.{
+            .game_version = &makeVersion("    "),
+        })).game_version.asSlice(),
+    );
+    try testing.expectEqualStrings(
+        "12.34.56",
+        capturer.captureFrame(&gm(.{
+            .game_version = &makeVersion("12.34.56"),
+        })).game_version.asSlice(),
+    );
+    try testing.expectEqualStrings(
+        "12.34.56",
+        capturer.captureFrame(&gm(.{
+            .game_version = &makeVersion("    12.34.56"),
+        })).game_version.asSlice(),
+    );
+    try testing.expectEqualStrings(
+        "12.34.56",
+        capturer.captureFrame(&gm(.{
+            .game_version = &makeVersion("12.34.56 (ignore)"),
+        })).game_version.asSlice(),
+    );
+    try testing.expectEqualStrings(
+        "12.34.56",
+        capturer.captureFrame(&gm(.{
+            .game_version = &makeVersion(" 12.34.56 (ignore)"),
+        })).game_version.asSlice(),
+    );
+}
 
 test "should capture source correctly in T7" {
     const gm = game.Memory(.t7).testingInit;

@@ -3,6 +3,9 @@ const sdk = @import("../../sdk/root.zig");
 const model = @import("root.zig");
 
 pub const Frame = struct {
+    irony_version: ?model.IronyVersion = null,
+    game: ?model.Game = null,
+    game_version: model.GameVersion = .empty,
     source: ?model.Source = null,
     match_phase: ?model.MatchPhase = null,
     rounds_needed_to_win: ?u32 = null,
