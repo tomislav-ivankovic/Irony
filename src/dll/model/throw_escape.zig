@@ -30,12 +30,12 @@ pub const ThrowEscapeTiming = enum(u1) {
     late = 1,
 };
 
-pub const ThrowEscape = packed struct(u9) {
+pub const ThrowEscape = struct {
     phase: ThrowEscapePhase,
     input_mode: ThrowEscapeInputMode = .press,
+    correct_inputs: ThrowEscapeInputs = .{},
     attempted_input: ThrowEscapeInput = .none,
     attempt_timing: ThrowEscapeTiming = .on_time,
-    correct_inputs: ThrowEscapeInputs = .{},
 
     const Self = @This();
 

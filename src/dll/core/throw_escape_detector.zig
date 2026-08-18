@@ -43,7 +43,7 @@ pub fn ThrowEscapeDetector(comptime config: ThrowEscapeDetectorConfig) type {
         }
 
         fn prolongEscapeSuccess(state: *const PlayerState, player: *model.Player) void {
-            const previous_escape = state.previous_escape orelse return;
+            const previous_escape = if (state.previous_escape) |*e| e else return;
             if (previous_escape.phase != .escape_success) {
                 return;
             }
@@ -55,13 +55,13 @@ pub fn ThrowEscapeDetector(comptime config: ThrowEscapeDetectorConfig) type {
             if (player.throw_escape) |*escape| {
                 escape.phase = .escape_success;
             } else {
-                player.throw_escape = previous_escape;
+                player.throw_escape = previous_escape.*;
             }
         }
 
         fn prolongCorrectInputs(state: *const PlayerState, player: *model.Player) void {
             const escape = if (player.throw_escape) |*e| e else return;
-            const previous_escape = state.previous_escape orelse return;
+            const previous_escape = if (state.previous_escape) |*e| e else return;
             if (escape.phase == .escape_success or escape.correct_inputs == model.ThrowEscapeInputs{}) {
                 escape.correct_inputs = previous_escape.correct_inputs;
             }
@@ -72,8 +72,8 @@ pub fn ThrowEscapeDetector(comptime config: ThrowEscapeDetectorConfig) type {
                 state.input_state = .none;
                 return;
             };
-            const previous_escape = state.previous_escape orelse return;
-            if (escape.phase != .escape_success and escape.correct_inputs != previous_escape.correct_inputs) {
+            const previous_correct_inputs = if (state.previous_escape) |*e| e.correct_inputs else model.ThrowEscapeInputs{};
+            if (escape.phase != .escape_success and escape.correct_inputs != previous_correct_inputs) {
                 state.input_state = .none;
                 escape.attempted_input = .none;
             }
@@ -81,8 +81,11 @@ pub fn ThrowEscapeDetector(comptime config: ThrowEscapeDetectorConfig) type {
             const previous_input = state.previous_input orelse return;
             switch (state.input_state) {
                 .none => block: {
-                    const escape_attempted = (!previous_input.button_1 and input.button_1) or
-                        (!previous_input.button_2 and input.button_2);
+                    const escape_attempted = switch (escape.input_mode) {
+                        .press => (!previous_input.button_1 and input.button_1) or
+                            (!previous_input.button_2 and input.button_2),
+                        .hold => true,
+                    };
                     if (!escape_attempted) {
                         break :block;
                     }
@@ -101,8 +104,6 @@ pub fn ThrowEscapeDetector(comptime config: ThrowEscapeDetectorConfig) type {
                             .strict => .confirmed_2,
                             .forgiving => .unconfirmed_2,
                         };
-                    } else {
-                        unreachable;
                     }
                 },
                 .unconfirmed_1 => {
@@ -132,7 +133,7 @@ pub fn ThrowEscapeDetector(comptime config: ThrowEscapeDetectorConfig) type {
 
         fn setAttemptTiming(state: *PlayerState, player: *model.Player) void {
             const escape = if (player.throw_escape) |*e| e else return;
-            const previous_escape = state.previous_escape orelse return;
+            const previous_escape = if (state.previous_escape) |*e| e else return;
             escape.attempt_timing = switch (previous_escape.attempted_input) {
                 .none => switch (escape.phase) {
                     .in_escape_window, .escape_success => .on_time,
@@ -143,10 +144,14 @@ pub fn ThrowEscapeDetector(comptime config: ThrowEscapeDetectorConfig) type {
         }
 
         fn updatePreviousState(state: *PlayerState, player: *const model.Player) void {
-            if (player.throw_escape == null) {
+            if (player.throw_escape) |*escape| {
+                const is_in_throw_animation = escape.phase == .in_escape_window or
+                    (escape.phase == .escape_success and state.previous_escape == null);
+                if (is_in_throw_animation) {
+                    state.throw_animation_id = player.animation_id;
+                }
+            } else {
                 state.throw_animation_id = null;
-            } else if (state.previous_escape == null) {
-                state.throw_animation_id = player.animation_id;
             }
             state.previous_animation_id = player.animation_id;
             state.previous_input = player.input;
@@ -398,7 +403,7 @@ test "should prolong correct inputs until the end of escape animation when escap
     try testing.expectEqual(null, frame.players[1].throw_escape);
 }
 
-test "should correctly detect attempted input in strict one plus two mode" {
+test "should correctly detect attempted input in strict one plus press two mode" {
     var frame = model.Frame{};
     var detector = ThrowEscapeDetector(.{ .one_plus_two_mode = .strict }){};
 
@@ -415,7 +420,7 @@ test "should correctly detect attempted input in strict one plus two mode" {
     frame = .{ // first frame of escape window
         .players = .{ .{
             .animation_id = 2,
-            .throw_escape = .{ .phase = .in_escape_window },
+            .throw_escape = .{ .phase = .in_escape_window, .input_mode = .press },
             .input = .{ .button_1 = true, .button_3 = true },
         }, .{} },
     };
@@ -426,7 +431,7 @@ test "should correctly detect attempted input in strict one plus two mode" {
     frame = .{ // pressing button 4
         .players = .{ .{
             .animation_id = 2,
-            .throw_escape = .{ .phase = .in_escape_window },
+            .throw_escape = .{ .phase = .in_escape_window, .input_mode = .press },
             .input = .{ .button_1 = true, .button_3 = true, .button_4 = true },
         }, .{} },
     };
@@ -437,7 +442,7 @@ test "should correctly detect attempted input in strict one plus two mode" {
     frame = .{ // releasing button 1
         .players = .{ .{
             .animation_id = 2,
-            .throw_escape = .{ .phase = .in_escape_window },
+            .throw_escape = .{ .phase = .in_escape_window, .input_mode = .press },
             .input = .{ .button_3 = true, .button_4 = true },
         }, .{} },
     };
@@ -448,7 +453,7 @@ test "should correctly detect attempted input in strict one plus two mode" {
     frame = .{ // pressing button 2
         .players = .{ .{
             .animation_id = 2,
-            .throw_escape = .{ .phase = .escape_success },
+            .throw_escape = .{ .phase = .escape_success, .input_mode = .press },
             .input = .{ .button_2 = true, .button_3 = true, .button_4 = true },
         }, .{} },
     };
@@ -511,7 +516,7 @@ test "should correctly detect attempted input in strict one plus two mode" {
     try testing.expectEqual(null, frame.players[0].throw_escape);
 }
 
-test "should correctly detect attempted input in forgiving one plus two mode" {
+test "should correctly detect attempted input in forgiving one plus two press mode" {
     var frame = model.Frame{};
     var detector = ThrowEscapeDetector(.{ .one_plus_two_mode = .forgiving }){};
 
@@ -528,7 +533,7 @@ test "should correctly detect attempted input in forgiving one plus two mode" {
     frame = .{ // first frame of escape window
         .players = .{ .{}, .{
             .animation_id = 2,
-            .throw_escape = .{ .phase = .in_escape_window },
+            .throw_escape = .{ .phase = .in_escape_window, .input_mode = .press },
             .input = .{ .button_1 = true, .button_3 = true },
         } },
     };
@@ -539,7 +544,7 @@ test "should correctly detect attempted input in forgiving one plus two mode" {
     frame = .{ // pressing button 4
         .players = .{ .{}, .{
             .animation_id = 2,
-            .throw_escape = .{ .phase = .in_escape_window },
+            .throw_escape = .{ .phase = .in_escape_window, .input_mode = .press },
             .input = .{ .button_1 = true, .button_3 = true, .button_4 = true },
         } },
     };
@@ -550,7 +555,7 @@ test "should correctly detect attempted input in forgiving one plus two mode" {
     frame = .{ // releasing button 1
         .players = .{ .{}, .{
             .animation_id = 2,
-            .throw_escape = .{ .phase = .in_escape_window },
+            .throw_escape = .{ .phase = .in_escape_window, .input_mode = .press },
             .input = .{ .button_3 = true, .button_4 = true },
         } },
     };
@@ -561,7 +566,7 @@ test "should correctly detect attempted input in forgiving one plus two mode" {
     frame = .{ // pressing button 2
         .players = .{ .{}, .{
             .animation_id = 2,
-            .throw_escape = .{ .phase = .in_escape_window },
+            .throw_escape = .{ .phase = .in_escape_window, .input_mode = .press },
             .input = .{ .button_2 = true, .button_3 = true, .button_4 = true },
         } },
     };
@@ -622,6 +627,144 @@ test "should correctly detect attempted input in forgiving one plus two mode" {
     };
     detector.detect(&frame);
     try testing.expectEqual(null, frame.players[1].throw_escape);
+}
+
+test "should correctly detect attempted input in strict one plus two hold mode" {
+    var frame = model.Frame{};
+    var detector = ThrowEscapeDetector(.{ .one_plus_two_mode = .strict }){};
+
+    frame = .{ // inputting 1+3 before escape window
+        .players = .{ .{
+            .animation_id = 1,
+            .throw_escape = null,
+            .input = .{ .button_1 = true, .button_3 = true },
+        }, .{} },
+    };
+    detector.detect(&frame);
+    try testing.expectEqual(null, frame.players[0].throw_escape);
+
+    frame = .{ // first frame of escape window
+        .players = .{ .{
+            .animation_id = 2,
+            .throw_escape = .{ .phase = .escape_success, .input_mode = .hold },
+            .input = .{ .button_1 = true, .button_3 = true },
+        }, .{} },
+    };
+    detector.detect(&frame);
+    try testing.expect(frame.players[0].throw_escape != null);
+    try testing.expectEqual(model.ThrowEscapeInput.one, frame.players[0].throw_escape.?.attempted_input);
+
+    frame = .{ // pressing button 4
+        .players = .{ .{
+            .animation_id = 3,
+            .throw_escape = null,
+            .input = .{ .button_1 = true, .button_2 = true, .button_3 = true },
+        }, .{} },
+    };
+    detector.detect(&frame);
+    try testing.expect(frame.players[0].throw_escape != null);
+    try testing.expectEqual(model.ThrowEscapeInput.one, frame.players[0].throw_escape.?.attempted_input);
+
+    frame = .{ // releasing everything
+        .players = .{ .{
+            .animation_id = 3,
+            .throw_escape = null,
+            .input = .{},
+        }, .{} },
+    };
+    detector.detect(&frame);
+    try testing.expect(frame.players[0].throw_escape != null);
+    try testing.expectEqual(model.ThrowEscapeInput.one, frame.players[0].throw_escape.?.attempted_input);
+
+    frame = .{ // one more frame in escape animation
+        .players = .{ .{
+            .animation_id = 3,
+            .throw_escape = null,
+            .input = .{},
+        }, .{} },
+    };
+    detector.detect(&frame);
+    try testing.expect(frame.players[0].throw_escape != null);
+    try testing.expectEqual(model.ThrowEscapeInput.one, frame.players[0].throw_escape.?.attempted_input);
+
+    frame = .{ // escape animation ends
+        .players = .{ .{
+            .animation_id = 4,
+            .throw_escape = null,
+            .input = .{},
+        }, .{} },
+    };
+    detector.detect(&frame);
+    try testing.expectEqual(null, frame.players[0].throw_escape);
+}
+
+test "should correctly detect attempted input in forgiving one plus two hold mode" {
+    var frame = model.Frame{};
+    var detector = ThrowEscapeDetector(.{ .one_plus_two_mode = .forgiving }){};
+
+    frame = .{ // inputting 1+3 before escape window
+        .players = .{ .{
+            .animation_id = 1,
+            .throw_escape = null,
+            .input = .{ .button_1 = true, .button_3 = true },
+        }, .{} },
+    };
+    detector.detect(&frame);
+    try testing.expectEqual(null, frame.players[0].throw_escape);
+
+    frame = .{ // first frame of escape window
+        .players = .{ .{
+            .animation_id = 2,
+            .throw_escape = .{ .phase = .in_escape_window, .input_mode = .hold },
+            .input = .{ .button_1 = true, .button_3 = true },
+        }, .{} },
+    };
+    detector.detect(&frame);
+    try testing.expect(frame.players[0].throw_escape != null);
+    try testing.expectEqual(model.ThrowEscapeInput.none, frame.players[0].throw_escape.?.attempted_input);
+
+    frame = .{ // pressing button 2
+        .players = .{ .{
+            .animation_id = 2,
+            .throw_escape = .{ .phase = .escape_success, .input_mode = .hold },
+            .input = .{ .button_1 = true, .button_2 = true, .button_3 = true },
+        }, .{} },
+    };
+    detector.detect(&frame);
+    try testing.expect(frame.players[0].throw_escape != null);
+    try testing.expectEqual(model.ThrowEscapeInput.one_plus_two, frame.players[0].throw_escape.?.attempted_input);
+
+    frame = .{ // releasing everything
+        .players = .{ .{
+            .animation_id = 3,
+            .throw_escape = null,
+            .input = .{},
+        }, .{} },
+    };
+    detector.detect(&frame);
+    try testing.expect(frame.players[0].throw_escape != null);
+    try testing.expectEqual(model.ThrowEscapeInput.one_plus_two, frame.players[0].throw_escape.?.attempted_input);
+
+    frame = .{ // one more frame in escape animation
+        .players = .{ .{
+            .animation_id = 3,
+            .throw_escape = null,
+            .input = .{},
+        }, .{} },
+    };
+    detector.detect(&frame);
+    try testing.expect(frame.players[0].throw_escape != null);
+    try testing.expectEqual(model.ThrowEscapeInput.one_plus_two, frame.players[0].throw_escape.?.attempted_input);
+
+    frame = .{ // escape animation ends
+        .players = .{ .{
+            .animation_id = 4,
+            .throw_escape = null,
+            .input = .{},
+        }, .{} },
+    };
+    detector.detect(&frame);
+    try testing.expectEqual(null, frame.players[0].throw_escape);
 }
 
 test "should set attempt timing to late when escape is attempted outside escape window" {
