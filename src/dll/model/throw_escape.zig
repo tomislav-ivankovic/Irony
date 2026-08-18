@@ -2,10 +2,9 @@ const std = @import("std");
 const model = @import("root.zig");
 
 pub const ThrowEscapePhase = enum(u2) {
-    not_being_thrown = 0,
-    in_escape_window = 1,
-    escape_success = 2,
-    escape_fail = 3,
+    in_escape_window = 0,
+    escape_success = 1,
+    escape_fail = 2,
 };
 
 pub const ThrowEscapeInputMode = enum(u1) {

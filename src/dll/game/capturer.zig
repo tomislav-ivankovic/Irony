@@ -460,7 +460,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
             const player = player_maybe orelse return null;
             const cancel_requirements = if (cancel_requirements_maybe) |c| c.* else return null;
             switch (player.correct_throw_escape_input) {
-                .none => return .{ .phase = .not_being_thrown },
+                .none => return null,
                 .press_1, .press_2, .press_1_plus_2, .hold_1, .hold_2, .hold_1_plus_2 => {},
                 else => return null,
             }
@@ -2023,11 +2023,7 @@ test "should capture throw escape correctly" {
             .throw_escape_hold = false,
         },
     }));
-    try testing.expectEqual(model.ThrowEscape{
-        .phase = .not_being_thrown,
-        .input_mode = .press,
-        .correct_inputs = .{ .one = false, .two = false, .one_plus_two = false },
-    }, frame_1.getPlayerById(.player_1).throw_escape);
+    try testing.expectEqual(null, frame_1.getPlayerById(.player_1).throw_escape);
     try testing.expectEqual(model.ThrowEscape{
         .phase = .in_escape_window,
         .input_mode = .press,

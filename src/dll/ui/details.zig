@@ -401,7 +401,7 @@ pub const Details = struct {
         \\Escape Fail - Player failed in escaping the throw.
     ,
         model.ThrowEscapePhase,
-        .not_being_thrown,
+        null,
         drawThrowEscapePhase,
     ) = .{},
     correct_throw_escape: Row(
@@ -1039,7 +1039,6 @@ fn drawBlocking(value: model.Blocking, alpha: f32) void {
 
 fn drawThrowEscapePhase(value: model.ThrowEscapePhase, alpha: f32) void {
     const text = switch (value) {
-        .not_being_thrown => empty_value_string,
         .in_escape_window => "In Escape Window",
         .escape_success => "Escape Success",
         .escape_fail => "Escape Fail",
@@ -3069,14 +3068,6 @@ test "should draw throw escape phase correctly" {
 
             details.processFrame(&settings, &.{ .players = .{
                 .{ .throw_escape = null },
-                .{ .throw_escape = null },
-            } });
-            ctx.yield(1);
-            try ctx.expectItemExists("cell_1/---");
-            try ctx.expectItemExists("cell_2/---");
-
-            details.processFrame(&settings, &.{ .players = .{
-                .{ .throw_escape = .{ .phase = .not_being_thrown } },
                 .{ .throw_escape = .{ .phase = .in_escape_window } },
             } });
             ctx.yield(1);
