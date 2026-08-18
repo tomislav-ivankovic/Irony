@@ -78,6 +78,7 @@ pub const Rendering = struct {
         self.lines.render(
             context,
             buffer_context,
+            camera.position.convert(),
             world_to_clip,
             clip_to_world,
             settings.occluded_alpha,

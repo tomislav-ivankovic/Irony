@@ -156,6 +156,7 @@ pub fn Lines(comptime rendering_api: build_info.RenderingApi) type {
             self: *Self,
             context: *const dx.Context,
             buffer_context: *const dx.BufferContext,
+            camera_position: sdk.math.Vec3,
             world_to_clip: sdk.math.Mat4,
             clip_to_world: sdk.math.Mat4,
             occluded_alpha: f32,
@@ -168,7 +169,7 @@ pub fn Lines(comptime rendering_api: build_info.RenderingApi) type {
                 @floatFromInt(back_buffer_size.y()),
             });
             if (is_depth_enabled) {
-                self.sortByDepth(world_to_clip);
+                self.sortByDepth(camera_position);
             }
             if (is_depth_enabled and occluded_alpha > 0) {
                 if (self.occluded_shader) |*shader| {
@@ -238,10 +239,10 @@ pub fn Lines(comptime rendering_api: build_info.RenderingApi) type {
             };
         }
 
-        fn sortByDepth(self: *Self, world_to_clip: sdk.math.Mat4) void {
+        fn sortByDepth(self: *Self, camera_position: sdk.math.Vec3) void {
             const Context = struct {
                 vertices: []const Vertex,
-                world_to_clip: sdk.math.Mat4,
+                camera_position: sdk.math.Vec3,
             };
             const group6 = struct {
                 fn call(indices: []Index) [][6]Index {
@@ -255,11 +256,11 @@ pub fn Lines(comptime rendering_api: build_info.RenderingApi) type {
                     const lhs_vertex = context.vertices[lhs[0]];
                     const rhs_vertex = context.vertices[rhs[0]];
                     const lhs_depth = lhs_vertex.start.add(lhs_vertex.end).scale(0.5)
-                        .pointTransform(context.world_to_clip).z();
+                        .distanceSquaredTo(context.camera_position);
                     const rhs_depth = rhs_vertex.start.add(rhs_vertex.end).scale(0.5)
-                        .pointTransform(context.world_to_clip).z();
+                        .distanceSquaredTo(context.camera_position);
                     if (lhs_depth != rhs_depth) {
-                        return lhs_depth < rhs_depth;
+                        return lhs_depth > rhs_depth;
                     } else {
                         return lhs_vertex.depth_factor < rhs_vertex.depth_factor;
                     }
@@ -270,7 +271,7 @@ pub fn Lines(comptime rendering_api: build_info.RenderingApi) type {
                 group6(self.indices.items),
                 Context{
                     .vertices = self.vertices.items,
-                    .world_to_clip = world_to_clip,
+                    .camera_position = camera_position,
                 },
                 lessThanFn,
             );
@@ -315,12 +316,13 @@ test "should render without errors when rendering api is DX11" {
             -1,
         );
 
+        const camera_position = sdk.math.Vec3.fromArray(.{ @floatFromInt(index), 1, 1 });
         const world_to_clip = sdk.math.Mat4.identity
-            .lookAt(.fromArray(.{ @floatFromInt(index), 1, 1 }), .zero, .plus_z)
+            .lookAt(camera_position, .zero, .plus_z)
             .perspective(0.25 * std.math.pi, 16.0 / 9.0, 1, 1000);
         const clip_to_world = world_to_clip.inverse() orelse return error.InverseFailed;
         const buffer_context = try context.beforeRender();
-        lines.render(&context, buffer_context, world_to_clip, clip_to_world, 0.1, 1.8, true);
+        lines.render(&context, buffer_context, camera_position, world_to_clip, clip_to_world, 0.1, 1.8, true);
         try context.afterRender(buffer_context);
         try testing_context.present();
     }
@@ -361,12 +363,13 @@ test "should render without errors when rendering api is DX12" {
             -1,
         );
 
+        const camera_position = sdk.math.Vec3.fromArray(.{ @floatFromInt(index), 1, 1 });
         const world_to_clip = sdk.math.Mat4.identity
-            .lookAt(.fromArray(.{ @floatFromInt(index), 1, 1 }), .zero, .plus_z)
+            .lookAt(camera_position, .zero, .plus_z)
             .perspective(0.25 * std.math.pi, 16.0 / 9.0, 1, 1000);
         const clip_to_world = world_to_clip.inverse() orelse return error.InverseFailed;
         const buffer_context = try context.beforeRender();
-        lines.render(&context, buffer_context, world_to_clip, clip_to_world, 0.1, 1.8, true);
+        lines.render(&context, buffer_context, camera_position, world_to_clip, clip_to_world, 0.1, 1.8, true);
         try context.afterRender(buffer_context);
         try testing_context.present();
     }
