@@ -63,6 +63,7 @@ pub const SkeletonPointId = @import("skeleton.zig").SkeletonPointId;
 pub const SkeletonPoint = @import("skeleton.zig").SkeletonPoint;
 pub const Skeleton = @import("skeleton.zig").Skeleton;
 pub const ThrowEscapePhase = @import("throw_escape.zig").ThrowEscapePhase;
+pub const ThrowEscapeInputMode = @import("throw_escape.zig").ThrowEscapeInputMode;
 pub const ThrowEscapeInput = @import("throw_escape.zig").ThrowEscapeInput;
 pub const ThrowEscapeInputs = @import("throw_escape.zig").ThrowEscapeInputs;
 pub const ThrowEscapeTiming = @import("throw_escape.zig").ThrowEscapeTiming;

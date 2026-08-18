@@ -66,23 +66,28 @@ pub const CancelFlags = sdk.memory.Bitfield(u32, &.{
 
 // MovesetExtractor: req
 pub const CancelRequirement = enum(u32) {
-    throw_escape_1 = 0x83, // MovesetExtractor: Pressed ONLY LP (1)
-    throw_escape_2 = 0x84, // MovesetExtractor: Pressed ONLY RP (2)
-    throw_escape_1_plus_2 = 0x85, // MovesetExtractor: Pressed ONLY RP+LP (1+2)
+    throw_escape_press_1 = 0x83, // MovesetExtractor: Pressed ONLY LP (1)
+    throw_escape_press_2 = 0x84, // MovesetExtractor: Pressed ONLY RP (2)
+    throw_escape_press_1_plus_2 = 0x85, // MovesetExtractor: Pressed ONLY RP+LP (1+2)
+    throw_escape_hold = 0x87,
     _,
 };
 
 pub const CancelRequirements = packed struct {
-    throw_escape_1: bool = false,
-    throw_escape_2: bool = false,
-    throw_escape_1_plus_2: bool = false,
+    throw_escape_press_1: bool = false,
+    throw_escape_press_2: bool = false,
+    throw_escape_press_1_plus_2: bool = false,
+    throw_escape_hold: bool = false,
 };
 
 pub const ThrowEscapeInput = enum(u32) {
     none = 0xC000001D,
-    one = 0xD000001C,
-    two = 0xE000001F,
-    one_plus_two = 0xF000001E,
+    press_1 = 0xD000001C,
+    press_2 = 0xE000001F,
+    press_1_plus_2 = 0xF000001E,
+    hold_1 = 0x90000018,
+    hold_2 = 0xA000001B,
+    hold_1_plus_2 = 0xB000001A,
     _,
 };
 

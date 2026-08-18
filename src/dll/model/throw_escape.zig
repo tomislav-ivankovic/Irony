@@ -8,6 +8,11 @@ pub const ThrowEscapePhase = enum(u2) {
     escape_fail = 3,
 };
 
+pub const ThrowEscapeInputMode = enum(u1) {
+    press = 0,
+    hold = 1,
+};
+
 pub const ThrowEscapeInput = enum(u2) {
     none = 0,
     one = 1,
@@ -26,8 +31,9 @@ pub const ThrowEscapeTiming = enum(u1) {
     late = 1,
 };
 
-pub const ThrowEscape = packed struct(u8) {
+pub const ThrowEscape = packed struct(u9) {
     phase: ThrowEscapePhase,
+    input_mode: ThrowEscapeInputMode = .press,
     attempted_input: ThrowEscapeInput = .none,
     attempt_timing: ThrowEscapeTiming = .on_time,
     correct_inputs: ThrowEscapeInputs = .{},

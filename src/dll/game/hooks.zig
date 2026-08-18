@@ -180,9 +180,10 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
             defer _ = active_hook_calls.fetchSub(1, .seq_cst);
             const requirement = param_1.*;
             switch (requirement) {
-                .throw_escape_1 => cancel_requirements.throw_escape_1 = true,
-                .throw_escape_2 => cancel_requirements.throw_escape_2 = true,
-                .throw_escape_1_plus_2 => cancel_requirements.throw_escape_1_plus_2 = true,
+                .throw_escape_press_1 => cancel_requirements.throw_escape_press_1 = true,
+                .throw_escape_press_2 => cancel_requirements.throw_escape_press_2 = true,
+                .throw_escape_press_1_plus_2 => cancel_requirements.throw_escape_press_1_plus_2 = true,
+                .throw_escape_hold => cancel_requirements.throw_escape_hold = true,
                 else => {},
             }
             return cancel_requirements_hook.?.original(param_1, param_2, param_3);
@@ -303,44 +304,59 @@ test "should set cancel_requirements and call original when process cancel requi
     try testing.expectEqual(game.CancelRequirements{}, hooks.cancel_requirements);
     try testing.expectEqual(0, ProcessCancelRequirement.times_called);
 
-    const throw_escape_1 = game.CancelRequirement.throw_escape_1;
+    const throw_escape_press_1 = game.CancelRequirement.throw_escape_press_1;
     ProcessCancelRequirement.return_value = 10;
-    const return_1 = ProcessCancelRequirement.call(&throw_escape_1, 11, 12);
+    const return_1 = ProcessCancelRequirement.call(&throw_escape_press_1, 11, 12);
     try testing.expectEqual(game.CancelRequirements{
-        .throw_escape_1 = true,
+        .throw_escape_press_1 = true,
     }, hooks.cancel_requirements);
     try testing.expectEqual(1, ProcessCancelRequirement.times_called);
-    try testing.expectEqual(&throw_escape_1, ProcessCancelRequirement.last_param_1);
+    try testing.expectEqual(&throw_escape_press_1, ProcessCancelRequirement.last_param_1);
     try testing.expectEqual(11, ProcessCancelRequirement.last_param_2);
     try testing.expectEqual(12, ProcessCancelRequirement.last_param_3);
     try testing.expectEqual(return_1, 10);
 
-    const throw_escape_2 = game.CancelRequirement.throw_escape_2;
+    const throw_escape_press_2 = game.CancelRequirement.throw_escape_press_2;
     ProcessCancelRequirement.return_value = 20;
-    const return_2 = ProcessCancelRequirement.call(&throw_escape_2, 21, 22);
+    const return_2 = ProcessCancelRequirement.call(&throw_escape_press_2, 21, 22);
     try testing.expectEqual(game.CancelRequirements{
-        .throw_escape_1 = true,
-        .throw_escape_2 = true,
+        .throw_escape_press_1 = true,
+        .throw_escape_press_2 = true,
     }, hooks.cancel_requirements);
     try testing.expectEqual(2, ProcessCancelRequirement.times_called);
-    try testing.expectEqual(&throw_escape_2, ProcessCancelRequirement.last_param_1);
+    try testing.expectEqual(&throw_escape_press_2, ProcessCancelRequirement.last_param_1);
     try testing.expectEqual(21, ProcessCancelRequirement.last_param_2);
     try testing.expectEqual(22, ProcessCancelRequirement.last_param_3);
     try testing.expectEqual(return_2, 20);
 
-    const throw_escape_1_plus_2 = game.CancelRequirement.throw_escape_1_plus_2;
+    const throw_escape_press_1_plus_2 = game.CancelRequirement.throw_escape_press_1_plus_2;
     ProcessCancelRequirement.return_value = 30;
-    const return_3 = ProcessCancelRequirement.call(&throw_escape_1_plus_2, 31, 32);
+    const return_3 = ProcessCancelRequirement.call(&throw_escape_press_1_plus_2, 31, 32);
     try testing.expectEqual(game.CancelRequirements{
-        .throw_escape_1 = true,
-        .throw_escape_2 = true,
-        .throw_escape_1_plus_2 = true,
+        .throw_escape_press_1 = true,
+        .throw_escape_press_2 = true,
+        .throw_escape_press_1_plus_2 = true,
     }, hooks.cancel_requirements);
     try testing.expectEqual(3, ProcessCancelRequirement.times_called);
-    try testing.expectEqual(&throw_escape_1_plus_2, ProcessCancelRequirement.last_param_1);
+    try testing.expectEqual(&throw_escape_press_1_plus_2, ProcessCancelRequirement.last_param_1);
     try testing.expectEqual(31, ProcessCancelRequirement.last_param_2);
     try testing.expectEqual(32, ProcessCancelRequirement.last_param_3);
     try testing.expectEqual(return_3, 30);
+
+    const throw_escape_hold = game.CancelRequirement.throw_escape_hold;
+    ProcessCancelRequirement.return_value = 40;
+    const return_4 = ProcessCancelRequirement.call(&throw_escape_hold, 41, 42);
+    try testing.expectEqual(game.CancelRequirements{
+        .throw_escape_press_1 = true,
+        .throw_escape_press_2 = true,
+        .throw_escape_press_1_plus_2 = true,
+        .throw_escape_hold = true,
+    }, hooks.cancel_requirements);
+    try testing.expectEqual(4, ProcessCancelRequirement.times_called);
+    try testing.expectEqual(&throw_escape_hold, ProcessCancelRequirement.last_param_1);
+    try testing.expectEqual(41, ProcessCancelRequirement.last_param_2);
+    try testing.expectEqual(42, ProcessCancelRequirement.last_param_3);
+    try testing.expectEqual(return_4, 40);
 }
 
 test "should reset cancel_requirements when tick function is called in T7" {
@@ -358,9 +374,10 @@ test "should reset cancel_requirements when tick function is called in T7" {
     defer hooks.deinit();
 
     hooks.cancel_requirements = .{
-        .throw_escape_1 = true,
-        .throw_escape_2 = true,
-        .throw_escape_1_plus_2 = true,
+        .throw_escape_press_1 = true,
+        .throw_escape_press_2 = true,
+        .throw_escape_press_1_plus_2 = true,
+        .throw_escape_hold = true,
     };
     Tick.call(123, 456);
     try testing.expectEqual(game.CancelRequirements{}, hooks.cancel_requirements);
@@ -381,9 +398,10 @@ test "should reset cancel_requirements when tick function is called in T8" {
     defer hooks.deinit();
 
     hooks.cancel_requirements = .{
-        .throw_escape_1 = true,
-        .throw_escape_2 = true,
-        .throw_escape_1_plus_2 = true,
+        .throw_escape_press_1 = true,
+        .throw_escape_press_2 = true,
+        .throw_escape_press_1_plus_2 = true,
+        .throw_escape_hold = true,
     };
     Tick.call(2, 3, 4, 5);
     try testing.expectEqual(game.CancelRequirements{}, hooks.cancel_requirements);

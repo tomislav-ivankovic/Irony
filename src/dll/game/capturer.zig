@@ -461,12 +461,13 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
             const cancel_requirements = if (cancel_requirements_maybe) |c| c.* else return null;
             switch (player.correct_throw_escape_input) {
                 .none => return .{ .phase = .not_being_thrown },
-                .one, .two, .one_plus_two => {},
+                .press_1, .press_2, .press_1_plus_2, .hold_1, .hold_2, .hold_1_plus_2 => {},
                 else => return null,
             }
-            const is_inside_escape_window = cancel_requirements.throw_escape_1 or
-                cancel_requirements.throw_escape_2 or
-                cancel_requirements.throw_escape_1_plus_2;
+            const is_inside_escape_window = cancel_requirements.throw_escape_press_1 or
+                cancel_requirements.throw_escape_press_2 or
+                cancel_requirements.throw_escape_press_1_plus_2 or
+                cancel_requirements.throw_escape_hold;
             return .{
                 .phase = switch (player.throw_escape_flags.escape_success) {
                     true => .escape_success,
@@ -475,10 +476,24 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                         false => .escape_fail,
                     },
                 },
-                .correct_inputs = .{
-                    .one = cancel_requirements.throw_escape_1,
-                    .two = cancel_requirements.throw_escape_2,
-                    .one_plus_two = cancel_requirements.throw_escape_1_plus_2,
+                .input_mode = switch (player.correct_throw_escape_input) {
+                    .press_1, .press_2, .press_1_plus_2 => .press,
+                    .hold_1, .hold_2, .hold_1_plus_2 => .hold,
+                    else => unreachable,
+                },
+                .correct_inputs = switch (is_inside_escape_window) {
+                    true => switch (player.correct_throw_escape_input) {
+                        .press_1, .press_2, .press_1_plus_2 => .{
+                            .one = cancel_requirements.throw_escape_press_1,
+                            .two = cancel_requirements.throw_escape_press_2,
+                            .one_plus_two = cancel_requirements.throw_escape_press_1_plus_2,
+                        },
+                        .hold_1 => .{ .one = true },
+                        .hold_2 => .{ .two = true },
+                        .hold_1_plus_2 => .{ .one_plus_two = true },
+                        else => unreachable,
+                    },
+                    false => .{},
                 },
             };
         }
@@ -1991,39 +2006,91 @@ test "should capture can interact correctly" {
 test "should capture throw escape correctly" {
     const gm = game.Memory(.t8).testingInit;
     var capturer = Capturer(.t8){};
+
     const frame_1 = capturer.captureFrame(&gm(.{
         .player_1 = &.{
             .correct_throw_escape_input = .none,
             .throw_escape_flags = .{ .escape_success = false },
         },
         .player_2 = &.{
-            .correct_throw_escape_input = .one_plus_two,
+            .correct_throw_escape_input = .press_1_plus_2,
             .throw_escape_flags = .{ .escape_success = false },
         },
         .cancel_requirements = &.{
-            .throw_escape_1 = false,
-            .throw_escape_2 = false,
-            .throw_escape_1_plus_2 = true,
+            .throw_escape_press_1 = false,
+            .throw_escape_press_2 = false,
+            .throw_escape_press_1_plus_2 = true,
+            .throw_escape_hold = false,
         },
     }));
+    try testing.expectEqual(model.ThrowEscape{
+        .phase = .not_being_thrown,
+        .input_mode = .press,
+        .correct_inputs = .{ .one = false, .two = false, .one_plus_two = false },
+    }, frame_1.getPlayerById(.player_1).throw_escape);
+    try testing.expectEqual(model.ThrowEscape{
+        .phase = .in_escape_window,
+        .input_mode = .press,
+        .correct_inputs = .{ .one = false, .two = false, .one_plus_two = true },
+    }, frame_1.getPlayerById(.player_2).throw_escape);
+
     const frame_2 = capturer.captureFrame(&gm(.{
         .player_1 = &.{
-            .correct_throw_escape_input = .one,
+            .correct_throw_escape_input = .press_1,
             .throw_escape_flags = .{ .escape_success = false },
         },
         .player_2 = &.{
-            .correct_throw_escape_input = .two,
+            .correct_throw_escape_input = .press_2,
             .throw_escape_flags = .{ .escape_success = true },
         },
         .cancel_requirements = &.{
-            .throw_escape_1 = true,
-            .throw_escape_2 = true,
-            .throw_escape_1_plus_2 = false,
+            .throw_escape_press_1 = true,
+            .throw_escape_press_2 = true,
+            .throw_escape_press_1_plus_2 = false,
+            .throw_escape_hold = false,
         },
     }));
+    try testing.expectEqual(model.ThrowEscape{
+        .phase = .in_escape_window,
+        .input_mode = .press,
+        .correct_inputs = .{ .one = true, .two = true, .one_plus_two = false },
+    }, frame_2.getPlayerById(.player_1).throw_escape);
+    try testing.expectEqual(model.ThrowEscape{
+        .phase = .escape_success,
+        .input_mode = .press,
+        .correct_inputs = .{ .one = true, .two = true, .one_plus_two = false },
+    }, frame_2.getPlayerById(.player_2).throw_escape);
+
     const frame_3 = capturer.captureFrame(&gm(.{
         .player_1 = &.{
-            .correct_throw_escape_input = .one_plus_two,
+            .correct_throw_escape_input = .hold_1,
+            .throw_escape_flags = .{ .escape_success = false },
+        },
+        .player_2 = &.{
+            .correct_throw_escape_input = .hold_2,
+            .throw_escape_flags = .{ .escape_success = false },
+        },
+        .cancel_requirements = &.{
+            .throw_escape_press_1 = false,
+            .throw_escape_press_2 = false,
+            .throw_escape_press_1_plus_2 = false,
+            .throw_escape_hold = true,
+        },
+    }));
+    try testing.expectEqual(model.ThrowEscape{
+        .phase = .in_escape_window,
+        .input_mode = .hold,
+        .correct_inputs = .{ .one = true, .two = false, .one_plus_two = false },
+    }, frame_3.getPlayerById(.player_1).throw_escape);
+    try testing.expectEqual(model.ThrowEscape{
+        .phase = .in_escape_window,
+        .input_mode = .hold,
+        .correct_inputs = .{ .one = false, .two = true, .one_plus_two = false },
+    }, frame_3.getPlayerById(.player_2).throw_escape);
+
+    const frame_4 = capturer.captureFrame(&gm(.{
+        .player_1 = &.{
+            .correct_throw_escape_input = .hold_1_plus_2,
             .throw_escape_flags = .{ .escape_success = false },
         },
         .player_2 = &.{
@@ -2031,32 +2098,18 @@ test "should capture throw escape correctly" {
             .throw_escape_flags = .{ .escape_success = false },
         },
         .cancel_requirements = &.{
-            .throw_escape_1 = false,
-            .throw_escape_2 = false,
-            .throw_escape_1_plus_2 = false,
+            .throw_escape_press_1 = false,
+            .throw_escape_press_2 = false,
+            .throw_escape_press_1_plus_2 = false,
+            .throw_escape_hold = false,
         },
     }));
     try testing.expectEqual(model.ThrowEscape{
-        .phase = .not_being_thrown,
-        .correct_inputs = .{ .one = false, .two = false, .one_plus_two = false },
-    }, frame_1.getPlayerById(.player_1).throw_escape);
-    try testing.expectEqual(model.ThrowEscape{
-        .phase = .in_escape_window,
-        .correct_inputs = .{ .one = false, .two = false, .one_plus_two = true },
-    }, frame_1.getPlayerById(.player_2).throw_escape);
-    try testing.expectEqual(model.ThrowEscape{
-        .phase = .in_escape_window,
-        .correct_inputs = .{ .one = true, .two = true, .one_plus_two = false },
-    }, frame_2.getPlayerById(.player_1).throw_escape);
-    try testing.expectEqual(model.ThrowEscape{
-        .phase = .escape_success,
-        .correct_inputs = .{ .one = true, .two = true, .one_plus_two = false },
-    }, frame_2.getPlayerById(.player_2).throw_escape);
-    try testing.expectEqual(model.ThrowEscape{
         .phase = .escape_fail,
+        .input_mode = .hold,
         .correct_inputs = .{ .one = false, .two = false, .one_plus_two = false },
-    }, frame_3.getPlayerById(.player_1).throw_escape);
-    try testing.expectEqual(null, frame_3.getPlayerById(.player_2).throw_escape);
+    }, frame_4.getPlayerById(.player_1).throw_escape);
+    try testing.expectEqual(null, frame_4.getPlayerById(.player_2).throw_escape);
 }
 
 test "should capture can move correctly" {
