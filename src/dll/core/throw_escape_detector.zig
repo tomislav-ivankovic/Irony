@@ -60,28 +60,26 @@ pub fn ThrowEscapeDetector(comptime config: ThrowEscapeDetectorConfig) type {
         fn prolongCorrectInputs(state: *const PlayerState, player: *model.Player) void {
             const escape = if (player.throw_escape) |*e| e else return;
             const previous_escape = state.previous_escape orelse return;
-            escape.correct_inputs = switch (escape.phase) {
-                .not_being_thrown => .{
-                    .one = false,
-                    .two = false,
-                    .one_plus_two = false,
-                },
-                .in_escape_window, .escape_success, .escape_fail => .{
-                    .one = escape.correct_inputs.one or previous_escape.correct_inputs.one,
-                    .two = escape.correct_inputs.two or previous_escape.correct_inputs.two,
-                    .one_plus_two = escape.correct_inputs.one_plus_two or previous_escape.correct_inputs.one_plus_two,
-                },
-            };
+            if (escape.phase == .not_being_thrown) {
+                escape.correct_inputs = .{};
+            } else if (escape.correct_inputs == model.ThrowEscapeInputs{}) {
+                escape.correct_inputs = previous_escape.correct_inputs;
+            }
         }
 
         fn processInput(state: *PlayerState, player: *model.Player) void {
             const input = player.input orelse return;
+            const previous_escape = state.previous_escape orelse return;
             const escape = if (player.throw_escape) |*e| e else return;
             const previous_input = state.previous_input orelse return;
             if (escape.phase == .not_being_thrown) {
                 state.input_state = .none;
                 escape.attempted_input = .none;
                 return;
+            }
+            if (escape.correct_inputs != previous_escape.correct_inputs) {
+                state.input_state = .none;
+                escape.attempted_input = .none;
             }
             switch (state.input_state) {
                 .none => block: {
