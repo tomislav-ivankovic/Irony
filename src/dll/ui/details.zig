@@ -404,6 +404,16 @@ pub const Details = struct {
         null,
         drawThrowEscapePhase,
     ) = .{},
+    throw_escape_input_mode: Row(
+        "Throw Escape Input Mode",
+        \\One of the following:
+        \\Press - Player has to press the correct throw escape input inside the throw escape window.
+        \\Hold - Player can start holding the correct throw escape input before the throw escape window starts.
+    ,
+        model.ThrowEscapeInputMode,
+        null,
+        drawThrowEscapeInputMode,
+    ) = .{},
     correct_throw_escape: Row(
         "Correct Throw Escape",
         \\One of the following:
@@ -578,6 +588,11 @@ pub const Details = struct {
             s,
             if (c1.throw_escape) |*t| t.phase else null,
             if (c2.throw_escape) |*t| t.phase else null,
+        );
+        self.throw_escape_input_mode.processFrame(
+            s,
+            if (c1.throw_escape) |*t| t.input_mode else null,
+            if (c2.throw_escape) |*t| t.input_mode else null,
         );
         self.correct_throw_escape.processFrame(
             s,
@@ -1042,6 +1057,14 @@ fn drawThrowEscapePhase(value: model.ThrowEscapePhase, alpha: f32) void {
         .in_escape_window => "In Escape Window",
         .escape_success => "Escape Success",
         .escape_fail => "Escape Fail",
+    };
+    drawText(text, alpha);
+}
+
+fn drawThrowEscapeInputMode(value: model.ThrowEscapeInputMode, alpha: f32) void {
+    const text = switch (value) {
+        .press => "Press",
+        .hold => "Hold",
     };
     drawText(text, alpha);
 }
@@ -3081,6 +3104,41 @@ test "should draw throw escape phase correctly" {
             ctx.yield(1);
             try ctx.expectItemExists("cell_1/Escape Success");
             try ctx.expectItemExists("cell_2/Escape Fail");
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw throw escape input mode correctly" {
+    const Test = struct {
+        var settings = model.DetailsSettings{ .rows_enabled = .{} };
+        var details = Details{};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            details.draw(&settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window/table/Throw Escape Input Mode");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .throw_escape = null },
+                .{ .throw_escape = null },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/---");
+            try ctx.expectItemExists("cell_2/---");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .throw_escape = .{ .phase = .in_escape_window, .input_mode = .press } },
+                .{ .throw_escape = .{ .phase = .in_escape_window, .input_mode = .hold } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/Press");
+            try ctx.expectItemExists("cell_2/Hold");
         }
     };
     const context = try sdk.ui.getTestingContext();
