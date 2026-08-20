@@ -197,9 +197,9 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                     0x0,
                 }),
                 .main_player_info = proxy("main_player_info", game.PlayerInfo(.t8), .{
-                    relativeOffset(i32, add(0x9, pattern(
+                    relativeOffset(i32, add(0xF, pattern(
                         cache,
-                        "40 53 48 83 EC 20 48 8B 1D ?? ?? ?? ?? 48 85 DB 74 ?? BA 01 00 00 00",
+                        "88 81 88 00 00 00 88 81 A8 00 00 00 48 8B 0D",
                     ))),
                     0x0,
                     0x0,
@@ -207,9 +207,9 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                     0x0,
                 }),
                 .secondary_player_info = proxy("secondary_player_info", game.PlayerInfo(.t8), .{
-                    relativeOffset(i32, add(0x9, pattern(
+                    relativeOffset(i32, add(0xF, pattern(
                         cache,
-                        "40 53 48 83 EC 20 48 8B 1D ?? ?? ?? ?? 48 85 DB 74 ?? BA 01 00 00 00",
+                        "88 81 88 00 00 00 88 81 A8 00 00 00 48 8B 0D",
                     ))),
                     0x0,
                     0x8,

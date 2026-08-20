@@ -22,7 +22,7 @@
 
     // Version of the T8 game that this version of the application has been tested to be compatible with.
     // Not a standard build.zig.zon field.
-    .t8_version = "3.01.01",
+    .t8_version = "3.02.01",
 
     // Indicates the version of Zig that the project is meant to be compiled with.
     // Not a standard build.zig.zon field.
