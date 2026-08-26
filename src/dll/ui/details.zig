@@ -467,6 +467,13 @@ pub const Details = struct {
         null,
         drawInput,
     ) = .{},
+    in_special_style: Row(
+        "In Special Style",
+        "Whether the player is using special style mode that enables simplified, beginner friendly attack input.",
+        bool,
+        null,
+        drawYesNo,
+    ) = .{},
     distance_to_opponent: Row(
         "Distance To Opponent [m]",
         \\Distance between the most exposed points on player's and opponent's hurt cylinders.
@@ -616,6 +623,7 @@ pub const Details = struct {
             } else null,
         );
         self.input.processFrame(s, c1.input, c2.input);
+        self.in_special_style.processFrame(s, c1.in_special_style, c2.in_special_style);
         self.distance_to_opponent.processFrame(s, c1.getDistanceTo(c2), c2.getDistanceTo(c1));
         self.angle_to_opponent.processFrame(s, c1.getAngleTo(c2), c2.getAngleTo(c1));
         self.distance_to_wall.processFrame(
@@ -3429,6 +3437,41 @@ test "should draw input correctly" {
             ctx.yield(1);
             try ctx.expectItemExists("cell_1/bR");
             try ctx.expectItemExists("cell_2/db1+2+3+4+SS+R+H");
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw in special style correctly" {
+    const Test = struct {
+        var settings = model.DetailsSettings{ .rows_enabled = .{} };
+        var details = Details{};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            details.draw(&settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window/table/In Special Style");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .in_special_style = null },
+                .{ .in_special_style = false },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/---");
+            try ctx.expectItemExists("cell_2/No");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .in_special_style = true },
+                .{ .in_special_style = false },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/Yes");
+            try ctx.expectItemExists("cell_2/No");
         }
     };
     const context = try sdk.ui.getTestingContext();

@@ -76,6 +76,7 @@ pub const Player = struct {
     can_move: ?bool = null,
     throw_escape: ?model.ThrowEscape = null,
     input: ?model.Input = null,
+    in_special_style: ?bool = null,
     health: ?u32 = null,
     health_recover_limit: ?u32 = null,
     max_health: ?u32 = null,

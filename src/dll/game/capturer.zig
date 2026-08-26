@@ -292,6 +292,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                 .can_move = if (player) |p| p.can_move.toBool() else null,
                 .throw_escape = captureThrowEscape(player, cancel_requirements),
                 .input = captureInput(player),
+                .in_special_style = if (player) |p| p.in_special_style.toBool() else null,
                 .health = if (player) |p| p.health.convert().value else null,
                 .health_recover_limit = if (player) |p| switch (game_id) {
                     .t7 => p.health.convert().value,
@@ -2371,6 +2372,23 @@ test "should capture forward/back correctly depending on the input side" {
     try testing.expectEqual(false, frame_4.getPlayerById(.player_1).input.?.back);
     try testing.expectEqual(false, frame_4.getPlayerById(.player_2).input.?.forward);
     try testing.expectEqual(true, frame_4.getPlayerById(.player_2).input.?.back);
+}
+
+test "should capture in special style correctly" {
+    const gm = game.Memory(.t8).testingInit;
+    var capturer = Capturer(.t8){};
+    const frame_1 = capturer.captureFrame(&gm(.{
+        .player_1 = &.{ .in_special_style = .false },
+        .player_2 = &.{ .in_special_style = .true },
+    }));
+    const frame_2 = capturer.captureFrame(&gm(.{
+        .player_1 = null,
+        .player_2 = &.{ .in_special_style = @enumFromInt(2) },
+    }));
+    try testing.expectEqual(false, frame_1.getPlayerById(.player_1).in_special_style);
+    try testing.expectEqual(true, frame_1.getPlayerById(.player_2).in_special_style);
+    try testing.expectEqual(null, frame_2.getPlayerById(.player_1).in_special_style);
+    try testing.expectEqual(null, frame_2.getPlayerById(.player_2).in_special_style);
 }
 
 test "should capture health correctly" {
