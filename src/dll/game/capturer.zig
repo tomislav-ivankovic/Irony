@@ -502,8 +502,8 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
             const player = player_maybe orelse return null;
             const input_side: game.PlayerSide = player.input_side;
             const input: game.Input(game_id) = player.input;
-            const directional_input: game.DirectionalInput = player.directional_input;
-            const attack_input: game.AttackInput(game_id).Buttons = player.attack_input.down_buttons;
+            const directional_input: game.DirectionalInput.Direction = player.directional_input.down;
+            const attack_input: game.AttackInput(game_id).Buttons = player.attack_input.down;
             const input_1 = model.Input{
                 .forward = switch (input_side) {
                     .left => input.right,
@@ -2215,8 +2215,8 @@ test "should capture input correctly in T7" {
             .input_side = .left,
         },
         .player_2 = &.{
-            .directional_input = .down_back,
-            .attack_input = .{ .down_buttons = .{
+            .directional_input = .{ .down = .down_back },
+            .attack_input = .{ .down = .{
                 .button_1 = true,
                 .button_2 = false,
                 .button_3 = true,
@@ -2279,8 +2279,8 @@ test "should capture input correctly in T8" {
             .input_side = .right,
         },
         .player_2 = &.{
-            .directional_input = .down_back,
-            .attack_input = .{ .down_buttons = .{
+            .directional_input = .{ .down = .down_back },
+            .attack_input = .{ .down = .{
                 .button_1 = true,
                 .button_2 = false,
                 .button_3 = true,

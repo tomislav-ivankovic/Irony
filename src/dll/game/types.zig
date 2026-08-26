@@ -159,11 +159,11 @@ pub const SimpleState = enum(u32) {
 
 pub fn AttackInput(comptime game_id: build_info.Game) type {
     return packed struct(u32) {
-        pressed_buttons: Buttons = .{},
+        pressed: Buttons = .{},
         _padding_1: u1 = 0,
-        down_buttons: Buttons = .{},
+        down: Buttons = .{},
         _padding_2: u1 = 0,
-        not_down_buttons: Buttons = .{},
+        up: Buttons = .{},
         _padding_3: u6 = 0,
 
         pub const Buttons = switch (game_id) {
@@ -189,17 +189,23 @@ pub fn AttackInput(comptime game_id: build_info.Game) type {
     };
 }
 
-pub const DirectionalInput = enum(u32) {
-    down_back = 2,
-    down = 4,
-    down_forward = 8,
-    back = 16,
-    neutral = 32,
-    forward = 64,
-    up_back = 128,
-    up = 256,
-    up_forward = 512,
-    _,
+pub const DirectionalInput = extern struct {
+    down: Direction = .neutral,
+    pressed: Direction = .none,
+
+    pub const Direction = enum(u32) {
+        none = 1,
+        down_back = 2,
+        down = 4,
+        down_forward = 8,
+        back = 16,
+        neutral = 32,
+        forward = 64,
+        up_back = 128,
+        up = 256,
+        up_forward = 512,
+        _,
+    };
 };
 
 pub fn Input(comptime game_id: build_info.Game) type {
@@ -422,7 +428,7 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x0AE0, "floor_number", u32, &0),
             field(0x0C00, "in_rage", Bool, &.false),
             field(0x0DD8, "attack_input", AttackInput(.t7), &.{}),
-            field(0x0DDC, "directional_input", DirectionalInput, &.neutral),
+            field(0x0DDC, "directional_input", DirectionalInput, &.{}),
             field(0x0DE4, "input_side", PlayerSide, &.left),
             field(0x0E0C, "input", Input(.t7), &.{}),
             field(0x0E50, "hit_lines", HitLines(.t7), &getDefaultHitLines(.t7)),
@@ -457,7 +463,7 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x24C1, "in_heat", Bool, &.false),
             field(0x2508, "stage_set_number", u32, &0),
             field(0x28B0, "attack_input", AttackInput(.t8), &.{}),
-            field(0x28B4, "directional_input", DirectionalInput, &.neutral),
+            field(0x28B4, "directional_input", DirectionalInput, &.{}),
             field(0x28BC, "input_side", PlayerSide, &.left),
             field(0x28E4, "input", Input(.t8), &.{}),
             field(0x2950, "hit_lines", HitLines(.t8), &getDefaultHitLines(.t8)),
