@@ -292,6 +292,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                 .can_move = if (player) |p| p.can_move.toBool() else null,
                 .throw_escape = captureThrowEscape(player, cancel_requirements),
                 .input = captureInput(player),
+                .effective_input = captureEffectiveInput(player),
                 .in_special_style = if (player) |p| p.in_special_style.toBool() else null,
                 .health = if (player) |p| p.health.convert().value else null,
                 .health_recover_limit = if (player) |p| switch (game_id) {
@@ -501,11 +502,36 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
 
         fn captureInput(player_maybe: ?*const GamePlayer) ?model.Input {
             const player = player_maybe orelse return null;
+            switch (game_id) {
+                .t7 => {},
+                .t8 => {
+                    const in_special_style: bool = player.in_special_style.toBool() orelse return null;
+                    if (in_special_style) {
+                        return captureInputFromDevice(player);
+                    }
+                },
+            }
+            return captureCombinedInput(player);
+        }
+
+        fn captureEffectiveInput(player_maybe: ?*const GamePlayer) ?model.Input {
+            const player = player_maybe orelse return null;
+            switch (game_id) {
+                .t7 => {},
+                .t8 => {
+                    const in_special_style: bool = player.in_special_style.toBool() orelse return null;
+                    if (in_special_style) {
+                        return captureInputFromGameLogic(player);
+                    }
+                },
+            }
+            return captureCombinedInput(player);
+        }
+
+        fn captureInputFromDevice(player: *const GamePlayer) ?model.Input {
             const input_side: game.PlayerSide = player.input_side;
             const input: game.Input(game_id) = player.input;
-            const directional_input: game.DirectionalInput.Direction = player.directional_input.down;
-            const attack_input: game.AttackInput(game_id).Buttons = player.attack_input.down;
-            const input_1 = model.Input{
+            return .{
                 .forward = switch (input_side) {
                     .left => input.right,
                     .right => input.left,
@@ -531,7 +557,13 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                     .t8 => input.heat,
                 },
             };
-            const input_2 = model.Input{
+        }
+
+        fn captureInputFromGameLogic(player: *const GamePlayer) ?model.Input {
+            const input_side: game.PlayerSide = player.input_side;
+            const directional_input: game.DirectionalInput.Direction = player.directional_input.down;
+            const attack_input: game.AttackInput(game_id).Buttons = player.attack_input.down;
+            return .{
                 .forward = switch (directional_input) {
                     .down_forward, .forward, .up_forward => true,
                     else => false,
@@ -584,6 +616,11 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                     .t8 => attack_input.heat,
                 },
             };
+        }
+
+        fn captureCombinedInput(player: *const GamePlayer) ?model.Input {
+            const input_1 = captureInputFromDevice(player) orelse return null;
+            const input_2 = captureInputFromGameLogic(player) orelse return null;
             return .{
                 .forward = input_1.forward or input_2.forward,
                 .back = input_1.back or input_2.back,
@@ -2196,7 +2233,7 @@ test "should capture can move correctly" {
     try testing.expectEqual(null, frame_2.getPlayerById(.player_2).can_move);
 }
 
-test "should capture input correctly in T7" {
+test "should capture input and effective input correctly in T7" {
     const gm = game.Memory(.t7).testingInit;
     var capturer = Capturer(.t7){};
     const frame = capturer.captureFrame(&gm(.{
@@ -2214,6 +2251,7 @@ test "should capture input correctly in T7" {
                 .rage = true,
             },
             .input_side = .left,
+            .in_special_style = .false,
         },
         .player_2 = &.{
             .directional_input = .{ .down = .down_back },
@@ -2225,7 +2263,247 @@ test "should capture input correctly in T7" {
                 .rage = true,
             } },
             .input_side = .right,
+            .in_special_style = .true,
         },
+    }));
+    const p1_input = model.Input{
+        .forward = true,
+        .back = false,
+        .up = false,
+        .down = true,
+        .left = false,
+        .right = true,
+        .button_1 = false,
+        .button_2 = true,
+        .button_3 = false,
+        .button_4 = true,
+        .special_style = false,
+        .rage = true,
+        .heat = false,
+    };
+    const p2_input = model.Input{
+        .forward = false,
+        .back = true,
+        .up = false,
+        .down = true,
+        .left = false,
+        .right = true,
+        .button_1 = true,
+        .button_2 = false,
+        .button_3 = true,
+        .button_4 = false,
+        .special_style = false,
+        .rage = true,
+        .heat = false,
+    };
+    try testing.expectEqual(p1_input, frame.getPlayerById(.player_1).input);
+    try testing.expectEqual(p2_input, frame.getPlayerById(.player_2).input);
+    try testing.expectEqual(p1_input, frame.getPlayerById(.player_1).effective_input);
+    try testing.expectEqual(p2_input, frame.getPlayerById(.player_2).effective_input);
+}
+
+test "should capture input and effective input correctly in T8" {
+    const gm = game.Memory(.t8).testingInit;
+    var capturer = Capturer(.t8){};
+    const frame = capturer.captureFrame(&gm(.{
+        .player_1 = &.{
+            .input = .{
+                .up = false,
+                .down = true,
+                .left = false,
+                .right = true,
+                .button_1 = false,
+                .button_2 = true,
+                .button_3 = false,
+                .button_4 = true,
+                .special_style = false,
+                .rage = true,
+                .heat = false,
+            },
+            .input_side = .right,
+            .in_special_style = .false,
+        },
+        .player_2 = &.{
+            .directional_input = .{ .down = .down_back },
+            .attack_input = .{ .down = .{
+                .button_1 = true,
+                .button_2 = false,
+                .button_3 = true,
+                .button_4 = false,
+                .heat = true,
+                .special_style = false,
+                .rage = true,
+            } },
+            .input_side = .left,
+            .in_special_style = .false,
+        },
+    }));
+    const p1_input = model.Input{
+        .forward = false,
+        .back = true,
+        .up = false,
+        .down = true,
+        .left = false,
+        .right = true,
+        .button_1 = false,
+        .button_2 = true,
+        .button_3 = false,
+        .button_4 = true,
+        .special_style = false,
+        .rage = true,
+        .heat = false,
+    };
+    const p2_input = model.Input{
+        .forward = false,
+        .back = true,
+        .up = false,
+        .down = true,
+        .left = true,
+        .right = false,
+        .button_1 = true,
+        .button_2 = false,
+        .button_3 = true,
+        .button_4 = false,
+        .special_style = false,
+        .rage = true,
+        .heat = true,
+    };
+    try testing.expectEqual(p1_input, frame.getPlayerById(.player_1).input);
+    try testing.expectEqual(p2_input, frame.getPlayerById(.player_2).input);
+    try testing.expectEqual(p1_input, frame.getPlayerById(.player_1).effective_input);
+    try testing.expectEqual(p2_input, frame.getPlayerById(.player_2).effective_input);
+}
+
+test "should capture forward/back input correctly depending on the input side" {
+    const gm = game.Memory(.t8).testingInit;
+    var capturer = Capturer(.t8){};
+
+    const frame_1 = capturer.captureFrame(&gm(.{
+        .player_1 = &.{ .input = .{ .right = true }, .input_side = .left, .in_special_style = .false },
+        .player_2 = &.{ .input = .{ .right = true }, .input_side = .right, .in_special_style = .false },
+    }));
+    try testing.expect(frame_1.getPlayerById(.player_1).input != null);
+    try testing.expect(frame_1.getPlayerById(.player_2).input != null);
+    try testing.expectEqual(true, frame_1.getPlayerById(.player_1).input.?.forward);
+    try testing.expectEqual(false, frame_1.getPlayerById(.player_1).input.?.back);
+    try testing.expectEqual(false, frame_1.getPlayerById(.player_2).input.?.forward);
+    try testing.expectEqual(true, frame_1.getPlayerById(.player_2).input.?.back);
+
+    const frame_2 = capturer.captureFrame(&gm(.{
+        .player_1 = &.{ .input = .{ .left = true }, .input_side = .left, .in_special_style = .false },
+        .player_2 = &.{ .input = .{ .left = true }, .input_side = .right, .in_special_style = .false },
+    }));
+    try testing.expect(frame_2.getPlayerById(.player_1).input != null);
+    try testing.expect(frame_2.getPlayerById(.player_2).input != null);
+    try testing.expectEqual(false, frame_2.getPlayerById(.player_1).input.?.forward);
+    try testing.expectEqual(true, frame_2.getPlayerById(.player_1).input.?.back);
+    try testing.expectEqual(true, frame_2.getPlayerById(.player_2).input.?.forward);
+    try testing.expectEqual(false, frame_2.getPlayerById(.player_2).input.?.back);
+
+    const frame_3 = capturer.captureFrame(&gm(.{
+        .player_1 = &.{ .input = .{ .right = true }, .input_side = .right, .in_special_style = .false },
+        .player_2 = &.{ .input = .{ .right = true }, .input_side = .left, .in_special_style = .false },
+    }));
+    try testing.expect(frame_3.getPlayerById(.player_1).input != null);
+    try testing.expect(frame_3.getPlayerById(.player_2).input != null);
+    try testing.expectEqual(false, frame_3.getPlayerById(.player_1).input.?.forward);
+    try testing.expectEqual(true, frame_3.getPlayerById(.player_1).input.?.back);
+    try testing.expectEqual(true, frame_3.getPlayerById(.player_2).input.?.forward);
+    try testing.expectEqual(false, frame_3.getPlayerById(.player_2).input.?.back);
+
+    const frame_4 = capturer.captureFrame(&gm(.{
+        .player_1 = &.{ .input = .{ .left = true }, .input_side = .right, .in_special_style = .false },
+        .player_2 = &.{ .input = .{ .left = true }, .input_side = .left, .in_special_style = .false },
+    }));
+    try testing.expect(frame_4.getPlayerById(.player_1).input != null);
+    try testing.expect(frame_4.getPlayerById(.player_2).input != null);
+    try testing.expectEqual(true, frame_4.getPlayerById(.player_1).input.?.forward);
+    try testing.expectEqual(false, frame_4.getPlayerById(.player_1).input.?.back);
+    try testing.expectEqual(false, frame_4.getPlayerById(.player_2).input.?.forward);
+    try testing.expectEqual(true, frame_4.getPlayerById(.player_2).input.?.back);
+}
+
+test "should capture left/right input correctly depending on the input side" {
+    const gm = game.Memory(.t8).testingInit;
+    var capturer = Capturer(.t8){};
+
+    const frame_1 = capturer.captureFrame(&gm(.{
+        .player_1 = &.{ .directional_input = .{ .down = .back }, .input_side = .left, .in_special_style = .false },
+        .player_2 = &.{ .directional_input = .{ .down = .back }, .input_side = .right, .in_special_style = .false },
+    }));
+    try testing.expect(frame_1.getPlayerById(.player_1).input != null);
+    try testing.expect(frame_1.getPlayerById(.player_2).input != null);
+    try testing.expectEqual(true, frame_1.getPlayerById(.player_1).input.?.left);
+    try testing.expectEqual(false, frame_1.getPlayerById(.player_1).input.?.right);
+    try testing.expectEqual(false, frame_1.getPlayerById(.player_2).input.?.left);
+    try testing.expectEqual(true, frame_1.getPlayerById(.player_2).input.?.right);
+
+    const frame_2 = capturer.captureFrame(&gm(.{
+        .player_1 = &.{ .directional_input = .{ .down = .forward }, .input_side = .left, .in_special_style = .false },
+        .player_2 = &.{ .directional_input = .{ .down = .forward }, .input_side = .right, .in_special_style = .false },
+    }));
+    try testing.expect(frame_2.getPlayerById(.player_1).input != null);
+    try testing.expect(frame_2.getPlayerById(.player_2).input != null);
+    try testing.expectEqual(false, frame_2.getPlayerById(.player_1).input.?.left);
+    try testing.expectEqual(true, frame_2.getPlayerById(.player_1).input.?.right);
+    try testing.expectEqual(true, frame_2.getPlayerById(.player_2).input.?.left);
+    try testing.expectEqual(false, frame_2.getPlayerById(.player_2).input.?.right);
+
+    const frame_3 = capturer.captureFrame(&gm(.{
+        .player_1 = &.{ .directional_input = .{ .down = .back }, .input_side = .right, .in_special_style = .false },
+        .player_2 = &.{ .directional_input = .{ .down = .back }, .input_side = .left, .in_special_style = .false },
+    }));
+    try testing.expect(frame_3.getPlayerById(.player_1).input != null);
+    try testing.expect(frame_3.getPlayerById(.player_2).input != null);
+    try testing.expectEqual(false, frame_3.getPlayerById(.player_1).input.?.left);
+    try testing.expectEqual(true, frame_3.getPlayerById(.player_1).input.?.right);
+    try testing.expectEqual(true, frame_3.getPlayerById(.player_2).input.?.left);
+    try testing.expectEqual(false, frame_3.getPlayerById(.player_2).input.?.right);
+
+    const frame_4 = capturer.captureFrame(&gm(.{
+        .player_1 = &.{ .directional_input = .{ .down = .forward }, .input_side = .right, .in_special_style = .false },
+        .player_2 = &.{ .directional_input = .{ .down = .forward }, .input_side = .left, .in_special_style = .false },
+    }));
+    try testing.expect(frame_4.getPlayerById(.player_1).input != null);
+    try testing.expect(frame_4.getPlayerById(.player_2).input != null);
+    try testing.expectEqual(true, frame_4.getPlayerById(.player_1).input.?.left);
+    try testing.expectEqual(false, frame_4.getPlayerById(.player_1).input.?.right);
+    try testing.expectEqual(false, frame_4.getPlayerById(.player_2).input.?.left);
+    try testing.expectEqual(true, frame_4.getPlayerById(.player_2).input.?.right);
+}
+
+test "should capture input and effective input from correct sources when in special style and in T8" {
+    const gm = game.Memory(.t8).testingInit;
+    var capturer = Capturer(.t8){};
+    const frame = capturer.captureFrame(&gm(.{
+        .player_1 = &.{
+            .input = .{
+                .up = false,
+                .down = true,
+                .left = false,
+                .right = true,
+                .button_1 = false,
+                .button_2 = true,
+                .button_3 = false,
+                .button_4 = true,
+                .special_style = false,
+                .rage = true,
+                .heat = false,
+            },
+            .directional_input = .{ .down = .up_back },
+            .attack_input = .{ .down = .{
+                .button_1 = true,
+                .button_2 = false,
+                .button_3 = true,
+                .button_4 = false,
+                .heat = true,
+                .special_style = false,
+                .rage = true,
+            } },
+            .input_side = .left,
+            .in_special_style = .true,
+        },
+        .player_2 = null,
     }));
     try testing.expectEqual(model.Input{
         .forward = true,
@@ -2245,74 +2523,8 @@ test "should capture input correctly in T7" {
     try testing.expectEqual(model.Input{
         .forward = false,
         .back = true,
-        .up = false,
-        .down = true,
-        .left = false,
-        .right = true,
-        .button_1 = true,
-        .button_2 = false,
-        .button_3 = true,
-        .button_4 = false,
-        .special_style = false,
-        .rage = true,
-        .heat = false,
-    }, frame.getPlayerById(.player_2).input);
-}
-
-test "should capture input correctly in T8" {
-    const gm = game.Memory(.t8).testingInit;
-    var capturer = Capturer(.t8){};
-    const frame = capturer.captureFrame(&gm(.{
-        .player_1 = &.{
-            .input = .{
-                .up = false,
-                .down = true,
-                .left = false,
-                .right = true,
-                .button_1 = false,
-                .button_2 = true,
-                .button_3 = false,
-                .button_4 = true,
-                .special_style = false,
-                .rage = true,
-                .heat = false,
-            },
-            .input_side = .right,
-        },
-        .player_2 = &.{
-            .directional_input = .{ .down = .down_back },
-            .attack_input = .{ .down = .{
-                .button_1 = true,
-                .button_2 = false,
-                .button_3 = true,
-                .button_4 = false,
-                .heat = true,
-                .special_style = false,
-                .rage = true,
-            } },
-            .input_side = .left,
-        },
-    }));
-    try testing.expectEqual(model.Input{
-        .forward = false,
-        .back = true,
-        .up = false,
-        .down = true,
-        .left = false,
-        .right = true,
-        .button_1 = false,
-        .button_2 = true,
-        .button_3 = false,
-        .button_4 = true,
-        .special_style = false,
-        .rage = true,
-        .heat = false,
-    }, frame.getPlayerById(.player_1).input);
-    try testing.expectEqual(model.Input{
-        .forward = false,
-        .back = true,
-        .up = false,
-        .down = true,
+        .up = true,
+        .down = false,
         .left = true,
         .right = false,
         .button_1 = true,
@@ -2322,56 +2534,7 @@ test "should capture input correctly in T8" {
         .special_style = false,
         .rage = true,
         .heat = true,
-    }, frame.getPlayerById(.player_2).input);
-}
-
-test "should capture forward/back correctly depending on the input side" {
-    const gm = game.Memory(.t8).testingInit;
-    var capturer = Capturer(.t8){};
-
-    const frame_1 = capturer.captureFrame(&gm(.{
-        .player_1 = &.{ .input = .{ .right = true }, .input_side = .left },
-        .player_2 = &.{ .input = .{ .right = true }, .input_side = .right },
-    }));
-    try testing.expect(frame_1.getPlayerById(.player_1).input != null);
-    try testing.expect(frame_1.getPlayerById(.player_2).input != null);
-    try testing.expectEqual(true, frame_1.getPlayerById(.player_1).input.?.forward);
-    try testing.expectEqual(false, frame_1.getPlayerById(.player_1).input.?.back);
-    try testing.expectEqual(false, frame_1.getPlayerById(.player_2).input.?.forward);
-    try testing.expectEqual(true, frame_1.getPlayerById(.player_2).input.?.back);
-
-    const frame_2 = capturer.captureFrame(&gm(.{
-        .player_1 = &.{ .input = .{ .left = true }, .input_side = .left },
-        .player_2 = &.{ .input = .{ .left = true }, .input_side = .right },
-    }));
-    try testing.expect(frame_2.getPlayerById(.player_1).input != null);
-    try testing.expect(frame_2.getPlayerById(.player_2).input != null);
-    try testing.expectEqual(false, frame_2.getPlayerById(.player_1).input.?.forward);
-    try testing.expectEqual(true, frame_2.getPlayerById(.player_1).input.?.back);
-    try testing.expectEqual(true, frame_2.getPlayerById(.player_2).input.?.forward);
-    try testing.expectEqual(false, frame_2.getPlayerById(.player_2).input.?.back);
-
-    const frame_3 = capturer.captureFrame(&gm(.{
-        .player_1 = &.{ .input = .{ .right = true }, .input_side = .right },
-        .player_2 = &.{ .input = .{ .right = true }, .input_side = .left },
-    }));
-    try testing.expect(frame_3.getPlayerById(.player_1).input != null);
-    try testing.expect(frame_3.getPlayerById(.player_2).input != null);
-    try testing.expectEqual(false, frame_3.getPlayerById(.player_1).input.?.forward);
-    try testing.expectEqual(true, frame_3.getPlayerById(.player_1).input.?.back);
-    try testing.expectEqual(true, frame_3.getPlayerById(.player_2).input.?.forward);
-    try testing.expectEqual(false, frame_3.getPlayerById(.player_2).input.?.back);
-
-    const frame_4 = capturer.captureFrame(&gm(.{
-        .player_1 = &.{ .input = .{ .left = true }, .input_side = .right },
-        .player_2 = &.{ .input = .{ .left = true }, .input_side = .left },
-    }));
-    try testing.expect(frame_4.getPlayerById(.player_1).input != null);
-    try testing.expect(frame_4.getPlayerById(.player_2).input != null);
-    try testing.expectEqual(true, frame_4.getPlayerById(.player_1).input.?.forward);
-    try testing.expectEqual(false, frame_4.getPlayerById(.player_1).input.?.back);
-    try testing.expectEqual(false, frame_4.getPlayerById(.player_2).input.?.forward);
-    try testing.expectEqual(true, frame_4.getPlayerById(.player_2).input.?.back);
+    }, frame.getPlayerById(.player_1).effective_input);
 }
 
 test "should capture in special style correctly" {

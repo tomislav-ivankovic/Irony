@@ -449,7 +449,7 @@ pub const Details = struct {
     ) = .{},
     input: Row(
         "Input",
-        \\Input that is being held down by the player at the current frame.
+        \\Input that the player is holding down with his input device at the current frame.
         \\Combination of following symbols:
         \\u - Up input.
         \\d - Down input.
@@ -462,6 +462,16 @@ pub const Details = struct {
         \\SS - Special style input.
         \\H - Heat input.
         \\R - Rage input.
+    ,
+        model.Input,
+        null,
+        drawInput,
+    ) = .{},
+    effective_input: Row(
+        "Effective Input",
+        \\Input that the game logic sees as being held down at the current frame by the player.
+        \\Usually same as "Input", but differs when player is using special style in T8.
+        \\Then it displays the result of special style input being translated into standard input.
     ,
         model.Input,
         null,
@@ -623,6 +633,7 @@ pub const Details = struct {
             } else null,
         );
         self.input.processFrame(s, c1.input, c2.input);
+        self.effective_input.processFrame(s, c1.effective_input, c2.effective_input);
         self.in_special_style.processFrame(s, c1.in_special_style, c2.in_special_style);
         self.distance_to_opponent.processFrame(s, c1.getDistanceTo(c2), c2.getDistanceTo(c1));
         self.angle_to_opponent.processFrame(s, c1.getAngleTo(c2), c2.getAngleTo(c1));
@@ -3423,6 +3434,98 @@ test "should draw input correctly" {
             details.processFrame(&settings, &.{ .players = .{
                 .{ .input = .{ .back = true, .rage = true } },
                 .{ .input = .{
+                    .down = true,
+                    .back = true,
+                    .button_1 = true,
+                    .button_2 = true,
+                    .button_3 = true,
+                    .button_4 = true,
+                    .special_style = true,
+                    .rage = true,
+                    .heat = true,
+                } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/bR");
+            try ctx.expectItemExists("cell_2/db1+2+3+4+SS+R+H");
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw effective input correctly" {
+    const Test = struct {
+        var settings = model.DetailsSettings{ .rows_enabled = .{} };
+        var details = Details{};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            details.draw(&settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window/table/Effective Input");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .effective_input = null },
+                .{ .effective_input = .{} },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/---");
+            try ctx.expectItemExists("cell_2/---");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .effective_input = .{ .up = true, .forward = true } },
+                .{ .effective_input = .{ .down = true, .back = true } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/uf");
+            try ctx.expectItemExists("cell_2/db");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .effective_input = .{ .up = true, .down = true } },
+                .{ .effective_input = .{ .forward = true, .back = true } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/---");
+            try ctx.expectItemExists("cell_2/---");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .effective_input = .{ .button_1 = true } },
+                .{ .effective_input = .{ .button_2 = true, .button_3 = true } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/1");
+            try ctx.expectItemExists("cell_2/2+3");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .effective_input = .{ .down = true, .forward = true, .button_4 = true } },
+                .{ .effective_input = .{
+                    .up = true,
+                    .back = true,
+                    .button_1 = true,
+                    .button_2 = true,
+                    .button_3 = true,
+                    .button_4 = true,
+                } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/df4");
+            try ctx.expectItemExists("cell_2/ub1+2+3+4");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .effective_input = .{ .special_style = true } },
+                .{ .effective_input = .{ .special_style = true, .heat = true } },
+            } });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/SS");
+            try ctx.expectItemExists("cell_2/SS+H");
+
+            details.processFrame(&settings, &.{ .players = .{
+                .{ .effective_input = .{ .back = true, .rage = true } },
+                .{ .effective_input = .{
                     .down = true,
                     .back = true,
                     .button_1 = true,
