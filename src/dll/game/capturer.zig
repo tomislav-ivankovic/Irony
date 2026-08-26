@@ -500,9 +500,11 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
 
         fn captureInput(player_maybe: ?*const GamePlayer) ?model.Input {
             const player = player_maybe orelse return null;
-            const input: game.Input(game_id) = player.input;
             const input_side: game.PlayerSide = player.input_side;
-            return .{
+            const input: game.Input(game_id) = player.input;
+            const directional_input: game.DirectionalInput = player.directional_input;
+            const attack_input: game.AttackInput(game_id).Buttons = player.attack_input.down_buttons;
+            const input_1 = model.Input{
                 .forward = switch (input_side) {
                     .left => input.right,
                     .right => input.left,
@@ -527,6 +529,74 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                     .t7 => false,
                     .t8 => input.heat,
                 },
+            };
+            const input_2 = model.Input{
+                .forward = switch (directional_input) {
+                    .down_forward, .forward, .up_forward => true,
+                    else => false,
+                },
+                .back = switch (directional_input) {
+                    .down_back, .back, .up_back => true,
+                    else => false,
+                },
+                .up = switch (directional_input) {
+                    .up_back, .up, .up_forward => true,
+                    else => false,
+                },
+                .down = switch (directional_input) {
+                    .down_back, .down, .down_forward => true,
+                    else => false,
+                },
+                .left = switch (input_side) {
+                    .left => switch (directional_input) {
+                        .down_back, .back, .up_back => true,
+                        else => false,
+                    },
+                    .right => switch (directional_input) {
+                        .down_forward, .forward, .up_forward => true,
+                        else => false,
+                    },
+                    _ => return null,
+                },
+                .right = switch (input_side) {
+                    .right => switch (directional_input) {
+                        .down_back, .back, .up_back => true,
+                        else => false,
+                    },
+                    .left => switch (directional_input) {
+                        .down_forward, .forward, .up_forward => true,
+                        else => false,
+                    },
+                    _ => return null,
+                },
+                .button_1 = attack_input.button_1,
+                .button_2 = attack_input.button_2,
+                .button_3 = attack_input.button_3,
+                .button_4 = attack_input.button_4,
+                .special_style = switch (game_id) {
+                    .t7 => false,
+                    .t8 => attack_input.special_style,
+                },
+                .rage = attack_input.rage,
+                .heat = switch (game_id) {
+                    .t7 => false,
+                    .t8 => attack_input.heat,
+                },
+            };
+            return .{
+                .forward = input_1.forward or input_2.forward,
+                .back = input_1.back or input_2.back,
+                .up = input_1.up or input_2.up,
+                .down = input_1.down or input_2.down,
+                .left = input_1.left or input_2.left,
+                .right = input_1.right or input_2.right,
+                .button_1 = input_1.button_1 or input_2.button_1,
+                .button_2 = input_1.button_2 or input_2.button_2,
+                .button_3 = input_1.button_3 or input_2.button_3,
+                .button_4 = input_1.button_4 or input_2.button_4,
+                .special_style = input_1.special_style or input_2.special_style,
+                .rage = input_1.rage or input_2.rage,
+                .heat = input_1.heat or input_2.heat,
             };
         }
 
@@ -2144,7 +2214,17 @@ test "should capture input correctly in T7" {
             },
             .input_side = .left,
         },
-        .player_2 = null,
+        .player_2 = &.{
+            .directional_input = .down_back,
+            .attack_input = .{ .down_buttons = .{
+                .button_1 = true,
+                .button_2 = false,
+                .button_3 = true,
+                .button_4 = false,
+                .rage = true,
+            } },
+            .input_side = .right,
+        },
     }));
     try testing.expectEqual(model.Input{
         .forward = true,
@@ -2161,7 +2241,21 @@ test "should capture input correctly in T7" {
         .rage = true,
         .heat = false,
     }, frame.getPlayerById(.player_1).input);
-    try testing.expectEqual(null, frame.getPlayerById(.player_2).input);
+    try testing.expectEqual(model.Input{
+        .forward = false,
+        .back = true,
+        .up = false,
+        .down = true,
+        .left = false,
+        .right = true,
+        .button_1 = true,
+        .button_2 = false,
+        .button_3 = true,
+        .button_4 = false,
+        .special_style = false,
+        .rage = true,
+        .heat = false,
+    }, frame.getPlayerById(.player_2).input);
 }
 
 test "should capture input correctly in T8" {
@@ -2184,7 +2278,19 @@ test "should capture input correctly in T8" {
             },
             .input_side = .right,
         },
-        .player_2 = null,
+        .player_2 = &.{
+            .directional_input = .down_back,
+            .attack_input = .{ .down_buttons = .{
+                .button_1 = true,
+                .button_2 = false,
+                .button_3 = true,
+                .button_4 = false,
+                .heat = true,
+                .special_style = false,
+                .rage = true,
+            } },
+            .input_side = .left,
+        },
     }));
     try testing.expectEqual(model.Input{
         .forward = false,
@@ -2201,7 +2307,21 @@ test "should capture input correctly in T8" {
         .rage = true,
         .heat = false,
     }, frame.getPlayerById(.player_1).input);
-    try testing.expectEqual(null, frame.getPlayerById(.player_2).input);
+    try testing.expectEqual(model.Input{
+        .forward = false,
+        .back = true,
+        .up = false,
+        .down = true,
+        .left = true,
+        .right = false,
+        .button_1 = true,
+        .button_2 = false,
+        .button_3 = true,
+        .button_4 = false,
+        .special_style = false,
+        .rage = true,
+        .heat = true,
+    }, frame.getPlayerById(.player_2).input);
 }
 
 test "should capture forward/back correctly depending on the input side" {
