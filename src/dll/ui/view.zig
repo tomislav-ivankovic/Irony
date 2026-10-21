@@ -73,6 +73,7 @@ pub const View = struct {
         const shapes = ui.Shapes{ ._3d = .{
             .renderer = shape_renderer,
             .thickness_scale = settings.general.rendering_3d.thickness_scale,
+            .fill_alpha = settings.general.rendering_3d.fill_alpha,
         } };
         ui.drawIngameCamera(&shapes, &settings.ingame_camera, frame);
         ui.drawCollisionSpheres(&shapes, &settings.collision_spheres, frame);

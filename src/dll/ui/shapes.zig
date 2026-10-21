@@ -249,7 +249,7 @@ pub const Shapes2D = struct {
 pub const Shapes3D = struct {
     renderer: *rendering.Shapes,
     thickness_scale: f32 = 1.0,
-    fill_alpha: f32 = 0.25,
+    fill_alpha: f32 = 1.0,
 
     const Self = @This();
 

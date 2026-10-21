@@ -276,6 +276,7 @@ const GeneralSettings = struct {
                     imgui.igSetTooltip("For depth rendering to work, rendering scale needs to be set to 100.");
                 }
                 drawScale("Thickness Scale", &v.thickness_scale, &d.thickness_scale);
+                drawFloat("Fill Alpha", &v.fill_alpha, &d.fill_alpha, 0.01, 0, 1, "%.2f", 0);
                 drawFloat("Occluded Alpha", &v.occluded_alpha, &d.occluded_alpha, 0.01, 0, 1, "%.2f", 0);
                 drawThickness("Anti-Aliasing", &v.anti_aliasing, &d.anti_aliasing);
             }
@@ -1351,6 +1352,11 @@ test "general settings should function correctly" {
             try testing.expectEqual(0.123, current.rendering_3d.occluded_alpha);
             ctx.itemClick("3D Rendering/Occluded Alpha/###default", imgui.ImGuiMouseButton_Left, 0);
             try testing.expectEqual(default.rendering_3d.occluded_alpha, current.rendering_3d.occluded_alpha);
+
+            ctx.itemInputValueFloat("3D Rendering/Fill Alpha", 0.456);
+            try testing.expectEqual(0.456, current.rendering_3d.fill_alpha);
+            ctx.itemClick("3D Rendering/Fill Alpha/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.rendering_3d.fill_alpha, current.rendering_3d.fill_alpha);
 
             ctx.itemInputValueFloat("3D Rendering/Thickness Scale", 123);
             try testing.expectEqual(123, current.rendering_3d.thickness_scale);
