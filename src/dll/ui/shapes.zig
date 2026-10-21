@@ -249,6 +249,7 @@ pub const Shapes2D = struct {
 pub const Shapes3D = struct {
     renderer: *rendering.Shapes,
     thickness_scale: f32 = 1.0,
+    fill_alpha: f32 = 0.25,
 
     const Self = @This();
 
@@ -292,8 +293,10 @@ pub const Shapes3D = struct {
     }
 
     pub fn drawSphere(self: *const Self, sphere: sdk.math.Sphere, color: sdk.math.Vec4, thickness: f32) void {
+        var fill_color = color;
+        fill_color.asColor().a *= self.fill_alpha;
         const scaled_thickness = self.thickness_scale * thickness;
-        self.renderer.addSphere(sphere, color, scaled_thickness);
+        self.renderer.addSphere(sphere, fill_color, color, scaled_thickness);
         if (builtin.is_test) {
             testing_shapes.append(.{ .sphere = .{
                 .world_sphere = sphere,
@@ -306,8 +309,10 @@ pub const Shapes3D = struct {
     }
 
     pub fn drawCylinder(self: *const Self, cylinder: sdk.math.Cylinder, color: sdk.math.Vec4, thickness: f32) void {
+        var fill_color = color;
+        fill_color.asColor().a *= self.fill_alpha;
         const scaled_thickness = self.thickness_scale * thickness;
-        self.renderer.addCylinder(cylinder, color, scaled_thickness);
+        self.renderer.addCylinder(cylinder, fill_color, color, scaled_thickness);
         if (builtin.is_test) {
             testing_shapes.append(.{ .cylinder = .{
                 .world_cylinder = cylinder,
