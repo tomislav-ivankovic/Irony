@@ -154,7 +154,7 @@ pub const EventBuss = struct {
 
         std.log.debug("Deinitializing UI...", .{});
         self.ui.deinit();
-        std.log.info("UI deinitialized.", .{});
+        std.log.info("UI de-initialized.", .{});
 
         std.log.debug("Joining latest version fetching loading task...", .{});
         _ = self.latest_version_task.join();

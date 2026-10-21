@@ -61,67 +61,21 @@ pub fn DllMain(
         w32.DLL_PROCESS_ATTACH => {
             std.log.info("DLL attached event detected.", .{});
             dll_module = sdk.os.Module{ .handle = module_handle, .process = .getCurrent() };
-
-            std.log.debug("Creating module handle shared value...", .{});
-            module_handle_shared_value = if (createModuleHandleSharedValue(module_handle)) |shared_value| block: {
-                std.log.info("Module handle shared value created.", .{});
-                break :block shared_value;
-            } else |err| block: {
-                sdk.misc.error_context.append("Failed to create module handle shared value.", .{});
-                sdk.misc.error_context.logError(err);
-                break :block null;
-            };
-
-            std.log.debug("Spawning the main thread...", .{});
-            main_thread = std.Thread.spawn(.{}, main, .{}) catch |err| {
-                sdk.misc.error_context.new("Failed to spawn main thread.", .{});
+            initialize(module_handle) catch |err| {
+                sdk.misc.error_context.append("Failed to initialize.", .{});
                 sdk.misc.error_context.logError(err);
                 return 0;
             };
-            std.log.debug("Main thread spawned.", .{});
-            main_thread_running.store(true, .seq_cst);
-
             std.log.info("DLL attached successfully.", .{});
             return 1;
         },
         w32.DLL_PROCESS_DETACH => {
             std.log.info("DLL detach event detected.", .{});
-
-            if (reserved != null) {
+            if (reserved == null) {
+                deinitialize();
+            } else {
                 std.log.info("Skipping cleanup since the host process is terminating.", .{});
-                std.log.info("Detaching from the process now...", .{});
-                return 1;
             }
-
-            std.log.debug("Shutting down main thread...", .{});
-            if (main_thread) |*thread| {
-                std.log.debug("Sending shutdown event...", .{});
-                sendEvent(&.shut_down);
-                std.log.info("Shutdown event sent.", .{});
-
-                std.log.debug("Waiting for main thread to shut down...", .{});
-                while (main_thread_running.load(.seq_cst)) {
-                    std.Thread.sleep(100 * std.time.ns_per_ms);
-                }
-                thread.detach();
-                std.log.info("Main thread shut down.", .{});
-            } else {
-                std.log.debug("Nothing to shut down.", .{});
-            }
-
-            std.log.debug("Destroying module handle shared value...", .{});
-            if (module_handle_shared_value) |*shared_value| {
-                if (shared_value.destroy()) {
-                    std.log.info("Module handle shared value destroyed.", .{});
-                    module_handle_shared_value = null;
-                } else |err| {
-                    sdk.misc.error_context.append("Failed to destroy module handle shared value.", .{});
-                    sdk.misc.error_context.logError(err);
-                }
-            } else {
-                std.log.debug("Nothing to destroy.", .{});
-            }
-
             std.log.info("Detaching from the process now...", .{});
             return 1;
         },
@@ -129,14 +83,71 @@ pub fn DllMain(
     }
 }
 
+fn initialize(module_handle: w32.HINSTANCE) !void {
+    std.log.debug("Creating module handle shared value...", .{});
+    module_handle_shared_value = if (createModuleHandleSharedValue(module_handle)) |shared_value| block: {
+        std.log.info("Module handle shared value created.", .{});
+        break :block shared_value;
+    } else |err| block: {
+        sdk.misc.error_context.append("Failed to create module handle shared value.", .{});
+        sdk.misc.error_context.logError(err);
+        break :block null;
+    };
+
+    std.log.debug("Spawning the main thread...", .{});
+    main_thread = std.Thread.spawn(.{}, main, .{}) catch |err| {
+        sdk.misc.error_context.new("Failed to spawn main thread.", .{});
+        return err;
+    };
+    main_thread_running.store(true, .seq_cst);
+    std.log.debug("Main thread spawned.", .{});
+}
+
+fn deinitialize() void {
+    std.log.debug("Shutting down main thread...", .{});
+    if (main_thread_running.load(.seq_cst)) {
+        if (main_thread) |*thread| {
+            std.log.debug("Sending shutdown event...", .{});
+            sendEvent(&.shut_down);
+            std.log.info("Shutdown event sent.", .{});
+
+            std.log.debug("Waiting for main thread to shut down...", .{});
+            while (main_thread_running.load(.seq_cst)) {
+                std.Thread.sleep(100 * std.time.ns_per_ms);
+            }
+            thread.detach();
+            std.log.info("Main thread shut down.", .{});
+        } else {
+            std.log.debug("Nothing to shut down.", .{});
+        }
+    } else {
+        std.log.debug("Nothing to shut down.", .{});
+    }
+
+    std.log.debug("Destroying module handle shared value...", .{});
+    if (module_handle_shared_value) |*shared_value| {
+        if (shared_value.destroy()) {
+            std.log.info("Module handle shared value destroyed.", .{});
+            module_handle_shared_value = null;
+        } else |err| {
+            sdk.misc.error_context.append("Failed to destroy module handle shared value.", .{});
+            sdk.misc.error_context.logError(err);
+        }
+    } else {
+        std.log.debug("Nothing to destroy.", .{});
+    }
+}
+
 pub fn selfShutDown() void {
+    std.log.info("Self shutdown initiated.", .{});
     const thread = std.Thread.spawn(.{}, struct {
         fn call() void {
+            deinitialize();
             w32.FreeLibraryAndExitThread(dll_module.handle, 0);
         }
     }.call, .{}) catch |err| {
         sdk.misc.error_context.new("Failed to spawn shut down thread.", .{});
-        sdk.misc.error_context.append("Failed to shut down.", .{});
+        sdk.misc.error_context.append("Failed to self shut down.", .{});
         sdk.misc.error_context.logError(err);
         return;
     };
@@ -416,7 +427,11 @@ fn sendEvent(event: *const Event) void {
 
 fn isListeningToEvent(event: *const Event) bool {
     const listening_to = listening_to_events.load(.seq_cst);
-    return listening_to == .all or (event.* == .present and listening_to == .only_present);
+    return switch (listening_to) {
+        .all => true,
+        .only_present => event.* == .present,
+        .none => false,
+    };
 }
 
 fn onPresent(context: dx.HostContext) void {
