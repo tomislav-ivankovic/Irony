@@ -115,6 +115,7 @@ test {
     _ = @import("dll/rendering/lines.zig");
     _ = @import("dll/rendering/rendering.zig");
     _ = @import("dll/rendering/shapes.zig");
+    _ = @import("dll/rendering/triangles.zig");
 
     _ = @import("dll/ui/about_window.zig");
     _ = @import("dll/ui/camera.zig");

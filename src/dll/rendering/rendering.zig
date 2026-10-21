@@ -13,24 +13,26 @@ const dx = switch (rendering_api) {
 };
 
 pub const Rendering = struct {
+    triangles: Triangles,
     lines: Lines,
     shapes: rendering.Shapes,
 
     const Self = @This();
     const Lines = rendering.Lines(rendering_api);
+    const Triangles = rendering.Triangles(rendering_api);
 
     pub fn init(allocator: std.mem.Allocator, context: ?*const dx.Context) Self {
-        const lines = Lines.init(allocator, context);
-        const shapes = rendering.Shapes.init(allocator);
         return .{
-            .lines = lines,
-            .shapes = shapes,
+            .triangles = Triangles.init(allocator, context),
+            .lines = Lines.init(allocator, context),
+            .shapes = rendering.Shapes.init(allocator),
         };
     }
 
     pub fn deinit(self: *Self, context: ?*const dx.Context) void {
         self.shapes.deinit();
         self.lines.deinit(context);
+        self.triangles.deinit(context);
     }
 
     pub fn render(
@@ -41,6 +43,7 @@ pub const Rendering = struct {
         settings: *const model.GeneralSettings.Rendering3D,
     ) void {
         defer self.lines.clear();
+        defer self.triangles.clear();
         defer self.shapes.clear();
         if (!settings.enabled or !isAllowedToRender(game_memory)) {
             return;
@@ -74,11 +77,13 @@ pub const Rendering = struct {
         const world_to_clip = calculateWorldToClip(context, camera) orelse return;
         const clip_to_world = world_to_clip.inverse() orelse return;
 
-        self.shapes.render(&self.lines, camera.position.convert());
+        const camera_position = camera.position.convert();
+        self.shapes.render(&self.triangles, &self.lines, camera_position);
+        self.triangles.render(context, buffer_context, world_to_clip);
         self.lines.render(
             context,
             buffer_context,
-            camera.position.convert(),
+            camera_position,
             world_to_clip,
             clip_to_world,
             settings.occluded_alpha,
