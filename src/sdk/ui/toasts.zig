@@ -52,13 +52,19 @@ pub const ToastsConfig = struct {
 
 pub fn Toasts(comptime config: ToastsConfig) type {
     return struct {
+        var io_maybe: ?std.Io = null;
         var toasts = misc.CircularBuffer(config.max_toasts, Toast){};
         var buffer: [config.buffer_size]u8 = undefined;
-        var mutex = std.Thread.Mutex{};
+        var mutex = std.Io.Mutex.init;
+
+        pub fn setIo(io: std.Io) void {
+            io_maybe = io;
+        }
 
         pub fn send(toast_type: ToastType, duration: ?f32, comptime fmt: []const u8, args: anytype) void {
-            mutex.lock();
-            defer mutex.unlock();
+            const io = io_maybe orelse return;
+            mutex.lock(io) catch return;
+            defer mutex.unlock(io);
             const last_toast = toasts.getLast() catch {
                 addToast(&buffer, toast_type, duration, fmt, args) catch return;
                 return;
@@ -77,7 +83,7 @@ pub fn Toasts(comptime config: ToastsConfig) type {
             comptime fmt: []const u8,
             args: anytype,
         ) !void {
-            const message = std.fmt.bufPrintZ(write_region, fmt, args) catch |err| {
+            const message = std.fmt.bufPrintSentinel(write_region, fmt, args, 0) catch |err| {
                 clearBufferRegion(write_region);
                 return err;
             };
@@ -101,8 +107,9 @@ pub fn Toasts(comptime config: ToastsConfig) type {
         }
 
         pub fn update(delta_time: f32) void {
-            mutex.lock();
-            defer mutex.unlock();
+            const io = io_maybe orelse return;
+            mutex.lock(io) catch return;
+            defer mutex.unlock(io);
             for (0..toasts.len) |index| {
                 const toast = toasts.get(index) catch unreachable;
                 toast.life_time += delta_time;
@@ -116,8 +123,9 @@ pub fn Toasts(comptime config: ToastsConfig) type {
         }
 
         pub fn draw() void {
-            mutex.lock();
-            defer mutex.unlock();
+            const io = io_maybe orelse return;
+            mutex.lock(io) catch return;
+            defer mutex.unlock(io);
             var index: usize = 0;
             var current_y: f32 = 0.0;
             for (0..toasts.len) |i| {
@@ -132,7 +140,7 @@ pub fn Toasts(comptime config: ToastsConfig) type {
 
         fn drawToast(toast: *const Toast, index: usize, current_y: *f32) void {
             var window_name_buffer: [32]u8 = undefined;
-            const window_name = std.fmt.bufPrintZ(&window_name_buffer, "toast-{}", .{index}) catch unreachable;
+            const window_name = std.fmt.bufPrintSentinel(&window_name_buffer, "toast-{}", .{index}, 0) catch unreachable;
             const window_flags = imgui.ImGuiWindowFlags_AlwaysAutoResize |
                 imgui.ImGuiWindowFlags_NoDecoration |
                 imgui.ImGuiWindowFlags_NoInputs |
@@ -180,7 +188,7 @@ pub fn Toasts(comptime config: ToastsConfig) type {
 
         pub fn logFn(
             comptime level: std.log.Level,
-            comptime scope: @Type(.enum_literal),
+            comptime scope: @EnumLiteral(),
             comptime format: []const u8,
             args: anytype,
         ) void {
@@ -218,6 +226,7 @@ test "should render correct messages at correct time" {
         .fly_in_time = 0.0,
         .fly_out_time = 0.0,
     });
+    toasts.setIo(testing.io);
     const Test = struct {
         fn guiFunction(_: ui.TestContext) !void {
             toasts.draw();
@@ -298,6 +307,7 @@ test "should discard earliest toasts when exceeding max toasts" {
         .fly_in_time = 0.0,
         .fly_out_time = 0.0,
     });
+    toasts.setIo(testing.io);
     const Test = struct {
         fn guiFunction(_: ui.TestContext) !void {
             toasts.draw();
@@ -340,6 +350,7 @@ test "should discard earliest entries when exceeding buffer size" {
         .fly_in_time = 0.0,
         .fly_out_time = 0.0,
     });
+    toasts.setIo(testing.io);
     const Test = struct {
         fn guiFunction(_: ui.TestContext) !void {
             toasts.draw();
@@ -381,6 +392,7 @@ test "should discard all toasts when message is larger then the buffer" {
         .fly_in_time = 0.0,
         .fly_out_time = 0.0,
     });
+    toasts.setIo(testing.io);
     const Test = struct {
         fn guiFunction(_: ui.TestContext) !void {
             toasts.draw();
@@ -412,6 +424,7 @@ test "should send toasts only for warning and error logs" {
         .fly_in_time = 0.0,
         .fly_out_time = 0.0,
     });
+    toasts.setIo(testing.io);
     const Test = struct {
         fn guiFunction(_: ui.TestContext) !void {
             toasts.draw();

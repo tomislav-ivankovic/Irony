@@ -13,8 +13,8 @@ pub const Version = struct {
 
     pub const current = Self.comptimeParse(build_info.version);
 
-    pub fn fetchLatest(allocator: std.mem.Allocator) !Self {
-        var client = std.http.Client{ .allocator = allocator };
+    pub fn fetchLatest(allocator: std.mem.Allocator, io: std.Io) !Self {
+        var client = std.http.Client{ .allocator = allocator, .io = io };
         defer client.deinit();
 
         const uri_string = build_info.home_page ++ "/releases/latest";

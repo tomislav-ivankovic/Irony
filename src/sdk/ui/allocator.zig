@@ -67,7 +67,7 @@ fn cFree(pointer: ?*anyopaque, _: ?*anyopaque) callconv(.c) void {
 const testing = std.testing;
 
 test "setAllocator should make Imgui use the provided allocator" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .enable_memory_limit = true }){};
+    var gpa = std.heap.DebugAllocator(.{ .enable_memory_limit = true }){};
     defer switch (gpa.deinit()) {
         .ok => {},
         .leak => std.log.err("GPA detected a memory leak.", .{}),

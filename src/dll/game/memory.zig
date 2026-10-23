@@ -64,16 +64,17 @@ pub fn Memory(comptime game_id: build_info.Game) type {
 
         pub fn init(
             allocator: std.mem.Allocator,
+            io: std.Io,
             base_dir: ?*const sdk.misc.BaseDir,
             comptime game_hooks: type,
         ) Self {
-            var cache = initPatternCache(allocator, base_dir, pattern_cache_file_name) catch |err| block: {
+            var cache = initPatternCache(allocator, io, base_dir, pattern_cache_file_name) catch |err| block: {
                 sdk.misc.error_context.append("Failed to initialize pattern cache.", .{});
                 sdk.misc.error_context.logError(err);
                 break :block null;
             };
             defer if (cache) |*pattern_cache| {
-                deinitPatternCache(pattern_cache, base_dir, pattern_cache_file_name);
+                deinitPatternCache(pattern_cache, io, base_dir, pattern_cache_file_name);
             };
             return switch (game_id) {
                 .t7 => t7Init(&cache, game_hooks),
@@ -465,6 +466,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
 
         fn initPatternCache(
             allocator: std.mem.Allocator,
+            io: std.Io,
             base_dir: ?*const sdk.misc.BaseDir,
             file_name: []const u8,
         ) !sdk.memory.PatternCache {
@@ -478,7 +480,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
             };
             var cache = sdk.memory.PatternCache.init(allocator, range);
             if (base_dir) |dir| {
-                loadPatternCache(&cache, dir, file_name) catch |err| {
+                loadPatternCache(&cache, io, dir, file_name) catch |err| {
                     sdk.misc.error_context.append("Failed to load memory pattern cache. Using empty cache.", .{});
                     sdk.misc.error_context.logWarning(err);
                 };
@@ -488,11 +490,12 @@ pub fn Memory(comptime game_id: build_info.Game) type {
 
         fn deinitPatternCache(
             cache: *sdk.memory.PatternCache,
+            io: std.Io,
             base_dir: ?*const sdk.misc.BaseDir,
             file_name: []const u8,
         ) void {
             if (base_dir) |dir| {
-                savePatternCache(cache, dir, file_name) catch |err| {
+                savePatternCache(cache, io, dir, file_name) catch |err| {
                     sdk.misc.error_context.append("Failed to save memory pattern cache.", .{});
                     sdk.misc.error_context.logWarning(err);
                 };
@@ -502,6 +505,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
 
         fn loadPatternCache(
             cache: *sdk.memory.PatternCache,
+            io: std.Io,
             base_dir: *const sdk.misc.BaseDir,
             file_name: []const u8,
         ) !void {
@@ -516,11 +520,12 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                 return err;
             };
 
-            return cache.load(file_path, executable_timestamp);
+            return cache.load(io, file_path, executable_timestamp);
         }
 
         fn savePatternCache(
             cache: *sdk.memory.PatternCache,
+            io: std.Io,
             base_dir: *const sdk.misc.BaseDir,
             file_name: []const u8,
         ) !void {
@@ -535,7 +540,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                 return err;
             };
 
-            return cache.save(file_path, executable_timestamp);
+            return cache.save(io, file_path, executable_timestamp);
         }
     };
 }

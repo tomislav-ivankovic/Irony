@@ -36,7 +36,7 @@ pub const TaiTable = struct {
             input_activated: bool = false,
 
             pub const buffer_size = 32;
-            pub const empty_buffer = [1]u8{0} ** buffer_size;
+            pub const empty_buffer: [buffer_size]u8 = @splat(0);
         };
     };
     const Dimensions = struct {
@@ -473,7 +473,7 @@ pub const TaiTable = struct {
         };
         var table_buffer: [32]u8 = undefined;
         const table_text = block: {
-            const text = std.fmt.bufPrintZ(&table_buffer, "{f}", .{table_input}) catch "error";
+            const text = std.fmt.bufPrintSentinel(&table_buffer, "{f}", .{table_input}, 0) catch "error";
             break :block if (text.len > 0) text else "---";
         };
         if (frame_maybe) |frame| {
@@ -483,7 +483,7 @@ pub const TaiTable = struct {
             } else {
                 var recording_buffer: [32]u8 = undefined;
                 const recording_text = block: {
-                    const text = std.fmt.bufPrintZ(&recording_buffer, "{f}", .{recording_input}) catch "error";
+                    const text = std.fmt.bufPrintSentinel(&recording_buffer, "{f}", .{recording_input}, 0) catch "error";
                     break :block if (text.len > 0) text else "---";
                 };
                 imgui.igTextColored(added_color, "%s", table_text.ptr);
@@ -563,7 +563,7 @@ pub const TaiTable = struct {
 
         if (player.animation_frame) |animation_frame| {
             var buffer: [16]u8 = undefined;
-            const text = std.fmt.bufPrintZ(&buffer, "{}", .{animation_frame}) catch "error";
+            const text = std.fmt.bufPrintSentinel(&buffer, "{}", .{animation_frame}, 0) catch "error";
             var text_size: imgui.ImVec2 = undefined;
             imgui.igCalcTextSize(&text_size, text, null, false, -1);
             var available_size: imgui.ImVec2 = undefined;
@@ -579,14 +579,14 @@ pub const TaiTable = struct {
             defer imgui.igEndTooltip();
             if (player.animation_id) |animation_id| {
                 var buffer: [16]u8 = undefined;
-                const text = std.fmt.bufPrintZ(&buffer, "{}", .{animation_id}) catch "error";
+                const text = std.fmt.bufPrintSentinel(&buffer, "{}", .{animation_id}, 0) catch "error";
                 imgui.igText("Animation ID:");
                 imgui.igSameLine(0, -1);
                 imgui.igText("%s", text.ptr);
             }
             if (player.animation_frame) |animation_frame| {
                 var buffer: [16]u8 = undefined;
-                const text = std.fmt.bufPrintZ(&buffer, "{}", .{animation_frame}) catch "error";
+                const text = std.fmt.bufPrintSentinel(&buffer, "{}", .{animation_frame}, 0) catch "error";
                 imgui.igText("Animation Frame:");
                 imgui.igSameLine(0, -1);
                 imgui.igText("%s", text.ptr);
@@ -756,7 +756,7 @@ pub const TaiTable = struct {
             .player_2 => item.player_2,
         };
         var buffer: [State.Editing.buffer_size]u8 = undefined;
-        _ = std.fmt.bufPrintZ(&buffer, "{f}", .{input}) catch |err| {
+        _ = std.fmt.bufPrintSentinel(&buffer, "{f}", .{input}, 0) catch |err| {
             sdk.misc.error_context.append("Failed to convert input to text.", .{});
             sdk.misc.error_context.logError(err);
             return;
@@ -830,7 +830,7 @@ pub const TaiTable = struct {
                         .player_2 => item.player_2,
                     };
                     var buffer: [State.Editing.buffer_size]u8 = undefined;
-                    _ = std.fmt.bufPrintZ(&buffer, "{f}", .{input}) catch |err| {
+                    _ = std.fmt.bufPrintSentinel(&buffer, "{f}", .{input}, 0) catch |err| {
                         sdk.misc.error_context.append("Failed to convert input to text.", .{});
                         sdk.misc.error_context.logError(err);
                         return;
@@ -839,10 +839,10 @@ pub const TaiTable = struct {
                 },
                 0 => {
                     const queue = &imgui.igGetIO_Nil().*.InputQueueCharacters;
-                    if (queue.Size <= 0) {
+                    if (queue.*.Size <= 0) {
                         return;
                     }
-                    const codepoints = queue.Data[0..@intCast(queue.Size)];
+                    const codepoints = queue.*.Data[0..@intCast(queue.*.Size)];
                     var buffer: [State.Editing.buffer_size]u8 = undefined;
                     var len: usize = 0;
                     for (codepoints) |codepoint| {
@@ -874,12 +874,12 @@ pub const TaiTable = struct {
                     return;
                 }
                 const queue = &imgui.igGetIO_Nil().*.InputQueueCharacters;
-                if (queue.Size <= 0) {
+                if (queue.*.Size <= 0) {
                     return;
                 }
                 const buffer = &editing.text_buffer;
                 var len = std.mem.sliceTo(buffer, 0).len;
-                const codepoints = queue.Data[0..@intCast(queue.Size)];
+                const codepoints = queue.*.Data[0..@intCast(queue.*.Size)];
                 for (codepoints) |codepoint| {
                     const u21_codepoint = std.math.cast(u21, codepoint) orelse {
                         sdk.misc.error_context.new("Failed to UTF8 encode: 0x{X}", .{codepoint});
@@ -1322,16 +1322,18 @@ pub const TaiTable = struct {
             const text = switch (things) {
                 .row => "Move Row",
                 .selected_row => "Move Selected Row [Alt + Up/Down] [Alt + Left Click Drag]",
-                .selected_rows => |n| std.fmt.bufPrintZ(
+                .selected_rows => |n| std.fmt.bufPrintSentinel(
                     &buffer,
                     "Move {} Selected Rows [Alt + Up/Down] [Alt + Left Click Drag]",
                     .{n},
+                    0,
                 ) catch "error",
                 .selected_value => "Move Selected Value [Alt + Up/Down] [Alt + Left Click Drag]",
-                .selected_values => |n| std.fmt.bufPrintZ(
+                .selected_values => |n| std.fmt.bufPrintSentinel(
                     &buffer,
                     "Move {} Selected Values [Alt + Up/Down] [Alt + Left Click Drag]",
                     .{n},
+                    0,
                 ) catch "error",
             };
             imgui.igSetTooltip("%s", text.ptr);
@@ -1496,10 +1498,11 @@ pub const TaiTable = struct {
                 .all_rows => "Swap Inputs Inside All Rows",
                 .row => "Swap Inputs Inside Row",
                 .selected_row => "Swap Inputs Inside Selected Row [Alt + Left/Right]",
-                .selected_rows => |n| std.fmt.bufPrintZ(
+                .selected_rows => |n| std.fmt.bufPrintSentinel(
                     &buffer,
                     "Swap Inputs Inside {} Selected Rows [Alt + Left/Right]",
                     .{n},
+                    0,
                 ) catch "error",
             };
             imgui.igSetTooltip("%s", text.ptr);
@@ -1571,7 +1574,7 @@ pub const TaiTable = struct {
             const text = switch (things) {
                 .row => "Insert Row",
                 .selected_row => "Insert Row [Ins]",
-                .selected_rows => |n| std.fmt.bufPrintZ(&buffer, "Insert {} Rows [Ins]", .{n}) catch "error",
+                .selected_rows => |n| std.fmt.bufPrintSentinel(&buffer, "Insert {} Rows [Ins]", .{n}, 0) catch "error",
             };
             imgui.igSetTooltip("%s", text.ptr);
         }
@@ -1627,7 +1630,12 @@ pub const TaiTable = struct {
             const text = switch (things) {
                 .row => "Delete Row",
                 .selected_row => "Delete Selected Row [Del]",
-                .selected_rows => |n| std.fmt.bufPrintZ(&buffer, "Delete {} Selected Rows [Del]", .{n}) catch "error",
+                .selected_rows => |n| std.fmt.bufPrintSentinel(
+                    &buffer,
+                    "Delete {} Selected Rows [Del]",
+                    .{n},
+                    0,
+                ) catch "error",
             };
             imgui.igSetTooltip("%s", text.ptr);
         }

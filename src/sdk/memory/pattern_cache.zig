@@ -70,8 +70,8 @@ pub const PatternCache = struct {
         return address;
     }
 
-    pub fn load(self: *Self, file_path: []const u8, version_id: u32) !void {
-        const file_data = std.fs.cwd().readFileAlloc(self.allocator, file_path, 131072) catch |err| {
+    pub fn load(self: *Self, io: std.Io, file_path: []const u8, version_id: u32) !void {
+        const file_data = std.Io.Dir.cwd().readFileAlloc(io, file_path, self.allocator, .limited(131072)) catch |err| {
             misc.error_context.new("Failed to read file: {s}", .{file_path});
             return err;
         };
@@ -109,8 +109,8 @@ pub const PatternCache = struct {
         }
     }
 
-    pub fn save(self: *const Self, file_path: []const u8, version_id: u32) !void {
-        const file_data = std.fs.cwd().readFileAlloc(self.allocator, file_path, 131072) catch null;
+    pub fn save(self: *const Self, io: std.Io, file_path: []const u8, version_id: u32) !void {
+        const file_data = std.Io.Dir.cwd().readFileAlloc(io, file_path, self.allocator, .limited(131072)) catch null;
         defer if (file_data) |data| {
             self.allocator.free(data);
         };
@@ -160,7 +160,7 @@ pub const PatternCache = struct {
         };
         defer self.allocator.free(new_file_data);
 
-        std.fs.cwd().writeFile(.{ .sub_path = file_path, .data = new_file_data }) catch |err| {
+        std.Io.Dir.cwd().writeFile(io, .{ .sub_path = file_path, .data = new_file_data }) catch |err| {
             misc.error_context.new("Failed to write the data to file: {s}", .{file_path});
             return err;
         };
@@ -210,9 +210,11 @@ test "save/load should save/load the cache state to/from a file" {
     try testing.expectEqual(@intFromPtr(&data[4]), cache_1.findAddress(&pattern_1));
     try testing.expectEqual(@intFromPtr(&data[5]), cache_1.findAddress(&pattern_2));
 
-    try cache_1.save("./test_assets/cache.json", 123);
-    defer std.fs.cwd().deleteFile("./test_assets/cache.json") catch @panic("Failed to cleanup test file.");
-    try cache_2.load("./test_assets/cache.json", 123);
+    try cache_1.save(testing.io, "./test_assets/cache.json", 123);
+    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/cache.json") catch {
+        @panic("Failed to cleanup test file.");
+    };
+    try cache_2.load(testing.io, "./test_assets/cache.json", 123);
 
     data[4] = 0x44;
     data[5] = 0x55;
@@ -236,12 +238,14 @@ test "save/load should work correctly when multiple version ids are inside the f
     try testing.expectEqual(@intFromPtr(&data[5]), cache_2.findAddress(&pattern));
     data[5] = 0x05;
 
-    try cache_1.save("./test_assets/cache.json", 111);
-    defer std.fs.cwd().deleteFile("./test_assets/cache.json") catch @panic("Failed to cleanup test file.");
-    try cache_2.save("./test_assets/cache.json", 222);
+    try cache_1.save(testing.io, "./test_assets/cache.json", 111);
+    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/cache.json") catch {
+        @panic("Failed to cleanup test file.");
+    };
+    try cache_2.save(testing.io, "./test_assets/cache.json", 222);
 
-    try cache_1.load("./test_assets/cache.json", 222);
-    try cache_2.load("./test_assets/cache.json", 111);
+    try cache_1.load(testing.io, "./test_assets/cache.json", 222);
+    try cache_2.load(testing.io, "./test_assets/cache.json", 111);
 
     try testing.expectEqual(@intFromPtr(&data[5]), cache_1.findAddress(&pattern));
     try testing.expectEqual(@intFromPtr(&data[4]), cache_2.findAddress(&pattern));

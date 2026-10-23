@@ -26,10 +26,10 @@
 
     // Indicates the version of Zig that the project is meant to be compiled with.
     // Not a standard build.zig.zon field.
-    .zig_version = "0.15.2",
+    .zig_version = "0.17.0",
 
     // Tracks the earliest Zig version that the package considers to be a supported use case.
-    .minimum_zig_version = "0.15.0",
+    .minimum_zig_version = "0.17.0",
 
     // Author of the project.
     // Not a standard build.zig.zon field.
@@ -95,8 +95,8 @@
         //    .lazy = false,
         //},
         .zigwin32 = .{
-            .url = "https://github.com/marlersoft/zigwin32/archive/5587b16fa040573846a6bf531301f6206d31a6bf.tar.gz",
-            .hash = "zigwin32-25.0.28-preview-AAAAAICM5AMResOGQnQ85mfe60TTOQeMtt7GRATUOKoP",
+            .url = "https://github.com/marlersoft/zigwin32/archive/ab1c05ff1da857ec500c4da42e190032a8639717.tar.gz",
+            .hash = "win32-25.0.28-preview-mX5pFQ8t5QNuXMsGluHTUtIed00-Mu4MEcV4wHxTJqpg",
         },
         .minhook = .{
             .url = "https://github.com/TsudaKageyu/minhook/archive/refs/tags/v1.3.3.tar.gz",

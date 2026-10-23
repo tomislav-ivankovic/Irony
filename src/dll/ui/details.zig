@@ -660,8 +660,8 @@ pub const Details = struct {
     }
 
     pub fn update(self: *Self, delta_time: f32) void {
-        inline for (@typeInfo(Self).@"struct".fields) |*field| {
-            @field(self, field.name).update(delta_time);
+        inline for (@typeInfo(Self).@"struct".field_names) |field_name| {
+            @field(self, field_name).update(delta_time);
         }
     }
 
@@ -691,9 +691,9 @@ pub const Details = struct {
         imgui.igTableSetupColumn(getHeaderName(settings.column_2), 0, 0, 0);
         imgui.igTableHeadersRow();
 
-        inline for (@typeInfo(Self).@"struct".fields) |*field| {
-            if (@field(settings.rows_enabled, field.name)) {
-                @field(self, field.name).draw(settings);
+        inline for (@typeInfo(Self).@"struct".field_names) |field_name| {
+            if (@field(settings.rows_enabled, field_name)) {
+                @field(self, field_name).draw(settings);
             }
         }
     }
@@ -824,13 +824,13 @@ fn drawYesNo(value: bool, alpha: f32) void {
 
 fn drawU32(value: u32, alpha: f32) void {
     var buffer: [string_buffer_size]u8 = undefined;
-    const text = std.fmt.bufPrintZ(&buffer, "{}", .{value}) catch error_string;
+    const text = std.fmt.bufPrintSentinel(&buffer, "{}", .{value}, 0) catch error_string;
     drawText(text, alpha);
 }
 
 fn drawF32(value: f32, alpha: f32) void {
     var buffer: [string_buffer_size]u8 = undefined;
-    const text = std.fmt.bufPrintZ(&buffer, "{d:.2}", .{value}) catch error_string;
+    const text = std.fmt.bufPrintSentinel(&buffer, "{d:.2}", .{value}, 0) catch error_string;
     drawText(text, alpha);
 }
 
@@ -844,7 +844,7 @@ fn drawF32Degrees(value: f32, alpha: f32) void {
 
 fn drawIronyVersion(value: model.IronyVersion, alpha: f32) void {
     var buffer: [string_buffer_size]u8 = undefined;
-    const text = std.fmt.bufPrintZ(&buffer, "{f}", .{value}) catch error_string;
+    const text = std.fmt.bufPrintSentinel(&buffer, "{f}", .{value}, 0) catch error_string;
     drawText(text, alpha);
 }
 
@@ -865,7 +865,7 @@ fn drawPlayerName(value: model.PlayerName, alpha: f32) void {
 }
 
 fn drawU32ActualMax(value: model.U32ActualMax, alpha: f32) void {
-    var buffer: [string_buffer_size]u8 = [1]u8{0} ** string_buffer_size;
+    var buffer: [string_buffer_size]u8 = @splat(0);
     var writer = std.Io.Writer.fixed(&buffer);
     if (value.actual) |actual| {
         writer.print("{}", .{actual}) catch {};
@@ -887,7 +887,7 @@ fn drawU32ActualMax(value: model.U32ActualMax, alpha: f32) void {
 }
 
 fn drawU32ActualMinMax(value: model.U32ActualMinMax, alpha: f32) void {
-    var buffer: [string_buffer_size]u8 = [1]u8{0} ** string_buffer_size;
+    var buffer: [string_buffer_size]u8 = @splat(0);
     var writer = std.Io.Writer.fixed(&buffer);
     if (value.actual) |actual| {
         writer.print("{}", .{actual}) catch {};
@@ -915,7 +915,7 @@ fn drawU32ActualMinMax(value: model.U32ActualMinMax, alpha: f32) void {
 }
 
 fn drawI32ActualMinMax(value: model.I32ActualMinMax, alpha: f32) void {
-    var buffer: [string_buffer_size]u8 = [1]u8{0} ** string_buffer_size;
+    var buffer: [string_buffer_size]u8 = @splat(0);
     var writer = std.Io.Writer.fixed(&buffer);
     if (value.actual) |actual| {
         if (actual > 0) {
@@ -952,7 +952,7 @@ fn drawI32ActualMinMax(value: model.I32ActualMinMax, alpha: f32) void {
 }
 
 fn drawF32MinMax(value: model.F32MinMax, alpha: f32) void {
-    var buffer: [string_buffer_size]u8 = [1]u8{0} ** string_buffer_size;
+    var buffer: [string_buffer_size]u8 = @splat(0);
     var writer = std.Io.Writer.fixed(&buffer);
     if (value.min) |min| {
         writer.print("{d:.2}", .{min}) catch {};
@@ -1112,7 +1112,7 @@ fn drawThrowEscapeTiming(value: model.ThrowEscapeTiming, alpha: f32) void {
 }
 
 fn drawThrowEscapeInputs(value: model.ThrowEscapeInputs, alpha: f32) void {
-    var buffer: [string_buffer_size]u8 = [1]u8{0} ** string_buffer_size;
+    var buffer: [string_buffer_size]u8 = @splat(0);
     var writer = std.Io.Writer.fixed(&buffer);
     var is_first = true;
     if (value.one) {
@@ -1146,7 +1146,7 @@ fn drawThrowEscapeInputs(value: model.ThrowEscapeInputs, alpha: f32) void {
 }
 
 fn drawCrushing(value: model.Crushing, alpha: f32) void {
-    var buffer: [string_buffer_size]u8 = [1]u8{0} ** string_buffer_size;
+    var buffer: [string_buffer_size]u8 = @splat(0);
     var writer = std.Io.Writer.fixed(&buffer);
     var is_first = true;
     if (value.invincibility) {
@@ -1195,8 +1195,8 @@ fn drawCrushing(value: model.Crushing, alpha: f32) void {
 }
 
 fn drawInput(value: model.Input, alpha: f32) void {
-    var buffer: [string_buffer_size]u8 = [1]u8{0} ** string_buffer_size;
-    const text = std.fmt.bufPrintZ(&buffer, "{f}", .{value}) catch error_string;
+    var buffer: [string_buffer_size]u8 = @splat(0);
+    const text = std.fmt.bufPrintSentinel(&buffer, "{f}", .{value}, 0) catch error_string;
     if (text.len > 0) {
         drawText(text, alpha);
     } else {
@@ -1219,7 +1219,7 @@ fn drawHeat(value: model.Heat, alpha: f32) void {
         .activated => |activated| {
             const percent = activated.gauge * 100;
             var buffer: [string_buffer_size]u8 = undefined;
-            const text = std.fmt.bufPrintZ(&buffer, "Activated: {d:.1}%", .{percent}) catch error_string;
+            const text = std.fmt.bufPrintSentinel(&buffer, "Activated: {d:.1}%", .{percent}, 0) catch error_string;
             drawText(text, alpha);
             return;
         },
@@ -1431,6 +1431,7 @@ test "should put text into clipboard when clicking text" {
             sdk.ui.toasts.update(100);
         }
     };
+    sdk.ui.toasts.setIo(testing.io);
     const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
@@ -3656,7 +3657,7 @@ test "should draw distance to wall correctly" {
                             model.Wall{ .edge_1 = .fromArray(.{ 556, -1 }), .edge_2_index = 2 },
                             model.Wall{ .edge_1 = .fromArray(.{ 556, 1 }), .edge_2_index = 3 },
                             model.Wall{ .edge_1 = .fromArray(.{ -223, 1 }), .edge_2_index = 0 },
-                        } ++ ([1]model.Wall{undefined} ** (model.Walls.max_len - 4)),
+                        } ++ @as([model.Walls.max_len - 4]model.Wall, @splat(undefined)),
                         .len = 4,
                     },
                 },
@@ -3704,7 +3705,7 @@ test "should draw angle to wall correctly" {
                             model.Wall{ .edge_1 = .fromArray(.{ -100, -100 }), .edge_2_index = 1 },
                             model.Wall{ .edge_1 = .fromArray(.{ 300, -100 }), .edge_2_index = 2 },
                             model.Wall{ .edge_1 = .fromArray(.{ -100, 300 }), .edge_2_index = 0 },
-                        } ++ ([1]model.Wall{undefined} ** (model.Walls.max_len - 3)),
+                        } ++ @as([model.Walls.max_len - 3]model.Wall, @splat(undefined)),
                         .len = 4,
                     },
                 },

@@ -952,7 +952,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                 edge_1: ?sdk.math.Vec2 = null,
                 edge_2_index: ?u8 = null,
             };
-            var breakable_walls = [1]BreakableWall{.{}} ** game.Memory(game_id).max_walls;
+            var breakable_walls: [game.Memory(game_id).max_walls]BreakableWall = @splat(.{});
             var result = model.Walls.empty;
             var hit_negative_x = false;
             var hit_negative_y = false;
@@ -1237,7 +1237,8 @@ test "should capture game correctly" {
 test "should capture game version correctly" {
     const makeVersion = struct {
         fn call(comptime str: []const u8) game.Version(.t8) {
-            return (str ++ ([1]u8{0} ** (@sizeOf(game.Version(.t8)) - str.len))).*;
+            const padding: [@sizeOf(game.Version(.t8)) - str.len]u8 = @splat(0);
+            return (str ++ padding).*;
         }
     }.call;
     const gm = game.Memory(.t8).testingInit;
@@ -1650,8 +1651,8 @@ test "should capture left player id correctly" {
     try testing.expectEqual(
         .player_1,
         capturer.captureFrame(&gm(.{
-            .player_1 = &.{ .input_side = @enumFromInt(2) },
-            .player_2 = &.{ .input_side = @enumFromInt(2) },
+            .player_1 = &.{ .input_side = @fromBackingInt(2) },
+            .player_2 = &.{ .input_side = @fromBackingInt(2) },
             .main_player_info = &.{ .player_id = .player_1 },
             .secondary_player_info = &.{ .player_id = .player_2 },
         })).left_player_id,
@@ -1660,7 +1661,7 @@ test "should capture left player id correctly" {
         .player_1,
         capturer.captureFrame(&gm(.{
             .player_1 = &.{ .input_side = .left },
-            .player_2 = &.{ .input_side = @enumFromInt(2) },
+            .player_2 = &.{ .input_side = @fromBackingInt(2) },
             .main_player_info = &.{ .player_id = .player_1 },
             .secondary_player_info = &.{ .player_id = .player_2 },
         })).left_player_id,
@@ -1669,7 +1670,7 @@ test "should capture left player id correctly" {
         .player_2,
         capturer.captureFrame(&gm(.{
             .player_1 = &.{ .input_side = .right },
-            .player_2 = &.{ .input_side = @enumFromInt(2) },
+            .player_2 = &.{ .input_side = @fromBackingInt(2) },
             .main_player_info = &.{ .player_id = .player_1 },
             .secondary_player_info = &.{ .player_id = .player_2 },
         })).left_player_id,
@@ -1677,7 +1678,7 @@ test "should capture left player id correctly" {
     try testing.expectEqual(
         .player_2,
         capturer.captureFrame(&gm(.{
-            .player_1 = &.{ .input_side = @enumFromInt(2) },
+            .player_1 = &.{ .input_side = @fromBackingInt(2) },
             .player_2 = &.{ .input_side = .left },
             .main_player_info = &.{ .player_id = .player_2 },
             .secondary_player_info = &.{ .player_id = .player_1 },
@@ -1686,7 +1687,7 @@ test "should capture left player id correctly" {
     try testing.expectEqual(
         .player_1,
         capturer.captureFrame(&gm(.{
-            .player_1 = &.{ .input_side = @enumFromInt(2) },
+            .player_1 = &.{ .input_side = @fromBackingInt(2) },
             .player_2 = &.{ .input_side = .right },
             .main_player_info = &.{ .player_id = .player_2 },
             .secondary_player_info = &.{ .player_id = .player_1 },
@@ -1751,7 +1752,8 @@ test "should capture main player id correctly" {
 test "should capture player name correctly" {
     const makePlayerName = struct {
         fn call(comptime name: []const u8) game.PlayerName {
-            return (name ++ ([1]u8{0} ** (@sizeOf(game.PlayerName) - name.len))).*;
+            const padding: [@sizeOf(game.PlayerName) - name.len]u8 = @splat(0);
+            return (name ++ padding).*;
         }
     }.call;
     const gm = game.Memory(.t8).testingInit;
@@ -2198,7 +2200,7 @@ test "should capture throw escape correctly" {
             .throw_escape_flags = .{ .escape_success = false },
         },
         .player_2 = &.{
-            .correct_throw_escape_input = @enumFromInt(0),
+            .correct_throw_escape_input = @fromBackingInt(0),
             .throw_escape_flags = .{ .escape_success = false },
         },
         .cancel_requirements = &.{
@@ -2225,7 +2227,7 @@ test "should capture can move correctly" {
     }));
     const frame_2 = capturer.captureFrame(&gm(.{
         .player_1 = null,
-        .player_2 = &.{ .can_move = @enumFromInt(2) },
+        .player_2 = &.{ .can_move = @fromBackingInt(2) },
     }));
     try testing.expectEqual(false, frame_1.getPlayerById(.player_1).can_move);
     try testing.expectEqual(true, frame_1.getPlayerById(.player_2).can_move);
@@ -2546,7 +2548,7 @@ test "should capture in special style correctly" {
     }));
     const frame_2 = capturer.captureFrame(&gm(.{
         .player_1 = null,
-        .player_2 = &.{ .in_special_style = @enumFromInt(2) },
+        .player_2 = &.{ .in_special_style = @fromBackingInt(2) },
     }));
     try testing.expectEqual(false, frame_1.getPlayerById(.player_1).in_special_style);
     try testing.expectEqual(true, frame_1.getPlayerById(.player_2).in_special_style);

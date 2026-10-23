@@ -179,11 +179,11 @@ test "should detect a whiff correctly" {
         .point_1 = .fromArray(.{ 0, 0, 0 }),
         .point_2 = .fromArray(.{ 1, 0, 0 }),
     };
-    const hurt_cylinder = [1]sdk.math.Cylinder{.{
+    const hurt_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 3, 0, 0 }),
         .radius = 1,
         .half_height = 1,
-    }};
+    };
     var frame = model.Frame{ .players = .{
         .{
             .attack_type = .unblockable_mid,
@@ -192,7 +192,7 @@ test "should detect a whiff correctly" {
         .{
             .crushing = .{},
             .hit_outcome = .none,
-            .hurt_cylinders = hurtCylinders(hurt_cylinder ** 14),
+            .hurt_cylinders = hurtCylinders(@splat(hurt_cylinder)),
         },
     } };
     var hit_detector = HitDetector{};
@@ -217,16 +217,16 @@ test "should detect a high crush correctly" {
         .point_1 = .fromArray(.{ -1, 0, 0 }),
         .point_2 = .fromArray(.{ 0, 0, 0 }),
     };
-    const whiffed_cylinder = [1]sdk.math.Cylinder{.{
+    const whiffed_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 1, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
-    const connected_cylinder = [1]sdk.math.Cylinder{.{
+    };
+    const connected_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 0, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
+    };
     var frame = model.Frame{ .players = .{
         .{
             .attack_type = .high,
@@ -235,7 +235,10 @@ test "should detect a high crush correctly" {
         .{
             .crushing = .{ .high_crushing = true },
             .hit_outcome = .none,
-            .hurt_cylinders = hurtCylinders((whiffed_cylinder ** 7) ++ (connected_cylinder ** 7)),
+            .hurt_cylinders = hurtCylinders(
+            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
+            ),
         },
     } };
     var hit_detector = HitDetector{};
@@ -269,16 +272,16 @@ test "should detect a low crush correctly" {
         .point_1 = .fromArray(.{ -1, 0, 0 }),
         .point_2 = .fromArray(.{ 0, 0, 0 }),
     };
-    const whiffed_cylinder = [1]sdk.math.Cylinder{.{
+    const whiffed_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 1, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
-    const connected_cylinder = [1]sdk.math.Cylinder{.{
+    };
+    const connected_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 0, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
+    };
     var frame = model.Frame{ .players = .{
         .{
             .attack_type = .low,
@@ -287,7 +290,10 @@ test "should detect a low crush correctly" {
         .{
             .crushing = .{ .low_crushing = true },
             .hit_outcome = .none,
-            .hurt_cylinders = hurtCylinders((whiffed_cylinder ** 7) ++ (connected_cylinder ** 7)),
+            .hurt_cylinders = hurtCylinders(
+            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
+            ),
         },
     } };
     var hit_detector = HitDetector{};
@@ -321,16 +327,16 @@ test "should detect a mid crush correctly" {
         .point_1 = .fromArray(.{ -1, 0, 0 }),
         .point_2 = .fromArray(.{ 0, 0, 0 }),
     };
-    const whiffed_cylinder = [1]sdk.math.Cylinder{.{
+    const whiffed_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 1, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
-    const connected_cylinder = [1]sdk.math.Cylinder{.{
+    };
+    const connected_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 0, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
+    };
     var frame = model.Frame{ .players = .{
         .{
             .attack_type = .mid,
@@ -339,7 +345,10 @@ test "should detect a mid crush correctly" {
         .{
             .crushing = .{ .invincibility = true },
             .hit_outcome = .none,
-            .hurt_cylinders = hurtCylinders((whiffed_cylinder ** 7) ++ (connected_cylinder ** 7)),
+            .hurt_cylinders = hurtCylinders(
+            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
+            ),
         },
     } };
     var hit_detector = HitDetector{};
@@ -373,16 +382,16 @@ test "should detect a anti air only crush correctly" {
         .point_1 = .fromArray(.{ -1, 0, 0 }),
         .point_2 = .fromArray(.{ 0, 0, 0 }),
     };
-    const whiffed_cylinder = [1]sdk.math.Cylinder{.{
+    const whiffed_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 1, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
-    const connected_cylinder = [1]sdk.math.Cylinder{.{
+    };
+    const connected_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 0, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
+    };
     var frame = model.Frame{ .players = .{
         .{
             .attack_type = .antiair_only,
@@ -391,7 +400,10 @@ test "should detect a anti air only crush correctly" {
         .{
             .crushing = .{ .anti_air_only_crushing = true },
             .hit_outcome = .none,
-            .hurt_cylinders = hurtCylinders((whiffed_cylinder ** 7) ++ (connected_cylinder ** 7)),
+            .hurt_cylinders = hurtCylinders(
+            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
+            ),
         },
     } };
     var hit_detector = HitDetector{};
@@ -425,16 +437,16 @@ test "should detect a power crush correctly" {
         .point_1 = .fromArray(.{ -1, 0, 0 }),
         .point_2 = .fromArray(.{ 0, 0, 0 }),
     };
-    const whiffed_cylinder = [1]sdk.math.Cylinder{.{
+    const whiffed_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 1, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
-    const connected_cylinder = [1]sdk.math.Cylinder{.{
+    };
+    const connected_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 0, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
+    };
     var frame = model.Frame{ .players = .{
         .{
             .attack_type = .mid,
@@ -443,7 +455,10 @@ test "should detect a power crush correctly" {
         .{
             .crushing = .{ .power_crushing = true },
             .hit_outcome = .none,
-            .hurt_cylinders = hurtCylinders((whiffed_cylinder ** 7) ++ (connected_cylinder ** 7)),
+            .hurt_cylinders = hurtCylinders(
+            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
+            ),
         },
     } };
     var hit_detector = HitDetector{};
@@ -480,16 +495,16 @@ test "should detect a block correctly" {
         .point_1 = .fromArray(.{ -1, 0, 0 }),
         .point_2 = .fromArray(.{ 0, 0, 0 }),
     };
-    const whiffed_cylinder = [1]sdk.math.Cylinder{.{
+    const whiffed_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 1, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
-    const connected_cylinder = [1]sdk.math.Cylinder{.{
+    };
+    const connected_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 0, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
+    };
     var frame = model.Frame{ .players = .{
         .{
             .attack_type = .mid,
@@ -498,7 +513,10 @@ test "should detect a block correctly" {
         .{
             .crushing = .{},
             .hit_outcome = .blocked_standing,
-            .hurt_cylinders = hurtCylinders((whiffed_cylinder ** 7) ++ (connected_cylinder ** 7)),
+            .hurt_cylinders = hurtCylinders(
+            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
+            ),
         },
     } };
     var hit_detector = HitDetector{};
@@ -535,16 +553,16 @@ test "should detect a normal hit correctly" {
         .point_1 = .fromArray(.{ -1, 0, 0 }),
         .point_2 = .fromArray(.{ 0, 0, 0 }),
     };
-    const whiffed_cylinder = [1]sdk.math.Cylinder{.{
+    const whiffed_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 1, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
-    const connected_cylinder = [1]sdk.math.Cylinder{.{
+    };
+    const connected_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 0, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
+    };
     var frame = model.Frame{ .players = .{
         .{
             .attack_type = .mid,
@@ -553,7 +571,10 @@ test "should detect a normal hit correctly" {
         .{
             .crushing = .{},
             .hit_outcome = .normal_hit_standing,
-            .hurt_cylinders = hurtCylinders((whiffed_cylinder ** 7) ++ (connected_cylinder ** 7)),
+            .hurt_cylinders = hurtCylinders(
+            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
+            ),
         },
     } };
     var hit_detector = HitDetector{};
@@ -590,16 +611,16 @@ test "should detect a counter hit correctly" {
         .point_1 = .fromArray(.{ -1, 0, 0 }),
         .point_2 = .fromArray(.{ 0, 0, 0 }),
     };
-    const whiffed_cylinder = [1]sdk.math.Cylinder{.{
+    const whiffed_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 1, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
-    const connected_cylinder = [1]sdk.math.Cylinder{.{
+    };
+    const connected_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 0, 0, 0 }),
         .radius = 0.5,
         .half_height = 0.5,
-    }};
+    };
     var frame = model.Frame{ .players = .{
         .{
             .attack_type = .mid,
@@ -608,7 +629,10 @@ test "should detect a counter hit correctly" {
         .{
             .crushing = .{},
             .hit_outcome = .counter_hit_standing,
-            .hurt_cylinders = hurtCylinders((whiffed_cylinder ** 7) ++ (connected_cylinder ** 7)),
+            .hurt_cylinders = hurtCylinders(
+            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
+            ),
         },
     } };
     var hit_detector = HitDetector{};
@@ -641,11 +665,11 @@ test "should detect inactive lines correctly" {
         .point_1 = .fromArray(.{ -1, 0, 0 }),
         .point_2 = .fromArray(.{ 1, 0, 0 }),
     };
-    const hurt_cylinder = [1]sdk.math.Cylinder{.{
+    const hurt_cylinder = sdk.math.Cylinder{
         .center = .fromArray(.{ 0, 0, 0 }),
         .radius = 1,
         .half_height = 1,
-    }};
+    };
     const frame = model.Frame{ .players = .{
         .{
             .attack_type = .mid,
@@ -654,7 +678,7 @@ test "should detect inactive lines correctly" {
         .{
             .crushing = .{},
             .hit_outcome = .blocked_standing,
-            .hurt_cylinders = hurtCylinders(hurt_cylinder ** 14),
+            .hurt_cylinders = hurtCylinders(@splat(hurt_cylinder)),
         },
     } };
 

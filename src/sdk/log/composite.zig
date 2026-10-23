@@ -2,7 +2,7 @@ const std = @import("std");
 
 const LogFunction = *const fn (
     comptime level: std.log.Level,
-    comptime scope: @Type(.enum_literal),
+    comptime scope: @EnumLiteral(),
     comptime format: []const u8,
     args: anytype,
 ) void;
@@ -11,7 +11,7 @@ pub fn CompositeLogger(comptime log_functions: []const LogFunction) type {
     return struct {
         pub fn logFn(
             comptime level: std.log.Level,
-            comptime scope: @Type(.enum_literal),
+            comptime scope: @EnumLiteral(),
             comptime format: []const u8,
             args: anytype,
         ) void {
@@ -31,7 +31,7 @@ test "should call every individual log function and pass all arguments" {
         var last_format: ?[]const u8 = null;
         pub fn logFn(
             comptime level: std.log.Level,
-            comptime scope: @Type(.enum_literal),
+            comptime scope: @EnumLiteral(),
             comptime format: []const u8,
             args: anytype,
         ) void {
@@ -48,7 +48,7 @@ test "should call every individual log function and pass all arguments" {
         var last_format: ?[]const u8 = null;
         pub fn logFn(
             comptime level: std.log.Level,
-            comptime scope: @Type(.enum_literal),
+            comptime scope: @EnumLiteral(),
             comptime format: []const u8,
             args: anytype,
         ) void {

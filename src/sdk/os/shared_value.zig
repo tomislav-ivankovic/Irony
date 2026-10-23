@@ -12,7 +12,7 @@ pub fn SharedValue(comptime Value: type) type {
         const Self = @This();
 
         pub fn create(name: []const u8) !Self {
-            var buffer = [_:0]u16{0} ** os.max_file_path_length;
+            var buffer: [os.max_file_path_length:0]u16 = @splat(0);
             const size = getFullName(&buffer, os.ProcessId.getCurrent(), name) catch |err| {
                 misc.error_context.append("Failed to get full name.", .{});
                 return err;
@@ -41,13 +41,13 @@ pub fn SharedValue(comptime Value: type) type {
         }
 
         pub fn open(process_id: os.ProcessId, name: []const u8, desired_access: w32.FILE_MAP) !Self {
-            var buffer = [_:0]u16{0} ** os.max_file_path_length;
+            var buffer: [os.max_file_path_length:0]u16 = @splat(0);
             const size = getFullName(&buffer, process_id, name) catch |err| {
                 misc.error_context.append("Failed to get full name.", .{});
                 return err;
             };
             const full_name = buffer[0..size :0];
-            const handle = w32.OpenFileMappingW(@bitCast(desired_access), 0, full_name) orelse {
+            const handle = w32.OpenFileMappingW(@backingInt(desired_access), 0, full_name) orelse {
                 misc.error_context.new("{f}", .{os.Error.getLast()});
                 misc.error_context.append("OpenFileMappingW returned null.", .{});
                 return error.OsError;

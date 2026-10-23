@@ -30,13 +30,15 @@ pub const LogsWindow = struct {
             return;
         }
 
-        {
-            const entries = buffer_logger.lockAndGetEntries();
+        if (buffer_logger.lockAndGetEntries()) |entries| {
             defer buffer_logger.unlock();
             for (0..entries.len) |index| {
                 const entry = entries.get(index) catch unreachable;
                 drawColoredText(getLogColor(entry.level), entry.full_message);
             }
+        } else |err| {
+            sdk.misc.error_context.append("Failed to lock buffered locker and get it's entities.", .{});
+            sdk.misc.error_context.logError(err);
         }
 
         const was_scroll_at_bottom = self.is_scroll_at_bottom;
@@ -71,18 +73,22 @@ pub const LogsWindow = struct {
 const testing = std.testing;
 
 test "should not draw anything when window is closed" {
-    const nanoTimestamp = struct {
-        fn call() i128 {
-            return 1577934245123456789;
+    var io = testing.io;
+    var vtable = io.vtable.*;
+    vtable.now = struct {
+        fn call(_: ?*anyopaque, _: std.Io.Clock) std.Io.Timestamp {
+            return .fromNanoseconds(1577934245123456789);
         }
     }.call;
+    io.vtable = &vtable;
+
     const logger = sdk.log.BufferLogger(.{
         .level = .debug,
         .time_zone = .utc,
         .buffer_size = 4096,
         .max_entries = 64,
-        .nanoTimestamp = nanoTimestamp,
     });
+    logger.setIo(io);
 
     logger.logFn(.debug, std.log.default_log_scope, "Message: 1", .{});
     logger.logFn(.info, std.log.default_log_scope, "Message: 2", .{});
@@ -105,18 +111,22 @@ test "should not draw anything when window is closed" {
 }
 
 test "should draw every log message when window is open" {
-    const nanoTimestamp = struct {
-        fn call() i128 {
-            return 1577934245123456789;
+    var io = testing.io;
+    var vtable = io.vtable.*;
+    vtable.now = struct {
+        fn call(_: ?*anyopaque, _: std.Io.Clock) std.Io.Timestamp {
+            return .fromNanoseconds(1577934245123456789);
         }
     }.call;
+    io.vtable = &vtable;
+
     const logger = sdk.log.BufferLogger(.{
         .level = .debug,
         .time_zone = .utc,
         .buffer_size = 4096,
         .max_entries = 64,
-        .nanoTimestamp = nanoTimestamp,
     });
+    logger.setIo(io);
 
     logger.logFn(.debug, std.log.default_log_scope, "Message: 1", .{});
     logger.logFn(.info, std.log.default_log_scope, "Message: 2", .{});
@@ -143,18 +153,22 @@ test "should draw every log message when window is open" {
 }
 
 test "should scroll to the bottom by default and still be able to scroll up" {
-    const nanoTimestamp = struct {
-        fn call() i128 {
-            return 1577934245123456789;
+    var io = testing.io;
+    var vtable = io.vtable.*;
+    vtable.now = struct {
+        fn call(_: ?*anyopaque, _: std.Io.Clock) std.Io.Timestamp {
+            return .fromNanoseconds(1577934245123456789);
         }
     }.call;
+    io.vtable = &vtable;
+
     const logger = sdk.log.BufferLogger(.{
         .level = .info,
         .time_zone = .utc,
         .buffer_size = 4096,
         .max_entries = 64,
-        .nanoTimestamp = nanoTimestamp,
     });
+    logger.setIo(io);
 
     for (0..64) |i| {
         logger.logFn(.info, std.log.default_log_scope, "Message: {}", .{i});

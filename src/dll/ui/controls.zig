@@ -112,14 +112,19 @@ pub fn Controls(comptime config: ControlsConfig) type {
 
         fn drawText(test_id: [:0]const u8, comptime fmt: []const u8, args: anytype) void {
             var buffer: [32]u8 = undefined;
-            const text = std.fmt.bufPrintZ(&buffer, fmt, args) catch "error";
+            const text = std.fmt.bufPrintSentinel(&buffer, fmt, args, 0) catch "error";
             imgui.igText("%s", text.ptr);
 
             if (builtin.is_test) {
                 var rect: imgui.ImRect = undefined;
                 imgui.igGetItemRectMin(&rect.Min);
                 imgui.igGetItemRectMax(&rect.Max);
-                const full_test_id = std.fmt.bufPrintZ(&buffer, "{s}: " ++ fmt, .{test_id} ++ args) catch "error";
+                const full_test_id = std.fmt.bufPrintSentinel(
+                    &buffer,
+                    "{s}: " ++ fmt,
+                    .{test_id} ++ args,
+                    0,
+                ) catch "error";
                 imgui.teItemAdd(imgui.igGetCurrentContext(), imgui.igGetID_Str(test_id), &rect, null);
                 imgui.teItemAdd(imgui.igGetCurrentContext(), imgui.igGetID_Str(full_test_id), &rect, null);
             }
@@ -517,10 +522,11 @@ pub fn Controls(comptime config: ControlsConfig) type {
 
         fn drawSpeedButton(controller: *config.Controller) void {
             var buffer: [32]u8 = undefined;
-            const button_text = std.fmt.bufPrintZ(
+            const button_text = std.fmt.bufPrintSentinel(
                 &buffer,
                 " ⏲ {d:.2}x ###speed",
                 .{controller.playback_speed},
+                0,
             ) catch " ⏲ ###speed";
             if (imgui.igButton(button_text, .{})) {
                 imgui.igOpenPopup_Str("speed_popup", 0);
@@ -532,7 +538,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
                 defer imgui.igEndPopup();
                 _ = imgui.igSliderFloat("###speed_slider", &controller.playback_speed, 0.1, 4.0, "%.2fx", 0);
                 for ([_]f32{ 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0 }) |option| {
-                    const text = std.fmt.bufPrintZ(&buffer, "{d:.2}x", .{option}) catch "error";
+                    const text = std.fmt.bufPrintSentinel(&buffer, "{d:.2}x", .{option}, 0) catch "error";
                     if (imgui.igSelectable_Bool(text, controller.playback_speed == option, 0, .{})) {
                         controller.playback_speed = option;
                     }

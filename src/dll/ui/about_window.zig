@@ -15,7 +15,7 @@ pub fn AboutWindow(comptime config: AboutWindowConfig) type {
         const Self = @This();
         pub const name = "About";
 
-        pub fn draw(self: *Self) void {
+        pub fn draw(self: *Self, io: std.Io) void {
             if (!self.is_open) {
                 return;
             }
@@ -113,9 +113,10 @@ pub fn AboutWindow(comptime config: AboutWindowConfig) type {
             imgui.igPopID();
 
             imgui.igBullet();
-            if (sdk.misc.Timestamp.fromNano(std.time.nanoTimestamp(), .local) catch null) |timestamp| {
+            const nano_time = std.Io.Clock.real.now(io).nanoseconds;
+            if (sdk.misc.Timestamp.fromNano(nano_time, .local) catch null) |timestamp| {
                 var buffer: [16]u8 = undefined;
-                if (std.fmt.bufPrintZ(&buffer, "©2025-{}", .{timestamp.year}) catch null) |str| {
+                if (std.fmt.bufPrintSentinel(&buffer, "©2025-{}", .{timestamp.year}, 0) catch null) |str| {
                     drawText(str);
                 } else {
                     drawText("©2025");
@@ -157,7 +158,7 @@ test "should not draw anything when window is closed" {
         var window: Window = .{ .is_open = false };
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw();
+            window.draw(testing.io);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -174,7 +175,7 @@ test "should draw everything when window is open" {
         var window: Window = .{ .is_open = true };
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw();
+            window.draw(testing.io);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -201,7 +202,8 @@ test "should draw everything when window is open" {
             try ctx.expectItemExists("Donate:");
             try ctx.expectItemExists("Donate:/One Time Donation");
             try ctx.expectItemExists("Donate:/Recurring Donation");
-            const timestamp = try sdk.misc.Timestamp.fromNano(std.time.nanoTimestamp(), .local);
+            const nano_time = std.Io.Clock.real.now(testing.io).nanoseconds;
+            const timestamp = try sdk.misc.Timestamp.fromNano(nano_time, .local);
             try ctx.expectItemExistsFmt("©2025-{}", .{timestamp.year});
         }
     };
@@ -223,7 +225,7 @@ test "should open correct links when they are clicked" {
         var window: Window = .{ .is_open = true };
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw();
+            window.draw(testing.io);
             sdk.ui.toasts.draw();
         }
 
@@ -259,6 +261,7 @@ test "should open correct links when they are clicked" {
             try ctx.expectItemExists("//toast-0/The donation page has been opened in the browser.");
         }
     };
+    sdk.ui.toasts.setIo(testing.io);
     const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }

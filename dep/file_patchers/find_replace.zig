@@ -1,10 +1,9 @@
 const std = @import("std");
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
     if (args.len != 4) {
         return error.WrongNumberOfArguments;
     }
@@ -12,15 +11,15 @@ pub fn main() !void {
     const find = args[2];
     const replace = args[3];
 
-    var file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
+    var file = try std.Io.Dir.cwd().openFile(io, path, .{});
+    defer file.close(io);
 
     var read_buffer: [4096]u8 = undefined;
-    var file_reader = file.reader(&read_buffer);
+    var file_reader = file.reader(io, &read_buffer);
     const reader = &file_reader.interface;
 
     var write_buffer: [4096]u8 = undefined;
-    var std_writer = std.fs.File.stdout().writer(&write_buffer);
+    var std_writer = std.Io.File.stdout().writer(io, &write_buffer);
     const writer = &std_writer.interface;
 
     var find_index: usize = 0;

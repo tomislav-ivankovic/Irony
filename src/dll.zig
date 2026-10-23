@@ -21,7 +21,7 @@ const dx = switch (build_info.rendering_api) {
     .dx12 => sdk.dx12,
 };
 
-const MainAllocator = std.heap.GeneralPurposeAllocator(.{ .enable_memory_limit = true });
+const MainAllocator = std.heap.DebugAllocator(.{ .enable_memory_limit = true });
 const MemorySearchTask = sdk.misc.Task(dll.game.Memory(build_info.game));
 const Event = union(enum) {
     present: dx.HostContext,
@@ -34,29 +34,29 @@ const ListeningToEvents = enum(u8) { none, all, only_present };
 
 const dx_hooks = dx.Hooks(onPresent, beforeResize, afterResize);
 const game_hooks = dll.game.Hooks(build_info.game, onTick);
-const number_of_hooking_retries = 10;
-const hooking_retry_sleep_time = 100 * std.time.ns_per_ms;
 
 var dll_module: sdk.os.Module = undefined;
 var module_handle_shared_value: ?sdk.os.SharedValue(w32.HINSTANCE) = null;
 var main_thread: ?std.Thread = null;
 var main_thread_running = std.atomic.Value(bool).init(false);
 
-var pending_event_mutex = std.Thread.Mutex{};
-var producer_mutex = std.Thread.Mutex{};
-var consumer_condition = std.Thread.Condition{};
-var producer_condition = std.Thread.Condition{};
+var pending_event_mutex = std.Io.Mutex.init;
+var producer_mutex = std.Io.Mutex.init;
+var consumer_condition = std.Io.Condition.init;
+var producer_condition = std.Io.Condition.init;
 var pending_event: ?Event = null;
 var listening_to_events = std.atomic.Value(ListeningToEvents).init(.none);
 
 var event_buss: ?dll.EventBuss = null;
 var window_procedure: ?sdk.os.WindowProcedure = null;
 
+var main_io = std.Io.Threaded.init_single_threaded;
+
 pub fn DllMain(
-    module_handle: w32.HINSTANCE,
-    forward_reason: u32,
-    reserved: ?*anyopaque,
-) callconv(.winapi) w32.BOOL {
+    module_handle: std.os.windows.HINSTANCE,
+    forward_reason: std.os.windows.DWORD,
+    reserved: ?std.os.windows.LPVOID,
+) std.os.windows.BOOL {
     switch (forward_reason) {
         w32.DLL_PROCESS_ATTACH => {
             std.log.info("DLL attached event detected.", .{});
@@ -64,10 +64,10 @@ pub fn DllMain(
             initialize(module_handle) catch |err| {
                 sdk.misc.error_context.append("Failed to initialize.", .{});
                 sdk.misc.error_context.logError(err);
-                return 0;
+                return .FALSE;
             };
             std.log.info("DLL attached successfully.", .{});
-            return 1;
+            return .TRUE;
         },
         w32.DLL_PROCESS_DETACH => {
             std.log.info("DLL detach event detected.", .{});
@@ -77,13 +77,17 @@ pub fn DllMain(
                 std.log.info("Skipping cleanup since the host process is terminating.", .{});
             }
             std.log.info("Detaching from the process now...", .{});
-            return 1;
+            return .TRUE;
         },
-        else => return 0,
+        else => return .FALSE,
     }
 }
 
 fn initialize(module_handle: w32.HINSTANCE) !void {
+    const io = main_io.io();
+    buffer_logger.setIo(io);
+    sdk.ui.toasts.setIo(io);
+
     std.log.debug("Creating module handle shared value...", .{});
     module_handle_shared_value = if (createModuleHandleSharedValue(module_handle)) |shared_value| block: {
         std.log.info("Module handle shared value created.", .{});
@@ -104,16 +108,20 @@ fn initialize(module_handle: w32.HINSTANCE) !void {
 }
 
 fn deinitialize() void {
+    const io = main_io.io();
     std.log.debug("Shutting down main thread...", .{});
     if (main_thread_running.load(.seq_cst)) {
         if (main_thread) |*thread| {
             std.log.debug("Sending shutdown event...", .{});
-            sendEvent(&.shut_down);
+            sendEvent(io, &.shut_down);
             std.log.info("Shutdown event sent.", .{});
 
             std.log.debug("Waiting for main thread to shut down...", .{});
             while (main_thread_running.load(.seq_cst)) {
-                std.Thread.sleep(100 * std.time.ns_per_ms);
+                io.sleep(.fromMilliseconds(100), .awake) catch |err| {
+                    sdk.misc.error_context.new("Failed to sleep for 100 ms.", .{});
+                    sdk.misc.error_context.logWarning(err);
+                };
             }
             thread.detach();
             std.log.info("Main thread shut down.", .{});
@@ -139,7 +147,6 @@ fn deinitialize() void {
 }
 
 pub fn selfShutDown() void {
-    std.log.info("Self shutdown initiated.", .{});
     const thread = std.Thread.spawn(.{}, struct {
         fn call() void {
             deinitialize();
@@ -155,6 +162,7 @@ pub fn selfShutDown() void {
 }
 
 pub fn main() void {
+    const io = main_io.io();
     defer main_thread_running.store(false, .seq_cst);
 
     std.log.info("Main thread started.", .{});
@@ -171,7 +179,7 @@ pub fn main() void {
     };
 
     std.log.debug("Starting file logging...", .{});
-    if (startFileLogging(&base_dir)) {
+    if (startFileLogging(io, &base_dir)) {
         std.log.info("File logging started.", .{});
     } else |err| {
         sdk.misc.error_context.append("Failed to start file logging.", .{});
@@ -215,14 +223,18 @@ pub fn main() void {
     }
 
     std.log.debug("Initializing DirectX hooks...", .{});
-    for (0..number_of_hooking_retries) |retry_number| {
-        dx_hooks.init() catch |err| {
-            if (retry_number < number_of_hooking_retries - 1) {
-                std.Thread.sleep(hooking_retry_sleep_time);
+    const number_of_retries = 10;
+    for (0..number_of_retries) |retry_number| {
+        dx_hooks.init() catch |err_1| {
+            if (retry_number < number_of_retries - 1) {
+                io.sleep(.fromMilliseconds(100), .awake) catch |err_2| {
+                    sdk.misc.error_context.new("Failed to sleep for 100 ms.", .{});
+                    sdk.misc.error_context.logWarning(err_2);
+                };
                 continue;
             } else {
                 sdk.misc.error_context.append("Failed to initialize DirectX hooks.", .{});
-                sdk.misc.error_context.logError(err);
+                sdk.misc.error_context.logError(err_1);
                 return;
             }
         };
@@ -231,7 +243,7 @@ pub fn main() void {
     std.log.info("DirectX hooks initialized.", .{});
     defer {
         std.log.debug("De-initializing DirectX hooks...", .{});
-        dx_hooks.deinit();
+        dx_hooks.deinit(io);
         std.log.info("DirectX hooks de-initialized.", .{});
     }
 
@@ -239,14 +251,14 @@ pub fn main() void {
     var memory_search_task = if (MemorySearchTask.spawn(
         allocator,
         performMemorySearch,
-        .{ allocator, &base_dir },
+        .{ allocator, io, &base_dir },
     )) |task| block: {
         std.log.info("Memory search task spawned.", .{});
         break :block task;
     } else |err| block: {
         sdk.misc.error_context.append("Failed to spawn memory search task. Searching in main thread...", .{});
         sdk.misc.error_context.logWarning(err);
-        const result = performMemorySearch(allocator, &base_dir);
+        const result = performMemorySearch(allocator, io, &base_dir);
         break :block MemorySearchTask.createCompleted(result);
     };
     defer {
@@ -255,31 +267,35 @@ pub fn main() void {
         std.log.info("Memory search task joined.", .{});
 
         std.log.debug("De-initializing game hooks...", .{});
-        game_hooks.deinit();
+        game_hooks.deinit(io);
         std.log.info("Game hooks de-initialized.", .{});
     }
 
     const State = enum { starting_up, up, shutting_down };
     var state = State.starting_up;
 
-    defer producer_condition.broadcast();
-    pending_event_mutex.lock();
-    defer pending_event_mutex.unlock();
+    defer producer_condition.broadcast(io);
+    pending_event_mutex.lock(io) catch |err| {
+        sdk.misc.error_context.append("Failed to get lock for pending event.", .{});
+        sdk.misc.error_context.logError(err);
+        return;
+    };
+    defer pending_event_mutex.unlock(io);
     listening_to_events.store(.all, .seq_cst);
     defer listening_to_events.store(.none, .seq_cst);
 
     while (true) {
-        consumer_condition.wait(&pending_event_mutex);
+        consumer_condition.wait(io, &pending_event_mutex) catch continue;
         const event = pending_event orelse continue;
         defer {
             pending_event = null;
-            producer_condition.signal();
+            producer_condition.signal(io);
         }
         switch (event) {
             .present => |*host_context| switch (state) {
                 .starting_up => {
                     std.log.info("Initializing event buss...", .{});
-                    event_buss = .init(allocator, &base_dir, host_context);
+                    event_buss = .init(allocator, io, &base_dir, host_context);
                     std.log.info("Event buss initialized.", .{});
 
                     std.log.debug("Initializing window procedure...", .{});
@@ -297,7 +313,7 @@ pub fn main() void {
                     if (event_buss) |*buss| {
                         const game_memory = memory_search_task.peek();
                         const memory_usage = main_allocator.total_requested_bytes;
-                        buss.draw(&base_dir, host_context, game_memory, memory_usage);
+                        buss.draw(io, &base_dir, host_context, game_memory, memory_usage);
                     }
                 },
                 .shutting_down => {
@@ -316,7 +332,7 @@ pub fn main() void {
 
                     std.log.info("De-initializing event buss...", .{});
                     if (event_buss) |*buss| {
-                        buss.deinit(&base_dir, host_context);
+                        buss.deinit(io, &base_dir, host_context);
                         event_buss = null;
                         std.log.info("Event buss de-initialized.", .{});
                     } else {
@@ -329,7 +345,7 @@ pub fn main() void {
             .tick => {
                 if (event_buss) |*buss| {
                     const game_memory = memory_search_task.join();
-                    buss.tick(&base_dir, game_memory, &game_hooks.input_override);
+                    buss.tick(io, &base_dir, game_memory, &game_hooks.input_override);
                 }
             },
             .before_resize => |*host_context| {
@@ -347,7 +363,7 @@ pub fn main() void {
             .shut_down => {
                 listening_to_events.store(.only_present, .seq_cst);
                 state = .shutting_down;
-                producer_condition.broadcast();
+                producer_condition.broadcast(io);
             },
         }
     }
@@ -371,21 +387,21 @@ fn createModuleHandleSharedValue(module_handle: w32.HINSTANCE) !sdk.os.SharedVal
     return shared_value;
 }
 
-fn startFileLogging(base_dir: *const sdk.misc.BaseDir) !void {
+fn startFileLogging(io: std.Io, base_dir: *const sdk.misc.BaseDir) !void {
     var buffer: [sdk.os.max_file_path_length]u8 = undefined;
     const file_path = base_dir.getPath(&buffer, log_file_name) catch |err| {
         sdk.misc.error_context.append("Failed to construct log file path.", .{});
         return err;
     };
-    file_logger.start(file_path) catch |err| {
+    file_logger.start(io, file_path) catch |err| {
         sdk.misc.error_context.append("Failed to start file logging with file path: {s}", .{file_path});
         return err;
     };
 }
 
-fn performMemorySearch(allocator: std.mem.Allocator, dir: *const sdk.misc.BaseDir) dll.game.Memory(build_info.game) {
+fn performMemorySearch(allocator: std.mem.Allocator, io: std.Io, dir: *const sdk.misc.BaseDir) dll.game.Memory(build_info.game) {
     std.log.debug("Initializing game memory...", .{});
-    const game_memory = dll.game.Memory(build_info.game).init(allocator, dir, game_hooks);
+    const game_memory = dll.game.Memory(build_info.game).init(allocator, io, dir, game_hooks);
     std.log.info("Game memory initialized.", .{});
 
     std.log.debug("Initializing game hooks...", .{});
@@ -395,30 +411,32 @@ fn performMemorySearch(allocator: std.mem.Allocator, dir: *const sdk.misc.BaseDi
     return game_memory;
 }
 
-fn sendEvent(event: *const Event) void {
+fn sendEvent(io: std.Io, event: *const Event) void {
     if (!isListeningToEvent(event)) {
         return;
     }
-    producer_mutex.lock();
-    defer producer_mutex.unlock();
+    producer_mutex.lock(io) catch return;
+    defer producer_mutex.unlock(io);
     if (!isListeningToEvent(event)) {
         return;
     }
-    pending_event_mutex.lock();
-    defer pending_event_mutex.unlock();
+    pending_event_mutex.lock(io) catch return;
+    defer pending_event_mutex.unlock(io);
     if (!isListeningToEvent(event)) {
         return;
     }
     while (pending_event != null) {
-        producer_condition.timedWait(&pending_event_mutex, 10 * std.time.ns_per_ms) catch {};
+        const timeout = std.Io.Timeout{ .duration = .{ .raw = .fromMilliseconds(10), .clock = .awake } };
+        producer_condition.waitTimeout(io, &pending_event_mutex, timeout) catch {};
         if (!isListeningToEvent(event)) {
             return;
         }
     }
     pending_event = event.*;
-    consumer_condition.signal();
+    consumer_condition.signal(io);
     while (pending_event != null) {
-        producer_condition.timedWait(&pending_event_mutex, 10 * std.time.ns_per_ms) catch {};
+        const timeout = std.Io.Timeout{ .duration = .{ .raw = .fromMilliseconds(10), .clock = .awake } };
+        producer_condition.waitTimeout(io, &pending_event_mutex, timeout) catch {};
         if (!isListeningToEvent(event)) {
             return;
         }
@@ -435,19 +453,19 @@ fn isListeningToEvent(event: *const Event) bool {
 }
 
 fn onPresent(context: dx.HostContext) void {
-    sendEvent(&.{ .present = context });
+    sendEvent(main_io.io(), &.{ .present = context });
 }
 
 fn onTick() void {
-    sendEvent(&.tick);
+    sendEvent(main_io.io(), &.tick);
 }
 
 fn beforeResize(context: dx.HostContext) void {
-    sendEvent(&.{ .before_resize = context });
+    sendEvent(main_io.io(), &.{ .before_resize = context });
 }
 
 fn afterResize(context: dx.HostContext) void {
-    sendEvent(&.{ .after_resize = context });
+    sendEvent(main_io.io(), &.{ .after_resize = context });
 }
 
 fn windowProcedure(

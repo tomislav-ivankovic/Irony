@@ -19,13 +19,14 @@ pub fn drawVersionInfo(latest_version: LatestVersion, comptime config: VersionIn
     const tool_tip, const text_color = switch (latest_version) {
         .available => |latest| switch (sdk.misc.Version.order(current, latest)) {
             .gt => .{
-                std.fmt.bufPrintZ(
+                std.fmt.bufPrintSentinel(
                     &tool_tip_buffer,
                     \\Using a unreleased version: {f}
                     \\Latest released version is: {f}
                     \\Are you a developer?
                 ,
                     .{ current, latest },
+                    0,
                 ) catch "error",
                 imgui.ImVec4{ .x = 0.5, .y = 1, .z = 0.5, .w = 1 },
             },
@@ -34,13 +35,14 @@ pub fn drawVersionInfo(latest_version: LatestVersion, comptime config: VersionIn
                 imgui.ImVec4{ .x = 0.5, .y = 1, .z = 0.5, .w = 1 },
             },
             .lt => .{
-                std.fmt.bufPrintZ(
+                std.fmt.bufPrintSentinel(
                     &tool_tip_buffer,
                     \\Using outdated version: {f}
                     \\Latest released version is: {f}
                     \\Right-click to open the download page for the latest version.
                 ,
                     .{ current, latest },
+                    0,
                 ) catch "error",
                 imgui.ImVec4{ .x = 1, .y = 0.5, .z = 0.5, .w = 1 },
             },
@@ -143,6 +145,7 @@ test "should put current version number into clipboard when left-clicking text" 
             sdk.ui.toasts.update(100);
         }
     };
+    sdk.ui.toasts.setIo(std.testing.io);
     const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
@@ -182,6 +185,7 @@ test "should open latest version download page when right-clicking text" {
             sdk.ui.toasts.update(100);
         }
     };
+    sdk.ui.toasts.setIo(std.testing.io);
     const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }

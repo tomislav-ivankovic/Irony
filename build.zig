@@ -5,9 +5,6 @@ const builtin = @import("builtin");
 // declaratively construct a build graph that will be executed by an external
 // runner.
 pub fn build(b: *std.Build) void {
-    // Use system Wine installation to run cross compiled Windows build artifacts.
-    b.enable_wine = true;
-
     // Standard target options allows the person running `zig build` to choose what target to build for.
     // Here we restrict the standard options to only allow building for 64-bit Windows, and make that the default target.
     const target = b.standardTargetOptions(.{
@@ -113,9 +110,7 @@ pub fn build(b: *std.Build) void {
 
     // This allows the user to pass arguments to the application in the build command itself, like this:
     // `zig build run -- arg1 arg2 etc`
-    if (b.args) |args| {
-        run_command.addArgs(args);
-    }
+    run_command.addPassthruArgs();
 
     // This creates a build step. It will be visible in the `zig build --help` menu, and can be selected like this:
     // `zig build run`
@@ -264,13 +259,13 @@ fn imguiDependency(
         \\    return std::string(buffer);
         \\}
     );
-    const patched_1 = patch_round_number.captureStdOut();
+    const patched_1 = patch_round_number.captureStdOut(.{});
 
     const patch_file_path = b.addRunArtifact(find_replace_patcher);
     patch_file_path.addFileArg(patched_1);
     patch_file_path.addArg("fs::path fpath(vFilePathName);");
     patch_file_path.addArg("fs::path fpath = fs::u8path(vFilePathName);");
-    const patched_2 = patch_file_path.captureStdOut();
+    const patched_2 = patch_file_path.captureStdOut(.{});
 
     const files = b.addWriteFiles();
     _ = files.addCopyDirectory(b.dependency("cimgui", .{}).path("."), ".", .{});

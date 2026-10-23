@@ -68,24 +68,27 @@ pub fn Matrix(comptime size: usize, comptime Element: type) type {
         }
 
         pub fn fromFlat(flat: Flat) Self {
-            return @bitCast(flat);
+            const pointer: *const Self = @ptrCast(&flat);
+            return pointer.*;
         }
 
         pub fn fromCoords(coords: Coords) Self {
             if (size > 4) {
                 @compileError("This operation is not defined for matrices larger then 4x4.");
             }
-            return @bitCast(coords);
+            const pointer: *const Self = @ptrCast(&coords);
+            return pointer.*;
         }
 
         pub fn fill(value: Element) Self {
-            const row = [1]Element{value} ** size;
-            const array = [1]([size]Element){row} ** size;
+            const row: [size]Element = @splat(value);
+            const array: [size][size]Element = @splat(row);
             return .{ .array = array };
         }
 
         pub fn toFlat(self: Self) Flat {
-            return @bitCast(self);
+        	const pointer: *const Flat = @ptrCast(&self);
+            return pointer.*;
         }
 
         pub fn asFlat(self: anytype) misc.SelfBasedPointer(@TypeOf(self), Self, Flat) {
@@ -96,7 +99,8 @@ pub fn Matrix(comptime size: usize, comptime Element: type) type {
             if (size > 4) {
                 @compileError("This operation is not defined for matrices larger then 4x4.");
             }
-            return @bitCast(self);
+            const pointer: *const Coords = @ptrCast(&self);
+            return pointer.*;
         }
 
         pub fn asCoords(self: anytype) misc.SelfBasedPointer(@TypeOf(self), Self, Coords) {

@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const Input = packed struct {
+pub const Input = packed struct (u13) {
     forward: bool = false,
     back: bool = false,
     up: bool = false,

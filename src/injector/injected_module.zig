@@ -35,7 +35,7 @@ pub const InjectedModule = struct {
     }
 
     fn injectModule(process: sdk.os.Process, module_path: []const u8) !void {
-        var buffer = [_:0]u16{0} ** sdk.os.max_file_path_length;
+        var buffer: [sdk.os.max_file_path_length:0]u16 = @splat(0);
         const size = std.unicode.utf8ToUtf16Le(&buffer, module_path) catch |err| {
             sdk.misc.error_context.new("Failed to convert UTF8 string \"{s}\" to UTF16-LE.", .{module_path});
             return err;

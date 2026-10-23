@@ -2,7 +2,7 @@ const std = @import("std");
 const build_info = @import("build_info");
 const sdk = @import("../../sdk/root.zig");
 const game = @import("root.zig");
-const cc = std.zig.c_translation.cast;
+const cc = std.zig.c_translation.helpers.cast;
 
 const to_unreal_scale = 0.1;
 const from_unreal_scale = 1.0 / to_unreal_scale;
@@ -338,19 +338,19 @@ fn encryptHealthInner(decrypted_value: i32, encryption_key: i64) i64 {
 pub fn composeConversions(comptime steps: anytype) *const ComposedFunction(@TypeOf(steps)) {
     const Steps = @TypeOf(steps);
     const types = Composition(Steps);
-    const fields = switch (@typeInfo(Steps)) {
-        .@"struct" => |*info| info.fields,
+    const fields_len = switch (@typeInfo(Steps)) {
+        .@"struct" => |*info| info.field_names.len,
         else => @compileError("Expected steps to be a tuple struct but got: " ++ @typeName(Steps)),
     };
     return struct {
-        fn composeConversions(value: types[0]) types[fields.len] {
+        fn composeConversions(value: types[0]) types[fields_len] {
             var current_value_pointer: *const anyopaque = &value;
-            inline for (0..fields.len) |index| {
+            inline for (0..fields_len) |index| {
                 const casted: *const types[index] = @ptrCast(@alignCast(current_value_pointer));
                 const intermediate_value = steps[index](casted.*);
                 current_value_pointer = &intermediate_value;
             }
-            const casted: *const types[fields.len] = @ptrCast(@alignCast(current_value_pointer));
+            const casted: *const types[fields_len] = @ptrCast(@alignCast(current_value_pointer));
             return casted.*;
         }
     }.composeConversions;
@@ -361,7 +361,7 @@ fn ComposedFunction(comptime Steps: type) type {
     return fn (value: types[0]) types[types.len - 1];
 }
 
-fn Composition(comptime Steps: type) [@typeInfo(Steps).@"struct".fields.len + 1]type {
+fn Composition(comptime Steps: type) [@typeInfo(Steps).@"struct".field_types.len + 1]type {
     const tuple_info = switch (@typeInfo(Steps)) {
         .@"struct" => |*info| info,
         else => @compileError("Expected steps to be a tuple struct but got: " ++ @typeName(Steps)),
@@ -369,32 +369,32 @@ fn Composition(comptime Steps: type) [@typeInfo(Steps).@"struct".fields.len + 1]
     if (!tuple_info.is_tuple) {
         @compileError("Expected steps to be a tuple struct but got: " ++ @typeName(Steps));
     }
-    if (tuple_info.fields.len == 0) {
+    if (tuple_info.field_types.len == 0) {
         @compileError("Expected steps to contain at least one element but found empty tuple.");
     }
-    var types: [tuple_info.fields.len + 1]type = undefined;
-    for (tuple_info.fields, 0..) |field, index| {
-        const function_info: *const std.builtin.Type.Fn = switch (@typeInfo(field.type)) {
+    var types: [tuple_info.field_types.len + 1]type = undefined;
+    for (tuple_info.field_types, 0..) |Field, index| {
+        const function_info: *const std.builtin.Type.Fn = switch (@typeInfo(Field)) {
             .@"fn" => |*info| info,
             .pointer => |*pointer_info| switch (@typeInfo(pointer_info.child)) {
                 .@"fn" => |*info| info,
                 else => @compileError(std.fmt.comptimePrint(
                     "Expecting steps at index {} to be a pointer to a function with 1 parameter but got: {s}",
-                    .{ index, @typeName(field.type) },
+                    .{ index, @typeName(Field) },
                 )),
             },
             else => @compileError(std.fmt.comptimePrint(
                 "Expecting steps at index {} to be a pointer to a function with 1 parameter but got: {s}",
-                .{ index, @typeName(field.type) },
+                .{ index, @typeName(Field) },
             )),
         };
-        if (function_info.params.len != 1) {
+        if (function_info.param_types.len != 1) {
             @compileError(std.fmt.comptimePrint(
                 "Expecting steps at index {} to be a pointer to a function with 1 parameter but got: {s}",
-                .{ index, @typeName(field.type) },
+                .{ index, @typeName(Field) },
             ));
         }
-        const Parameter = function_info.params[0].type orelse void;
+        const Parameter = function_info.param_types[0] orelse void;
         if (index == 0) {
             types[0] = Parameter;
         } else {
@@ -445,10 +445,10 @@ fn ParameterOf(comptime Function: type) type {
             "Expecting a function type or a function pointer type but got: " ++ @typeName(Function),
         ),
     };
-    if (info.params.len != 1) {
+    if (info.param_types.len != 1) {
         @compileError("Expecting a function with exactly one parameter but got: " ++ @typeName(Function));
     }
-    return info.params[0].type orelse void;
+    return info.param_types[0] orelse void;
 }
 
 fn ReturnValueOf(comptime Function: type) type {
@@ -464,9 +464,6 @@ fn ReturnValueOf(comptime Function: type) type {
             "Expecting a function type or a function pointer type but got: " ++ @typeName(Function),
         ),
     };
-    if (info.params.len != 1) {
-        @compileError("Expecting a function with exactly one parameter but got: " ++ @typeName(Function));
-    }
     return info.return_type orelse void;
 }
 

@@ -252,7 +252,7 @@ test "should render hello world successfully when rendering api is dx11" {
     for (0..10) |_| {
         ui_context.newFrame();
         if (imgui.igBegin("Hello world.", null, 0)) {
-            imgui.igText("Hello world.", .{});
+            imgui.igText("Hello world.");
         }
         imgui.igEnd();
         ui_context.endFrame();
@@ -281,7 +281,7 @@ test "should render hello world successfully when rendering api is dx12" {
     for (0..10) |_| {
         ui_context.newFrame();
         if (imgui.igBegin("Hello world.", null, 0)) {
-            imgui.igText("Hello world.", .{});
+            imgui.igText("Hello world.");
         }
         imgui.igEnd();
         ui_context.endFrame();

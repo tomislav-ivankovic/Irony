@@ -45,13 +45,14 @@ pub const Ui = struct {
         self.main_window.processFrame(settings, frame);
     }
 
-    pub fn update(self: *Self, delta_time: f32, controller: *core.Controller) void {
+    pub fn update(self: *Self, io: std.Io, delta_time: f32, controller: *core.Controller) void {
         sdk.ui.toasts.update(delta_time);
-        self.main_window.update(delta_time, controller);
+        self.main_window.update(io, delta_time, controller);
     }
 
     pub fn draw(
         self: *Self,
+        io: std.Io,
         base_dir: *const sdk.misc.BaseDir,
         file_dialog_context: *imgui.ImGuiFileDialog,
         settings_maybe: ?*model.Settings,
@@ -105,6 +106,7 @@ pub const Ui = struct {
 
         self.main_window.draw(
             self,
+            io,
             base_dir,
             file_dialog_context,
             controller,
@@ -113,11 +115,11 @@ pub const Ui = struct {
             memory_usage,
         );
         self.tai_window.draw(controller, tai, tai_coordinator);
-        self.settings_window.draw(base_dir, settings);
+        self.settings_window.draw(io, base_dir, settings);
         self.logs_window.draw(dll.buffer_logger);
         self.game_memory_window.draw(build_info.game, game_memory);
         self.frame_window.draw(controller.getCurrentFrame());
-        self.about_window.draw();
+        self.about_window.draw(io);
     }
 
     pub fn draw3D(

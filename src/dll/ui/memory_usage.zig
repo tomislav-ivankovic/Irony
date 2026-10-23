@@ -5,21 +5,24 @@ const sdk = @import("../../sdk/root.zig");
 pub fn drawMemoryUsage(bytes: usize) void {
     var buffer: [64]u8 = undefined;
     const text = switch (bytes) {
-        0...999 => std.fmt.bufPrintZ(&buffer, "{} B", .{bytes}),
-        1_000...999_999 => std.fmt.bufPrintZ(
+        0...999 => std.fmt.bufPrintSentinel(&buffer, "{} B", .{bytes}, 0),
+        1_000...999_999 => std.fmt.bufPrintSentinel(
             &buffer,
             "{}.{d:0>2} kB",
             .{ bytes / 1_000, bytes % 1_000 / 10 },
+            0,
         ),
-        1_000_000...999_999_999 => std.fmt.bufPrintZ(
+        1_000_000...999_999_999 => std.fmt.bufPrintSentinel(
             &buffer,
             "{}.{d:0>2} MB",
             .{ bytes / 1_000_000, bytes % 1_000_000 / 10_000 },
+            0,
         ),
-        else => std.fmt.bufPrintZ(
+        else => std.fmt.bufPrintSentinel(
             &buffer,
             "{}.{d:0>2} GB",
             .{ bytes / 1_000_000_000, bytes % 1_000_000_000 / 10_000_000 },
+            0,
         ),
     } catch "error";
 
@@ -32,13 +35,13 @@ pub fn drawMemoryUsage(bytes: usize) void {
 
     if (imgui.igIsItemHovered(0)) {
         var tooltip_buffer: [64]u8 = undefined;
-        const tooltip_text = std.fmt.bufPrintZ(&tooltip_buffer, "RAM usage:\n{} bytes", .{bytes}) catch "error";
+        const tooltip_text = std.fmt.bufPrintSentinel(&tooltip_buffer, "RAM usage:\n{} bytes", .{bytes}, 0) catch "error";
         imgui.igSetTooltip(tooltip_text);
     }
 
     if (imgui.igIsItemClicked(imgui.ImGuiMouseButton_Left)) {
         var clipboard_buffer: [64]u8 = undefined;
-        const clipboard_text = std.fmt.bufPrintZ(&clipboard_buffer, "{}", .{bytes}) catch "error";
+        const clipboard_text = std.fmt.bufPrintSentinel(&clipboard_buffer, "{}", .{bytes}, 0) catch "error";
         imgui.igSetClipboardText(clipboard_text);
         sdk.ui.toasts.send(.info, null, "Copied to clipboard: {s}", .{clipboard_text});
     }
@@ -114,6 +117,7 @@ test "should put bytes value into clipboard when clicking text" {
             sdk.ui.toasts.update(100);
         }
     };
+    sdk.ui.toasts.setIo(testing.io);
     const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }

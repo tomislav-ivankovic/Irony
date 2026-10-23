@@ -31,8 +31,8 @@ pub const FrameWindow = struct {
         }
 
         if (frame) |f| {
-            inline for (@typeInfo(model.Frame).@"struct".fields) |*field| {
-                ui.drawData(field.name, &@field(f, field.name));
+            inline for (@typeInfo(model.Frame).@"struct".field_names) |field_name| {
+                ui.drawData(field_name, &@field(f, field_name));
             }
         } else {
             imgui.igText("No frame captured.");
@@ -92,8 +92,8 @@ test "should draw frame struct fields when window is opened and frame is not nul
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
             ctx.setRef(FrameWindow.name);
-            inline for (@typeInfo(model.Frame).@"struct".fields) |*field| {
-                try ctx.expectItemExists(field.name);
+            for (@typeInfo(model.Frame).@"struct".field_names) |field_name| {
+                try ctx.expectItemExists(field_name);
             }
         }
     };

@@ -114,8 +114,13 @@ To run the project's tests execute:
 zig build test
 ```
 
-If you are on Linux, the tests will run inside Wine.
-Make sure you have Wine installed and make sure that your default Wine prefix has `dxvk` and `vkd3d` installed.
+If you are on Linux, use `-fwine` to run tests inside Wine.
+
+```bash
+zig build test -fwine
+```
+
+To do that, make sure you have Wine installed and make sure that your default Wine prefix has `dxvk` and `vkd3d` installed.
 You can use the following command to install these:
 
 ```bash

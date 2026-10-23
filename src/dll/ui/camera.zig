@@ -686,7 +686,7 @@ test "should project correctly when follow target is stage" {
                     testWall(7, 1),
                     testWall(-5, 3),
                     testWall(-7, -3),
-                } ++ ([1]model.Wall{undefined} ** (model.Walls.max_len - 3)),
+                } ++ @as([model.Walls.max_len - 3]model.Wall, @splat(undefined)),
                 .len = 3,
             },
         };

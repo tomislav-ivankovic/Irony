@@ -16,7 +16,7 @@ const dx = switch (rendering_api) {
 };
 
 pub const EventBuss = struct {
-    timer: sdk.misc.Timer(.{}),
+    timer: sdk.misc.Timer,
     managed_dx_context: ?dx.ManagedContext,
     ui_context: ?UiContext,
     settings_task: SettingsTask,
@@ -32,6 +32,7 @@ pub const EventBuss = struct {
 
     pub fn init(
         allocator: std.mem.Allocator,
+        io: std.Io,
         base_dir: *const sdk.misc.BaseDir,
         host_dx_context: *const dx.HostContext,
     ) Self {
@@ -63,10 +64,10 @@ pub const EventBuss = struct {
 
         std.log.debug("Spawning settings loading task...", .{});
         const settings_task = SettingsTask.spawn(allocator, struct {
-            fn call(dir: *const sdk.misc.BaseDir) model.Settings {
+            fn call(io_copy: std.Io, dir: *const sdk.misc.BaseDir) model.Settings {
                 std.log.info("Settings loading task spawned.", .{});
                 std.log.debug("Loading settings...", .{});
-                if (model.Settings.load(dir)) |settings| {
+                if (model.Settings.load(io_copy, dir)) |settings| {
                     std.log.info("Settings loaded.", .{});
                     return settings;
                 } else |err_1| {
@@ -75,7 +76,7 @@ pub const EventBuss = struct {
                     const default_settings = model.Settings{};
                     if (err_1 == error.FileNotFound) {
                         std.log.info("Saving default settings...", .{});
-                        if (default_settings.save(dir)) {
+                        if (default_settings.save(io_copy, dir)) {
                             std.log.info("Default settings saved.", .{});
                         } else |err_2| {
                             sdk.misc.error_context.append("Failed to save default settings.", .{});
@@ -85,31 +86,32 @@ pub const EventBuss = struct {
                     return default_settings;
                 }
             }
-        }.call, .{base_dir}) catch |err| block: {
+        }.call, .{ io, base_dir }) catch |err| block: {
             sdk.misc.error_context.append("Failed to spawn settings loading task. Using default settings.", .{});
             sdk.misc.error_context.logWarning(err);
             break :block SettingsTask.createCompleted(.{});
         };
 
         std.log.debug("Spawning latest version fetching task...", .{});
-        const latest_version_task = LatestVersionTask.spawn(allocator, struct {
-            fn call(alloc: std.mem.Allocator) ?sdk.misc.Version {
-                std.log.info("Latest version fetching task spawned.", .{});
-                std.log.debug("Fetching latest version...", .{});
-                if (sdk.misc.Version.fetchLatest(alloc)) |latest_version| {
-                    std.log.info("Latest version fetched: {f}", .{latest_version});
-                    return latest_version;
-                } else |err| {
-                    sdk.misc.error_context.append("Failed to fetch latest version tag.", .{});
-                    sdk.misc.error_context.logError(err);
-                    return null;
-                }
-            }
-        }.call, .{allocator}) catch |err| block: {
-            sdk.misc.error_context.append("Failed to spawn latest version fetching task.", .{});
-            sdk.misc.error_context.logError(err);
-            break :block LatestVersionTask.createCompleted(null);
-        };
+        const latest_version_task = LatestVersionTask.createCompleted(null); // TODO Uncomment the below code after fixing: https://codeberg.org/ziglang/zig/issues/32129
+        // LatestVersionTask.spawn(allocator, struct {
+        //     fn call(alloc: std.mem.Allocator, io_copy: std.Io) ?sdk.misc.Version {
+        //         std.log.info("Latest version fetching task spawned.", .{});
+        //         std.log.debug("Fetching latest version...", .{});
+        //         if (sdk.misc.Version.fetchLatest(alloc, io_copy)) |latest_version| {
+        //             std.log.info("Latest version fetched: {f}", .{latest_version});
+        //             return latest_version;
+        //         } else |err| {
+        //             sdk.misc.error_context.append("Failed to fetch latest version tag.", .{});
+        //             sdk.misc.error_context.logError(err);
+        //             return null;
+        //         }
+        //     }
+        // }.call, .{ allocator, io }) catch |err| block: {
+        //     sdk.misc.error_context.append("Failed to spawn latest version fetching task.", .{});
+        //     sdk.misc.error_context.logError(err);
+        //     break :block LatestVersionTask.createCompleted(null);
+        // };
 
         std.log.debug("Initializing core...", .{});
         const core_instance = core.Core.init(allocator);
@@ -140,9 +142,11 @@ pub const EventBuss = struct {
 
     pub fn deinit(
         self: *Self,
+        io: std.Io,
         base_dir: *const sdk.misc.BaseDir,
         host_dx_context: *const dx.HostContext,
     ) void {
+        _ = io;
         _ = base_dir;
         const dx_context = if (self.managed_dx_context) |*mdxc| block: {
             break :block dx.Context.fromHostAndManaged(host_dx_context, mdxc);
@@ -194,25 +198,27 @@ pub const EventBuss = struct {
 
     pub fn tick(
         self: *Self,
+        io: std.Io,
         base_dir: *const sdk.misc.BaseDir,
         game_memory: *game.Memory(build_info.game),
         input_override: *game.InputOverride,
     ) void {
         game_memory.updateAddresses();
         const settings = self.settings_task.peek() orelse return;
-        self.core.tick(base_dir, settings, game_memory, input_override, self, processFrame);
+        self.core.tick(io, base_dir, settings, game_memory, input_override, self, processFrame);
     }
 
     pub fn draw(
         self: *Self,
+        io: std.Io,
         base_dir: *const sdk.misc.BaseDir,
         host_dx_context: *const dx.HostContext,
         game_memory_maybe: ?*game.Memory(build_info.game),
         memory_usage: usize,
     ) void {
-        const delta_time = self.timer.measureDeltaTime();
+        const delta_time = self.timer.measureDeltaTime(io);
         self.core.update(delta_time, self, processFrame);
-        self.ui.update(delta_time, &self.core.controller);
+        self.ui.update(io, delta_time, &self.core.controller);
 
         const managed_dx_context = if (self.managed_dx_context) |*context| context else return;
         var dx_context = dx.Context.fromHostAndManaged(host_dx_context, managed_dx_context);
@@ -228,6 +234,7 @@ pub const EventBuss = struct {
         ui_context.newFrame();
         imgui.igGetIO_Nil().*.MouseDrawCursor = true;
         self.ui.draw(
+            io,
             base_dir,
             ui_context.file_dialog_context,
             settings_maybe,

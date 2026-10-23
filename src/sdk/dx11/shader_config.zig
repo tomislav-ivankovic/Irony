@@ -132,7 +132,7 @@ pub const ShaderConfig = struct {
                     .independent => 1,
                 },
                 .RenderTarget = switch (self.mode) {
-                    .shared => |*target| [1]w32.D3D11_RENDER_TARGET_BLEND_DESC{Target.optionalToNative(target)} ** 8,
+                    .shared => |*target| @splat(Target.optionalToNative(target)),
                     .independent => |*targets| block: {
                         var result: [8]w32.D3D11_RENDER_TARGET_BLEND_DESC = undefined;
                         for (targets, &result) |*target, *element| {
@@ -463,7 +463,7 @@ test "Blend.toNative should return correct value" {
 
     const native_3 = (ShaderConfig.Blend{
         .enable_alpha_to_coverage = false,
-        .mode = .{ .independent = [1]?ShaderConfig.Blend.Target{null} ** 8 },
+        .mode = .{ .independent = @splat(null) },
     }).toNative();
     try testing.expectEqual(0, native_3.AlphaToCoverageEnable);
     try testing.expectEqual(1, native_3.IndependentBlendEnable);

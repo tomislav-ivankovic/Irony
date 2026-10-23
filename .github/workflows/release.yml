@@ -61,7 +61,7 @@ jobs:
               run: |
                   export WINEARCH=win64
                   export WINEPREFIX=$HOME/.wineprefix
-                  zig build test -Dskip_gpu=true -Dskip_display=true --summary all -freference-trace
+                  zig build test -fwine -Dskip_gpu=true -Dskip_display=true --summary all -freference-trace
             - name: Build Release
               id: build_release
               run: zig build --release=fast --summary all -freference-trace

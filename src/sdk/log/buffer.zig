@@ -7,7 +7,6 @@ pub const BufferLoggerConfig = struct {
     time_zone: misc.TimeZone = .local,
     buffer_size: usize = 4096,
     max_entries: usize = 64,
-    nanoTimestamp: *const fn () i128 = std.time.nanoTimestamp,
 };
 
 pub const LogEntry = struct {
@@ -22,52 +21,67 @@ pub const LogEntry = struct {
 
 pub fn BufferLogger(comptime config: BufferLoggerConfig) type {
     return struct {
+        var io_maybe: ?std.Io = null;
         var entries = misc.CircularBuffer(config.max_entries, LogEntry){};
         var buffer: [config.buffer_size]u8 = undefined;
-        var mutex = std.Thread.Mutex{};
+        var mutex = std.Io.Mutex.init;
 
-        pub fn lockAndGetEntries() *const misc.CircularBuffer(config.max_entries, LogEntry) {
-            mutex.lock();
+        pub fn setIo(io: std.Io) void {
+            io_maybe = io;
+        }
+
+        pub fn lockAndGetEntries() !*const misc.CircularBuffer(config.max_entries, LogEntry) {
+            const io = io_maybe orelse {
+                misc.error_context.new("The IO is not set.", .{});
+                return error.NoIo;
+            };
+            mutex.lock(io) catch |err| {
+                misc.error_context.new("Failed to obtain mutex lock.", .{});
+                return err;
+            };
             return &entries;
         }
 
         pub fn unlock() void {
-            mutex.unlock();
+            const io = io_maybe orelse return;
+            mutex.unlock(io);
         }
 
         pub fn logFn(
             comptime level: std.log.Level,
-            comptime scope: @Type(.enum_literal),
+            comptime scope: @EnumLiteral(),
             comptime format: []const u8,
             args: anytype,
         ) void {
             if (@intFromEnum(level) > @intFromEnum(config.level)) {
                 return;
             }
-            mutex.lock();
-            defer mutex.unlock();
+            const io = io_maybe orelse return;
+            mutex.lock(io) catch return;
+            defer mutex.unlock(io);
             const last_entry = entries.getLast() catch {
-                log(&buffer, level, scope, format, args) catch return;
+                log(io, &buffer, level, scope, format, args) catch return;
                 return;
             };
             const last_buffer_region = last_entry.buffer_region;
             const start_index = (&last_buffer_region[0] - &buffer[0]) + last_buffer_region.len;
-            log(buffer[start_index..], level, scope, format, args) catch {
-                log(&buffer, level, scope, format, args) catch return;
+            log(io, buffer[start_index..], level, scope, format, args) catch {
+                log(io, &buffer, level, scope, format, args) catch return;
             };
         }
 
         fn log(
+            io: std.Io,
             write_region: []u8,
             comptime level: std.log.Level,
-            comptime scope: @Type(.enum_literal),
+            comptime scope: @EnumLiteral(),
             comptime format: []const u8,
             args: anytype,
         ) !void {
             var writer = std.Io.Writer.fixed(write_region);
 
-            const timestamp = config.nanoTimestamp();
-            if (misc.Timestamp.fromNano(timestamp, config.time_zone) catch null) |timestamp_struct| {
+            const nano_time = std.Io.Clock.real.now(io).nanoseconds;
+            if (misc.Timestamp.fromNano(nano_time, config.time_zone) catch null) |timestamp_struct| {
                 writer.print("{f} ", .{timestamp_struct}) catch |err| {
                     clearBufferRegion(write_region);
                     return err;
@@ -98,7 +112,7 @@ pub fn BufferLogger(comptime config: BufferLoggerConfig) type {
             const end_pos = writer.end;
 
             const entry = LogEntry{
-                .timestamp = timestamp,
+                .timestamp = nano_time,
                 .timestamp_str = timestamp_str,
                 .level = level,
                 .scope = scope_str,
@@ -124,26 +138,29 @@ pub fn BufferLogger(comptime config: BufferLoggerConfig) type {
 const testing = std.testing;
 
 test "should set correct values to entry fields" {
-    const nanoTimestamp = struct {
-        fn call() i128 {
-            return 1577934245123456789;
+    var io = testing.io;
+    var vtable = io.vtable.*;
+    vtable.now = struct {
+        fn call(_: ?*anyopaque, _: std.Io.Clock) std.Io.Timestamp {
+            return .fromNanoseconds(1577934245123456789);
         }
     }.call;
+    io.vtable = &vtable;
 
     const logger = BufferLogger(.{
         .level = .debug,
         .time_zone = .utc,
         .buffer_size = 4096,
         .max_entries = 64,
-        .nanoTimestamp = nanoTimestamp,
     });
+    logger.setIo(io);
 
     logger.logFn(.debug, std.log.default_log_scope, "Message: {}", .{1});
     logger.logFn(.info, .scope_1, "Message: {}", .{2});
     logger.logFn(.warn, .scope_2, "Message: {}", .{3});
     logger.logFn(.err, .scope_3, "Message: {}", .{4});
 
-    const entries = logger.lockAndGetEntries();
+    const entries = try logger.lockAndGetEntries();
     defer logger.unlock();
     try testing.expectEqual(4, entries.len);
 
@@ -189,26 +206,29 @@ test "should set correct values to entry fields" {
 }
 
 test "should filter based on log level correctly" {
-    const nanoTimestamp = struct {
-        fn call() i128 {
-            return 1577934245123456789;
+    var io = testing.io;
+    var vtable = io.vtable.*;
+    vtable.now = struct {
+        fn call(_: ?*anyopaque, _: std.Io.Clock) std.Io.Timestamp {
+            return .fromNanoseconds(1577934245123456789);
         }
     }.call;
+    io.vtable = &vtable;
 
     const logger = BufferLogger(.{
         .level = .warn,
         .time_zone = .utc,
         .buffer_size = 4096,
         .max_entries = 64,
-        .nanoTimestamp = nanoTimestamp,
     });
+    logger.setIo(io);
 
     logger.logFn(.debug, std.log.default_log_scope, "Message: 1", .{});
     logger.logFn(.info, std.log.default_log_scope, "Message: 2", .{});
     logger.logFn(.warn, std.log.default_log_scope, "Message: 3", .{});
     logger.logFn(.err, std.log.default_log_scope, "Message: 4", .{});
 
-    const entries = logger.lockAndGetEntries();
+    const entries = try logger.lockAndGetEntries();
     defer logger.unlock();
 
     try testing.expectEqual(2, entries.len);
@@ -217,26 +237,29 @@ test "should filter based on log level correctly" {
 }
 
 test "should discard earliest entries when exceeding max entries" {
-    const nanoTimestamp = struct {
-        fn call() i128 {
-            return 1577934245123456789;
+    var io = testing.io;
+    var vtable = io.vtable.*;
+    vtable.now = struct {
+        fn call(_: ?*anyopaque, _: std.Io.Clock) std.Io.Timestamp {
+            return .fromNanoseconds(1577934245123456789);
         }
     }.call;
+    io.vtable = &vtable;
 
     const logger = BufferLogger(.{
         .level = .debug,
         .time_zone = .utc,
         .buffer_size = 4096,
         .max_entries = 2,
-        .nanoTimestamp = nanoTimestamp,
     });
+    logger.setIo(io);
 
     logger.logFn(.debug, std.log.default_log_scope, "Message: 1", .{});
     logger.logFn(.debug, std.log.default_log_scope, "Message: 2", .{});
     logger.logFn(.debug, std.log.default_log_scope, "Message: 3", .{});
     logger.logFn(.debug, std.log.default_log_scope, "Message: 4", .{});
 
-    const entries = logger.lockAndGetEntries();
+    const entries = try logger.lockAndGetEntries();
     defer logger.unlock();
 
     try testing.expectEqual(2, entries.len);
@@ -245,19 +268,22 @@ test "should discard earliest entries when exceeding max entries" {
 }
 
 test "should discard earliest entries when exceeding buffer size" {
-    const nanoTimestamp = struct {
-        fn call() i128 {
-            return 1577934245123456789;
+    var io = testing.io;
+    var vtable = io.vtable.*;
+    vtable.now = struct {
+        fn call(_: ?*anyopaque, _: std.Io.Clock) std.Io.Timestamp {
+            return .fromNanoseconds(1577934245123456789);
         }
     }.call;
+    io.vtable = &vtable;
 
     const logger = BufferLogger(.{
         .level = .debug,
         .time_zone = .utc,
         .buffer_size = 98,
         .max_entries = 64,
-        .nanoTimestamp = nanoTimestamp,
     });
+    logger.setIo(io);
 
     logger.logFn(.debug, std.log.default_log_scope, "Message: 1", .{});
     logger.logFn(.debug, std.log.default_log_scope, "Message: 2", .{});
@@ -265,7 +291,7 @@ test "should discard earliest entries when exceeding buffer size" {
     logger.logFn(.debug, std.log.default_log_scope, "Message: 4", .{});
 
     {
-        const entries = logger.lockAndGetEntries();
+        const entries = try logger.lockAndGetEntries();
         defer logger.unlock();
 
         try testing.expectEqual(2, entries.len);
@@ -282,7 +308,7 @@ test "should discard earliest entries when exceeding buffer size" {
     logger.logFn(.debug, std.log.default_log_scope, "Message: 123", .{});
     logger.logFn(.debug, std.log.default_log_scope, "Message: 456", .{});
 
-    const entries = logger.lockAndGetEntries();
+    const entries = try logger.lockAndGetEntries();
     defer logger.unlock();
 
     try testing.expectEqual(1, entries.len);
@@ -293,31 +319,34 @@ test "should discard earliest entries when exceeding buffer size" {
 }
 
 test "should discard all entries when full message is larger then the buffer" {
-    const nanoTimestamp = struct {
-        fn call() i128 {
-            return 1577934245123456789;
+    var io = testing.io;
+    var vtable = io.vtable.*;
+    vtable.now = struct {
+        fn call(_: ?*anyopaque, _: std.Io.Clock) std.Io.Timestamp {
+            return .fromNanoseconds(1577934245123456789);
         }
     }.call;
+    io.vtable = &vtable;
 
     const logger = BufferLogger(.{
         .level = .debug,
         .time_zone = .utc,
         .buffer_size = 50,
         .max_entries = 64,
-        .nanoTimestamp = nanoTimestamp,
     });
+    logger.setIo(io);
 
     logger.logFn(.debug, std.log.default_log_scope, "Message: 1", .{});
 
     {
-        const entries = logger.lockAndGetEntries();
+        const entries = try logger.lockAndGetEntries();
         defer logger.unlock();
         try testing.expectEqual(1, entries.len);
     }
 
     logger.logFn(.debug, std.log.default_log_scope, "Message: 123", .{});
 
-    const entries = logger.lockAndGetEntries();
+    const entries = try logger.lockAndGetEntries();
     defer logger.unlock();
     try testing.expectEqual(0, entries.len);
 }

@@ -21,7 +21,7 @@ pub const Module = struct {
     }
 
     pub fn getLocal(name: []const u8) !Self {
-        var buffer = [_:0]u16{0} ** os.max_file_path_length;
+        var buffer: [os.max_file_path_length:0]u16 = @splat(0);
         const size = std.unicode.utf8ToUtf16Le(&buffer, name) catch |err| {
             misc.error_context.new("Failed to convert \"{s}\" to UTF-16LE.", .{name});
             return err;
@@ -64,7 +64,7 @@ pub const Module = struct {
     }
 
     fn getRemoteBySearching(process: os.Process, name: []const u8) !Self {
-        var buffer = [_:0]u16{0} ** os.max_file_path_length;
+        var buffer: [os.max_file_path_length:0]u16 = @splat(0);
         const size = std.unicode.utf8ToUtf16Le(&buffer, name) catch |err| {
             misc.error_context.new("Failed to convert \"{s}\" to UTF-16LE.", .{name});
             return err;

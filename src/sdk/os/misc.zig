@@ -44,7 +44,7 @@ pub fn filePathToDirectoryPath(path: []const u8) []const u8 {
 }
 
 pub fn getFullPath(full_path_buffer: *[os.max_file_path_length]u8, short_path: []const u8) !usize {
-    var short_path_buffer_utf16 = [_:0]u16{0} ** os.max_file_path_length;
+    var short_path_buffer_utf16: [os.max_file_path_length:0]u16 = @splat(0);
     const short_path_size = std.unicode.utf8ToUtf16Le(&short_path_buffer_utf16, short_path) catch |err| {
         misc.error_context.new("Failed to convert UTF8 string \"{s}\" to UTF16-LE.", .{short_path});
         return err;
@@ -153,7 +153,7 @@ test "getFullPath should produce correct full path" {
 
 test "getExecutableTimestamp should return a value grater then 1 day ago and less or equal then now" {
     const timestamp = try getExecutableTimestamp();
-    const now: u32 = @intCast(@divTrunc(std.time.milliTimestamp(), std.time.ms_per_s));
+    const now: u32 = @intCast(std.Io.Clock.real.now(testing.io).toSeconds());
     const day_ago = now - std.time.s_per_day;
     try testing.expect(timestamp > day_ago);
     try testing.expect(timestamp <= now);

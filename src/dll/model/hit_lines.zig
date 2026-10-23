@@ -7,7 +7,7 @@ pub const HitLine = struct {
     flags: HitLineFlags = .{},
 };
 
-pub const HitLineFlags = packed struct {
+pub const HitLineFlags = packed struct(u8) {
     is_inactive: bool = false,
     is_intersecting: bool = false,
     is_crushed: bool = false,

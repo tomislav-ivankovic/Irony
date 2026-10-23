@@ -254,10 +254,10 @@ pub const HitLinePoint = extern struct {
 };
 
 pub const HitLine = extern struct {
-    points: [3]HitLinePoint = [1]HitLinePoint{.{}} ** 3,
-    _padding_1: [8]u8 = [1]u8{0} ** 8,
+    points: [3]HitLinePoint = @splat(.{}),
+    _padding_1: [8]u8 = @splat(0),
     ignore: Bool = .false,
-    _padding_2: [7]u8 = [1]u8{0} ** 7,
+    _padding_2: [7]u8 = @splat(0),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 64);
@@ -303,10 +303,7 @@ pub fn HurtCylinder(comptime game_id: build_info.Game) type {
                 .t7 => 1,
                 .t8 => 9,
             }
-        ]f32 = switch (game_id) {
-            .t7 => [1]f32{0} ** 1,
-            .t8 => [1]f32{0} ** 9,
-        },
+        ]f32 = @splat(0),
 
         comptime {
             switch (game_id) {
@@ -361,7 +358,7 @@ pub const CollisionSphere = extern struct {
     center: sdk.math.Vec3 = .zero,
     multiplier: f32 = 0,
     radius: f32 = 0,
-    _padding: [3]f32 = [1]f32{0} ** 3,
+    _padding: [3]f32 = @splat(0),
 
     comptime {
         std.debug.assert(@sizeOf(@This()) == 32);
@@ -492,11 +489,11 @@ pub fn PlayerInfo(comptime game_id: build_info.Game) type {
     return switch (game_id) {
         .t7 => sdk.memory.StructWithOffsets(null, &.{
             field(0x068, "player_id", PlayerId, &.player_1),
-            field(0x11C, "name", PlayerName, &([1]u8{0} ** 32)),
+            field(0x11C, "name", PlayerName, &@splat(0)),
         }),
         .t8 => sdk.memory.StructWithOffsets(null, &.{
             field(0x005, "player_id", PlayerId, &.player_1),
-            field(0x0B0, "name", PlayerName, &([1]u8{0} ** 32)),
+            field(0x0B0, "name", PlayerName, &@splat(0)),
         }),
     };
 }

@@ -49,18 +49,20 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
             if (size > 4) {
                 @compileError("This operation is not defined for vectors larger then 4D.");
             }
-            return @bitCast(coords);
+            const pointer: *const Self = @ptrCast(&coords);
+            return pointer.*;
         }
 
         pub fn fromColor(color: Color) Self {
             if (size > 4) {
                 @compileError("This operation is not defined for vectors larger then 4D.");
             }
-            return @bitCast(color);
+            const pointer: *const Self = @ptrCast(&color);
+            return pointer.*;
         }
 
         pub fn fill(value: Element) Self {
-            return .{ .array = [1]Element{value} ** size };
+            return .{ .array = @splat(value) };
         }
 
         pub fn fromAxis(comptime axis_index: usize) Self {
@@ -81,7 +83,8 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
             if (size > 4) {
                 @compileError("This operation is not defined for vectors larger then 4D.");
             }
-            return @bitCast(self);
+            const pointer: *const Coords = @ptrCast(&self);
+            return pointer.*;
         }
 
         pub fn asCoords(self: anytype) misc.SelfBasedPointer(@TypeOf(self), Self, Coords) {
@@ -95,7 +98,8 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
             if (size > 4) {
                 @compileError("This operation is not defined for vectors larger then 4D.");
             }
-            return @bitCast(self);
+            const pointer: *const Color = @ptrCast(&self);
+            return pointer.*;
         }
 
         pub fn asColor(self: anytype) misc.SelfBasedPointer(@TypeOf(self), Self, Color) {
@@ -219,14 +223,16 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
             if (ImVec == void) {
                 @compileError("Imgui does not have a type that is equivalent to: " ++ @typeName(Self));
             }
-            return @bitCast(vec);
+            const pointer: *const Self = @ptrCast(&vec);
+            return pointer.*;
         }
 
         pub fn toImVec(self: Self) ImVec {
             if (ImVec == void) {
                 @compileError("Imgui does not have a type that is equivalent to: " ++ @typeName(Self));
             }
-            return @bitCast(self);
+            const pointer: *const ImVec = @ptrCast(&self);
+            return pointer.*;
         }
 
         pub fn asImVec(self: anytype) misc.SelfBasedPointer(@TypeOf(self), Self, ImVec) {

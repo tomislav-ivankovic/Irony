@@ -114,7 +114,7 @@ test "peek should not block and return null while task is getting executed and r
         _ = counter.fetchAdd(1, .seq_cst);
         try std.Thread.yield();
     }
-    std.Thread.sleep(std.time.ns_per_ms);
+    try testing.io.sleep(.fromMilliseconds(1), .awake);
 
     try testing.expect(task.peek() != null);
     try testing.expectEqual(10, task.peek().?.*);

@@ -39,7 +39,7 @@ pub fn FileMenu(comptime config: FileMenuConfig) type {
             finnish,
         };
 
-        pub fn update(self: *Self, controller: *config.Controller) void {
+        pub fn update(self: *Self, io: std.Io, controller: *config.Controller) void {
             var action = self.action;
             defer self.action = action;
             var progress = self.progress;
@@ -97,7 +97,7 @@ pub fn FileMenu(comptime config: FileMenuConfig) type {
 
             if (self.progress != .save_in_progress and progress == .save_in_progress) {
                 const path = self.save_dialog.getLastSelectedPath() orelse file_path orelse unreachable;
-                controller.save(path);
+                controller.save(io, path);
             }
 
             if (progress == .save_in_progress and controller.mode != .save) {
@@ -127,7 +127,7 @@ pub fn FileMenu(comptime config: FileMenuConfig) type {
 
             if (self.progress != .open_in_progress and progress == .open_in_progress) {
                 const path = self.open_dialog.getLastSelectedPath() orelse unreachable;
-                controller.load(path);
+                controller.load(io, path);
             }
 
             if (progress == .open_in_progress and controller.mode != .load) {
@@ -154,6 +154,7 @@ pub fn FileMenu(comptime config: FileMenuConfig) type {
 
         pub fn draw(
             self: *Self,
+            io: std.Io,
             base_dir: *const sdk.misc.BaseDir,
             file_dialog_context: *imgui.ImGuiFileDialog,
             controller: *config.Controller,
@@ -161,8 +162,8 @@ pub fn FileMenu(comptime config: FileMenuConfig) type {
         ) void {
             self.menu_bar.draw(self.action == .idle, controller.getTotalFrames() == 0);
             self.unsaved_dialog.draw(self.progress == .unsaved_dialog);
-            self.save_dialog.draw(file_dialog_context, base_dir, controller.getFilePath(), self.progress == .save_dialog);
-            self.open_dialog.draw(file_dialog_context, base_dir, controller.getFilePath(), self.progress == .open_dialog);
+            self.save_dialog.draw(file_dialog_context, io, base_dir, controller.getFilePath(), self.progress == .save_dialog);
+            self.open_dialog.draw(file_dialog_context, io, base_dir, controller.getFilePath(), self.progress == .open_dialog);
 
             if (self.menu_bar.action == .close_ui and is_ui_open.*) {
                 is_ui_open.* = false;
@@ -346,6 +347,7 @@ const FileDialog = struct {
     pub fn draw(
         self: *Self,
         context: *imgui.ImGuiFileDialog,
+        io: std.Io,
         base_dir: *const sdk.misc.BaseDir,
         current_path: ?[:0]const u8,
         is_open: bool,
@@ -375,12 +377,12 @@ const FileDialog = struct {
                             break :block base_dir.get();
                         };
                     } else {
-                        config.fileName = getTimestampFileName(&buffer_1) catch |err| block: {
+                        config.fileName = getTimestampFileName(&buffer_1, io) catch |err| block: {
                             sdk.misc.error_context.append("Failed to construct a timestamp based file name.", .{});
                             sdk.misc.error_context.logError(err);
                             break :block "untitled";
                         };
-                        config.path = createAndGetRecordingsDirectory(&buffer_2, base_dir) catch |err| block: {
+                        config.path = createAndGetRecordingsDirectory(&buffer_2, io, base_dir) catch |err| block: {
                             sdk.misc.error_context.append("Failed to create \"{s}\" directory.", .{directory_name});
                             sdk.misc.error_context.logError(err);
                             break :block base_dir.get();
@@ -390,7 +392,7 @@ const FileDialog = struct {
                     config.flags |= imgui.ImGuiFileDialogFlags_CaseInsensitiveExtentionFiltering;
                 },
                 .open => {
-                    config.path = createAndGetRecordingsDirectory(&buffer_1, base_dir) catch |err| block: {
+                    config.path = createAndGetRecordingsDirectory(&buffer_1, io, base_dir) catch |err| block: {
                         sdk.misc.error_context.append("Failed to create \"{s}\" directory.", .{directory_name});
                         sdk.misc.error_context.logError(err);
                         break :block base_dir.get();
@@ -456,29 +458,31 @@ const FileDialog = struct {
 
     fn createAndGetRecordingsDirectory(
         buffer: *[sdk.os.max_file_path_length]u8,
+        io: std.Io,
         base_dir: *const sdk.misc.BaseDir,
     ) ![:0]const u8 {
         const path = base_dir.getPath(buffer, directory_name) catch |err| {
             sdk.misc.error_context.append("Failed to construct \"{s}\" directory path.", .{directory_name});
             return err;
         };
-        std.fs.cwd().makePath(path) catch |err| {
+        std.Io.Dir.cwd().createDirPath(io, path) catch |err| {
             sdk.misc.error_context.append("Failed to make directory: {s}", .{path});
             return err;
         };
         return path;
     }
 
-    fn getTimestampFileName(buffer: []u8) ![:0]const u8 {
-        const nano = std.time.nanoTimestamp();
+    fn getTimestampFileName(buffer: []u8, io: std.Io) ![:0]const u8 {
+        const nano = std.Io.Clock.real.now(io).nanoseconds;
         const ts = sdk.misc.Timestamp.fromNano(nano, .local) catch |err| {
             sdk.misc.error_context.append("Failed to construct timestamp structure for nano timestamp: {}", .{nano});
             return err;
         };
-        return std.fmt.bufPrintZ(
+        return std.fmt.bufPrintSentinel(
             buffer,
             "{:0>4}-{:0>2}-{:0>2}T{:0>2}-{:0>2}-{:0>2}",
             .{ @abs(ts.year), ts.month, ts.day, ts.hour, ts.minute, ts.second },
+            0,
         ) catch |err| {
             sdk.misc.error_context.append("Failed to construct timestamp string for nano time: {}", .{nano});
             return err;
@@ -487,7 +491,7 @@ const FileDialog = struct {
 
     fn filePathToDirectoryPath(buffer: []u8, file_path: []const u8) ![:0]const u8 {
         const directory_path = sdk.os.filePathToDirectoryPath(file_path);
-        return std.fmt.bufPrintZ(buffer, "{s}", .{directory_path}) catch |err| {
+        return std.fmt.bufPrintSentinel(buffer, "{s}", .{directory_path}, 0) catch |err| {
             sdk.misc.error_context.new("Failed to put the result string into buffer: {s}", .{directory_path});
             return err;
         };
@@ -500,7 +504,7 @@ const FileDialog = struct {
         };
         const file_name = sdk.os.pathToFileName(file_path);
         const result = file_name[0..(file_name.len - extension.len)];
-        return std.fmt.bufPrintZ(buffer, "{s}", .{result}) catch |err| {
+        return std.fmt.bufPrintSentinel(buffer, "{s}", .{result}, 0) catch |err| {
             sdk.misc.error_context.new("Failed to put the result string into buffer: {s}", .{result});
             return err;
         };
@@ -525,8 +529,10 @@ const MockController = struct {
     total_frames: usize = 100,
     clear_call_count: usize = 0,
     save_call_count: usize = 0,
+    last_save_io: ?std.Io = null,
     last_save_path: ?FilePath = null,
     load_call_count: usize = 0,
+    last_load_io: ?std.Io = null,
     last_load_path: ?FilePath = null,
 
     const Self = @This();
@@ -546,14 +552,16 @@ const MockController = struct {
         self.mode = .live;
     }
 
-    pub fn save(self: *Self, path: []const u8) void {
+    pub fn save(self: *Self, io: std.Io, path: []const u8) void {
         self.save_call_count += 1;
+        self.last_save_io = io;
         self.last_save_path = .fromSliceTrimmed(path);
         self.mode = .save;
     }
 
-    pub fn load(self: *Self, path: []const u8) void {
+    pub fn load(self: *Self, io: std.Io, path: []const u8) void {
         self.load_call_count += 1;
+        self.last_load_io = io;
         self.last_load_path = .fromSliceTrimmed(path);
         self.mode = .load;
     }
@@ -587,8 +595,8 @@ test "should call clear on controller when new is clicked without unsaved change
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
-            file_menu.update(&controller);
+            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -618,8 +626,8 @@ test "new should be disabled when total frames is zero" {
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
-            file_menu.update(&controller);
+            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -654,8 +662,8 @@ test "should show correctly working unsaved changes dialog when new is clicked w
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
-            file_menu.update(&controller);
+            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -706,6 +714,7 @@ test "should show correctly working unsaved changes dialog when new is clicked w
             try testing.expectEqual(1, controller.save_call_count);
             try testing.expectEqual(1, controller.clear_call_count);
             try testing.expectStringEndsWith(controller.last_save_path.?.asSlice(), "test.irony");
+            try testing.expectEqual(testing.io, controller.last_save_io);
             controller.mode = .live;
             controller.did_last_save_or_load_succeed = true;
             ctx.yield(1);
@@ -736,8 +745,8 @@ test "should call load on controller when open is clicked without unsaved change
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
-            file_menu.update(&controller);
+            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -757,6 +766,7 @@ test "should call load on controller when open is clicked without unsaved change
             ctx.itemInputValueStr("**/##FileName", "test"); // Presses enter so no need to click OK.
             try testing.expectEqual(1, controller.load_call_count);
             try testing.expectStringEndsWith(controller.last_load_path.?.asSlice(), "test.irony");
+            try testing.expectEqual(testing.io, controller.last_load_io);
         }
     };
     Test.file_dialog_context = imgui.IGFD_Create() orelse @panic("Failed to create file dialog context.");
@@ -782,8 +792,8 @@ test "should show correctly working unsaved changes dialog when open is clicked 
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
-            file_menu.update(&controller);
+            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -825,6 +835,7 @@ test "should show correctly working unsaved changes dialog when open is clicked 
             try testing.expectEqual(0, controller.save_call_count);
             try testing.expectEqual(1, controller.load_call_count);
             try testing.expectStringEndsWith(controller.last_load_path.?.asSlice(), "test.irony");
+            try testing.expectEqual(testing.io, controller.last_load_io);
             controller.mode = .live;
             controller.did_last_save_or_load_succeed = false;
             ctx.yield(1);
@@ -855,6 +866,7 @@ test "should show correctly working unsaved changes dialog when open is clicked 
             try testing.expectEqual(1, controller.save_call_count);
             try testing.expectEqual(1, controller.load_call_count);
             try testing.expectStringEndsWith(controller.last_save_path.?.asSlice(), "test1.irony");
+            try testing.expectEqual(testing.io, controller.last_save_io);
             controller.mode = .live;
             controller.did_last_save_or_load_succeed = true;
             controller.file_path = .fromArray("./test.irony".*); // Makes the next save without a file dialog.
@@ -884,6 +896,7 @@ test "should show correctly working unsaved changes dialog when open is clicked 
             try testing.expectEqual(2, controller.save_call_count);
             try testing.expectEqual(2, controller.load_call_count);
             try testing.expectStringEndsWith(controller.last_load_path.?.asSlice(), "test2.irony");
+            try testing.expectEqual(testing.io, controller.last_load_io);
         }
     };
     Test.file_dialog_context = imgui.IGFD_Create() orelse @panic("Failed to create file dialog context.");
@@ -908,8 +921,8 @@ test "should call save on controller when save is clicked and file is selected" 
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
-            file_menu.update(&controller);
+            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -929,6 +942,7 @@ test "should call save on controller when save is clicked and file is selected" 
             ctx.itemInputValueStr("**/##FileName", "test"); // Presses enter so no need to click OK.
             try testing.expectEqual(1, controller.save_call_count);
             try testing.expectStringEndsWith(controller.last_save_path.?.asSlice(), "test.irony");
+            try testing.expectEqual(testing.io, controller.last_save_io);
             controller.mode = .live;
             controller.did_last_save_or_load_succeed = true;
             controller.file_path = .fromArray("./test.irony".*); // Makes the next save without a file dialog.
@@ -959,8 +973,8 @@ test "save should be disabled when total frames is zero" {
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
-            file_menu.update(&controller);
+            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -992,8 +1006,8 @@ test "should call save on controller when save as is clicked and file is selecte
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
-            file_menu.update(&controller);
+            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1013,6 +1027,7 @@ test "should call save on controller when save as is clicked and file is selecte
             ctx.itemInputValueStr("**/##FileName", "test1"); // Presses enter so no need to click OK.
             try testing.expectEqual(1, controller.save_call_count);
             try testing.expectStringEndsWith(controller.last_save_path.?.asSlice(), "test1.irony");
+            try testing.expectEqual(testing.io, controller.last_save_io);
             controller.mode = .live;
             controller.did_last_save_or_load_succeed = true;
             controller.file_path = .fromArray("./test.irony".*); // Would make the next save without a file dialog.
@@ -1025,6 +1040,7 @@ test "should call save on controller when save as is clicked and file is selecte
             ctx.itemInputValueStr("**/##FileName", "test2"); // Presses enter so no need to click OK.
             try testing.expectEqual(2, controller.save_call_count);
             try testing.expectStringEndsWith(controller.last_save_path.?.asSlice(), "test2.irony");
+            try testing.expectEqual(testing.io, controller.last_save_io);
         }
     };
     Test.file_dialog_context = imgui.IGFD_Create() orelse @panic("Failed to create file dialog context.");
@@ -1047,8 +1063,8 @@ test "save as should be disabled when total frames is zero" {
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
-            file_menu.update(&controller);
+            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1080,8 +1096,8 @@ test "should set is_ui_open to false when close ui button is clicked" {
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
-            file_menu.update(&controller);
+            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1117,8 +1133,8 @@ test "should call self shutdown when exit is clicked without unsaved changes" {
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
-            file_menu.update(&controller);
+            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1154,8 +1170,8 @@ test "should show correctly working unsaved changes dialog when exit is clicked 
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(&testing_base_dir, file_dialog_context, &controller, &is_ui_open);
-            file_menu.update(&controller);
+            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1206,6 +1222,7 @@ test "should show correctly working unsaved changes dialog when exit is clicked 
             try testing.expectEqual(1, controller.save_call_count);
             try testing.expectEqual(1, shutdown_call_count);
             try testing.expectStringEndsWith(controller.last_save_path.?.asSlice(), "test.irony");
+            try testing.expectEqual(testing.io, controller.last_save_io);
             controller.mode = .live;
             controller.did_last_save_or_load_succeed = true;
             ctx.yield(1);

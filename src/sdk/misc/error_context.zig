@@ -39,7 +39,7 @@ pub fn ErrorContext(comptime config: ErrorContextConfig) type {
         }
 
         pub inline fn append(self: *Self, comptime fmt: []const u8, args: anytype) void {
-            if (@typeInfo(@TypeOf(.{args})).@"struct".fields[0].is_comptime) {
+            if (@typeInfo(@TypeOf(.{args})).@"struct".field_attrs[0].@"comptime") {
                 self.staticAppend(fmt, args);
             } else {
                 self.dynamicAppend(fmt, args);

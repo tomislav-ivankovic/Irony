@@ -115,7 +115,7 @@ pub const Blocking = enum(u3) {
     fully_blocking_lows = 4,
 };
 
-pub const Crushing = packed struct {
+pub const Crushing = packed struct(u5) {
     high_crushing: bool = false,
     low_crushing: bool = false,
     anti_air_only_crushing: bool = false,

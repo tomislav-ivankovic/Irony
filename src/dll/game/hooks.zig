@@ -142,7 +142,7 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
             }
         }
 
-        pub fn deinit() void {
+        pub fn deinit(io: std.Io) void {
             if (game_id == .t8) {
                 std.log.debug("Destroying render targets hook...", .{});
                 if (render_targets_hook) |*hook| {
@@ -198,7 +198,10 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
             }
 
             while (active_hook_calls.load(.seq_cst) > 0) {
-                std.Thread.sleep(10 * std.time.ns_per_ms);
+                io.sleep(.fromMilliseconds(10), .awake) catch |err| {
+                    sdk.misc.error_context.append("Failed to sleep for 10 ms while waiting on active game hooks.", .{});
+                    sdk.misc.error_context.logError(err);
+                };
             }
         }
 
@@ -322,7 +325,7 @@ test "should call onTick and original when tick function is called in T7" {
     try sdk.memory.hooking.init();
     defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");
     hooks.init(&.{ .tick = Tick.call });
-    defer hooks.deinit();
+    defer hooks.deinit(testing.io);
 
     try testing.expectEqual(0, Tick.times_called);
     try testing.expectEqual(0, OnTick.times_called);
@@ -359,7 +362,7 @@ test "should call onTick and original when tick function is called in T8" {
     try sdk.memory.hooking.init();
     defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");
     hooks.init(&.{ .tick = Tick.call });
-    defer hooks.deinit();
+    defer hooks.deinit(testing.io);
 
     try testing.expectEqual(0, Tick.times_called);
     try testing.expectEqual(0, OnTick.times_called);
@@ -400,7 +403,7 @@ test "should apply input override correctly in T7" {
     try sdk.memory.hooking.init();
     defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");
     hooks.init(&.{ .processInput = ProcessInput.call });
-    defer hooks.deinit();
+    defer hooks.deinit(testing.io);
 
     hooks.input_override = .{
         .player_1 = .{
@@ -477,7 +480,7 @@ test "should apply input override correctly in T8" {
     try sdk.memory.hooking.init();
     defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");
     hooks.init(&.{ .processInput = ProcessInput.call });
-    defer hooks.deinit();
+    defer hooks.deinit(testing.io);
 
     hooks.input_override = .{
         .player_1 = .{
@@ -551,7 +554,7 @@ test "should set cancel_requirements and call original when process cancel requi
     try sdk.memory.hooking.init();
     defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");
     hooks.init(&.{ .processCancelRequirement = ProcessCancelRequirement.call });
-    defer hooks.deinit();
+    defer hooks.deinit(testing.io);
 
     try testing.expectEqual(game.CancelRequirements{}, hooks.cancel_requirements);
     try testing.expectEqual(0, ProcessCancelRequirement.times_called);
@@ -623,7 +626,7 @@ test "should reset cancel_requirements when tick function is called in T7" {
     try sdk.memory.hooking.init();
     defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");
     hooks.init(&.{ .tick = Tick.call });
-    defer hooks.deinit();
+    defer hooks.deinit(testing.io);
 
     hooks.cancel_requirements = .{
         .throw_escape_press_1 = true,
@@ -647,7 +650,7 @@ test "should reset cancel_requirements when tick function is called in T8" {
     try sdk.memory.hooking.init();
     defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");
     hooks.init(&.{ .tick = Tick.call });
-    defer hooks.deinit();
+    defer hooks.deinit(testing.io);
 
     hooks.cancel_requirements = .{
         .throw_escape_press_1 = true,
@@ -682,7 +685,7 @@ test "should set depth_buffer_address to correct value and call original when se
     try sdk.memory.hooking.init();
     defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");
     hooks.init(&.{ .setRenderTargets = SetRenderTargets.call });
-    defer hooks.deinit();
+    defer hooks.deinit(testing.io);
 
     const B = extern struct {
         _padding: [0x20]u8 = undefined,

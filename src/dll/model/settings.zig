@@ -20,19 +20,19 @@ pub const Settings = struct {
     const Self = @This();
     pub const file_name = "settings.json";
 
-    pub fn save(self: *const Self, base_dir: *const sdk.misc.BaseDir) !void {
+    pub fn save(self: *const Self, io: std.Io, base_dir: *const sdk.misc.BaseDir) !void {
         var path_buffer: [sdk.os.max_file_path_length]u8 = undefined;
         const file_path = base_dir.getPath(&path_buffer, file_name) catch |err| {
             sdk.misc.error_context.append("Failed to construct file path.", .{});
             return err;
         };
-        const file = std.fs.cwd().createFile(file_path, .{}) catch |err| {
+        const file = std.Io.Dir.cwd().createFile(io, file_path, .{}) catch |err| {
             sdk.misc.error_context.new("Failed to create or open file: {s}", .{file_path});
             return err;
         };
-        defer file.close();
+        defer file.close(io);
         var buffer: [1024]u8 = undefined;
-        var writer = file.writer(&buffer);
+        var writer = file.writer(io, &buffer);
         sdk.io.writeJsonValue(Self, self, &writer.interface, &.{ .new_line = .{} }) catch |err| {
             sdk.misc.error_context.append("Failed to write JSON file content.", .{});
             return err;
@@ -43,19 +43,19 @@ pub const Settings = struct {
         };
     }
 
-    pub fn load(base_dir: *const sdk.misc.BaseDir) !Self {
+    pub fn load(io: std.Io, base_dir: *const sdk.misc.BaseDir) !Self {
         var path_buffer: [sdk.os.max_file_path_length]u8 = undefined;
         const file_path = base_dir.getPath(&path_buffer, file_name) catch |err| {
             sdk.misc.error_context.append("Failed to construct file path.", .{});
             return err;
         };
-        const file = std.fs.cwd().openFile(file_path, .{}) catch |err| {
+        const file = std.Io.Dir.cwd().openFile(io, file_path, .{}) catch |err| {
             sdk.misc.error_context.new("Failed to open file: {s}", .{file_path});
             return err;
         };
-        defer file.close();
+        defer file.close(io);
         var buffer: [1024]u8 = undefined;
-        var reader = file.reader(&buffer);
+        var reader = file.reader(io, &buffer);
         return sdk.io.readJsonValue(Self, &reader.interface, &.{}) catch |err| {
             sdk.misc.error_context.append("Failed to parse JSON file content.", .{});
             return err;
@@ -515,9 +515,11 @@ test "Settings.load should load the same settings that Settings.save saves" {
         },
     };
     const base_dir = try sdk.misc.BaseDir.fromStr("./test_assets");
-    try expected_settings.save(&base_dir);
-    defer std.fs.cwd().deleteFile("./test_assets/" ++ Settings.file_name) catch @panic("Failed to cleanup test file.");
-    const actual_settings = try Settings.load(&base_dir);
+    try expected_settings.save(testing.io, &base_dir);
+    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/" ++ Settings.file_name) catch {
+        @panic("Failed to cleanup test file.");
+    };
+    const actual_settings = try Settings.load(testing.io, &base_dir);
     try testing.expectEqual(expected_settings, actual_settings);
 }
 
@@ -529,10 +531,12 @@ test "Settings.load should overwrite the settings file if it already exists" {
         },
     };
     const base_dir = try sdk.misc.BaseDir.fromStr("./test_assets");
-    try default_settings.save(&base_dir);
-    defer std.fs.cwd().deleteFile("./test_assets/" ++ Settings.file_name) catch @panic("Failed to cleanup test file.");
-    try expected_settings.save(&base_dir);
-    const actual_settings = try Settings.load(&base_dir);
+    try default_settings.save(testing.io, &base_dir);
+    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/" ++ Settings.file_name) catch {
+        @panic("Failed to cleanup test file.");
+    };
+    try expected_settings.save(testing.io, &base_dir);
+    const actual_settings = try Settings.load(testing.io, &base_dir);
     try testing.expectEqual(expected_settings, actual_settings);
 }
 

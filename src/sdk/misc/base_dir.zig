@@ -18,7 +18,7 @@ pub const BaseDir = struct {
             );
             return error.NoSpaceLeft;
         }
-        var buffer = [_:0]u8{0} ** (os.max_file_path_length);
+        var buffer: [os.max_file_path_length:0]u8 = @splat(0);
         std.mem.copyForwards(u8, &buffer, base_dir);
         return .{
             .buffer = buffer,
@@ -42,7 +42,7 @@ pub const BaseDir = struct {
     }
 
     pub fn getPath(self: *const Self, buffer: *[os.max_file_path_length]u8, sub_path: []const u8) ![:0]u8 {
-        return std.fmt.bufPrintZ(buffer, "{s}\\{s}", .{ self.get(), sub_path }) catch |err| {
+        return std.fmt.bufPrintSentinel(buffer, "{s}\\{s}", .{ self.get(), sub_path }, 0) catch |err| {
             misc.error_context.new("Failed to put path into the buffer: {s}\\{s}", .{ self.get(), sub_path });
             return err;
         };

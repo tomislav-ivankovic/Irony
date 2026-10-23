@@ -88,7 +88,7 @@ test "findAddress should return null when trail is not resolvable" {
 }
 
 test "toConstPointer should return a pointer when trail is resolvable, address is aligned and memory is readable" {
-    const Struct = packed struct { field_1: i32, field_2: i32 };
+    const Struct = extern struct { field_1: i32, field_2: i32 };
     const field_1_offset = @offsetOf(Struct, "field_1");
     const field_2_offset = @offsetOf(Struct, "field_2");
 
@@ -107,7 +107,7 @@ test "toConstPointer should return a pointer when trail is resolvable, address i
 }
 
 test "toConstPointer should return null when trail is not resolvable, address is misaligned or memory is not readable" {
-    const Struct = packed struct { field_1: i32, field_2: i32 };
+    const Struct = extern struct { field_1: i32, field_2: i32 };
     const field_1_offset = @offsetOf(Struct, "field_1");
     const field_2_offset = @offsetOf(Struct, "field_2");
 
@@ -129,7 +129,7 @@ test "toConstPointer should return null when trail is not resolvable, address is
 }
 
 test "toMutablePointer should return a pointer when trail is resolvable, address is aligned and memory is writable" {
-    const Struct = packed struct { field_1: i32, field_2: i32 };
+    const Struct = extern struct { field_1: i32, field_2: i32 };
     const field_1_offset = @offsetOf(Struct, "field_1");
     const field_2_offset = @offsetOf(Struct, "field_2");
 
@@ -148,7 +148,7 @@ test "toMutablePointer should return a pointer when trail is resolvable, address
 }
 
 test "toMutablePointer should return null when trail is not resolvable, address is misaligned or memory is not writable" {
-    const Struct = packed struct { field_1: i32, field_2: i32 };
+    const Struct = extern struct { field_1: i32, field_2: i32 };
     const field_1_offset = @offsetOf(Struct, "field_1");
     const field_2_offset = @offsetOf(Struct, "field_2");
 
@@ -170,7 +170,7 @@ test "toMutablePointer should return null when trail is not resolvable, address 
 }
 
 test "takeCopy should return a copy when trail is resolvable, address is aligned and memory is readable" {
-    const Struct = packed struct { field_1: i32, field_2: i32 };
+    const Struct = extern struct { field_1: i32, field_2: i32 };
     const field_1_offset = @offsetOf(Struct, "field_1");
     const field_2_offset = @offsetOf(Struct, "field_2");
 
@@ -189,7 +189,7 @@ test "takeCopy should return a copy when trail is resolvable, address is aligned
 }
 
 test "takeCopy should return null when trail is not resolvable, address is misaligned or memory is not readable" {
-    const Struct = packed struct { field_1: i32, field_2: i32 };
+    const Struct = extern struct { field_1: i32, field_2: i32 };
     const field_1_offset = @offsetOf(Struct, "field_1");
     const field_2_offset = @offsetOf(Struct, "field_2");
 

@@ -65,7 +65,7 @@ pub const ErrorEnum = enum(w32.HRESULT) {
     const Self = @This();
 
     pub fn from(result: w32.HRESULT) ?Self {
-        return std.meta.intToEnum(Self, result) catch null;
+        return std.enums.fromInt(Self, result);
     }
 
     pub fn getDescription(self: Self) [:0]const u8 {

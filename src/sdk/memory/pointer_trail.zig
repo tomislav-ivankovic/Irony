@@ -64,7 +64,7 @@ pub const PointerTrail = struct {
 const testing = std.testing;
 
 test "resolve should return the memory address that the pointer trail resolves to when the trail is resolvable" {
-    const Struct = packed struct { field_1: i32, field_2: i32 };
+    const Struct = extern struct { field_1: i32, field_2: i32 };
     const field_1_offset = @offsetOf(Struct, "field_1");
     const field_2_offset = @offsetOf(Struct, "field_2");
 
@@ -87,7 +87,7 @@ test "resolve should return the memory address that the pointer trail resolves t
 }
 
 test "resolve should return null when the pointer trail is incomplete or not resolvable" {
-    const Struct = packed struct { field_1: i32, field_2: i32 };
+    const Struct = extern struct { field_1: i32, field_2: i32 };
     const field_1_offset = @offsetOf(Struct, "field_1");
     const field_2_offset = @offsetOf(Struct, "field_2");
 

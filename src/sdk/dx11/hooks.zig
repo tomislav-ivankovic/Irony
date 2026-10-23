@@ -70,7 +70,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             std.log.info("Present hook enabled.", .{});
         }
 
-        pub fn deinit() void {
+        pub fn deinit(io: std.Io) void {
             std.log.debug("Destroying the present hook...", .{});
             if (present_hook) |hook| {
                 if (hook.destroy()) {
@@ -98,7 +98,10 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             }
 
             while (active_hook_calls.load(.seq_cst) > 0) {
-                std.Thread.sleep(10 * std.time.ns_per_ms);
+                io.sleep(.fromMilliseconds(10), .awake) catch |err| {
+                    misc.error_context.append("Failed to sleep for 10 ms while waiting on active DX11 hooks.", .{});
+                    misc.error_context.logError(err);
+                };
             }
         }
 
@@ -248,7 +251,7 @@ test "should call correct callbacks at correct times" {
 
     const hooks = Hooks(OnPresent.call, BeforeResize.call, AfterResize.call);
     try hooks.init();
-    defer hooks.deinit();
+    defer hooks.deinit(testing.io);
 
     try testing.expectEqual(0, OnPresent.times_called);
     try testing.expectEqual(0, BeforeResize.times_called);

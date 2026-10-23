@@ -15,18 +15,15 @@ pub fn BoundedArray(
 
         const Self = @This();
         pub const Child = Element;
-        pub const Length = @Type(.{ .int = .{
-            .signedness = .unsigned,
-            .bits = switch (capacity) {
-                0 => 1,
-                else => std.math.log2_int_ceil(usize, capacity + 1),
-            },
-        } });
+        pub const Length = @Int(.unsigned, switch (capacity) {
+            0 => 1,
+            else => std.math.log2_int_ceil(usize, capacity + 1),
+        });
 
         pub const max_len = capacity;
         pub const buffer_len = if (sentinel) capacity + 1 else capacity;
         pub const empty = Self{
-            .buffer = [1]Element{empty_element} ** buffer_len,
+            .buffer = @splat(empty_element),
             .len = 0,
         };
         pub const tag = bounded_array_tag;

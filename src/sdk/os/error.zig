@@ -17,20 +17,20 @@ pub const Error = struct {
             .ALLOCATE_BUFFER = 1,
             .IGNORE_INSERTS = 1,
             .FROM_SYSTEM = 1,
-        }, null, @intFromEnum(self.error_code), language_id, @ptrCast(&message), 0, null);
+        }, null, @backingInt(self.error_code), language_id, @ptrCast(&message), 0, null);
         defer _ = w32.LocalFree(@bitCast(@intFromPtr(message)));
 
         if (message_length > 0) {
             var iterator = std.unicode.Utf16LeIterator.init(message[0..message_length]);
             while (iterator.nextCodepoint() catch return error.WriteFailed) |codepoint| {
-                var buffer = [_]u8{undefined} ** 4;
+                var buffer: [4]u8 = undefined;
                 const len = std.unicode.utf8Encode(codepoint, &buffer) catch return error.WriteFailed;
                 try writer.writeAll(buffer[0..len]);
             }
             try writer.writeAll(" (");
         }
 
-        try writer.print("error code 0x{X} {s}", .{ @intFromEnum(self.error_code), @tagName(self.error_code) });
+        try writer.print("error code 0x{X} {s}", .{ @backingInt(self.error_code), @tagName(self.error_code) });
 
         if (message_length > 0) {
             try writer.writeAll(")");

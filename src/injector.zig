@@ -35,7 +35,7 @@ const targets = [_]Target{
         .module_name = @tagName(build_info.name) ++ "_t7.dll",
     },
 };
-const interval_ns = 1 * std.time.ns_per_s;
+const interval_duration = std.Io.Duration.fromSeconds(1);
 
 pub const Mode = enum {
     normal,
@@ -43,7 +43,10 @@ pub const Mode = enum {
 };
 var mode = Mode.normal;
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    console_logger.setIo(io);
+
     std.log.info("Application started up.", .{});
 
     std.log.debug("Finding base directory...", .{});
@@ -51,7 +54,7 @@ pub fn main() !void {
     std.log.info("Base directory set to: {s}", .{base_dir.get()});
 
     std.log.debug("Starting file logging...", .{});
-    if (startFileLogging(&base_dir)) {
+    if (startFileLogging(io, &base_dir)) {
         std.log.info("File logging started.", .{});
     } else |err| {
         sdk.misc.error_context.append("Failed to start file logging.", .{});
@@ -61,7 +64,7 @@ pub fn main() !void {
     std.log.info("{s} Injector version {s}", .{ build_info.display_name, build_info.version });
 
     std.log.debug("Checking for only inject mode...", .{});
-    mode = getMode() catch |err| {
+    mode = getMode(&init.minimal.args) catch |err| {
         sdk.misc.error_context.append("Failed to get the injector mode.", .{});
         sdk.misc.error_context.logError(err);
         return;
@@ -89,24 +92,25 @@ pub fn main() !void {
     injector.runProcessLoop(
         &process_names,
         access_rights,
-        interval_ns,
+        io,
+        interval_duration,
         &base_dir,
         onProcessOpen,
         onProcessClose,
     );
 }
 
-fn getMode() !Mode {
-    const allocator = std.heap.page_allocator;
-    const args = std.process.argsAlloc(allocator) catch |err| {
+fn getMode(args: *const std.process.Args) !Mode {
+    var buffer: [1024]u8 = undefined;
+    var allocator = std.heap.FixedBufferAllocator.init(&buffer);
+    const slice = args.toSlice(allocator.allocator()) catch |err| {
         sdk.misc.error_context.new("Failed to get process command line arguments.", .{});
         return err;
     };
-    defer std.process.argsFree(allocator, args);
-    switch (args.len) {
+    switch (slice.len) {
         0, 1 => return .normal,
         2 => {
-            const arg = args[1];
+            const arg = slice[1];
             if (std.mem.eql(u8, arg, "only_inject")) {
                 return .only_inject;
             } else {
@@ -118,11 +122,10 @@ fn getMode() !Mode {
             }
         },
         else => {
-            sdk.misc.error_context.new("Expecting 0 or 1 command line arguments but got: {}", .{args.len - 1});
+            sdk.misc.error_context.new("Expecting 0 or 1 command line arguments but got: {}", .{slice.len - 1});
             return error.UnexpectedArgsLen;
         },
     }
-    return args.len >= 2;
 }
 
 fn findBaseDir() sdk.misc.BaseDir {
@@ -142,19 +145,19 @@ fn findBaseDir() sdk.misc.BaseDir {
     };
 }
 
-fn startFileLogging(base_dir: *const sdk.misc.BaseDir) !void {
+fn startFileLogging(io: std.Io, base_dir: *const sdk.misc.BaseDir) !void {
     var buffer: [sdk.os.max_file_path_length]u8 = undefined;
     const file_path = base_dir.getPath(&buffer, log_file_name) catch |err| {
         sdk.misc.error_context.append("Failed to find log file path.", .{});
         return err;
     };
-    file_logger.start(file_path) catch |err| {
+    file_logger.start(io, file_path) catch |err| {
         sdk.misc.error_context.append("Failed to start file logging with file path: {s}", .{file_path});
         return err;
     };
 }
 
-var injected_modules = [1]?injector.InjectedModule{null} ** targets.len;
+var injected_modules: [targets.len]?injector.InjectedModule = @splat(null);
 
 pub fn onProcessOpen(base_dir: *const sdk.misc.BaseDir, index: usize, process: *const sdk.os.Process) bool {
     const module_name = targets[index].module_name;

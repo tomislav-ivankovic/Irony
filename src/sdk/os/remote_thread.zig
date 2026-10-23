@@ -46,7 +46,7 @@ pub const RemoteThread = struct {
 
     pub fn join(self: *const Self) !u32 {
         const return_code = w32.WaitForSingleObject(self.handle, w32.INFINITE);
-        if (return_code == @intFromEnum(w32.WAIT_FAILED)) {
+        if (return_code == w32.WAIT_FAILED) {
             misc.error_context.new("{f}", .{os.Error.getLast()});
             misc.error_context.append("WaitForSingleObject returned: {}", .{return_code});
             return error.OsError;

@@ -12,12 +12,13 @@ pub fn Bitfield(comptime BackingInt: type, comptime members: []const BitfieldMem
     @setEvalBranchQuota(3000);
 
     const number_of_bits = @bitSizeOf(BackingInt);
-    var fields: [number_of_bits]std.builtin.Type.StructField = undefined;
+    var field_names: [number_of_bits][]const u8 = undefined;
+    var field_attributes: [number_of_bits]std.builtin.Type.Struct.FieldAttributes = undefined;
     var next_member_index: usize = 0;
     var padding_field_name_buffer: [8]u8 = undefined;
     padding_field_name_buffer[0] = '_';
 
-    for (&fields, 0..) |*field, bit_index| {
+    for (&field_names, &field_attributes, 0..) |*field_name, *field_attribute, bit_index| {
         const backing_value = 1 << bit_index;
         const next_member: ?*const BitfieldMember(BackingInt) = switch (next_member_index < members.len) {
             true => &members[next_member_index],
@@ -25,13 +26,8 @@ pub fn Bitfield(comptime BackingInt: type, comptime members: []const BitfieldMem
         };
         if (next_member) |member| {
             if (member.backing_value == backing_value) {
-                field.* = .{
-                    .name = member.name,
-                    .type = bool,
-                    .default_value_ptr = if (member.default_value == true) &true else &false,
-                    .is_comptime = false,
-                    .alignment = 0,
-                };
+                field_name.* = member.name;
+                field_attribute.* = .{ .default_value_ptr = if (member.default_value == true) &true else &false };
                 next_member_index += 1;
                 continue;
             } else if (member.backing_value < backing_value) {
@@ -51,22 +47,11 @@ pub fn Bitfield(comptime BackingInt: type, comptime members: []const BitfieldMem
         const int_len = std.fmt.printInt(padding_field_name_buffer[1..], bit_index, 10, .lower, .{});
         padding_field_name_buffer[int_len + 1] = 0;
         const name_final = padding_field_name_buffer[0..(int_len + 1) :0].*;
-        field.* = .{
-            .name = &name_final,
-            .type = bool,
-            .default_value_ptr = &false,
-            .is_comptime = false,
-            .alignment = 0,
-        };
+        field_name.* = &name_final;
+        field_attribute.* = .{ .default_value_ptr = &false };
     }
 
-    return @Type(.{ .@"struct" = .{
-        .layout = .@"packed",
-        .backing_integer = BackingInt,
-        .fields = &fields,
-        .decls = &.{},
-        .is_tuple = false,
-    } });
+    return @Struct(.@"packed", BackingInt, &field_names, &@splat(bool), &field_attributes);
 }
 
 const testing = std.testing;
@@ -84,12 +69,9 @@ test "should place members at correct bits" {
         .{ .name = "bit_6", .backing_value = 64 },
         .{ .name = "bit_10", .backing_value = 1024 },
     });
-    const bit_3: u16 = @bitCast(Bits{ .bit_3 = true });
-    const bit_6: u16 = @bitCast(Bits{ .bit_6 = true });
-    const bit_10: u16 = @bitCast(Bits{ .bit_10 = true });
-    try testing.expectEqual(8, bit_3);
-    try testing.expectEqual(64, bit_6);
-    try testing.expectEqual(1024, bit_10);
+    try testing.expectEqual(8, @backingInt(Bits{ .bit_3 = true }));
+    try testing.expectEqual(64, @backingInt(Bits{ .bit_6 = true }));
+    try testing.expectEqual(1024, @backingInt(Bits{ .bit_10 = true }));
 }
 
 test "should have correctly working default member values" {
@@ -98,6 +80,5 @@ test "should have correctly working default member values" {
         .{ .name = "bit_6", .backing_value = 64 },
         .{ .name = "bit_10", .backing_value = 1024, .default_value = true },
     });
-    const default_value: u16 = @bitCast(Bits{});
-    try testing.expectEqual(1024, default_value);
+    try testing.expectEqual(1024, @backingInt(Bits{}));
 }

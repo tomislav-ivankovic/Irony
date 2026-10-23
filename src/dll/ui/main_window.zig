@@ -31,11 +31,11 @@ pub const MainWindow = struct {
         self.details.processFrame(&settings.details, frame);
     }
 
-    pub fn update(self: *Self, delta_time: f32, controller: *core.Controller) void {
+    pub fn update(self: *Self, io: std.Io, delta_time: f32, controller: *core.Controller) void {
         self.match_bar.update(delta_time);
         self.view.update(delta_time);
         self.details.update(delta_time);
-        self.file_menu.update(controller);
+        self.file_menu.update(io, controller);
     }
 
     pub fn handleKeybinds(self: *Self, controller: *core.Controller) void {
@@ -45,6 +45,7 @@ pub const MainWindow = struct {
     pub fn draw(
         self: *Self,
         ui_instance: *ui.Ui,
+        io: std.Io,
         base_dir: *const sdk.misc.BaseDir,
         file_dialog_context: *imgui.ImGuiFileDialog,
         controller: *core.Controller,
@@ -69,10 +70,11 @@ pub const MainWindow = struct {
         var title_buffer: [260]u8 = undefined;
         const asterisk = if (controller.contains_unsaved_changes) "*" else "";
         const file_name = if (controller.getFilePath()) |path| sdk.os.pathToFileName(path) else "Untitled";
-        const title = std.fmt.bufPrintZ(
+        const title = std.fmt.bufPrintSentinel(
             &title_buffer,
             build_info.display_name ++ " - {s}{s}###main_window",
             .{ asterisk, file_name },
+            0,
         ) catch build_info.display_name ++ "###main_window";
 
         const render_content = imgui.igBegin(title, &ui_instance.is_open, imgui.ImGuiWindowFlags_MenuBar);
@@ -83,6 +85,7 @@ pub const MainWindow = struct {
 
         self.drawMenuBar(
             ui_instance,
+            io,
             base_dir,
             file_dialog_context,
             controller,
@@ -146,6 +149,7 @@ pub const MainWindow = struct {
     fn drawMenuBar(
         self: *Self,
         ui_instance: *ui.Ui,
+        io: std.Io,
         base_dir: *const sdk.misc.BaseDir,
         file_dialog_context: *imgui.ImGuiFileDialog,
         controller: *core.Controller,
@@ -158,7 +162,7 @@ pub const MainWindow = struct {
         }
         defer imgui.igEndMenuBar();
 
-        self.file_menu.draw(base_dir, file_dialog_context, controller, &ui_instance.is_open);
+        self.file_menu.draw(io, base_dir, file_dialog_context, controller, &ui_instance.is_open);
         self.view.camera.drawMenuBar();
         drawWindowMenu(ui_instance);
         drawHelpMenu(ui_instance);

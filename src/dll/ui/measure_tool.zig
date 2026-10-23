@@ -133,7 +133,7 @@ pub const MeasureTool = struct {
 
         const distance = line.point_1.distanceTo(line.point_2);
         var buffer: [32]u8 = undefined;
-        const text = std.fmt.bufPrintZ(&buffer, "{d:.2} cm", .{distance}) catch "error";
+        const text = std.fmt.bufPrintSentinel(&buffer, "{d:.2} cm", .{distance}, 0) catch "error";
         var text_size: sdk.math.Vec2 = undefined;
         imgui.igCalcTextSize(text_size.asImVec(), text, null, false, -1);
 

@@ -23,7 +23,7 @@ pub const HurtCylinder = struct {
     flags: HurtCylinderFlags = .{},
 };
 
-pub const HurtCylinderFlags = packed struct {
+pub const HurtCylinderFlags = packed struct (u7) {
     is_intersecting: bool = false,
     is_crushing: bool = false,
     is_power_crushing: bool = false,

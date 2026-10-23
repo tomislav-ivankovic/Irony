@@ -8,7 +8,7 @@ pub fn DescriptorHeapAllocator(comptime heap_size: usize) type {
         cpu_start: w32.D3D12_CPU_DESCRIPTOR_HANDLE,
         gpu_start: w32.D3D12_GPU_DESCRIPTOR_HANDLE,
         increment: u32,
-        is_index_used: [heap_size]bool = [_]bool{false} ** heap_size,
+        is_index_used: [heap_size]bool = @splat(false),
 
         const Self = @This();
 

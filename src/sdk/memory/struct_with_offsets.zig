@@ -8,7 +8,9 @@ pub const StructWithOffsetsMember = struct {
 };
 
 pub fn StructWithOffsets(size: ?usize, comptime members: []const StructWithOffsetsMember) type {
-    var fields_buffer: [2 * members.len + 1]std.builtin.Type.StructField = undefined;
+    var field_names: [2 * members.len + 1][]const u8 = undefined;
+    var field_types: [2 * members.len + 1]type = undefined;
+    var field_attributes: [2 * members.len + 1]std.builtin.Type.Struct.FieldAttributes = undefined;
     var fields_len = 0;
     var current_offset: usize = 0;
     var padding_index: usize = 0;
@@ -29,13 +31,9 @@ pub fn StructWithOffsets(size: ?usize, comptime members: []const StructWithOffse
             padding_field_name_buffer[int_len + 1] = 0;
             const name_final = padding_field_name_buffer[0..(int_len + 1) :0].*;
             const padding_size = member_offset - current_offset;
-            fields_buffer[fields_len] = .{
-                .name = &name_final,
-                .type = [padding_size]u8,
-                .default_value_ptr = &([_]u8{0} ** padding_size),
-                .is_comptime = false,
-                .alignment = 1,
-            };
+            field_names[fields_len] = &name_final;
+            field_types[fields_len] = [padding_size]u8;
+            field_attributes[fields_len] = .{ .default_value_ptr = &@as([padding_size]u8, @splat(0)) };
             padding_index += 1;
             fields_len += 1;
         }
@@ -46,13 +44,9 @@ pub fn StructWithOffsets(size: ?usize, comptime members: []const StructWithOffse
                 .{ member.name, member_offset, @alignOf(member.type) },
             ));
         }
-        fields_buffer[fields_len] = .{
-            .name = member.name,
-            .type = member.type,
-            .default_value_ptr = member.default_value_ptr,
-            .is_comptime = false,
-            .alignment = @alignOf(member.type),
-        };
+        field_names[fields_len] = member.name;
+        field_types[fields_len] = member.type;
+        field_attributes[fields_len] = .{ .default_value_ptr = member.default_value_ptr };
         fields_len += 1;
         current_offset = member_offset + @sizeOf(member.type);
     }
@@ -69,25 +63,21 @@ pub fn StructWithOffsets(size: ?usize, comptime members: []const StructWithOffse
             padding_field_name_buffer[int_len + 1] = 0;
             const name_final = padding_field_name_buffer[0..(int_len + 1) :0].*;
             const padding_size = struct_size - current_offset;
-            fields_buffer[fields_len] = .{
-                .name = &name_final,
-                .type = [padding_size]u8,
-                .default_value_ptr = &([_]u8{0} ** padding_size),
-                .is_comptime = false,
-                .alignment = 1,
-            };
+            field_names[fields_len] = &name_final;
+            field_types[fields_len] = [padding_size]u8;
+            field_attributes[fields_len] = .{ .default_value_ptr = &@as([padding_size]u8, @splat(0)) };
             padding_index += 1;
             fields_len += 1;
         }
     }
 
-    return @Type(.{ .@"struct" = .{
-        .layout = .@"extern",
-        .backing_integer = null,
-        .fields = fields_buffer[0..fields_len],
-        .decls = &.{},
-        .is_tuple = false,
-    } });
+    return @Struct(
+        .@"extern",
+        null,
+        field_names[0..fields_len],
+        field_types[0..fields_len],
+        field_attributes[0..fields_len],
+    );
 }
 
 const testing = std.testing;

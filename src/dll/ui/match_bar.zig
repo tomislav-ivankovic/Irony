@@ -193,7 +193,7 @@ pub const MatchBar = struct {
                 0 => @divExact(frames, 60),
                 else => @divFloor(frames, 60) + 1,
             };
-            break :block std.fmt.bufPrintZ(&buffer, "{}", .{seconds}) catch "---";
+            break :block std.fmt.bufPrintSentinel(&buffer, "{}", .{seconds}, 0) catch "---";
         } else "∞";
         if (imgui.igButtonBehavior(rect, id, null, null, 0)) {
             imgui.igSetClipboardText(text);
@@ -201,7 +201,7 @@ pub const MatchBar = struct {
         }
         if (builtin.is_test) {
             var test_buffer: [buffer.len + 32]u8 = undefined;
-            const test_text = std.fmt.bufPrintZ(&test_buffer, "{s}: {s}", .{ id_string, text }) catch "error";
+            const test_text = std.fmt.bufPrintSentinel(&test_buffer, "{s}: {s}", .{ id_string, text }, 0) catch "error";
             imgui.teItemAdd(imgui.igGetCurrentContext(), imgui.igGetID_Str(test_text), &rect, null);
         }
 
@@ -211,7 +211,8 @@ pub const MatchBar = struct {
             .x = rect.Min.x + (0.5 * size.x) - (0.5 * text_size.x),
             .y = rect.Min.y + (0.5 * size.y) - (0.5 * text_size.y),
         };
-        const color = imgui.igGetColorU32_Vec4(style.*.Colors[imgui.ImGuiCol_Text]);
+        const colors: []const imgui.ImVec4 = style.*.Colors[0..style.*.Colors.len];
+        const color = imgui.igGetColorU32_Vec4(colors[imgui.ImGuiCol_Text]);
 
         const draw_list = imgui.igGetWindowDrawList();
         imgui.ImDrawList_AddText_Vec2(draw_list, text_pos, color, text, null);
@@ -244,7 +245,7 @@ pub const MatchBar = struct {
         }
         if (builtin.is_test) {
             var test_buffer: [model.PlayerName.buffer_len + 32]u8 = undefined;
-            const test_text = std.fmt.bufPrintZ(&test_buffer, "{s}: {s}", .{ id_string, text }) catch "error";
+            const test_text = std.fmt.bufPrintSentinel(&test_buffer, "{s}: {s}", .{ id_string, text }, 0) catch "error";
             imgui.teItemAdd(imgui.igGetCurrentContext(), imgui.igGetID_Str(test_text), &rect, null);
         }
 
@@ -294,10 +295,11 @@ pub const MatchBar = struct {
         }
 
         var buffer: [16]u8 = undefined;
-        const text = std.fmt.bufPrintZ(
+        const text = std.fmt.bufPrintSentinel(
             &buffer,
             "{}/{}",
             .{ rounds_won.current_value, rounds_needed_to_win },
+            0,
         ) catch "error";
         if (imgui.igButtonBehavior(rect, id, null, null, 0)) {
             imgui.igSetClipboardText(text);
@@ -305,7 +307,7 @@ pub const MatchBar = struct {
         }
         if (builtin.is_test) {
             var test_buffer: [buffer.len + 32]u8 = undefined;
-            const test_text = std.fmt.bufPrintZ(&test_buffer, "{s}: {s}", .{ id_string, text }) catch "error";
+            const test_text = std.fmt.bufPrintSentinel(&test_buffer, "{s}: {s}", .{ id_string, text }, 0) catch "error";
             imgui.teItemAdd(imgui.igGetCurrentContext(), imgui.igGetID_Str(test_text), &rect, null);
         }
 
@@ -379,14 +381,14 @@ pub const MatchBar = struct {
             .used_up => 0.0,
         };
         var buffer: [8]u8 = undefined;
-        const text = std.fmt.bufPrintZ(&buffer, "{d:.1}%", .{heat_value * 100}) catch "error";
+        const text = std.fmt.bufPrintSentinel(&buffer, "{d:.1}%", .{heat_value * 100}, 0) catch "error";
         if (imgui.igButtonBehavior(rect, id, null, null, 0)) {
             imgui.igSetClipboardText(text);
             sdk.ui.toasts.send(.info, null, "Copied to clipboard: {s}", .{text});
         }
         if (builtin.is_test) {
             var test_buffer: [buffer.len + 32]u8 = undefined;
-            const test_text = std.fmt.bufPrintZ(&test_buffer, "{s}: {s}", .{ id_string, text }) catch "error";
+            const test_text = std.fmt.bufPrintSentinel(&test_buffer, "{s}: {s}", .{ id_string, text }, 0) catch "error";
             imgui.teItemAdd(imgui.igGetCurrentContext(), imgui.igGetID_Str(test_text), &rect, null);
         }
 
@@ -467,8 +469,8 @@ pub const MatchBar = struct {
 
         var buffer: [16]u8 = undefined;
         const text = switch (side) {
-            .left => std.fmt.bufPrintZ(&buffer, "({}) {}", .{ state.recoverable_health, state.health }),
-            .right => std.fmt.bufPrintZ(&buffer, "{} ({})", .{ state.health, state.recoverable_health }),
+            .left => std.fmt.bufPrintSentinel(&buffer, "({}) {}", .{ state.recoverable_health, state.health }, 0),
+            .right => std.fmt.bufPrintSentinel(&buffer, "{} ({})", .{ state.health, state.recoverable_health }, 0),
         } catch "error";
         if (imgui.igButtonBehavior(rect, id, null, null, 0)) {
             imgui.igSetClipboardText(text);
@@ -476,7 +478,7 @@ pub const MatchBar = struct {
         }
         if (builtin.is_test) {
             var test_buffer: [buffer.len + 32]u8 = undefined;
-            const test_text = std.fmt.bufPrintZ(&test_buffer, "{s}: {s}", .{ id_string, text }) catch "error";
+            const test_text = std.fmt.bufPrintSentinel(&test_buffer, "{s}: {s}", .{ id_string, text }, 0) catch "error";
             imgui.teItemAdd(imgui.igGetCurrentContext(), imgui.igGetID_Str(test_text), &rect, null);
         }
 
@@ -923,6 +925,7 @@ test "should copy correct text to clipboard when clicking on items" {
             sdk.ui.toasts.update(100);
         }
     };
+    sdk.ui.toasts.setIo(testing.io);
     const context = try sdk.ui.getTestingContext();
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }

@@ -345,8 +345,9 @@ fn readFloat(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.A
 fn writeEnum(writer: *std.Io.Writer, value: anytype) !void {
     const Type = @TypeOf(value);
     const info = &@typeInfo(Type).@"enum";
-    if (!info.is_exhaustive) {
-        @compileError("Enum " ++ @typeName(Type) ++ " is not exhaustive and therefor not supported.");
+    switch (info.mode) {
+        .exhaustive => {},
+        .nonexhaustive => @compileError("Enum " ++ @typeName(Type) ++ " is nonexhaustive and therefor not supported."),
     }
     const tag_name = @tagName(value);
     std.json.Stringify.encodeJsonString(tag_name, .{}, writer) catch |err| {
@@ -357,8 +358,9 @@ fn writeEnum(writer: *std.Io.Writer, value: anytype) !void {
 
 fn readEnum(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.Allocator) !Type {
     const info = &@typeInfo(Type).@"enum";
-    if (!info.is_exhaustive) {
-        @compileError("Enum " ++ @typeName(Type) ++ " is not exhaustive and therefor not supported.");
+    switch (info.mode) {
+        .exhaustive => {},
+        .nonexhaustive => @compileError("Enum " ++ @typeName(Type) ++ " is nonexhaustive and therefor not supported."),
     }
     const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
         misc.error_context.new("Failed to read enum value token.", .{});
@@ -372,9 +374,9 @@ fn readEnum(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.Al
             return error.UnexpectedToken;
         },
     };
-    inline for (info.fields) |*field| {
-        if (std.mem.eql(u8, field.name, string)) {
-            return @enumFromInt(field.value);
+    inline for (info.field_names, info.field_values) |field_name, field_value| {
+        if (std.mem.eql(u8, field_name, string)) {
+            return @fromBackingInt(field_value);
         }
     }
     misc.error_context.new("Invalid enum value: {s}", .{string});
@@ -517,7 +519,7 @@ fn writeTuple(writer: *std.Io.Writer, value_pointer: anytype, whitespace: *const
         misc.error_context.append("Failed to write first field whitespace.", .{});
         return err;
     };
-    inline for (0..info.fields.len) |index| {
+    inline for (0..info.field_names.len) |index| {
         errdefer misc.error_context.append("Failed to write tuple field: {}", .{index});
         const field_pointer = &value_pointer[index];
         writeValue(writer, field_pointer, &indented_whitespace) catch |err| {
@@ -557,7 +559,7 @@ fn readTuple(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.A
     }
     var tuple: Type = if (default) |d| d.* else undefined;
     var index: usize = 0;
-    inline for (info.fields) |*field| {
+    inline for (info.field_names, info.field_types) |field_name, Field| {
         errdefer misc.error_context.append("Failed to read tuple field: {}", .{index});
         const token_type = reader.peekNextTokenType() catch |err| {
             misc.error_context.new("Failed to peek field token type.", .{});
@@ -566,9 +568,8 @@ fn readTuple(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.A
         if (token_type == .array_end) {
             break;
         }
-        const Field = field.type;
-        const default_field = if (default) |d| &@field(d, field.name) else null;
-        @field(tuple, field.name) = readValue(Field, reader, allocator, default_field) catch |err| {
+        const default_field = if (default) |d| &@field(d, field_name) else null;
+        @field(tuple, field_name) = readValue(Field, reader, allocator, default_field) catch |err| {
             misc.error_context.append("Failed to read field value.", .{});
             return err;
         };
@@ -593,7 +594,7 @@ fn readTuple(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.A
         misc.error_context.new("Failed to read tuple end token.", .{});
         return err;
     };
-    if (default == null and (index + 1) < info.fields.len) {
+    if (default == null and (index + 1) < info.field_names.len) {
         misc.error_context.new("JSON array ended early with length: {}", .{index});
         return error.EarlyEnd;
     }
@@ -611,9 +612,9 @@ fn writeStruct(writer: *std.Io.Writer, value_pointer: anytype, whitespace: *cons
         misc.error_context.append("Failed first field whitespace.", .{});
         return err;
     };
-    inline for (info.fields, 0..) |*field, index| {
-        errdefer misc.error_context.append("Failed to write struct field: {s}", .{field.name});
-        std.json.Stringify.encodeJsonString(field.name, .{}, writer) catch |err| {
+    inline for (info.field_names, 0..) |field_name, index| {
+        errdefer misc.error_context.append("Failed to write struct field: {s}", .{field_name});
+        std.json.Stringify.encodeJsonString(field_name, .{}, writer) catch |err| {
             misc.error_context.new("Failed to write field name.", .{});
             return err;
         };
@@ -625,12 +626,12 @@ fn writeStruct(writer: *std.Io.Writer, value_pointer: anytype, whitespace: *cons
             misc.error_context.append("Failed to write field value whitespace.", .{});
             return err;
         };
-        const field_pointer = &@field(value_pointer, field.name);
+        const field_pointer = &@field(value_pointer, field_name);
         writeValue(writer, field_pointer, &indented_whitespace) catch |err| {
             misc.error_context.append("Failed to write field value.", .{});
             return err;
         };
-        if (index < info.fields.len - 1) {
+        if (index < info.field_names.len - 1) {
             writer.writeByte(',') catch |err| {
                 misc.error_context.new("Failed to write next field separator.", .{});
                 return err;
@@ -662,7 +663,7 @@ fn readStruct(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.
         return error.UnexpectedToken;
     }
     var structure: Type = if (default) |d| d.* else undefined;
-    var found_fields = [1]bool{default != null} ** info.fields.len;
+    var found_fields: [info.field_names.len]bool = @splat(default != null);
     while (true) {
         const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
             misc.error_context.new("Failed to read next struct field token.", .{});
@@ -673,7 +674,7 @@ fn readStruct(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.
             freeIfAllocated(allocator, token);
             is_token_freed = true;
         };
-        const field_name = switch (token) {
+        const key = switch (token) {
             .allocated_string => |string| string,
             .object_end => break,
             else => {
@@ -682,23 +683,22 @@ fn readStruct(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.
             },
         };
         var field_found = false;
-        inline for (info.fields, 0..) |*field, index| {
-            if (std.mem.eql(u8, field.name, field_name)) {
+        inline for (info.field_names, info.field_types, info.field_attrs, 0..) |field_name, Field, attr, index| {
+            if (std.mem.eql(u8, field_name, key)) {
                 if (!is_token_freed) { // Field name is not needed while parsing the field value.
                     freeIfAllocated(allocator, token);
                     is_token_freed = true;
                 }
-                const Field = field.type;
                 const default_field = if (default) |d| block: {
-                    break :block &@field(d, field.name);
+                    break :block &@field(d, field_name);
                 } else block: {
                     break :block @as(
-                        ?@TypeOf(&@field(default.?, field.name)),
-                        @ptrCast(@alignCast(field.default_value_ptr)),
+                        ?@TypeOf(&@field(default.?, field_name)),
+                        @ptrCast(@alignCast(attr.default_value_ptr)),
                     );
                 };
-                @field(structure, field.name) = readValue(Field, reader, allocator, default_field) catch |err| {
-                    misc.error_context.append("Failed to read field value: {s}", .{field.name});
+                @field(structure, field_name) = readValue(Field, reader, allocator, default_field) catch |err| {
+                    misc.error_context.append("Failed to read field value: {s}", .{field_name});
                     return err;
                 };
                 field_found = true;
@@ -708,21 +708,21 @@ fn readStruct(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.
         }
         if (!field_found) {
             reader.skipValue() catch |err| {
-                misc.error_context.new("Failed to skip field value: {s}", .{field_name});
+                misc.error_context.new("Failed to skip field value: {s}", .{key});
                 return err;
             };
         }
     }
-    inline for (info.fields, found_fields) |*field, found| {
+    inline for (info.field_names, info.field_attrs, found_fields) |field_name, attr, found| {
         if (!found) {
             const err = error.FieldNotFound;
-            misc.error_context.new("Failed to find struct field inside JSON object: {s}", .{field.name});
+            misc.error_context.new("Failed to find struct field inside JSON object: {s}", .{field_name});
             const default_field = if (default) |d| block: {
-                break :block &@field(d, field.name);
+                break :block &@field(d, field_name);
             } else block: {
                 break :block @as(
-                    ?@TypeOf(&@field(default.?, field.name)),
-                    @ptrCast(@alignCast(field.default_value_ptr)),
+                    ?@TypeOf(&@field(default.?, field_name)),
+                    @ptrCast(@alignCast(attr.default_value_ptr)),
                 );
             };
             if (default_field) |d| {
@@ -730,7 +730,7 @@ fn readStruct(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.
                 if (!builtin.is_test) {
                     misc.error_context.logWarning(err);
                 }
-                @field(structure, field.name) = d.*;
+                @field(structure, field_name) = d.*;
             } else {
                 return err;
             }
@@ -795,18 +795,17 @@ fn readUnion(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.A
             misc.error_context.append("Failed to read union's tag. ({s})", .{@typeName(Tag)});
             return err;
         };
-        inline for (info.fields) |*field| {
-            if (@field(Tag, field.name) == tag) {
-                const Payload = field.type;
+        inline for (info.field_names, info.field_types) |field_name, Payload| {
+            if (@field(Tag, field_name) == tag) {
                 const default_payload = switch (default != null and tag == default_tag.?.*) {
-                    true => &@field(default.?, field.name),
+                    true => &@field(default.?, field_name),
                     false => null,
                 };
                 const payload = readValue(Payload, reader, allocator, default_payload) catch |err| {
                     misc.error_context.append("Failed to read union's payload.", .{});
                     return err;
                 };
-                break :block @unionInit(Type, field.name, payload);
+                break :block @unionInit(Type, field_name, payload);
             }
         }
         unreachable;
@@ -961,9 +960,9 @@ fn writeEnumArray(writer: *std.Io.Writer, value_pointer: anytype, whitespace: *c
         misc.error_context.append("Failed to write first entry whitespace.", .{});
         return err;
     };
-    inline for (key_info.fields, 0..) |*field, index| {
-        errdefer misc.error_context.append("Failed to write enum array entry: {s}", .{field.name});
-        std.json.Stringify.encodeJsonString(field.name, .{}, writer) catch |err| {
+    inline for (key_info.field_names, key_info.field_values, 0..) |field_name, field_value, index| {
+        errdefer misc.error_context.append("Failed to write enum array entry: {s}", .{field_name});
+        std.json.Stringify.encodeJsonString(field_name, .{}, writer) catch |err| {
             misc.error_context.new("Failed to write entry key.", .{});
             return err;
         };
@@ -975,13 +974,13 @@ fn writeEnumArray(writer: *std.Io.Writer, value_pointer: anytype, whitespace: *c
             misc.error_context.append("Failed to write entry value whitespace.", .{});
             return err;
         };
-        const key: Key = @enumFromInt(field.value);
+        const key: Key = @fromBackingInt(field_value);
         const field_pointer = value_pointer.getPtrConst(key);
         writeValue(writer, field_pointer, &indented_whitespace) catch |err| {
             misc.error_context.append("Failed to write entry value.", .{});
             return err;
         };
-        if (index < key_info.fields.len - 1) {
+        if (index < key_info.field_names.len - 1) {
             writer.writeByte(',') catch |err| {
                 misc.error_context.new("Failed to write next entry separator.", .{});
                 return err;
@@ -1015,7 +1014,7 @@ fn readEnumArray(comptime Type: type, reader: *std.json.Reader, allocator: std.m
         return error.UnexpectedToken;
     }
     var enum_array: Type = if (default) |d| d.* else undefined;
-    var found_keys = [1]bool{default != null} ** key_info.fields.len;
+    var found_keys: [key_info.field_names.len]bool = @splat(default != null);
     while (true) {
         const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
             misc.error_context.new("Failed to read next enum array entry token.", .{});
@@ -1035,14 +1034,14 @@ fn readEnumArray(comptime Type: type, reader: *std.json.Reader, allocator: std.m
             },
         };
         var key_found = false;
-        inline for (key_info.fields, 0..) |*field, index| {
-            if (std.mem.eql(u8, field.name, key_name)) {
-                errdefer misc.error_context.append("Failed to read enum array entry: {s}", .{field.name});
+        inline for (key_info.field_names, key_info.field_values, 0..) |field_name, field_value, index| {
+            if (std.mem.eql(u8, field_name, key_name)) {
+                errdefer misc.error_context.append("Failed to read enum array entry: {s}", .{field_name});
                 if (!is_token_freed) { // Key name is not needed while parsing the value.
                     freeIfAllocated(allocator, token);
                     is_token_freed = true;
                 }
-                const key: Key = @enumFromInt(field.value);
+                const key: Key = @fromBackingInt(field_value);
                 const default_field = if (default) |d| d.getPtrConst(key) else null;
                 const value = readValue(Value, reader, allocator, default_field) catch |err| {
                     misc.error_context.append("Failed to read entry value.", .{});
@@ -1061,9 +1060,9 @@ fn readEnumArray(comptime Type: type, reader: *std.json.Reader, allocator: std.m
             };
         }
     }
-    inline for (key_info.fields, found_keys) |*field, found| {
+    for (key_info.field_names, found_keys) |field_name, found| {
         if (!found) {
-            misc.error_context.new("Failed to find enum array entry inside JSON object: {s}", .{field.name});
+            misc.error_context.new("Failed to find enum array entry inside JSON object: {s}", .{field_name});
             return error.EntryNotFound;
         }
     }
@@ -1223,7 +1222,6 @@ test "readJsonValue should read the same value that writeJsonValue saved" {
 }
 
 test "readLargeJsonArray should read the same value that writeLargeJsonArray saved" {
-    errdefer |err| misc.error_context.logError(err);
     const Element = struct {
         void: void = {},
         bool: bool = false,

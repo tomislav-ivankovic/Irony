@@ -126,8 +126,8 @@ pub const TaiControls = struct {
             .clear_and_record = "Clear And Record",
         });
         var max_label_width: f32 = 0.0;
-        inline for (@typeInfo(Mode).@"enum".fields) |*field| {
-            const value: Mode = @enumFromInt(field.value);
+        inline for (@typeInfo(Mode).@"enum".field_values) |field_value| {
+            const value: Mode = @enumFromInt(field_value);
             var size: imgui.ImVec2 = undefined;
             imgui.igCalcTextSize(&size, labels.get(value), null, false, -1);
             max_label_width = @max(max_label_width, size.x);
@@ -136,8 +136,8 @@ pub const TaiControls = struct {
         imgui.igSetNextItemWidth(width);
         if (imgui.igBeginCombo("###record_mode", labels.get(self.record_mode), 0)) {
             defer imgui.igEndCombo();
-            inline for (@typeInfo(Mode).@"enum".fields) |*field| {
-                const value: Mode = @enumFromInt(field.value);
+            inline for (@typeInfo(Mode).@"enum".field_values) |field_value| {
+                const value: Mode = @enumFromInt(field_value);
                 if (imgui.igSelectable_Bool(labels.get(value), self.record_mode == value, 0, .{})) {
                     self.record_mode = value;
                 }

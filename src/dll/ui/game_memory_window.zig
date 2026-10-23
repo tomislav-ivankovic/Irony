@@ -30,8 +30,8 @@ pub const GameMemoryWindow = struct {
             return;
         }
 
-        inline for (@typeInfo(game.Memory(game_id)).@"struct".fields) |*field| {
-            ui.drawData(field.name, &@field(game_memory, field.name));
+        inline for (@typeInfo(game.Memory(game_id)).@"struct".field_names) |field_name| {
+            ui.drawData(field_name, &@field(game_memory, field_name));
         }
         // if (game_memory.player_1.findAddress()) |address| {
         //     const array: *const [3000]u32 = @ptrFromInt(address);
@@ -74,8 +74,8 @@ test "should draw game memory struct fields when window is opened in T7" {
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
             ctx.setRef(GameMemoryWindow.name);
-            inline for (@typeInfo(game.Memory(.t7)).@"struct".fields) |*field| {
-                try ctx.expectItemExists(field.name);
+            for (@typeInfo(game.Memory(.t7)).@"struct".field_names) |field_name| {
+                try ctx.expectItemExists(field_name);
             }
         }
     };
@@ -94,8 +94,8 @@ test "should draw game memory struct fields when window is opened in T8" {
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
             ctx.setRef(GameMemoryWindow.name);
-            inline for (@typeInfo(game.Memory(.t8)).@"struct".fields) |*field| {
-                try ctx.expectItemExists(field.name);
+            for (@typeInfo(game.Memory(.t8)).@"struct".field_names) |field_name| {
+                try ctx.expectItemExists(field_name);
             }
         }
     };

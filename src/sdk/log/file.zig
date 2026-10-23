@@ -6,57 +6,74 @@ pub const FileLoggerConfig = struct {
     level: std.log.Level = .debug,
     time_zone: misc.TimeZone = .local,
     buffer_size: usize = 4096,
-    nanoTimestamp: *const fn () i128 = std.time.nanoTimestamp,
 };
 
 pub fn FileLogger(comptime config: FileLoggerConfig) type {
     return struct {
-        var log_file: ?std.fs.File = null;
-        var log_writer: ?std.fs.File.Writer = null;
-        var buffer: [config.buffer_size]u8 = [1]u8{0} ** config.buffer_size;
-        var mutex = std.Thread.Mutex{};
+        var state_maybe: ?State = null;
+        var buffer: [config.buffer_size]u8 = @splat(0);
+        var mutex = std.Io.Mutex.init;
 
-        pub fn start(file_path: []const u8) !void {
-            const file = std.fs.cwd().createFile(file_path, .{ .truncate = false }) catch |err| {
-                misc.error_context.new("Failed to create or open file: {s}\n", .{file_path});
+        const State = struct {
+            io: std.Io,
+            file: std.Io.File,
+            file_writer: std.Io.File.Writer,
+        };
+
+        pub fn start(io: std.Io, file_path: []const u8) !void {
+            if (state_maybe != null) {
+                misc.error_context.new("File logger already started.", .{});
+                return error.AlreadyStarted;
+            }
+            const file = std.Io.Dir.cwd().createFile(io, file_path, .{ .truncate = false, .read = true }) catch |err| {
+                misc.error_context.new("Failed to create or open file: {s}", .{file_path});
                 return err;
             };
-            file.seekFromEnd(0) catch |err| {
-                misc.error_context.new("Failed to seek to end position of the file: {s}\n", .{file_path});
+            errdefer file.close(io);
+            const file_length = file.length(io) catch |err| {
+                misc.error_context.new("Failed to find file length: {s}", .{file_path});
                 return err;
             };
-            log_file = file;
-            log_writer = file.writerStreaming(&buffer);
+            var file_writer = file.writerStreaming(io, &buffer);
+            file_writer.seekTo(file_length) catch |err| {
+                misc.error_context.new("Failed to seek to {} offset of the file: {s}", .{ file_length, file_path });
+                return err;
+            };
+            state_maybe = .{
+                .io = io,
+                .file = file,
+                .file_writer = file_writer,
+            };
         }
 
         pub fn stop() void {
-            if (log_writer) |*writer| {
-                writer.interface.flush() catch |err| {
-                    std.debug.print("Failed to flush buffer before closing the file logger. Cause: {}\n", .{err});
-                };
-                log_writer = null;
-            }
-            if (log_file) |*file| {
-                file.close();
-                log_file = null;
-            }
+            const state = if (state_maybe) |*s| s else return;
+            state.file_writer.end() catch |err| {
+                misc.error_context.new("Failed to end file writer.", .{});
+                misc.error_context.append("Failed to stop file logger.", .{});
+                misc.error_context.logError(err);
+            };
+            state.file.close(state.io);
+            state_maybe = null;
         }
 
         pub fn logFn(
             comptime level: std.log.Level,
-            comptime scope: @Type(.enum_literal),
+            comptime scope: @EnumLiteral(),
             comptime format: []const u8,
             args: anytype,
         ) void {
-            if (@intFromEnum(level) > @intFromEnum(config.level)) {
+            if (@backingInt(level) > @backingInt(config.level)) {
                 return;
             }
-            const timestamp = misc.Timestamp.fromNano(config.nanoTimestamp(), config.time_zone) catch null;
+            const state = if (state_maybe) |*s| s else return;
+            const nano_time = std.Io.Clock.real.now(state.io).nanoseconds;
+            const timestamp = misc.Timestamp.fromNano(nano_time, config.time_zone) catch null;
             const scope_prefix = if (scope != std.log.default_log_scope) "(" ++ @tagName(scope) ++ ") " else "";
             const level_prefix = "[" ++ comptime level.asText() ++ "] ";
-            var writer = if (log_writer) |*w| &w.interface else return;
-            mutex.lock();
-            defer mutex.unlock();
+            const writer = &state.file_writer.interface;
+            mutex.lock(state.io) catch return;
+            defer mutex.unlock(state.io);
             if (timestamp) |t| {
                 writer.print("{f} " ++ level_prefix ++ scope_prefix ++ format ++ "\n", .{t} ++ args) catch |err| {
                     std.debug.print("Failed to write log message with file logger. Cause: {}\n", .{err});
@@ -80,27 +97,29 @@ const testing = std.testing;
 
 test "should format output correctly" {
     const file_path = "./test_assets/tmp1.log";
-    const nanoTimestamp = struct {
-        fn call() i128 {
-            return 1577934245123456789;
+    var io = testing.io;
+    var vtable = io.vtable.*;
+    vtable.now = struct {
+        fn call(_: ?*anyopaque, _: std.Io.Clock) std.Io.Timestamp {
+            return .fromNanoseconds(1577934245123456789);
         }
     }.call;
+    io.vtable = &vtable;
 
     const logger = FileLogger(.{
         .level = .debug,
         .time_zone = .utc,
-        .nanoTimestamp = nanoTimestamp,
     });
-    try logger.start(file_path);
+    try logger.start(io, file_path);
     logger.logFn(.debug, std.log.default_log_scope, "Message: {}", .{1});
     logger.logFn(.info, .scope_1, "Message: {}", .{2});
     logger.logFn(.warn, .scope_2, "Message: {}", .{3});
     logger.logFn(.err, .scope_3, "Message: {}", .{4});
     logger.stop();
+    defer std.Io.Dir.cwd().deleteFile(io, file_path) catch @panic("Failed to clean up test file.");
 
-    const content = try std.fs.cwd().readFileAlloc(testing.allocator, file_path, 1_000_000);
+    const content = try std.Io.Dir.cwd().readFileAlloc(io, file_path, testing.allocator, .limited(1_000_000));
     defer testing.allocator.free(content);
-    try std.fs.cwd().deleteFile(file_path);
 
     const expected =
         \\2020-01-02T03:04:05.123456789 [debug] Message: 1
@@ -114,27 +133,29 @@ test "should format output correctly" {
 
 test "should filter based on log level correctly" {
     const file_path = "./test_assets/tmp2.log";
-    const nanoTimestamp = struct {
-        fn call() i128 {
-            return 1577934245123456789;
+    var io = testing.io;
+    var vtable = io.vtable.*;
+    vtable.now = struct {
+        fn call(_: ?*anyopaque, _: std.Io.Clock) std.Io.Timestamp {
+            return .fromNanoseconds(1577934245123456789);
         }
     }.call;
+    io.vtable = &vtable;
 
     const logger = FileLogger(.{
         .level = .warn,
         .time_zone = .utc,
-        .nanoTimestamp = nanoTimestamp,
     });
-    try logger.start(file_path);
+    try logger.start(io, file_path);
     logger.logFn(.debug, std.log.default_log_scope, "Message: 1", .{});
     logger.logFn(.info, std.log.default_log_scope, "Message: 2", .{});
     logger.logFn(.warn, std.log.default_log_scope, "Message: 3", .{});
     logger.logFn(.err, std.log.default_log_scope, "Message: 4", .{});
     logger.stop();
+    defer std.Io.Dir.cwd().deleteFile(io, file_path) catch @panic("Failed to clean up test file.");
 
-    const content = try std.fs.cwd().readFileAlloc(testing.allocator, file_path, 1_000_000);
+    const content = try std.Io.Dir.cwd().readFileAlloc(io, file_path, testing.allocator, .limited(1_000_000));
     defer testing.allocator.free(content);
-    try std.fs.cwd().deleteFile(file_path);
 
     const expected =
         \\2020-01-02T03:04:05.123456789 [warning] Message: 3
@@ -146,28 +167,30 @@ test "should filter based on log level correctly" {
 
 test "should append logs to the end of the file" {
     const file_path = "./test_assets/tmp3.log";
-    const nanoTimestamp = struct {
-        fn call() i128 {
-            return 1577934245123456789;
+    var io = testing.io;
+    var vtable = io.vtable.*;
+    vtable.now = struct {
+        fn call(_: ?*anyopaque, _: std.Io.Clock) std.Io.Timestamp {
+            return .fromNanoseconds(1577934245123456789);
         }
     }.call;
+    io.vtable = &vtable;
 
-    const file = try std.fs.cwd().createFile(file_path, .{});
-    try file.writeAll("Content before logging.\n");
-    file.close();
+    const file = try std.Io.Dir.cwd().createFile(io, file_path, .{});
+    try file.writeStreamingAll(io, "Content before logging.\n");
+    file.close(io);
 
     const logger = FileLogger(.{
         .level = .debug,
         .time_zone = .utc,
-        .nanoTimestamp = nanoTimestamp,
     });
-    try logger.start(file_path);
+    try logger.start(io, file_path);
     logger.logFn(.info, std.log.default_log_scope, "Logging content.", .{});
     logger.stop();
+    defer std.Io.Dir.cwd().deleteFile(io, file_path) catch @panic("Failed to clean up test file.");
 
-    const content = try std.fs.cwd().readFileAlloc(testing.allocator, file_path, 1_000_000);
+    const content = try std.Io.Dir.cwd().readFileAlloc(io, file_path, testing.allocator, .limited(1_000_000));
     defer testing.allocator.free(content);
-    try std.fs.cwd().deleteFile(file_path);
 
     const expected =
         \\Content before logging.
