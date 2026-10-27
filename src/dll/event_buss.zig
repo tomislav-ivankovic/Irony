@@ -93,25 +93,24 @@ pub const EventBuss = struct {
         };
 
         std.log.debug("Spawning latest version fetching task...", .{});
-        const latest_version_task = LatestVersionTask.createCompleted(null); // TODO Uncomment the below code after fixing: https://codeberg.org/ziglang/zig/issues/32129
-        // LatestVersionTask.spawn(allocator, struct {
-        //     fn call(alloc: std.mem.Allocator, io_copy: std.Io) ?sdk.misc.Version {
-        //         std.log.info("Latest version fetching task spawned.", .{});
-        //         std.log.debug("Fetching latest version...", .{});
-        //         if (sdk.misc.Version.fetchLatest(alloc, io_copy)) |latest_version| {
-        //             std.log.info("Latest version fetched: {f}", .{latest_version});
-        //             return latest_version;
-        //         } else |err| {
-        //             sdk.misc.error_context.append("Failed to fetch latest version tag.", .{});
-        //             sdk.misc.error_context.logError(err);
-        //             return null;
-        //         }
-        //     }
-        // }.call, .{ allocator, io }) catch |err| block: {
-        //     sdk.misc.error_context.append("Failed to spawn latest version fetching task.", .{});
-        //     sdk.misc.error_context.logError(err);
-        //     break :block LatestVersionTask.createCompleted(null);
-        // };
+        const latest_version_task = LatestVersionTask.spawn(allocator, struct {
+            fn call(alloc: std.mem.Allocator, io_copy: std.Io) ?sdk.misc.Version {
+                std.log.info("Latest version fetching task spawned.", .{});
+                std.log.debug("Fetching latest version...", .{});
+                if (sdk.misc.Version.fetchLatest(alloc, io_copy)) |latest_version| {
+                    std.log.info("Latest version fetched: {f}", .{latest_version});
+                    return latest_version;
+                } else |err| {
+                    sdk.misc.error_context.append("Failed to fetch latest version tag.", .{});
+                    sdk.misc.error_context.logError(err);
+                    return null;
+                }
+            }
+        }.call, .{ allocator, io }) catch |err| block: {
+            sdk.misc.error_context.append("Failed to spawn latest version fetching task.", .{});
+            sdk.misc.error_context.logError(err);
+            break :block LatestVersionTask.createCompleted(null);
+        };
 
         std.log.debug("Initializing core...", .{});
         const core_instance = core.Core.init(allocator);

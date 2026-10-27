@@ -22,6 +22,7 @@ pub const Version = struct {
             @compileError("Invalid URI: " ++ uri_string);
         };
         var request = client.request(.GET, uri, .{
+            .keep_alive = false,
             .extra_headers = &.{
                 .{ .name = "Accept", .value = "application/json" },
                 .{ .name = "X-GitHub-Api-Version", .value = "2022-11-28" },
@@ -47,7 +48,7 @@ pub const Version = struct {
             if (status.phrase()) |phrase| {
                 misc.error_context.new("Server responded with status: {s}", .{phrase});
             } else {
-                misc.error_context.new("Server responded with status code: {}", .{@intFromEnum(status)});
+                misc.error_context.new("Server responded with status code: {}", .{@backingInt(status)});
             }
             return error.BadResponseStatus;
         }

@@ -22,6 +22,7 @@ const dx = switch (build_info.rendering_api) {
 };
 
 const MainAllocator = std.heap.DebugAllocator(.{ .enable_memory_limit = true });
+const IoImplementation = sdk.io.WinIo;
 const MemorySearchTask = sdk.misc.Task(dll.game.Memory(build_info.game));
 const Event = union(enum) {
     present: dx.HostContext,
@@ -40,6 +41,7 @@ var module_handle_shared_value: ?sdk.os.SharedValue(w32.HINSTANCE) = null;
 var main_thread: ?std.Thread = null;
 var main_thread_running = std.atomic.Value(bool).init(false);
 
+var single_threaded_io = IoImplementation.init_single_threaded;
 var pending_event_mutex = std.Io.Mutex.init;
 var producer_mutex = std.Io.Mutex.init;
 var consumer_condition = std.Io.Condition.init;
@@ -49,8 +51,6 @@ var listening_to_events = std.atomic.Value(ListeningToEvents).init(.none);
 
 var event_buss: ?dll.EventBuss = null;
 var window_procedure: ?sdk.os.WindowProcedure = null;
-
-var main_io = std.Io.Threaded.init_single_threaded;
 
 pub fn DllMain(
     module_handle: std.os.windows.HINSTANCE,
@@ -84,9 +84,9 @@ pub fn DllMain(
 }
 
 fn initialize(module_handle: w32.HINSTANCE) !void {
-    const io = main_io.io();
-    buffer_logger.setIo(io);
-    sdk.ui.toasts.setIo(io);
+    const sio = single_threaded_io.io();
+    buffer_logger.setIo(sio);
+    sdk.ui.toasts.setIo(sio);
 
     std.log.debug("Creating module handle shared value...", .{});
     module_handle_shared_value = if (createModuleHandleSharedValue(module_handle)) |shared_value| block: {
@@ -108,17 +108,17 @@ fn initialize(module_handle: w32.HINSTANCE) !void {
 }
 
 fn deinitialize() void {
-    const io = main_io.io();
+    const sio = single_threaded_io.io();
     std.log.debug("Shutting down main thread...", .{});
     if (main_thread_running.load(.seq_cst)) {
         if (main_thread) |*thread| {
             std.log.debug("Sending shutdown event...", .{});
-            sendEvent(io, &.shut_down);
+            sendEvent(&.shut_down);
             std.log.info("Shutdown event sent.", .{});
 
             std.log.debug("Waiting for main thread to shut down...", .{});
             while (main_thread_running.load(.seq_cst)) {
-                io.sleep(.fromMilliseconds(100), .awake) catch |err| {
+                sio.sleep(.fromMilliseconds(100), .awake) catch |err| {
                     sdk.misc.error_context.new("Failed to sleep for 100 ms.", .{});
                     sdk.misc.error_context.logWarning(err);
                 };
@@ -162,7 +162,6 @@ pub fn selfShutDown() void {
 }
 
 pub fn main() void {
-    const io = main_io.io();
     defer main_thread_running.store(false, .seq_cst);
 
     std.log.info("Main thread started.", .{});
@@ -178,6 +177,36 @@ pub fn main() void {
         break :block sdk.misc.BaseDir.working_dir;
     };
 
+    std.log.debug("Initializing main allocator...", .{});
+    var main_allocator = MainAllocator.init;
+    const allocator = main_allocator.allocator();
+    std.log.info("Main allocator initialized.", .{});
+    defer {
+        std.log.debug("De-initializing main allocator...", .{});
+        switch (main_allocator.deinit()) {
+            .ok => std.log.info("Main allocator de-initialized.", .{}),
+            .leak => std.log.err("Main allocator detected memory leaks.", .{}),
+        }
+    }
+
+    std.log.debug("Initializing main IO...", .{});
+    var main_io = IoImplementation.init(allocator, .{});
+    std.log.info("Main IO initialized.", .{});
+    defer {
+        std.log.debug("De-initializing main IO...", .{});
+        main_io.deinit();
+        std.log.info("Main IO de-initialized.", .{});
+    }
+    const sio = single_threaded_io.io();
+    const io = main_io.io();
+
+    buffer_logger.setIo(io);
+    sdk.ui.toasts.setIo(io);
+    defer {
+        sdk.ui.toasts.setIo(sio);
+        buffer_logger.setIo(sio);
+    }
+
     std.log.debug("Starting file logging...", .{});
     if (startFileLogging(io, &base_dir)) {
         std.log.info("File logging started.", .{});
@@ -192,18 +221,6 @@ pub fn main() void {
     }
 
     std.log.info("{s} version {s}", .{ build_info.display_name, build_info.version });
-
-    std.log.debug("Initializing main allocator...", .{});
-    var main_allocator = MainAllocator.init;
-    const allocator = main_allocator.allocator();
-    std.log.info("Main allocator initialized.", .{});
-    defer {
-        std.log.debug("De-initializing main allocator...", .{});
-        switch (main_allocator.deinit()) {
-            .ok => std.log.info("Main allocator de-initialized.", .{}),
-            .leak => std.log.err("Main allocator detected memory leaks.", .{}),
-        }
-    }
 
     std.log.debug("Initializing hooking...", .{});
     sdk.memory.hooking.init() catch |err| {
@@ -274,22 +291,22 @@ pub fn main() void {
     const State = enum { starting_up, up, shutting_down };
     var state = State.starting_up;
 
-    defer producer_condition.broadcast(io);
-    pending_event_mutex.lock(io) catch |err| {
+    defer producer_condition.broadcast(sio);
+    pending_event_mutex.lock(sio) catch |err| {
         sdk.misc.error_context.append("Failed to get lock for pending event.", .{});
         sdk.misc.error_context.logError(err);
         return;
     };
-    defer pending_event_mutex.unlock(io);
+    defer pending_event_mutex.unlock(sio);
     listening_to_events.store(.all, .seq_cst);
     defer listening_to_events.store(.none, .seq_cst);
 
     while (true) {
-        consumer_condition.wait(io, &pending_event_mutex) catch continue;
+        consumer_condition.wait(sio, &pending_event_mutex) catch continue;
         const event = pending_event orelse continue;
         defer {
             pending_event = null;
-            producer_condition.signal(io);
+            producer_condition.signal(sio);
         }
         switch (event) {
             .present => |*host_context| switch (state) {
@@ -363,7 +380,7 @@ pub fn main() void {
             .shut_down => {
                 listening_to_events.store(.only_present, .seq_cst);
                 state = .shutting_down;
-                producer_condition.broadcast(io);
+                producer_condition.broadcast(sio);
             },
         }
     }
@@ -411,32 +428,33 @@ fn performMemorySearch(allocator: std.mem.Allocator, io: std.Io, dir: *const sdk
     return game_memory;
 }
 
-fn sendEvent(io: std.Io, event: *const Event) void {
+fn sendEvent(event: *const Event) void {
     if (!isListeningToEvent(event)) {
         return;
     }
-    producer_mutex.lock(io) catch return;
-    defer producer_mutex.unlock(io);
+    const sio = single_threaded_io.io();
+    producer_mutex.lock(sio) catch return;
+    defer producer_mutex.unlock(sio);
     if (!isListeningToEvent(event)) {
         return;
     }
-    pending_event_mutex.lock(io) catch return;
-    defer pending_event_mutex.unlock(io);
+    pending_event_mutex.lock(sio) catch return;
+    defer pending_event_mutex.unlock(sio);
     if (!isListeningToEvent(event)) {
         return;
     }
     while (pending_event != null) {
         const timeout = std.Io.Timeout{ .duration = .{ .raw = .fromMilliseconds(10), .clock = .awake } };
-        producer_condition.waitTimeout(io, &pending_event_mutex, timeout) catch {};
+        producer_condition.waitTimeout(sio, &pending_event_mutex, timeout) catch {};
         if (!isListeningToEvent(event)) {
             return;
         }
     }
     pending_event = event.*;
-    consumer_condition.signal(io);
+    consumer_condition.signal(sio);
     while (pending_event != null) {
         const timeout = std.Io.Timeout{ .duration = .{ .raw = .fromMilliseconds(10), .clock = .awake } };
-        producer_condition.waitTimeout(io, &pending_event_mutex, timeout) catch {};
+        producer_condition.waitTimeout(sio, &pending_event_mutex, timeout) catch {};
         if (!isListeningToEvent(event)) {
             return;
         }
@@ -453,19 +471,19 @@ fn isListeningToEvent(event: *const Event) bool {
 }
 
 fn onPresent(context: dx.HostContext) void {
-    sendEvent(main_io.io(), &.{ .present = context });
+    sendEvent(&.{ .present = context });
 }
 
 fn onTick() void {
-    sendEvent(main_io.io(), &.tick);
+    sendEvent(&.tick);
 }
 
 fn beforeResize(context: dx.HostContext) void {
-    sendEvent(main_io.io(), &.{ .before_resize = context });
+    sendEvent(&.{ .before_resize = context });
 }
 
 fn afterResize(context: dx.HostContext) void {
-    sendEvent(main_io.io(), &.{ .after_resize = context });
+    sendEvent(&.{ .after_resize = context });
 }
 
 fn windowProcedure(
