@@ -147,18 +147,19 @@ fn deinitialize() void {
 }
 
 pub fn selfShutDown() void {
-    const thread = std.Thread.spawn(.{}, struct {
-        fn call() void {
-            deinitialize();
-            w32.FreeLibraryAndExitThread(dll_module.handle, 0);
-        }
-    }.call, .{}) catch |err| {
-        sdk.misc.error_context.new("Failed to spawn shut down thread.", .{});
+    const handle = w32.CreateThread(null, 0, shutDownThread, null, .{}, null) orelse {
+        sdk.misc.error_context.new("{f}", .{sdk.os.Error.getLast()});
+        sdk.misc.error_context.append("Failed to spawn shut down thread.", .{});
         sdk.misc.error_context.append("Failed to self shut down.", .{});
-        sdk.misc.error_context.logError(err);
+        sdk.misc.error_context.logError(error.OsError);
         return;
     };
-    thread.detach();
+    _ = w32.CloseHandle(handle);
+}
+
+fn shutDownThread(_: ?*anyopaque) callconv(.winapi) u32 {
+    deinitialize();
+    w32.FreeLibraryAndExitThread(dll_module.handle, 0);
 }
 
 pub fn main() void {
