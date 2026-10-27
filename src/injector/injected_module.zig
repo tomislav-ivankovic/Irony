@@ -80,6 +80,52 @@ pub const InjectedModule = struct {
     }
 
     fn ejectModule(module: sdk.os.Module) !void {
+        gracefullyEjectModule(module) catch |err_1| {
+            sdk.misc.error_context.append("Failed to gracefully eject module. Continuing with forceful ejection. ", .{});
+            sdk.misc.error_context.logWarning(err_1);
+            forcefullyEjectModule(module) catch |err_2| {
+                sdk.misc.error_context.append("Failed to forcefully eject module.", .{});
+                return err_2;
+            };
+        };
+    }
+
+    fn gracefullyEjectModule(module: sdk.os.Module) !void {
+        const shared_value = sdk.os.SharedValue(usize).open(
+            module.process.id,
+            "irony-shutdown-routine",
+            .{ .READ = 1 },
+        ) catch |err| {
+            sdk.misc.error_context.append("Failed to open shutdown routine shared value.", .{});
+            return err;
+        };
+        defer shared_value.close() catch |err| {
+            sdk.misc.error_context.append("Failed to close shutdown routine shared value.", .{});
+            sdk.misc.error_context.logError(err);
+        };
+        const shutdown_routine_address = shared_value.read() catch |err| {
+            sdk.misc.error_context.append("Failed to read shutdown routine shared value.", .{});
+            return err;
+        };
+        const remote_thread = sdk.os.RemoteThread.spawn(
+            &module.process,
+            @ptrFromInt(shutdown_routine_address),
+            0,
+        ) catch |err| {
+            sdk.misc.error_context.append("Failed to spawn shutdown routine remote thread.", .{});
+            return err;
+        };
+        defer remote_thread.clean() catch |err| {
+            sdk.misc.error_context.append("Failed to clean shutdown routine remote thread.", .{});
+            sdk.misc.error_context.logError(err);
+        };
+        _ = remote_thread.join() catch |err| {
+            sdk.misc.error_context.append("Failed to join shutdown routine remote thread.", .{});
+            return err;
+        };
+    }
+
+    fn forcefullyEjectModule(module: sdk.os.Module) !void {
         const kernel_module = sdk.os.Module.getLocal("kernel32.dll") catch |err| {
             sdk.misc.error_context.append("Failed to get local kernel module: kernel32.dll", .{});
             return err;

@@ -38,6 +38,7 @@ const game_hooks = dll.game.Hooks(build_info.game, onTick);
 
 var dll_module: sdk.os.Module = undefined;
 var module_handle_shared_value: ?sdk.os.SharedValue(w32.HINSTANCE) = null;
+var shutdown_routine_shared_value: ?sdk.os.SharedValue(w32.LPTHREAD_START_ROUTINE) = null;
 var main_thread: ?std.Thread = null;
 var main_thread_running = std.atomic.Value(bool).init(false);
 
@@ -98,6 +99,16 @@ fn initialize(module_handle: w32.HINSTANCE) !void {
         break :block null;
     };
 
+    std.log.debug("Creating shutdown routine shared value...", .{});
+    shutdown_routine_shared_value = if (createShutdownRoutineSharedValue()) |shared_value| block: {
+        std.log.info("Shutdown routine shared value created.", .{});
+        break :block shared_value;
+    } else |err| block: {
+        sdk.misc.error_context.append("Failed to create shutdown routine shared value.", .{});
+        sdk.misc.error_context.logError(err);
+        break :block null;
+    };
+
     std.log.debug("Spawning the main thread...", .{});
     main_thread = std.Thread.spawn(.{}, main, .{}) catch |err| {
         sdk.misc.error_context.new("Failed to spawn main thread.", .{});
@@ -144,12 +155,25 @@ fn deinitialize() void {
     } else {
         std.log.debug("Nothing to destroy.", .{});
     }
+
+    std.log.debug("Destroying shutdown routine shared value...", .{});
+    if (module_handle_shared_value) |*shared_value| {
+        if (shared_value.destroy()) {
+            std.log.info("Shutdown routine shared value destroyed.", .{});
+            module_handle_shared_value = null;
+        } else |err| {
+            sdk.misc.error_context.append("Failed to destroy shutdown routine shared value.", .{});
+            sdk.misc.error_context.logError(err);
+        }
+    } else {
+        std.log.debug("Nothing to destroy.", .{});
+    }
 }
 
 pub fn selfShutDown() void {
-    const handle = w32.CreateThread(null, 0, shutDownThread, null, .{}, null) orelse {
+    const handle = w32.CreateThread(null, 0, shutdownRoutine, null, .{}, null) orelse {
         sdk.misc.error_context.new("{f}", .{sdk.os.Error.getLast()});
-        sdk.misc.error_context.append("Failed to spawn shut down thread.", .{});
+        sdk.misc.error_context.append("Failed to spawn shut down routine thread.", .{});
         sdk.misc.error_context.append("Failed to self shut down.", .{});
         sdk.misc.error_context.logError(error.OsError);
         return;
@@ -157,7 +181,7 @@ pub fn selfShutDown() void {
     _ = w32.CloseHandle(handle);
 }
 
-fn shutDownThread(_: ?*anyopaque) callconv(.winapi) u32 {
+fn shutdownRoutine(_: ?*anyopaque) callconv(.winapi) u32 {
     deinitialize();
     w32.FreeLibraryAndExitThread(dll_module.handle, 0);
 }
@@ -399,6 +423,25 @@ fn createModuleHandleSharedValue(module_handle: w32.HINSTANCE) !sdk.os.SharedVal
         };
     }
     shared_value.write(module_handle) catch |err| {
+        sdk.misc.error_context.append("Failed to write the module handle to shared value.", .{});
+        return err;
+    };
+    return shared_value;
+}
+
+fn createShutdownRoutineSharedValue() !sdk.os.SharedValue(w32.LPTHREAD_START_ROUTINE) {
+    const name = "irony-shutdown-routine";
+    const shared_value = sdk.os.SharedValue(w32.LPTHREAD_START_ROUTINE).create(name) catch |err| {
+        sdk.misc.error_context.append("Failed to create shared value named: {s}", .{name});
+        return err;
+    };
+    errdefer {
+        shared_value.destroy() catch |err| {
+            sdk.misc.error_context.append("Failed to destroy shared value.", .{});
+            sdk.misc.error_context.logError(err);
+        };
+    }
+    shared_value.write(shutdownRoutine) catch |err| {
         sdk.misc.error_context.append("Failed to write the module handle to shared value.", .{});
         return err;
     };
