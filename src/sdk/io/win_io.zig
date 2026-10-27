@@ -4847,13 +4847,13 @@ const WSAID_CONNECTEX: w32.Guid = .initString("25a207b9-ddf3-4660-8ee9-76e58c740
 fn netAccept(userdata: ?*anyopaque, listen_handle: net.Socket.Handle, options: net.Server.AcceptOptions) net.Server.AcceptError!net.Socket {
     const w = fromUserdata(userdata);
     const listen_socket = toSocket(listen_handle);
-    var local: PosixAddress = undefined;
-    var local_len: i32 = @sizeOf(PosixAddress);
+    var local: AcceptAddress = undefined;
+    var local_len: i32 = @sizeOf(AcceptAddress);
     if (w32.getsockname(listen_socket, @ptrCast(&local), &local_len) != 0) switch (wsaGetLastError()) {
         .EINVAL => return error.SocketNotListening,
         else => |err| return unexpectedWsaError(err),
     };
-    const accept_socket = openSocket(w, local.any.family, options.mode, options.protocol) catch |err| switch (err) {
+    const accept_socket = openSocket(w, local.posix.any.family, options.mode, options.protocol) catch |err| switch (err) {
         error.AddressFamilyUnsupported,
         error.ProtocolUnsupportedBySystem,
         error.ProtocolUnsupportedByAddressFamily,
@@ -4866,7 +4866,7 @@ fn netAccept(userdata: ?*anyopaque, listen_handle: net.Socket.Handle, options: n
 
     const acceptEx = try getExtensionFunction(w32.LPFN_ACCEPTEX, listen_socket, WSAID_ACCEPTEX);
     // AcceptEx requires room for both addresses plus 16 bytes each.
-    const addr_space = @sizeOf(PosixAddress) + 16;
+    const addr_space = @sizeOf(AcceptAddress) + 16;
     var addresses: [2 * addr_space]u8 align(8) = undefined;
     const event = try createManualEvent();
     defer _ = w32.CloseHandle(event);
@@ -4890,13 +4890,20 @@ fn netAccept(userdata: ?*anyopaque, listen_handle: net.Socket.Handle, options: n
     const listen_bytes = std.mem.asBytes(&listen_value);
     _ = w32.setsockopt(accept_socket, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, @ptrCast(listen_bytes), listen_bytes.len);
 
-    var remote: PosixAddress = undefined;
-    var remote_len: i32 = @sizeOf(PosixAddress);
+    var remote: AcceptAddress = undefined;
+    var remote_len: i32 = @sizeOf(AcceptAddress);
     if (w32.getpeername(accept_socket, @ptrCast(&remote), &remote_len) != 0) {
         return acceptError(wsaGetLastError());
     }
-    return .{ .handle = fromSocket(accept_socket), .address = addressFromPosix(&remote) };
+    return .{ .handle = fromSocket(accept_socket), .address = addressFromPosix(&remote.posix) };
 }
+
+/// Winsock fails with `WSAEFAULT` if an address buffer is too small for the
+/// socket's address family, and `sockaddr_un` is larger than `PosixAddress`.
+const AcceptAddress = extern union {
+    posix: PosixAddress,
+    unix: UnixSockaddr,
+};
 
 fn acceptError(err: w32.WSA_ERROR) net.Server.AcceptError {
     return switch (err) {
@@ -5015,6 +5022,16 @@ fn netListenUnix(
     return fromSocket(socket);
 }
 
+fn unixSocketFileExists(path: []const u8) bool {
+    var wide: WindowsPath = undefined;
+    wtf8ToWindowsPath(path, &wide) catch return false;
+    if (w32.GetFileAttributesW(wide.span().ptr) != INVALID_FILE_ATTRIBUTES) return true;
+    return switch (getLastError()) {
+        .ERROR_FILE_NOT_FOUND, .ERROR_PATH_NOT_FOUND => false,
+        else => true,
+    };
+}
+
 fn netConnectUnix(
     userdata: ?*anyopaque,
     address: *const net.UnixAddress,
@@ -5029,11 +5046,12 @@ fn netConnectUnix(
     const storage = unixSockaddr(address);
     try Thread.checkCancel();
     if (w32.connect(socket, @ptrCast(&storage), @sizeOf(UnixSockaddr)) != 0) return switch (wsaGetLastError()) {
-        .ECONNREFUSED => error.ConnectionRefused,
+        // Windows also reports a missing socket file as refused.
+        .ECONNREFUSED => if (unixSocketFileExists(address.path)) error.ConnectionRefused else error.FileNotFound,
         .EACCES => error.AccessDenied,
         .ENOBUFS => error.SystemResources,
         .ENETDOWN => error.NetworkDown,
-        .EADDRNOTAVAIL, .ENOENT => error.FileNotFound,
+        .EADDRNOTAVAIL => error.FileNotFound,
         else => |err| unexpectedWsaError(err),
     };
     return fromSocket(socket);
