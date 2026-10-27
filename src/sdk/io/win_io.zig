@@ -122,10 +122,26 @@ pub fn setAsyncLimit(w: *WinIo, new_limit: Io.Limit) void {
     w.async_limit = new_limit;
 }
 
+pub const DeinitOptions = struct {
+    /// Whether to release Winsock (`WSACleanup`) if this instance used
+    /// sockets. `WSACleanup` can take the loader lock, so deinitializing while
+    /// another thread holds it deadlocks: for example when a thread that
+    /// `DllMain` waits for during `DLL_PROCESS_DETACH` calls `deinit`. When
+    /// false, one Winsock reference is left behind for the lifetime of the
+    /// process. Threads, handles and memory are released either way, and
+    /// nothing else needs the loader lock: `dnsapi.dll` and `iphlpapi.dll`
+    /// are imported, so they are loaded and unloaded with the module that
+    /// contains WinIo.
+    cleanup_winsock: bool = true,
+};
+
 pub fn deinit(w: *WinIo) void {
+    w.deinitWithOptions(.{});
+}
+
+pub fn deinitWithOptions(w: *WinIo, options: DeinitOptions) void {
     w.join();
-    if (w.wsa_started.load(.monotonic)) _ = w32.WSACleanup();
-    w.dl.deinit();
+    if (options.cleanup_winsock and w.wsa_started.load(.monotonic)) _ = w32.WSACleanup();
     if (w.null_handle) |handle| _ = w32.CloseHandle(handle);
     w.* = undefined;
 }
@@ -5316,9 +5332,9 @@ fn netInterfaceNameResolve(
     userdata: ?*anyopaque,
     name: *const net.Interface.Name,
 ) net.Interface.Name.ResolveError!net.Interface {
-    const w = fromUserdata(userdata);
+    _ = userdata;
     try Thread.checkCancel();
-    const iphlpapi = w.dl.iphlpapi() orelse return error.Unexpected;
+    const iphlpapi = Dl.Iphlpapi;
     var name_w: [net.Interface.Name.max_len:0]u16 = undefined;
     name_w[
         std.unicode.wtf8ToWtf16Le(&name_w, name.toSlice()) catch |err| switch (err) {
@@ -5340,9 +5356,9 @@ fn netInterfaceNameResolve(
 }
 
 fn netInterfaceName(userdata: ?*anyopaque, interface: net.Interface) net.Interface.NameError!net.Interface.Name {
-    const w = fromUserdata(userdata);
+    _ = userdata;
     try Thread.checkCancel();
-    const iphlpapi = w.dl.iphlpapi() orelse return error.Unexpected;
+    const iphlpapi = Dl.Iphlpapi;
     var luid: u64 = undefined;
     switch (win32Error(iphlpapi.ConvertInterfaceIndexToLuid(interface.index, &luid))) {
         .NO_ERROR => {},
@@ -5359,71 +5375,58 @@ fn netInterfaceName(userdata: ?*anyopaque, interface: net.Interface) net.Interfa
     return .fromSlice(name[0..std.unicode.wtf16LeToWtf8(&name, std.mem.sliceTo(&name_w, 0))]);
 }
 
-/// Functions from DLLs that are loaded only when needed, like `std.Io.Threaded` does.
+/// Functions from `iphlpapi.dll` and `dnsapi.dll`. They are imported, so the
+/// loader loads these DLLs with the program (or the DLL that contains WinIo)
+/// and unloads them with it: nothing is loaded or freed at run time, which
+/// would take the loader lock. The exception is `DnsQueryEx`, which Wine may
+/// not export, so it is looked up in the already loaded `dnsapi.dll`, which
+/// does not take a reference to it.
 const Dl = struct {
+    /// `DnsQueryEx` once looked up. Protected by `mutex`.
+    dns_query_ex: ?Dnsapi.DnsQueryExFn = null,
+    dns_query_ex_looked_up: bool = false,
     mutex: Io.Mutex = .init,
-    iphlpapi_module: ?w32.HINSTANCE = null,
-    iphlpapi_functions: ?Iphlpapi = null,
-    dnsapi_module: ?w32.HINSTANCE = null,
-    dnsapi_functions: ?Dnsapi = null,
 
     const Iphlpapi = struct {
-        ConvertInterfaceNameToLuidW: *const fn (name: [*:0]const u16, luid: *u64) callconv(.winapi) u32,
-        ConvertInterfaceLuidToIndex: *const fn (luid: *const u64, index: *u32) callconv(.winapi) u32,
-        ConvertInterfaceIndexToLuid: *const fn (index: u32, luid: *u64) callconv(.winapi) u32,
-        ConvertInterfaceLuidToNameW: *const fn (luid: *const u64, name: [*]u16, len: usize) callconv(.winapi) u32,
+        extern "iphlpapi" fn ConvertInterfaceNameToLuidW(name: [*:0]const u16, luid: *u64) callconv(.winapi) u32;
+        extern "iphlpapi" fn ConvertInterfaceLuidToIndex(luid: *const u64, index: *u32) callconv(.winapi) u32;
+        extern "iphlpapi" fn ConvertInterfaceIndexToLuid(index: u32, luid: *u64) callconv(.winapi) u32;
+        extern "iphlpapi" fn ConvertInterfaceLuidToNameW(luid: *const u64, name: [*]u16, len: usize) callconv(.winapi) u32;
     };
 
+    extern "dnsapi" fn DnsFree(data: ?*anyopaque, free_type: windows.DNS.FREE_TYPE) callconv(.winapi) void;
+    extern "dnsapi" fn DnsQuery_W(
+        name: [*:0]const u16,
+        record_type: windows.DNS.TYPE,
+        options: windows.DNS.QUERY,
+        extra: ?*anyopaque,
+        results: *?*windows.DNS.RECORD,
+        reserved: ?*anyopaque,
+    ) callconv(.winapi) windows.DNS.STATUS;
+
     const Dnsapi = struct {
-        DnsQueryEx: *const fn (
+        /// Null if `dnsapi.dll` does not export it.
+        DnsQueryEx: ?DnsQueryExFn,
+        DnsFree: *const @TypeOf(Dl.DnsFree) = &Dl.DnsFree,
+        DnsQuery_W: *const @TypeOf(Dl.DnsQuery_W) = &Dl.DnsQuery_W,
+
+        const DnsQueryExFn = *const fn (
             request: *const windows.DNS.QUERY.REQUEST,
             result: *windows.DNS.QUERY.RESULT,
             cancel: ?*windows.DNS.QUERY.CANCEL,
-        ) callconv(.winapi) windows.DNS.STATUS,
-        DnsFree: *const fn (data: ?*anyopaque, free_type: windows.DNS.FREE_TYPE) callconv(.winapi) void,
-        DnsQuery_W: *const fn (
-            name: [*:0]const u16,
-            record_type: windows.DNS.TYPE,
-            options: windows.DNS.QUERY,
-            extra: ?*anyopaque,
-            results: *?*windows.DNS.RECORD,
-            reserved: ?*anyopaque,
-        ) callconv(.winapi) windows.DNS.STATUS,
+        ) callconv(.winapi) windows.DNS.STATUS;
     };
 
-    fn deinit(dl: *Dl) void {
-        if (dl.iphlpapi_module) |module| _ = w32.FreeLibrary(module);
-        if (dl.dnsapi_module) |module| _ = w32.FreeLibrary(module);
-        dl.* = .{};
-    }
-
-    fn load(comptime Functions: type, module_out: *?w32.HINSTANCE, comptime dll_name: []const u8) ?Functions {
-        const LOAD_LIBRARY_SEARCH_SYSTEM32: u32 = 0x800;
-        const module = w32.LoadLibraryExW(L(dll_name), null, @bitCast(LOAD_LIBRARY_SEARCH_SYSTEM32)) orelse return null;
-        var functions: Functions = undefined;
-        inline for (@typeInfo(Functions).@"struct".field_names) |name| {
-            const proc = w32.GetProcAddress(module, name) orelse {
-                _ = w32.FreeLibrary(module);
-                return null;
-            };
-            @field(functions, name) = @ptrCast(proc);
+    fn dnsapi(dl: *Dl) Dnsapi {
+        mutexLockUncancelable(&dl.mutex);
+        defer mutexUnlock(&dl.mutex);
+        if (!dl.dns_query_ex_looked_up) {
+            // Imported, so always loaded.
+            const module = w32.GetModuleHandleW(L("dnsapi.dll")).?;
+            dl.dns_query_ex = @ptrCast(w32.GetProcAddress(module, "DnsQueryEx"));
+            dl.dns_query_ex_looked_up = true;
         }
-        module_out.* = module;
-        return functions;
-    }
-
-    fn iphlpapi(dl: *Dl) ?Iphlpapi {
-        mutexLockUncancelable(&dl.mutex);
-        defer mutexUnlock(&dl.mutex);
-        if (dl.iphlpapi_functions == null) dl.iphlpapi_functions = load(Iphlpapi, &dl.iphlpapi_module, "iphlpapi.dll");
-        return dl.iphlpapi_functions;
-    }
-
-    fn dnsapi(dl: *Dl) ?Dnsapi {
-        mutexLockUncancelable(&dl.mutex);
-        defer mutexUnlock(&dl.mutex);
-        if (dl.dnsapi_functions == null) dl.dnsapi_functions = load(Dnsapi, &dl.dnsapi_module, "dnsapi.dll");
-        return dl.dnsapi_functions;
+        return .{ .DnsQueryEx = dl.dns_query_ex };
     }
 };
 
@@ -5527,7 +5530,7 @@ fn netLookupFallible(
     }
 
     try Thread.checkCancel();
-    const dnsapi = w.dl.dnsapi() orelse return error.DetectingNetworkConfigurationFailed;
+    const dnsapi = w.dl.dnsapi();
     const current_thread = Thread.current;
     var lookup_dns: LookupDns = .{
         .win_io = w,
@@ -5550,8 +5553,9 @@ fn netLookupFallible(
             error.InvalidWtf8 => return error.UnknownHostName,
         }
     ] = 0;
+    const DnsQueryEx = dnsapi.DnsQueryEx orelse return lookupDnsQuery(w, dnsapi, &host_name_w, resolved, options);
     // Workaround various bugs by attempting a synchronous non-wire query first
-    switch (dnsapi.DnsQueryEx(&.{
+    switch (DnsQueryEx(&.{
         .Version = 1,
         .QueryName = &host_name_w,
         .QueryType = if (options.family == .ip4) .A else .AAAA,
@@ -5566,7 +5570,7 @@ fn netLookupFallible(
         .DNS_REQUEST_PENDING => unreachable, // `pQueryCompletionCallback` was `null`
         // `DnsQueryEx` is not implemented by Wine.
         .DNS_ERROR_RCODE_NOT_IMPLEMENTED, .CALL_NOT_IMPLEMENTED => return lookupDnsQuery(w, dnsapi, &host_name_w, resolved, options),
-        .DNS_ERROR_RECORD_DOES_NOT_EXIST => switch (dnsapi.DnsQueryEx(&.{
+        .DNS_ERROR_RECORD_DOES_NOT_EXIST => switch (DnsQueryEx(&.{
             .Version = 1,
             .QueryName = &host_name_w,
             .QueryType = if (options.family == .ip4) .A else .AAAA,
