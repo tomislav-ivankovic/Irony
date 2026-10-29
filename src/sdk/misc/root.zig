@@ -1,4 +1,3 @@
-pub const BaseDir = @import("base_dir.zig").BaseDir;
 pub const bounded_array_tag = @import("bounded_array.zig").bounded_array_tag;
 pub const BoundedArray = @import("bounded_array.zig").BoundedArray;
 pub const CircularBuffer = @import("circular_buffer.zig").CircularBuffer;

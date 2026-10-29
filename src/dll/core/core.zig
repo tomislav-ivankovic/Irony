@@ -47,7 +47,6 @@ pub const Core = struct {
     pub fn tick(
         self: *Self,
         io: std.Io,
-        base_dir: *const sdk.misc.BaseDir,
         settings: *const model.Settings,
         game_memory: *const game.Memory(build_info.game),
         input_override: *game.InputOverride,
@@ -62,7 +61,7 @@ pub const Core = struct {
         self.hit_detector.detect(&frame);
         self.move_detector.detect(&frame);
         self.move_measurer.measure(&frame);
-        self.automation.processFrame(io, base_dir, &settings.automation, &self.controller, &frame);
+        self.automation.processFrame(io, &settings.automation, &self.controller, &frame);
         self.tool_assisted_input.processFrame(input_override, frame.source);
         self.controller.processFrame(&frame, context, processFrame);
         self.tai_recording_coordinator.processFrame(&self.tool_assisted_input, &self.controller);

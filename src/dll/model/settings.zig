@@ -20,14 +20,9 @@ pub const Settings = struct {
     const Self = @This();
     pub const file_name = "settings.json";
 
-    pub fn save(self: *const Self, io: std.Io, base_dir: *const sdk.misc.BaseDir) !void {
-        var path_buffer: [sdk.os.max_file_path_length]u8 = undefined;
-        const file_path = base_dir.getPath(&path_buffer, file_name) catch |err| {
-            sdk.misc.error_context.append("Failed to construct file path.", .{});
-            return err;
-        };
-        const file = std.Io.Dir.cwd().createFile(io, file_path, .{}) catch |err| {
-            sdk.misc.error_context.new("Failed to create or open file: {s}", .{file_path});
+    pub fn save(self: *const Self, io: std.Io) !void {
+        const file = std.Io.Dir.cwd().createFile(io, file_name, .{}) catch |err| {
+            sdk.misc.error_context.new("Failed to create or open file: {s}", .{file_name});
             return err;
         };
         defer file.close(io);
@@ -43,14 +38,9 @@ pub const Settings = struct {
         };
     }
 
-    pub fn load(io: std.Io, base_dir: *const sdk.misc.BaseDir) !Self {
-        var path_buffer: [sdk.os.max_file_path_length]u8 = undefined;
-        const file_path = base_dir.getPath(&path_buffer, file_name) catch |err| {
-            sdk.misc.error_context.append("Failed to construct file path.", .{});
-            return err;
-        };
-        const file = std.Io.Dir.cwd().openFile(io, file_path, .{}) catch |err| {
-            sdk.misc.error_context.new("Failed to open file: {s}", .{file_path});
+    pub fn load(io: std.Io) !Self {
+        const file = std.Io.Dir.cwd().openFile(io, file_name, .{}) catch |err| {
+            sdk.misc.error_context.new("Failed to open file: {s}", .{file_name});
             return err;
         };
         defer file.close(io);
@@ -514,12 +504,11 @@ test "Settings.load should load the same settings that Settings.save saves" {
             .thickness = 123.0,
         },
     };
-    const base_dir = try sdk.misc.BaseDir.fromStr("./test_assets");
-    try expected_settings.save(testing.io, &base_dir);
-    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/" ++ Settings.file_name) catch {
+    try expected_settings.save(testing.io);
+    defer std.Io.Dir.cwd().deleteFile(testing.io, Settings.file_name) catch {
         @panic("Failed to cleanup test file.");
     };
-    const actual_settings = try Settings.load(testing.io, &base_dir);
+    const actual_settings = try Settings.load(testing.io);
     try testing.expectEqual(expected_settings, actual_settings);
 }
 
@@ -530,13 +519,12 @@ test "Settings.load should overwrite the settings file if it already exists" {
             .thickness = 123.0,
         },
     };
-    const base_dir = try sdk.misc.BaseDir.fromStr("./test_assets");
-    try default_settings.save(testing.io, &base_dir);
-    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/" ++ Settings.file_name) catch {
+    try default_settings.save(testing.io);
+    defer std.Io.Dir.cwd().deleteFile(testing.io, Settings.file_name) catch {
         @panic("Failed to cleanup test file.");
     };
-    try expected_settings.save(testing.io, &base_dir);
-    const actual_settings = try Settings.load(testing.io, &base_dir);
+    try expected_settings.save(testing.io);
+    const actual_settings = try Settings.load(testing.io);
     try testing.expectEqual(expected_settings, actual_settings);
 }
 

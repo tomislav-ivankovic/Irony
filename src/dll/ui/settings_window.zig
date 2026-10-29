@@ -28,7 +28,7 @@ pub const SettingsWindow = struct {
         self.general_settings.deinit();
     }
 
-    pub fn draw(self: *Self, io: std.Io, base_dir: *const sdk.misc.BaseDir, settings: *model.Settings) void {
+    pub fn draw(self: *Self, io: std.Io, settings: *model.Settings) void {
         if (!self.is_open) {
             return;
         }
@@ -52,24 +52,22 @@ pub const SettingsWindow = struct {
 
         const navigation_layout_height = content_size.y - self.save_button.height - imgui.igGetStyle().*.ItemSpacing.y;
         if (imgui.igBeginChild_Str("layout", .{ .y = navigation_layout_height }, 0, 0)) {
-            self.drawNavigationLayout(io, base_dir, settings);
+            self.drawNavigationLayout(io, settings);
         }
         imgui.igEndChild();
 
-        self.save_button.draw(io, base_dir, settings);
+        self.save_button.draw(io, settings);
     }
 
-    fn drawNavigationLayout(self: *Self, io: std.Io, base_dir: *const sdk.misc.BaseDir, settings: *model.Settings) void {
+    fn drawNavigationLayout(self: *Self, io: std.Io, settings: *model.Settings) void {
         const Context = struct {
             self: *Self,
             io: std.Io,
-            base_dir: *const sdk.misc.BaseDir,
             settings: *model.Settings,
         };
         const context = Context{
             .self = self,
             .io = io,
-            .base_dir = base_dir,
             .settings = settings,
         };
         self.navigation_layout.draw(&context, &.{
@@ -77,7 +75,7 @@ pub const SettingsWindow = struct {
                 .name = "General",
                 .content = struct {
                     fn call(c: *const Context) void {
-                        c.self.general_settings.draw(c.io, c.base_dir, c.settings, &default_settings);
+                        c.self.general_settings.draw(c.io, c.settings, &default_settings);
                     }
                 }.call,
             },
@@ -220,7 +218,6 @@ const GeneralSettings = struct {
     pub fn draw(
         self: *Self,
         io: std.Io,
-        base_dir: *const sdk.misc.BaseDir,
         settings: *model.Settings,
         default_settings: *const model.Settings,
     ) void {
@@ -289,7 +286,7 @@ const GeneralSettings = struct {
         drawRendering2D("2D Rendering", &settings.general.rendering_2d, &default_settings.general.rendering_2d);
         drawRendering3D("3D Rendering", &settings.general.rendering_3d, &default_settings.general.rendering_3d);
         imgui.igSeparator();
-        self.reload_button.draw(io, base_dir, settings);
+        self.reload_button.draw(io, settings);
         self.defaults_button.draw(settings, default_settings);
     }
 };
@@ -339,7 +336,7 @@ const SaveButton = struct {
         _ = self.task.join();
     }
 
-    fn draw(self: *Self, io: std.Io, base_dir: *const sdk.misc.BaseDir, settings: *model.Settings) void {
+    fn draw(self: *Self, io: std.Io, settings: *model.Settings) void {
         var content_size: imgui.ImVec2 = undefined;
         imgui.igGetContentRegionAvail(&content_size);
 
@@ -348,23 +345,23 @@ const SaveButton = struct {
         defer imgui.igEndDisabled();
         const label = if (is_loading) "Saving..." else "Save";
         if (imgui.igButton(label, .{ .x = content_size.x })) {
-            self.saveSettings(io, base_dir, settings);
+            self.saveSettings(io, settings);
         }
         var size: imgui.ImVec2 = undefined;
         imgui.igGetItemRectSize(&size);
         self.height = size.y;
     }
 
-    fn saveSettings(self: *Self, io: std.Io, base_dir: *const sdk.misc.BaseDir, settings: *const model.Settings) void {
+    fn saveSettings(self: *Self, io: std.Io, settings: *const model.Settings) void {
         std.log.info("Saving settings...", .{});
         std.log.debug("Spawning settings save thread...", .{});
         _ = self.task.join();
         self.task = Task.spawn(
             self.allocator,
             struct {
-                fn call(io_copy: std.Io, dir: sdk.misc.BaseDir, settings_to_save: model.Settings) void {
+                fn call(io_copy: std.Io, settings_to_save: model.Settings) void {
                     std.log.debug("Settings save task started.", .{});
-                    if (settings_to_save.save(io_copy, &dir)) {
+                    if (settings_to_save.save(io_copy)) {
                         std.log.info("Settings saved.", .{});
                         sdk.ui.toasts.send(.success, null, "Settings saved successfully.", .{});
                     } else |err| {
@@ -373,7 +370,7 @@ const SaveButton = struct {
                     }
                 }
             }.call,
-            .{ io, base_dir.*, settings.* },
+            .{ io, settings.* },
         ) catch |err| {
             sdk.misc.error_context.new("Failed to spawn settings save task.", .{});
             sdk.misc.error_context.append("Failed to save settings.", .{});
@@ -403,7 +400,7 @@ const ReloadButton = struct {
         _ = self.task.join();
     }
 
-    fn draw(self: *Self, io: std.Io, base_dir: *const sdk.misc.BaseDir, settings: *model.Settings) void {
+    fn draw(self: *Self, io: std.Io, settings: *model.Settings) void {
         const is_loading = self.task.peek() == null;
         imgui.igBeginDisabled(is_loading);
         defer imgui.igEndDisabled();
@@ -418,7 +415,7 @@ const ReloadButton = struct {
             imgui.igText("Any settings you did not save will be lost.");
             imgui.igSeparator();
             if (imgui.igButton("Reload", .{})) {
-                self.loadSettings(io, base_dir);
+                self.loadSettings(io);
                 imgui.igCloseCurrentPopup();
             }
             imgui.igSameLine(0, -1);
@@ -430,16 +427,16 @@ const ReloadButton = struct {
         self.checkLoadedSettings(settings);
     }
 
-    fn loadSettings(self: *Self, io: std.Io, base_dir: *const sdk.misc.BaseDir) void {
+    fn loadSettings(self: *Self, io: std.Io) void {
         std.log.info("Loading settings...", .{});
         std.log.debug("Spawning settings load thread...", .{});
         _ = self.task.join();
         self.task = Task.spawn(
             self.allocator,
             struct {
-                fn call(io_copy: std.Io, dir: sdk.misc.BaseDir) ?model.Settings {
+                fn call(io_copy: std.Io) ?model.Settings {
                     std.log.debug("Settings load task started.", .{});
-                    if (model.Settings.load(io_copy, &dir)) |settings| {
+                    if (model.Settings.load(io_copy)) |settings| {
                         std.log.debug("Settings loaded into temporary storage.", .{});
                         return settings;
                     } else |err| {
@@ -449,7 +446,7 @@ const ReloadButton = struct {
                     }
                 }
             }.call,
-            .{ io, base_dir.* },
+            .{ io },
         ) catch |err| {
             sdk.misc.error_context.new("Failed to spawn settings load task.", .{});
             sdk.misc.error_context.append("Failed to load settings.", .{});
@@ -1101,7 +1098,6 @@ fn drawDefaultButton(value: anytype, default: *const @TypeOf(value.*)) void {
 }
 
 const testing = std.testing;
-const testing_base_dir = sdk.misc.BaseDir.fromStr("test_assets") catch unreachable;
 
 test "should not draw anything when window is closed" {
     const Test = struct {
@@ -1109,7 +1105,7 @@ test "should not draw anything when window is closed" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1130,7 +1126,7 @@ test "reset settings to defaults button should set settings to default value whe
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
             sdk.ui.toasts.draw();
         }
 
@@ -1170,7 +1166,7 @@ test "reload settings button should load the same settings that the save button 
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
             sdk.ui.toasts.draw();
         }
 
@@ -1183,7 +1179,7 @@ test "reload settings button should load the same settings that the save button 
             while (ctx.itemExists("Saving...")) {
                 ctx.yield(1);
             }
-            defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/" ++ model.Settings.file_name) catch {
+            defer std.Io.Dir.cwd().deleteFile(testing.io, model.Settings.file_name) catch {
                 @panic("Failed to cleanup test file.");
             };
             try ctx.expectItemExists("Save");
@@ -1227,7 +1223,7 @@ test "player settings separation should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1300,7 +1296,7 @@ test "general settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1389,7 +1385,7 @@ test "automation settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1440,7 +1436,7 @@ test "hit line settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1543,7 +1539,7 @@ test "hurt cylinders settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1662,7 +1658,7 @@ test "collision spheres settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1707,7 +1703,7 @@ test "skeletons settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1783,7 +1779,7 @@ test "forward directions settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1838,7 +1834,7 @@ test "stage settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -1997,7 +1993,7 @@ test "ingame camera settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -2045,7 +2041,7 @@ test "measure tool settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -2111,7 +2107,7 @@ test "match bar settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -2230,7 +2226,7 @@ test "details table settings should function correctly" {
         var window: SettingsWindow = undefined;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            window.draw(testing.io, &testing_base_dir, &settings);
+            window.draw(testing.io, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {

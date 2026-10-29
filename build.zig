@@ -98,7 +98,7 @@ pub fn build(b: *std.Build) void {
     const run_command = b.addRunArtifact(injector);
 
     // Make sure that the working directory when the program is ran is the same one where the executable is located.
-    run_command.setCwd(std.Build.LazyPath{ .cwd_relative = "./zig-out/bin" });
+    run_command.setCwd(.{ .relative = .{ .base = .install_bin } });
 
     // Stop Wine from spamming debug messages in the console when running the application.
     run_command.setEnvironmentVariable("WINEDEBUG", "-all");
@@ -152,6 +152,9 @@ pub fn build(b: *std.Build) void {
     // This *creates* a Test step in the build graph, to be executed when another step is evaluated that depends on it.
     // The next line below will establish such a dependency.
     const test_command = b.addRunArtifact(tests);
+
+    // Make sure that the working directory when the tests are ran is test_assets.
+    test_command.setCwd(b.path("./test_assets"));
 
     // Stop Wine from spamming debug messages in the console when running tests.
     test_command.setEnvironmentVariable("WINEDEBUG", "-all");

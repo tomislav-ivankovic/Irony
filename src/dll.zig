@@ -22,7 +22,6 @@ const dx = switch (build_info.rendering_api) {
 };
 
 const MainAllocator = std.heap.DebugAllocator(.{ .enable_memory_limit = true });
-const IoImplementation = sdk.io.WinIo;
 const MemorySearchTask = sdk.misc.Task(dll.game.Memory(build_info.game));
 const Event = union(enum) {
     present: dx.HostContext,
@@ -42,7 +41,7 @@ var shutdown_routine_shared_value: ?sdk.os.SharedValue(w32.LPTHREAD_START_ROUTIN
 var main_thread: ?std.Thread = null;
 var main_thread_running = std.atomic.Value(bool).init(false);
 
-var single_threaded_io = IoImplementation.init_single_threaded;
+var single_threaded_io = sdk.io.WinIo.init_single_threaded;
 var pending_event_mutex = std.Io.Mutex.init;
 var producer_mutex = std.Io.Mutex.init;
 var consumer_condition = std.Io.Condition.init;
@@ -192,16 +191,6 @@ pub fn main() void {
     std.log.info("Main thread started.", .{});
     defer std.log.info("Main thread stopped.", .{});
 
-    std.log.debug("Finding base directory...", .{});
-    const base_dir = if (sdk.misc.BaseDir.fromModule(&dll_module)) |dir| block: {
-        std.log.info("Base directory found: {s}", .{dir.get()});
-        break :block dir;
-    } else |err| block: {
-        sdk.misc.error_context.append("Failed to find base directory. Using working directory instead.", .{});
-        sdk.misc.error_context.logError(err);
-        break :block sdk.misc.BaseDir.working_dir;
-    };
-
     std.log.debug("Initializing main allocator...", .{});
     var main_allocator = MainAllocator.init;
     const allocator = main_allocator.allocator();
@@ -215,15 +204,29 @@ pub fn main() void {
     }
 
     std.log.debug("Initializing main IO...", .{});
-    var main_io = IoImplementation.init(allocator, .{});
+    var main_io = sdk.io.WinIo.init(allocator, .{});
     std.log.info("Main IO initialized.", .{});
     defer {
         std.log.debug("De-initializing main IO...", .{});
         main_io.deinit();
         std.log.info("Main IO de-initialized.", .{});
     }
+
+    std.log.debug("Finding base directory...", .{});
+    var virtual_cwd_io = if (sdk.io.VirtualCwdIo.initFromModule(main_io.io(), &dll_module)) |vio| block: {
+        std.log.info("Base directory found: {s}", .{vio.path.asSlice()});
+        break :block vio;
+    } else |err| block: {
+        sdk.misc.error_context.append("Failed to find base directory. Using working directory instead.", .{});
+        sdk.misc.error_context.logError(err);
+        break :block null;
+    };
+    defer if (virtual_cwd_io) |*vio| {
+        vio.deinit();
+    };
+
     const sio = single_threaded_io.io();
-    const io = main_io.io();
+    const io = if (virtual_cwd_io) |*vio| vio.io() else main_io.io();
 
     buffer_logger.setIo(io);
     sdk.ui.toasts.setIo(io);
@@ -233,7 +236,7 @@ pub fn main() void {
     }
 
     std.log.debug("Starting file logging...", .{});
-    if (startFileLogging(io, &base_dir)) {
+    if (file_logger.start(io, log_file_name)) {
         std.log.info("File logging started.", .{});
     } else |err| {
         sdk.misc.error_context.append("Failed to start file logging.", .{});
@@ -293,14 +296,14 @@ pub fn main() void {
     var memory_search_task = if (MemorySearchTask.spawn(
         allocator,
         performMemorySearch,
-        .{ allocator, io, &base_dir },
+        .{ allocator, io },
     )) |task| block: {
         std.log.info("Memory search task spawned.", .{});
         break :block task;
     } else |err| block: {
         sdk.misc.error_context.append("Failed to spawn memory search task. Searching in main thread...", .{});
         sdk.misc.error_context.logWarning(err);
-        const result = performMemorySearch(allocator, io, &base_dir);
+        const result = performMemorySearch(allocator, io);
         break :block MemorySearchTask.createCompleted(result);
     };
     defer {
@@ -337,7 +340,7 @@ pub fn main() void {
             .present => |*host_context| switch (state) {
                 .starting_up => {
                     std.log.info("Initializing event buss...", .{});
-                    event_buss = .init(allocator, io, &base_dir, host_context);
+                    event_buss = .init(allocator, io, host_context);
                     std.log.info("Event buss initialized.", .{});
 
                     std.log.debug("Initializing window procedure...", .{});
@@ -355,7 +358,7 @@ pub fn main() void {
                     if (event_buss) |*buss| {
                         const game_memory = memory_search_task.peek();
                         const memory_usage = main_allocator.total_requested_bytes;
-                        buss.draw(io, &base_dir, host_context, game_memory, memory_usage);
+                        buss.draw(io, host_context, game_memory, memory_usage);
                     }
                 },
                 .shutting_down => {
@@ -374,7 +377,7 @@ pub fn main() void {
 
                     std.log.info("De-initializing event buss...", .{});
                     if (event_buss) |*buss| {
-                        buss.deinit(io, &base_dir, host_context);
+                        buss.deinit(io, host_context);
                         event_buss = null;
                         std.log.info("Event buss de-initialized.", .{});
                     } else {
@@ -387,19 +390,19 @@ pub fn main() void {
             .tick => {
                 if (event_buss) |*buss| {
                     const game_memory = memory_search_task.join();
-                    buss.tick(io, &base_dir, game_memory, &game_hooks.input_override);
+                    buss.tick(io, game_memory, &game_hooks.input_override);
                 }
             },
             .before_resize => |*host_context| {
                 std.log.info("Detected before resize event.", .{});
                 if (event_buss) |*buss| {
-                    buss.beforeResize(&base_dir, host_context);
+                    buss.beforeResize(host_context);
                 }
             },
             .after_resize => |*host_context| {
                 std.log.info("Detected after resize event.", .{});
                 if (event_buss) |*buss| {
-                    buss.afterResize(&base_dir, host_context);
+                    buss.afterResize(host_context);
                 }
             },
             .shut_down => {
@@ -448,21 +451,9 @@ fn createShutdownRoutineSharedValue() !sdk.os.SharedValue(w32.LPTHREAD_START_ROU
     return shared_value;
 }
 
-fn startFileLogging(io: std.Io, base_dir: *const sdk.misc.BaseDir) !void {
-    var buffer: [sdk.os.max_file_path_length]u8 = undefined;
-    const file_path = base_dir.getPath(&buffer, log_file_name) catch |err| {
-        sdk.misc.error_context.append("Failed to construct log file path.", .{});
-        return err;
-    };
-    file_logger.start(io, file_path) catch |err| {
-        sdk.misc.error_context.append("Failed to start file logging with file path: {s}", .{file_path});
-        return err;
-    };
-}
-
-fn performMemorySearch(allocator: std.mem.Allocator, io: std.Io, dir: *const sdk.misc.BaseDir) dll.game.Memory(build_info.game) {
+fn performMemorySearch(allocator: std.mem.Allocator, io: std.Io) dll.game.Memory(build_info.game) {
     std.log.debug("Initializing game memory...", .{});
-    const game_memory = dll.game.Memory(build_info.game).init(allocator, io, dir, game_hooks);
+    const game_memory = dll.game.Memory(build_info.game).init(allocator, io, game_hooks);
     std.log.info("Game memory initialized.", .{});
 
     std.log.debug("Initializing game hooks...", .{});

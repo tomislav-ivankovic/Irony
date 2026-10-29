@@ -33,7 +33,6 @@ pub const EventBuss = struct {
     pub fn init(
         allocator: std.mem.Allocator,
         io: std.Io,
-        base_dir: *const sdk.misc.BaseDir,
         host_dx_context: *const dx.HostContext,
     ) Self {
         std.log.debug("Initializing DirectX context...", .{});
@@ -52,7 +51,7 @@ pub const EventBuss = struct {
 
         const ui_context = if (dx_context) |*dxc| block: {
             std.log.debug("Initializing UI context...", .{});
-            if (UiContext.init(allocator, base_dir, dxc)) |context| {
+            if (UiContext.init(allocator, io, dxc)) |context| {
                 std.log.info("UI context initialized.", .{});
                 break :block context;
             } else |err| {
@@ -64,10 +63,10 @@ pub const EventBuss = struct {
 
         std.log.debug("Spawning settings loading task...", .{});
         const settings_task = SettingsTask.spawn(allocator, struct {
-            fn call(io_copy: std.Io, dir: *const sdk.misc.BaseDir) model.Settings {
+            fn call(io_copy: std.Io) model.Settings {
                 std.log.info("Settings loading task spawned.", .{});
                 std.log.debug("Loading settings...", .{});
-                if (model.Settings.load(io_copy, dir)) |settings| {
+                if (model.Settings.load(io_copy)) |settings| {
                     std.log.info("Settings loaded.", .{});
                     return settings;
                 } else |err_1| {
@@ -76,7 +75,7 @@ pub const EventBuss = struct {
                     const default_settings = model.Settings{};
                     if (err_1 == error.FileNotFound) {
                         std.log.info("Saving default settings...", .{});
-                        if (default_settings.save(io_copy, dir)) {
+                        if (default_settings.save(io_copy)) {
                             std.log.info("Default settings saved.", .{});
                         } else |err_2| {
                             sdk.misc.error_context.append("Failed to save default settings.", .{});
@@ -86,7 +85,7 @@ pub const EventBuss = struct {
                     return default_settings;
                 }
             }
-        }.call, .{ io, base_dir }) catch |err| block: {
+        }.call, .{ io }) catch |err| block: {
             sdk.misc.error_context.append("Failed to spawn settings loading task. Using default settings.", .{});
             sdk.misc.error_context.logWarning(err);
             break :block SettingsTask.createCompleted(.{});
@@ -142,11 +141,9 @@ pub const EventBuss = struct {
     pub fn deinit(
         self: *Self,
         io: std.Io,
-        base_dir: *const sdk.misc.BaseDir,
         host_dx_context: *const dx.HostContext,
     ) void {
         _ = io;
-        _ = base_dir;
         const dx_context = if (self.managed_dx_context) |*mdxc| block: {
             break :block dx.Context.fromHostAndManaged(host_dx_context, mdxc);
         } else null;
@@ -198,19 +195,17 @@ pub const EventBuss = struct {
     pub fn tick(
         self: *Self,
         io: std.Io,
-        base_dir: *const sdk.misc.BaseDir,
         game_memory: *game.Memory(build_info.game),
         input_override: *game.InputOverride,
     ) void {
         game_memory.updateAddresses();
         const settings = self.settings_task.peek() orelse return;
-        self.core.tick(io, base_dir, settings, game_memory, input_override, self, processFrame);
+        self.core.tick(io, settings, game_memory, input_override, self, processFrame);
     }
 
     pub fn draw(
         self: *Self,
         io: std.Io,
-        base_dir: *const sdk.misc.BaseDir,
         host_dx_context: *const dx.HostContext,
         game_memory_maybe: ?*game.Memory(build_info.game),
         memory_usage: usize,
@@ -234,7 +229,6 @@ pub const EventBuss = struct {
         imgui.igGetIO_Nil().*.MouseDrawCursor = true;
         self.ui.draw(
             io,
-            base_dir,
             ui_context.file_dialog_context,
             settings_maybe,
             game_memory_maybe,
@@ -269,10 +263,8 @@ pub const EventBuss = struct {
 
     pub fn beforeResize(
         self: *Self,
-        base_dir: *const sdk.misc.BaseDir,
         host_dx_context: *const dx.HostContext,
     ) void {
-        _ = base_dir;
         _ = host_dx_context;
         std.log.debug("De-initializing DirectX buffer contexts...", .{});
         if (self.managed_dx_context) |*context| {
@@ -285,10 +277,8 @@ pub const EventBuss = struct {
 
     pub fn afterResize(
         self: *Self,
-        base_dir: *const sdk.misc.BaseDir,
         host_dx_context: *const dx.HostContext,
     ) void {
-        _ = base_dir;
         std.log.debug("Re-initializing DirectX buffer contexts...", .{});
         if (self.managed_dx_context) |*context| {
             if (context.reinitBufferContexts(host_dx_context)) {

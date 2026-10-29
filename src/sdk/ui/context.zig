@@ -26,7 +26,7 @@ pub fn Context(comptime rendering_api: build_info.RenderingApi) type {
 
         const Self = @This();
 
-        pub fn init(allocator: std.mem.Allocator, base_dir: ?*const misc.BaseDir, dx_context: *const dx.Context) !Self {
+        pub fn init(allocator: std.mem.Allocator, io_maybe: ?std.Io, dx_context: *const dx.Context) !Self {
             const old_allocator = ui.getAllocator();
             ui.setAllocator(allocator);
             errdefer ui.setAllocator(old_allocator);
@@ -37,11 +37,13 @@ pub fn Context(comptime rendering_api: build_info.RenderingApi) type {
             };
             errdefer imgui.igDestroyContext(imgui_context);
 
-            const ini_file_path = if (base_dir) |dir| (dir.allocPath(allocator, "imgui.ini") catch |err| b: {
-                misc.error_context.append("Failed to allocate imgui.ini file path.", .{});
-                misc.error_context.logError(err);
-                break :b null;
-            }) else null;
+            const ini_file_path = if (io_maybe) |io| block: {
+                break :block std.Io.Dir.cwd().realPathFileAlloc(io, "imgui.ini", allocator) catch |err| {
+                    misc.error_context.append("Failed to allocate imgui.ini file path.", .{});
+                    misc.error_context.logError(err);
+                    break :block null;
+                };
+            } else null;
             errdefer if (ini_file_path) |path| {
                 allocator.free(path);
             };

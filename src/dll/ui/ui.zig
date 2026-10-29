@@ -53,7 +53,6 @@ pub const Ui = struct {
     pub fn draw(
         self: *Self,
         io: std.Io,
-        base_dir: *const sdk.misc.BaseDir,
         file_dialog_context: *imgui.ImGuiFileDialog,
         settings_maybe: ?*model.Settings,
         game_memory_maybe: ?*const game.Memory(build_info.game),
@@ -107,7 +106,6 @@ pub const Ui = struct {
         self.main_window.draw(
             self,
             io,
-            base_dir,
             file_dialog_context,
             controller,
             settings,
@@ -115,7 +113,7 @@ pub const Ui = struct {
             memory_usage,
         );
         self.tai_window.draw(controller, tai, tai_coordinator);
-        self.settings_window.draw(io, base_dir, settings);
+        self.settings_window.draw(io, settings);
         self.logs_window.draw(dll.buffer_logger);
         self.game_memory_window.draw(build_info.game, game_memory);
         self.frame_window.draw(controller.getCurrentFrame());

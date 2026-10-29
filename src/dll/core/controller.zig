@@ -1699,18 +1699,18 @@ test "should load the same frames that were previously saved" {
     controller.processFrame(&frame_3, {}, Callback.call);
     controller.processFrame(&frame_4, {}, Callback.call);
 
-    controller.save(testing.io, "./test_assets/recording.irony");
+    controller.save(testing.io, "recording.irony");
     while (controller.mode == .save) {
         controller.update(Controller.frame_time, {}, Callback.call);
         std.Thread.yield() catch {};
     }
     try testing.expectEqual(true, controller.did_last_save_or_load_succeed);
-    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/recording.irony") catch {
+    defer std.Io.Dir.cwd().deleteFile(testing.io, "recording.irony") catch {
         @panic("Failed to cleanup test file.");
     };
 
     controller.clear();
-    controller.load(testing.io, "./test_assets/recording.irony");
+    controller.load(testing.io, "recording.irony");
     while (controller.mode == .load) {
         controller.update(Controller.frame_time, {}, Callback.call);
         std.Thread.yield() catch {};
@@ -1755,13 +1755,13 @@ test "should pause at the previously current frame after recording save complete
     controller.setCurrentFrameIndex(2);
     controller.play();
 
-    controller.save(testing.io, "./test_assets/recording.irony");
+    controller.save(testing.io, "recording.irony");
     while (controller.mode == .save) {
         controller.update(Controller.frame_time, {}, Callback.call);
         std.Thread.yield() catch {};
     }
     try testing.expectEqual(true, controller.did_last_save_or_load_succeed);
-    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/recording.irony") catch {
+    defer std.Io.Dir.cwd().deleteFile(testing.io, "recording.irony") catch {
         @panic("Failed to cleanup test file.");
     };
 
@@ -1796,18 +1796,18 @@ test "should pause at the last frame of the recording after recording load compl
     controller.setCurrentFrameIndex(2);
     controller.play();
 
-    controller.save(testing.io, "./test_assets/recording.irony");
+    controller.save(testing.io, "recording.irony");
     while (controller.mode == .save) {
         controller.update(Controller.frame_time, {}, Callback.call);
         std.Thread.yield() catch {};
     }
     try testing.expectEqual(true, controller.did_last_save_or_load_succeed);
-    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/recording.irony") catch {
+    defer std.Io.Dir.cwd().deleteFile(testing.io, "recording.irony") catch {
         @panic("Failed to cleanup test file.");
     };
 
     controller.clear();
-    controller.load(testing.io, "./test_assets/recording.irony");
+    controller.load(testing.io, "recording.irony");
     while (controller.mode == .load) {
         controller.update(Controller.frame_time, {}, Callback.call);
         std.Thread.yield() catch {};
@@ -1845,18 +1845,18 @@ test "should keep track of file path and unsaved changes correctly while recordi
     try testing.expectEqual(null, controller.getFilePath());
     try testing.expectEqual(true, controller.contains_unsaved_changes);
 
-    controller.save(testing.io, "./test_assets/recording.irony");
+    controller.save(testing.io, "recording.irony");
     while (controller.mode == .save) {
         controller.update(Controller.frame_time, {}, Callback.call);
         std.Thread.yield() catch {};
     }
     try testing.expectEqual(true, controller.did_last_save_or_load_succeed);
-    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/recording.irony") catch {
+    defer std.Io.Dir.cwd().deleteFile(testing.io, "recording.irony") catch {
         @panic("Failed to cleanup test file.");
     };
 
     try testing.expect(controller.getFilePath() != null);
-    try testing.expectEqualStrings("./test_assets/recording.irony", controller.getFilePath().?);
+    try testing.expectEqualStrings("recording.irony", controller.getFilePath().?);
     try testing.expectEqual(false, controller.contains_unsaved_changes);
 
     controller.clear();
@@ -1864,7 +1864,7 @@ test "should keep track of file path and unsaved changes correctly while recordi
     try testing.expectEqual(null, controller.getFilePath());
     try testing.expectEqual(false, controller.contains_unsaved_changes);
 
-    controller.load(testing.io, "./test_assets/recording.irony");
+    controller.load(testing.io, "recording.irony");
     while (controller.mode == .load) {
         controller.update(Controller.frame_time, {}, Callback.call);
         std.Thread.yield() catch {};
@@ -1872,6 +1872,6 @@ test "should keep track of file path and unsaved changes correctly while recordi
     try testing.expectEqual(true, controller.did_last_save_or_load_succeed);
 
     try testing.expect(controller.getFilePath() != null);
-    try testing.expectEqualStrings("./test_assets/recording.irony", controller.getFilePath().?);
+    try testing.expectEqualStrings("recording.irony", controller.getFilePath().?);
     try testing.expectEqual(false, controller.contains_unsaved_changes);
 }

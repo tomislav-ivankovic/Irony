@@ -44,17 +44,27 @@ pub const Mode = enum {
 var mode = Mode.normal;
 
 pub fn main(init: std.process.Init) !void {
-    const io = init.io;
-    console_logger.setIo(io);
+    console_logger.setIo(init.io);
 
     std.log.info("Application started up.", .{});
 
     std.log.debug("Finding base directory...", .{});
-    const base_dir = findBaseDir();
-    std.log.info("Base directory set to: {s}", .{base_dir.get()});
+    const virtual_cwd_io = if (sdk.io.VirtualCwdIo.initFromMainModule(init.io)) |vio| block: {
+        std.log.info("Base directory set to: {s}", .{vio.path.asSlice()});
+        break :block vio;
+    } else |err| block: {
+        sdk.misc.error_context.append("Failed to find base directory. Falling back to working directory.", .{});
+        sdk.misc.error_context.logError(err);
+        break :block null;
+    };
+    defer if (virtual_cwd_io) |*vio| {
+        vio.deinit();
+    };
+
+    const io = if (virtual_cwd_io) |*vio| vio.io() else init.io;
 
     std.log.debug("Starting file logging...", .{});
-    if (startFileLogging(io, &base_dir)) {
+    if (file_logger.start(io, log_file_name)) {
         std.log.info("File logging started.", .{});
     } else |err| {
         sdk.misc.error_context.append("Failed to start file logging.", .{});
@@ -94,7 +104,7 @@ pub fn main(init: std.process.Init) !void {
         access_rights,
         io,
         interval_duration,
-        &base_dir,
+        io,
         onProcessOpen,
         onProcessClose,
     );
@@ -128,47 +138,19 @@ fn getMode(args: *const std.process.Args) !Mode {
     }
 }
 
-fn findBaseDir() sdk.misc.BaseDir {
-    const main_module = sdk.os.Module.getMain() catch |err| {
-        sdk.misc.error_context.append("Failed to get process main module.", .{});
-        sdk.misc.error_context.append("Failed find base directory.", .{});
-        sdk.misc.error_context.logError(err);
-        std.log.info("Defaulting base directory to working directory.", .{});
-        return sdk.misc.BaseDir.working_dir;
-    };
-    return sdk.misc.BaseDir.fromModule(&main_module) catch |err| {
-        sdk.misc.error_context.append("Failed to find base directory from main module.", .{});
-        sdk.misc.error_context.append("Failed find base directory.", .{});
-        sdk.misc.error_context.logError(err);
-        std.log.info("Defaulting base directory to working directory.", .{});
-        return sdk.misc.BaseDir.working_dir;
-    };
-}
-
-fn startFileLogging(io: std.Io, base_dir: *const sdk.misc.BaseDir) !void {
-    var buffer: [sdk.os.max_file_path_length]u8 = undefined;
-    const file_path = base_dir.getPath(&buffer, log_file_name) catch |err| {
-        sdk.misc.error_context.append("Failed to find log file path.", .{});
-        return err;
-    };
-    file_logger.start(io, file_path) catch |err| {
-        sdk.misc.error_context.append("Failed to start file logging with file path: {s}", .{file_path});
-        return err;
-    };
-}
-
 var injected_modules: [targets.len]?injector.InjectedModule = @splat(null);
 
-pub fn onProcessOpen(base_dir: *const sdk.misc.BaseDir, index: usize, process: *const sdk.os.Process) bool {
+pub fn onProcessOpen(io: std.Io, index: usize, process: *const sdk.os.Process) bool {
     const module_name = targets[index].module_name;
 
     std.log.debug("Getting full path of \"{s}\"...", .{module_name});
     var buffer: [sdk.os.max_file_path_length]u8 = undefined;
-    const full_path = base_dir.getPath(&buffer, module_name) catch |err| {
+    const full_path_len = std.Io.Dir.cwd().realPathFile(io, module_name, &buffer) catch |err| {
         sdk.misc.error_context.append("Failed to get full file path of: {s}", .{module_name});
         sdk.misc.error_context.logError(err);
         return false;
     };
+    const full_path = buffer[0..full_path_len];
     std.log.debug("Full path found: {s}", .{full_path});
 
     std.log.info("Injecting module \"{s}\"...", .{module_name});
@@ -198,8 +180,8 @@ pub fn onProcessOpen(base_dir: *const sdk.misc.BaseDir, index: usize, process: *
     return true;
 }
 
-pub fn onProcessClose(base_dir: *const sdk.misc.BaseDir, index: usize) void {
-    _ = base_dir;
+pub fn onProcessClose(io: std.Io, index: usize) void {
+    _ = io;
     const module_name = targets[index].module_name;
     const module = if (injected_modules[index]) |*m| m else {
         std.log.info("Nothing to eject.", .{});

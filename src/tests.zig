@@ -20,6 +20,7 @@ test {
 
     _ = @import("sdk/io/irony.zig");
     _ = @import("sdk/io/json.zig");
+    _ = @import("sdk/io/virtual_cwd_io.zig");
     _ = @import("sdk/io/win_io.zig");
     _ = @import("sdk/io/zstd.zig");
 
@@ -48,7 +49,6 @@ test {
     _ = @import("sdk/memory/range.zig");
     _ = @import("sdk/memory/struct_with_offsets.zig");
 
-    _ = @import("sdk/misc/base_dir.zig");
     _ = @import("sdk/misc/bounded_array.zig");
     _ = @import("sdk/misc/circular_buffer.zig");
     _ = @import("sdk/misc/error_context.zig");

@@ -3,7 +3,9 @@ zig-pkg
 zig-out
 
 # Temporaty files while running tests
-test_assets/tmp*
+test_assets/*
+!test_assets/wait.exe
+!test_assets/test.dll
 
 # Editor directories and files
 .vscode/*

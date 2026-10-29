@@ -148,11 +148,11 @@ test "loadRecording should load the same frames that the saveRecording saved whe
         .{ .frames_since_round_start = 2 },
         .{ .frames_since_round_start = 3 },
     };
-    try saveRecording(testing.allocator, testing.io, "./test_assets/recording.irony", &frames);
-    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/recording.irony") catch {
+    try saveRecording(testing.allocator, testing.io, "recording.irony", &frames);
+    defer std.Io.Dir.cwd().deleteFile(testing.io, "recording.irony") catch {
         @panic("Failed to cleanup test file.");
     };
-    var recording = try loadRecording(testing.allocator, testing.io, "./test_assets/recording.irony");
+    var recording = try loadRecording(testing.allocator, testing.io, "recording.irony");
     defer recording.deinit(testing.allocator);
     try testing.expectEqualSlices(model.Frame, &frames, recording.items);
 }
@@ -163,11 +163,11 @@ test "loadRecording should load the same frames that the saveRecording saved whe
         .{ .frames_since_round_start = 2 },
         .{ .frames_since_round_start = 3 },
     };
-    try saveRecording(testing.allocator, testing.io, "./test_assets/recording.json", &frames);
-    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/recording.json") catch {
+    try saveRecording(testing.allocator, testing.io, "recording.json", &frames);
+    defer std.Io.Dir.cwd().deleteFile(testing.io, "recording.json") catch {
         @panic("Failed to cleanup test file.");
     };
-    var recording = try loadRecording(testing.allocator, testing.io, "./test_assets/recording.json");
+    var recording = try loadRecording(testing.allocator, testing.io, "recording.json");
     defer recording.deinit(testing.allocator);
     try testing.expectEqualSlices(model.Frame, &frames, recording.items);
 }
@@ -178,30 +178,30 @@ test "loadRecording should load the same frames that the saveRecording saved whe
         .{ .frames_since_round_start = 2 },
         .{ .frames_since_round_start = 3 },
     };
-    try saveRecording(testing.allocator, testing.io, "./test_assets/recording.json.zstd", &frames);
-    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/recording.json.zstd") catch {
+    try saveRecording(testing.allocator, testing.io, "recording.json.zstd", &frames);
+    defer std.Io.Dir.cwd().deleteFile(testing.io, "recording.json.zstd") catch {
         @panic("Failed to cleanup test file.");
     };
-    var recording = try loadRecording(testing.allocator, testing.io, "./test_assets/recording.json.zstd");
+    var recording = try loadRecording(testing.allocator, testing.io, "recording.json.zstd");
     defer recording.deinit(testing.allocator);
     try testing.expectEqualSlices(model.Frame, &frames, recording.items);
 }
 
 test "saveRecording should overwrite the file if it already exists" {
-    try saveRecording(testing.allocator, testing.io, "./test_assets/recording.irony", &.{
+    try saveRecording(testing.allocator, testing.io, "recording.irony", &.{
         .{ .frames_since_round_start = 1 },
         .{ .frames_since_round_start = 2 },
         .{ .frames_since_round_start = 3 },
     });
-    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/recording.irony") catch {
+    defer std.Io.Dir.cwd().deleteFile(testing.io, "recording.irony") catch {
         @panic("Failed to cleanup test file.");
     };
-    try saveRecording(testing.allocator, testing.io, "./test_assets/recording.irony", &.{
+    try saveRecording(testing.allocator, testing.io, "recording.irony", &.{
         .{ .frames_since_round_start = 4 },
         .{ .frames_since_round_start = 5 },
         .{ .frames_since_round_start = 6 },
     });
-    var recording = try loadRecording(testing.allocator, testing.io, "./test_assets/recording.irony");
+    var recording = try loadRecording(testing.allocator, testing.io, "recording.irony");
     defer recording.deinit(testing.allocator);
     try testing.expectEqualSlices(model.Frame, &.{
         .{ .frames_since_round_start = 4 },

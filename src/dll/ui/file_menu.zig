@@ -155,15 +155,14 @@ pub fn FileMenu(comptime config: FileMenuConfig) type {
         pub fn draw(
             self: *Self,
             io: std.Io,
-            base_dir: *const sdk.misc.BaseDir,
             file_dialog_context: *imgui.ImGuiFileDialog,
             controller: *config.Controller,
             is_ui_open: *bool,
         ) void {
             self.menu_bar.draw(self.action == .idle, controller.getTotalFrames() == 0);
             self.unsaved_dialog.draw(self.progress == .unsaved_dialog);
-            self.save_dialog.draw(file_dialog_context, io, base_dir, controller.getFilePath(), self.progress == .save_dialog);
-            self.open_dialog.draw(file_dialog_context, io, base_dir, controller.getFilePath(), self.progress == .open_dialog);
+            self.save_dialog.draw(file_dialog_context, io, controller.getFilePath(), self.progress == .save_dialog);
+            self.open_dialog.draw(file_dialog_context, io, controller.getFilePath(), self.progress == .open_dialog);
 
             if (self.menu_bar.action == .close_ui and is_ui_open.*) {
                 is_ui_open.* = false;
@@ -348,7 +347,6 @@ const FileDialog = struct {
         self: *Self,
         context: *imgui.ImGuiFileDialog,
         io: std.Io,
-        base_dir: *const sdk.misc.BaseDir,
         current_path: ?[:0]const u8,
         is_open: bool,
     ) void {
@@ -374,7 +372,7 @@ const FileDialog = struct {
                                 .{path},
                             );
                             sdk.misc.error_context.logError(err);
-                            break :block base_dir.get();
+                            break :block getBaseDirectory(&buffer_2, io);
                         };
                     } else {
                         config.fileName = getTimestampFileName(&buffer_1, io) catch |err| block: {
@@ -382,20 +380,20 @@ const FileDialog = struct {
                             sdk.misc.error_context.logError(err);
                             break :block "untitled";
                         };
-                        config.path = createAndGetRecordingsDirectory(&buffer_2, io, base_dir) catch |err| block: {
+                        config.path = createAndGetRecordingsDirectory(&buffer_2, io) catch |err_1| block: {
                             sdk.misc.error_context.append("Failed to create \"{s}\" directory.", .{directory_name});
-                            sdk.misc.error_context.logError(err);
-                            break :block base_dir.get();
+                            sdk.misc.error_context.logError(err_1);
+                            break :block getBaseDirectory(&buffer_2, io);
                         };
                     }
                     config.flags |= imgui.ImGuiFileDialogFlags_ConfirmOverwrite;
                     config.flags |= imgui.ImGuiFileDialogFlags_CaseInsensitiveExtentionFiltering;
                 },
                 .open => {
-                    config.path = createAndGetRecordingsDirectory(&buffer_1, io, base_dir) catch |err| block: {
+                    config.path = createAndGetRecordingsDirectory(&buffer_1, io) catch |err| block: {
                         sdk.misc.error_context.append("Failed to create \"{s}\" directory.", .{directory_name});
                         sdk.misc.error_context.logError(err);
-                        break :block base_dir.get();
+                        break :block getBaseDirectory(&buffer_2, io);
                     };
                 },
             }
@@ -456,20 +454,27 @@ const FileDialog = struct {
         self.action = .proceed;
     }
 
-    fn createAndGetRecordingsDirectory(
-        buffer: *[sdk.os.max_file_path_length]u8,
-        io: std.Io,
-        base_dir: *const sdk.misc.BaseDir,
-    ) ![:0]const u8 {
-        const path = base_dir.getPath(buffer, directory_name) catch |err| {
+    fn getBaseDirectory(buffer: *[sdk.os.max_file_path_length]u8, io: std.Io) [:0]const u8 {
+        const len = std.Io.Dir.cwd().realPath(io, buffer[0..(buffer.len - 1)]) catch |err| {
+            sdk.misc.error_context.append("Failed to construct base directory path.", .{});
+            sdk.misc.error_context.logError(err);
+            return ".";
+        };
+        buffer[len] = 0;
+        return buffer[0..len :0];
+    }
+
+    fn createAndGetRecordingsDirectory(buffer: *[sdk.os.max_file_path_length]u8, io: std.Io) ![:0]const u8 {
+        std.Io.Dir.cwd().createDirPath(io, directory_name) catch |err| {
+            sdk.misc.error_context.append("Failed to make directory: {s}", .{directory_name});
+            return err;
+        };
+        const len = std.Io.Dir.cwd().realPathFile(io, directory_name, buffer[0..(buffer.len - 1)]) catch |err| {
             sdk.misc.error_context.append("Failed to construct \"{s}\" directory path.", .{directory_name});
             return err;
         };
-        std.Io.Dir.cwd().createDirPath(io, path) catch |err| {
-            sdk.misc.error_context.append("Failed to make directory: {s}", .{path});
-            return err;
-        };
-        return path;
+        buffer[len] = 0;
+        return buffer[0..len :0];
     }
 
     fn getTimestampFileName(buffer: []u8, io: std.Io) ![:0]const u8 {
@@ -519,7 +524,6 @@ const FileDialog = struct {
 };
 
 const testing = std.testing;
-const testing_base_dir = sdk.misc.BaseDir.fromStr("test_assets") catch unreachable;
 
 const MockController = struct {
     mode: Mode = .live,
@@ -595,7 +599,7 @@ test "should call clear on controller when new is clicked without unsaved change
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(testing.io, &controller);
         }
 
@@ -626,7 +630,7 @@ test "new should be disabled when total frames is zero" {
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(testing.io, &controller);
         }
 
@@ -662,7 +666,7 @@ test "should show correctly working unsaved changes dialog when new is clicked w
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(testing.io, &controller);
         }
 
@@ -745,7 +749,7 @@ test "should call load on controller when open is clicked without unsaved change
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(testing.io, &controller);
         }
 
@@ -792,7 +796,7 @@ test "should show correctly working unsaved changes dialog when open is clicked 
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(testing.io, &controller);
         }
 
@@ -921,7 +925,7 @@ test "should call save on controller when save is clicked and file is selected" 
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(testing.io, &controller);
         }
 
@@ -973,7 +977,7 @@ test "save should be disabled when total frames is zero" {
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(testing.io, &controller);
         }
 
@@ -1006,7 +1010,7 @@ test "should call save on controller when save as is clicked and file is selecte
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(testing.io, &controller);
         }
 
@@ -1063,7 +1067,7 @@ test "save as should be disabled when total frames is zero" {
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(testing.io, &controller);
         }
 
@@ -1096,7 +1100,7 @@ test "should set is_ui_open to false when close ui button is clicked" {
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(testing.io, &controller);
         }
 
@@ -1133,7 +1137,7 @@ test "should call self shutdown when exit is clicked without unsaved changes" {
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(testing.io, &controller);
         }
 
@@ -1170,7 +1174,7 @@ test "should show correctly working unsaved changes dialog when exit is clicked 
             defer imgui.igEnd();
             if (!imgui.igBeginMenuBar()) return;
             defer imgui.igEndMenuBar();
-            file_menu.draw(testing.io, &testing_base_dir, file_dialog_context, &controller, &is_ui_open);
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
             file_menu.update(testing.io, &controller);
         }
 

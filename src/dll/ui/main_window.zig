@@ -46,7 +46,6 @@ pub const MainWindow = struct {
         self: *Self,
         ui_instance: *ui.Ui,
         io: std.Io,
-        base_dir: *const sdk.misc.BaseDir,
         file_dialog_context: *imgui.ImGuiFileDialog,
         controller: *core.Controller,
         settings: *model.Settings,
@@ -86,7 +85,6 @@ pub const MainWindow = struct {
         self.drawMenuBar(
             ui_instance,
             io,
-            base_dir,
             file_dialog_context,
             controller,
             &settings.general.ui,
@@ -150,7 +148,6 @@ pub const MainWindow = struct {
         self: *Self,
         ui_instance: *ui.Ui,
         io: std.Io,
-        base_dir: *const sdk.misc.BaseDir,
         file_dialog_context: *imgui.ImGuiFileDialog,
         controller: *core.Controller,
         settings: *const model.GeneralSettings.Ui,
@@ -162,7 +159,7 @@ pub const MainWindow = struct {
         }
         defer imgui.igEndMenuBar();
 
-        self.file_menu.draw(io, base_dir, file_dialog_context, controller, &ui_instance.is_open);
+        self.file_menu.draw(io, file_dialog_context, controller, &ui_instance.is_open);
         self.view.camera.drawMenuBar();
         drawWindowMenu(ui_instance);
         drawHelpMenu(ui_instance);

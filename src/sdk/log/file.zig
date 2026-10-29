@@ -96,7 +96,7 @@ pub fn FileLogger(comptime config: FileLoggerConfig) type {
 const testing = std.testing;
 
 test "should format output correctly" {
-    const file_path = "./test_assets/tmp1.log";
+    const file_path = "tmp1.log";
     var io = testing.io;
     var vtable = io.vtable.*;
     vtable.now = struct {
@@ -132,7 +132,7 @@ test "should format output correctly" {
 }
 
 test "should filter based on log level correctly" {
-    const file_path = "./test_assets/tmp2.log";
+    const file_path = "tmp2.log";
     var io = testing.io;
     var vtable = io.vtable.*;
     vtable.now = struct {
@@ -166,7 +166,7 @@ test "should filter based on log level correctly" {
 }
 
 test "should append logs to the end of the file" {
-    const file_path = "./test_assets/tmp3.log";
+    const file_path = "tmp3.log";
     var io = testing.io;
     var vtable = io.vtable.*;
     vtable.now = struct {

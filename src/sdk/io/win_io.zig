@@ -15,15 +15,15 @@ const w32 = @import("win32").everything;
 /// Thread-safe. Used for allocating `Io.Future` and `Io.Group` closures, for
 /// spawning child processes and for the memory mapping fallback.
 allocator: Allocator,
-mutex: Io.Mutex = .init,
-cond: Io.Condition = .init,
+mutex: std.Io.Mutex = .init,
+cond: std.Io.Condition = .init,
 run_queue: std.SinglyLinkedList = .{},
 join_requested: bool = false,
 stack_size: usize,
 /// All threads are spawned detached; this is how we wait until they all exit.
 wait_group: WaitGroup = .init,
-async_limit: Io.Limit,
-concurrent_limit: Io.Limit = .unlimited,
+async_limit: std.Io.Limit,
+concurrent_limit: std.Io.Limit = .unlimited,
 /// Number of threads that are unavailable to take tasks. To calculate
 /// available count, subtract this from either `async_limit` or
 /// `concurrent_limit`.
@@ -44,15 +44,15 @@ stderr_writer: File.Writer = .{
     .file = undefined,
     .mode = .streaming,
 },
-stderr_mode: Io.Terminal.Mode = .no_color,
+stderr_mode: std.Io.Terminal.Mode = .no_color,
 stderr_writer_initialized: bool = false,
-stderr_mutex: Io.Mutex = .init,
+stderr_mutex: std.Io.Mutex = .init,
 /// Thread ID of the thread holding `stderr_mutex`, or 0.
 stderr_mutex_locker: u32 = 0,
 stderr_mutex_lock_count: usize = 0,
 
 /// Serializes spawning child processes, since handle inheritance is process-wide.
-process_spawn_mutex: Io.Mutex = .init,
+process_spawn_mutex: std.Io.Mutex = .init,
 /// The NUL device, opened when first needed. Protected by `mutex`.
 null_handle: ?w32.HANDLE = null,
 
@@ -60,8 +60,8 @@ null_handle: ?w32.HANDLE = null,
 wsa_started: std.atomic.Value(bool) = .init(false),
 dl: Dl = .{},
 
-pub const InitOptions = Io.Threaded.InitOptions;
-const Csprng = Io.Threaded.Csprng;
+pub const InitOptions = std.Io.Threaded.InitOptions;
+const Csprng = std.Io.Threaded.Csprng;
 
 pub fn init(
     /// Must be threadsafe. Only used for `async`, `concurrent`, `groupAsync`,
@@ -116,7 +116,7 @@ var global_single_threaded_instance: WinIo = .init_single_threaded;
 /// `std.Io.Threaded.global_single_threaded`, it is never deinitialized.
 pub const global_single_threaded: *WinIo = &global_single_threaded_instance;
 
-pub fn setAsyncLimit(w: *WinIo, new_limit: Io.Limit) void {
+pub fn setAsyncLimit(w: *WinIo, new_limit: std.Io.Limit) void {
     mutexLockUncancelable(&w.mutex);
     defer mutexUnlock(&w.mutex);
     w.async_limit = new_limit;
@@ -166,7 +166,7 @@ fn fromUserdata(userdata: ?*anyopaque) *WinIo {
     return @ptrCast(@alignCast(userdata));
 }
 
-const vtable: Io.VTable = .{
+const vtable: std.Io.VTable = .{
     .crashHandler = crashHandler,
 
     .async = async,
@@ -327,7 +327,7 @@ const WAIT_TIMEOUT: u32 = 0x102;
 const FILE_TYPE_DISK: u32 = 1;
 
 /// Call when a Win32 function failed with an error code that is not handled.
-fn unexpectedError(err: w32.WIN32_ERROR) Io.UnexpectedError {
+fn unexpectedError(err: w32.WIN32_ERROR) std.Io.UnexpectedError {
     @branchHint(.cold);
     if (std.options.unexpected_error_tracing) {
         std.debug.print("error.Unexpected: GetLastError({d}): {s}\n", .{
@@ -341,7 +341,7 @@ fn unexpectedError(err: w32.WIN32_ERROR) Io.UnexpectedError {
 
 /// Call when a Win32 function failed with an error code that indicates a
 /// programmer mistake.
-fn errorBug(err: w32.WIN32_ERROR) Io.UnexpectedError {
+fn errorBug(err: w32.WIN32_ERROR) std.Io.UnexpectedError {
     @branchHint(.cold);
     switch (builtin.mode) {
         .debug => std.debug.panic("programmer bug caused syscall error: {d} ({s})", .{
@@ -730,7 +730,7 @@ const Thread = struct {
 
     status: std.atomic.Value(Status),
 
-    cancel_protection: Io.CancelProtection,
+    cancel_protection: std.Io.CancelProtection,
     /// While blocked in a cancelable `WaitOnAddress`, the address being waited
     /// on, so that a canceler can wake this thread with `WakeByAddressAll`.
     wait_address: std.atomic.Value(?*const u32),
@@ -789,7 +789,7 @@ const Thread = struct {
 
     /// The thread is neither in a syscall nor entering one, but we want to check for cancelation
     /// anyway. If there is a pending cancel request, acknowledge it and return `error.Canceled`.
-    fn checkCancel() Io.Cancelable!void {
+    fn checkCancel() std.Io.Cancelable!void {
         const thread = Thread.current orelse return;
         switch (thread.cancel_protection) {
             .blocked => return,
@@ -817,11 +817,11 @@ const Thread = struct {
         return Thread.futexWaitInner(ptr, expect, true, timeout_ns) catch unreachable;
     }
 
-    fn futexWait(ptr: *const u32, expect: u32, timeout_ns: ?u64) Io.Cancelable!void {
+    fn futexWait(ptr: *const u32, expect: u32, timeout_ns: ?u64) std.Io.Cancelable!void {
         return Thread.futexWaitInner(ptr, expect, false, timeout_ns);
     }
 
-    fn futexWaitInner(ptr: *const u32, expect: u32, uncancelable: bool, timeout_ns: ?u64) Io.Cancelable!void {
+    fn futexWaitInner(ptr: *const u32, expect: u32, uncancelable: bool, timeout_ns: ?u64) std.Io.Cancelable!void {
         @branchHint(.cold);
 
         if (builtin.single_threaded) unreachable; // nobody would ever wake us
@@ -969,7 +969,7 @@ const Syscall = struct {
     /// Marks entry to a syscall region. This should be tightly scoped around the actual syscall
     /// to minimize races. The syscall must be marked as "finished" by `checkCancel`, `finish`,
     /// or one of the wrappers of `finish`.
-    fn start() Io.Cancelable!Syscall {
+    fn start() std.Io.Cancelable!Syscall {
         const thread = Thread.current orelse return .{ .thread = null };
         switch (thread.cancel_protection) {
             .blocked => return .{ .thread = null },
@@ -993,7 +993,7 @@ const Syscall = struct {
     /// interrupted through a mechanism which may indicate cancelation, or may be spurious. If
     /// the syscall was canceled, it is finished and `error.Canceled` is returned. Otherwise,
     /// the syscall is not marked finished, and the caller should retry.
-    fn checkCancel(s: Syscall) Io.Cancelable!void {
+    fn checkCancel(s: Syscall) std.Io.Cancelable!void {
         const thread = s.thread orelse return;
         switch (thread.status.fetchOr(.{
             .cancelation = @fromBackingInt(@intCast(0b010)),
@@ -1032,13 +1032,13 @@ const Syscall = struct {
         return err;
     }
     /// Convenience wrapper which calls `finish`, then calls `unexpectedError`.
-    fn unexpectedError(s: Syscall, err: w32.WIN32_ERROR) Io.UnexpectedError {
+    fn unexpectedError(s: Syscall, err: w32.WIN32_ERROR) std.Io.UnexpectedError {
         @branchHint(.cold);
         s.finish();
         return WinIo.unexpectedError(err);
     }
     /// Convenience wrapper which calls `finish`, then calls `errorBug`.
-    fn errorBug(s: Syscall, err: w32.WIN32_ERROR) Io.UnexpectedError {
+    fn errorBug(s: Syscall, err: w32.WIN32_ERROR) std.Io.UnexpectedError {
         @branchHint(.cold);
         s.finish();
         return WinIo.errorBug(err);
@@ -1050,7 +1050,7 @@ const Syscall = struct {
 const AlertableSyscall = struct {
     thread: ?*Thread,
 
-    fn start() Io.Cancelable!AlertableSyscall {
+    fn start() std.Io.Cancelable!AlertableSyscall {
         const thread = Thread.current orelse return .{ .thread = null };
         switch (thread.cancel_protection) {
             .blocked => return .{ .thread = null },
@@ -1076,7 +1076,7 @@ const AlertableSyscall = struct {
         }
     }
 
-    fn checkCancel(s: AlertableSyscall) Io.Cancelable!void {
+    fn checkCancel(s: AlertableSyscall) std.Io.Cancelable!void {
         const thread = s.thread orelse return;
         const old_status = thread.status.fetchOr(.{
             .cancelation = @fromBackingInt(@intCast(0b010)),
@@ -1260,7 +1260,7 @@ fn concurrent(
     context: []const u8,
     context_alignment: Alignment,
     start: *const fn (context: *const anyopaque, result: *anyopaque) void,
-) Io.ConcurrentError!*Io.AnyFuture {
+) std.Io.ConcurrentError!*Io.AnyFuture {
     if (builtin.single_threaded) return error.ConcurrencyUnavailable;
 
     const w = fromUserdata(userdata);
@@ -1357,7 +1357,7 @@ fn groupConcurrent(
     context: []const u8,
     context_alignment: Alignment,
     start: *const fn (context: *const anyopaque) void,
-) Io.ConcurrentError!void {
+) std.Io.ConcurrentError!void {
     if (builtin.single_threaded) return error.ConcurrencyUnavailable;
 
     const w = fromUserdata(userdata);
@@ -1401,7 +1401,7 @@ fn groupConcurrent(
     condSignal(&w.cond);
 }
 
-fn groupAwait(userdata: ?*anyopaque, type_erased: *Io.Group, initial_token: *anyopaque) Io.Cancelable!void {
+fn groupAwait(userdata: ?*anyopaque, type_erased: *Io.Group, initial_token: *anyopaque) std.Io.Cancelable!void {
     _ = initial_token; // we need to load `token` *after* the group finishes
     if (builtin.single_threaded) unreachable; // nothing to await
     const w = fromUserdata(userdata);
@@ -1512,7 +1512,7 @@ fn recancelInner() void {
     }
 }
 
-fn swapCancelProtection(userdata: ?*anyopaque, new: Io.CancelProtection) Io.CancelProtection {
+fn swapCancelProtection(userdata: ?*anyopaque, new: std.Io.CancelProtection) std.Io.CancelProtection {
     _ = userdata;
     const thread = Thread.current orelse return .unblocked;
     const old = thread.cancel_protection;
@@ -1520,7 +1520,7 @@ fn swapCancelProtection(userdata: ?*anyopaque, new: Io.CancelProtection) Io.Canc
     return old;
 }
 
-fn checkCancel(userdata: ?*anyopaque) Io.Cancelable!void {
+fn checkCancel(userdata: ?*anyopaque) std.Io.Cancelable!void {
     _ = userdata;
     return Thread.checkCancel();
 }
@@ -1623,7 +1623,7 @@ fn cancel(
     future.destroy(w.allocator);
 }
 
-fn futexWait(userdata: ?*anyopaque, ptr: *const u32, expected: u32, timeout: Io.Timeout) Io.Cancelable!void {
+fn futexWait(userdata: ?*anyopaque, ptr: *const u32, expected: u32, timeout: std.Io.Timeout) std.Io.Cancelable!void {
     if (builtin.single_threaded) {
         assert(timeout != .none); // Deadlock.
         return;
@@ -1650,7 +1650,7 @@ fn futexWake(userdata: ?*anyopaque, ptr: *const u32, max_waiters: u32) void {
 
 const WaitGroup = struct {
     state: std.atomic.Value(usize),
-    event: Io.Event,
+    event: std.Io.Event,
 
     const init: WaitGroup = .{ .state = .{ .raw = 0 }, .event = .unset };
 
@@ -1772,7 +1772,7 @@ fn condWait(cond: *Io.Condition, mutex: *Io.Mutex) void {
 }
 
 /// Same as `Io.Mutex.lock` but avoids the VTable.
-fn mutexLock(m: *Io.Mutex) Io.Cancelable!void {
+fn mutexLock(m: *Io.Mutex) std.Io.Cancelable!void {
     const initial_state = m.state.cmpxchgStrong(
         .unlocked,
         .locked_once,
@@ -1845,7 +1845,7 @@ fn queryPerformanceCounter() u64 {
     return @bitCast(qpc.QuadPart);
 }
 
-fn nowWindows(clock: Io.Clock) Io.Timestamp {
+fn nowWindows(clock: std.Io.Clock) std.Io.Timestamp {
     switch (clock) {
         .real => {
             // 100ns granularity, counted from the Windows epoch (1601-01-01).
@@ -1888,12 +1888,12 @@ fn nowWindows(clock: Io.Clock) Io.Timestamp {
     }
 }
 
-fn now(userdata: ?*anyopaque, clock: Io.Clock) Io.Timestamp {
+fn now(userdata: ?*anyopaque, clock: std.Io.Clock) std.Io.Timestamp {
     _ = userdata;
     return nowWindows(clock);
 }
 
-fn clockResolution(userdata: ?*anyopaque, clock: Io.Clock) Io.Clock.ResolutionError!Io.Duration {
+fn clockResolution(userdata: ?*anyopaque, clock: std.Io.Clock) std.Io.Clock.ResolutionError!Io.Duration {
     _ = userdata;
     return switch (clock) {
         .awake, .boot, .real => {
@@ -1913,18 +1913,18 @@ fn clockResolution(userdata: ?*anyopaque, clock: Io.Clock) Io.Clock.ResolutionEr
 
 /// Returns the milliseconds remaining until `deadline`, rounded up, or `null`
 /// if the deadline has passed.
-fn millisecondsUntil(deadline: Io.Clock.Timestamp) ?u32 {
+fn millisecondsUntil(deadline: std.Io.Clock.Timestamp) ?u32 {
     const remaining_ns = nowWindows(deadline.clock).durationTo(deadline.raw).nanoseconds;
     if (remaining_ns <= 0) return null;
     return nanosecondsToMilliseconds(std.math.lossyCast(u64, remaining_ns));
 }
 
-fn sleep(userdata: ?*anyopaque, timeout: Io.Timeout) Io.Cancelable!void {
+fn sleep(userdata: ?*anyopaque, timeout: std.Io.Timeout) std.Io.Cancelable!void {
     _ = userdata;
     return sleepInternal(timeout);
 }
 
-fn sleepInternal(timeout: Io.Timeout) Io.Cancelable!void {
+fn sleepInternal(timeout: std.Io.Timeout) std.Io.Cancelable!void {
     const deadline: ?Io.Clock.Timestamp = switch (timeout) {
         .none => null,
         .duration => |d| switch (d.clock) {
@@ -1997,7 +1997,7 @@ fn fallbackSeed(aslr_addr: ?*anyopaque, seed: *[Csprng.seed_len]u8) void {
     std.mem.writeInt(u64, seed[0..@sizeOf(u64)], queryPerformanceCounter(), .native);
 }
 
-fn randomSecure(userdata: ?*anyopaque, buffer: []u8) Io.RandomSecureError!void {
+fn randomSecure(userdata: ?*anyopaque, buffer: []u8) std.Io.RandomSecureError!void {
     _ = userdata;
     if (buffer.len == 0) return;
     var i: usize = 0;
@@ -2051,7 +2051,7 @@ const OverlappedOperation = struct {
 
     /// Waits for the completion routine to run. Once the operation is issued,
     /// this must be called before `op` goes out of scope.
-    fn wait(op: *OverlappedOperation, handle: w32.HANDLE) Io.Cancelable!void {
+    fn wait(op: *OverlappedOperation, handle: w32.HANDLE) std.Io.Cancelable!void {
         while (!op.done) {
             const alertable_syscall = AlertableSyscall.start() catch |err| switch (err) {
                 error.Canceled => |e| {
@@ -2070,7 +2070,7 @@ const ReadResult = struct { w32.WIN32_ERROR, u32 };
 
 /// Reads from `file` into `buffer`, at `offset` if not null. Returns the error
 /// code (`.NO_ERROR` on success) and the number of bytes read.
-fn readFileWindows(file: Io.File, buffer: []u8, offset: ?u64) Io.Cancelable!ReadResult {
+fn readFileWindows(file: std.Io.File, buffer: []u8, offset: ?u64) std.Io.Cancelable!ReadResult {
     const len = std.math.lossyCast(u32, buffer.len);
     if (file.flags.nonblocking) {
         var op: OverlappedOperation = .init(offset);
@@ -2102,7 +2102,7 @@ fn readFileWindows(file: Io.File, buffer: []u8, offset: ?u64) Io.Cancelable!Read
 
 /// Writes `buffer` to `file`, at `offset` if not null. Returns the error code
 /// (`.NO_ERROR` on success) and the number of bytes written.
-fn writeFileWindows(file: Io.File, buffer: []const u8, offset: ?u64) Io.Cancelable!ReadResult {
+fn writeFileWindows(file: std.Io.File, buffer: []const u8, offset: ?u64) std.Io.Cancelable!ReadResult {
     const len = std.math.lossyCast(u32, buffer.len);
     if (file.flags.nonblocking) {
         var op: OverlappedOperation = .init(offset);
@@ -2165,7 +2165,7 @@ fn writeFileResult(err: w32.WIN32_ERROR, n: u32) !usize {
     }
 }
 
-fn fileReadStreaming(file: Io.File, data: []const []u8) Io.File.ReadStreamingError!usize {
+fn fileReadStreaming(file: std.Io.File, data: []const []u8) std.Io.File.ReadStreamingError!usize {
     var index: usize = 0;
     while (data.len - index != 0 and data[index].len == 0) index += 1;
     if (data.len - index == 0) return 0;
@@ -2173,7 +2173,7 @@ fn fileReadStreaming(file: Io.File, data: []const []u8) Io.File.ReadStreamingErr
     return readFileResult(err, n);
 }
 
-fn fileReadPositional(userdata: ?*anyopaque, file: Io.File, data: []const []u8, offset: u64) Io.File.ReadPositionalError!usize {
+fn fileReadPositional(userdata: ?*anyopaque, file: std.Io.File, data: []const []u8, offset: u64) std.Io.File.ReadPositionalError!usize {
     _ = userdata;
     var index: usize = 0;
     while (index < data.len and data[index].len == 0) index += 1;
@@ -2201,11 +2201,11 @@ fn windowsWriteBuffer(header: []const u8, data: []const []const u8, splat: usize
 }
 
 fn fileWriteStreaming(
-    file: Io.File,
+    file: std.Io.File,
     header: []const u8,
     data: []const []const u8,
     splat: usize,
-) Io.File.Writer.Error!usize {
+) std.Io.File.Writer.Error!usize {
     const buffer = windowsWriteBuffer(header, data, splat);
     if (buffer.len == 0) return 0;
     const err, const n = try writeFileWindows(file, buffer, null);
@@ -2214,12 +2214,12 @@ fn fileWriteStreaming(
 
 fn fileWritePositional(
     userdata: ?*anyopaque,
-    file: Io.File,
+    file: std.Io.File,
     header: []const u8,
     data: []const []const u8,
     splat: usize,
     offset: u64,
-) Io.File.WritePositionalError!usize {
+) std.Io.File.WritePositionalError!usize {
     _ = userdata;
     const buffer = windowsWriteBuffer(header, data, splat);
     if (buffer.len == 0) return 0;
@@ -2229,11 +2229,11 @@ fn fileWritePositional(
 
 fn fileWriteFileStreaming(
     userdata: ?*anyopaque,
-    file: Io.File,
+    file: std.Io.File,
     header: []const u8,
     file_reader: *Io.File.Reader,
-    limit: Io.Limit,
-) Io.File.Writer.WriteFileError!usize {
+    limit: std.Io.Limit,
+) std.Io.File.Writer.WriteFileError!usize {
     _ = userdata;
     const reader_buffered = file_reader.interface.buffered();
     if (reader_buffered.len >= @backingInt(limit)) {
@@ -2257,12 +2257,12 @@ fn fileWriteFileStreaming(
 
 fn fileWriteFilePositional(
     userdata: ?*anyopaque,
-    file: Io.File,
+    file: std.Io.File,
     header: []const u8,
     file_reader: *Io.File.Reader,
-    limit: Io.Limit,
+    limit: std.Io.Limit,
     offset: u64,
-) Io.File.WriteFilePositionalError!usize {
+) std.Io.File.WriteFilePositionalError!usize {
     const reader_buffered = file_reader.interface.buffered();
     if (reader_buffered.len >= @backingInt(limit)) {
         const n = try fileWritePositional(userdata, file, header, &.{limit.slice(reader_buffered)}, 1, offset);
@@ -2283,14 +2283,14 @@ fn fileWriteFilePositional(
     return error.Unimplemented;
 }
 
-fn fileClose(userdata: ?*anyopaque, files: []const Io.File) void {
+fn fileClose(userdata: ?*anyopaque, files: []const std.Io.File) void {
     _ = userdata;
     for (files) |file| _ = w32.CloseHandle(file.handle);
 }
 
 /// Moves the file pointer. Pipes and character devices have no file pointer,
 /// so they are reported as unseekable.
-fn setFilePointer(handle: w32.HANDLE, distance: i64, method: w32.SET_FILE_POINTER_MOVE_METHOD) Io.File.SeekError!void {
+fn setFilePointer(handle: w32.HANDLE, distance: i64, method: w32.SET_FILE_POINTER_MOVE_METHOD) std.Io.File.SeekError!void {
     const syscall: Syscall = try .start();
     if (w32.GetFileType(handle) != FILE_TYPE_DISK) return syscall.fail(error.Unseekable);
     while (true) {
@@ -2304,12 +2304,12 @@ fn setFilePointer(handle: w32.HANDLE, distance: i64, method: w32.SET_FILE_POINTE
     }
 }
 
-fn fileSeekBy(userdata: ?*anyopaque, file: Io.File, offset: i64) Io.File.SeekError!void {
+fn fileSeekBy(userdata: ?*anyopaque, file: std.Io.File, offset: i64) std.Io.File.SeekError!void {
     _ = userdata;
     return setFilePointer(file.handle, offset, .CURRENT);
 }
 
-fn fileSeekTo(userdata: ?*anyopaque, file: Io.File, offset: u64) Io.File.SeekError!void {
+fn fileSeekTo(userdata: ?*anyopaque, file: std.Io.File, offset: u64) std.Io.File.SeekError!void {
     _ = userdata;
     return setFilePointer(file.handle, std.math.cast(i64, offset) orelse return error.Unseekable, .BEGIN);
 }
@@ -2339,7 +2339,7 @@ fn ntstatusFromError(err: w32.WIN32_ERROR) std.os.windows.NTSTATUS {
     };
 }
 
-fn deviceIoControl(o: *const Io.Operation.DeviceIoControl) Io.Cancelable!std.os.windows.IO_STATUS_BLOCK {
+fn deviceIoControl(o: *const std.Io.Operation.DeviceIoControl) std.Io.Cancelable!std.os.windows.IO_STATUS_BLOCK {
     const code: u32 = @bitCast(o.code);
     const in_ptr: ?*anyopaque = if (o.in.len > 0) @constCast(o.in.ptr) else null;
     const out_ptr: ?*anyopaque = if (o.out.len > 0) o.out.ptr else null;
@@ -2405,7 +2405,7 @@ fn deviceIoControl(o: *const Io.Operation.DeviceIoControl) Io.Cancelable!std.os.
 // ---------------------------------------------------------------------------
 // Operations and batches
 
-fn operate(userdata: ?*anyopaque, operation: Io.Operation) Io.Cancelable!Io.Operation.Result {
+fn operate(userdata: ?*anyopaque, operation: std.Io.Operation) std.Io.Cancelable!Io.Operation.Result {
     const w = fromUserdata(userdata);
     switch (operation) {
         .file_read_streaming => |o| return .{
@@ -2474,7 +2474,7 @@ const BatchOperationUserdata = extern struct {
     /// For `net_receive`: the data buffer.
     b: usize,
 
-    const Erased = Io.Operation.Storage.Pending.Userdata;
+    const Erased = std.Io.Operation.Storage.Pending.Userdata;
 
     comptime {
         assert(@sizeOf(BatchOperationUserdata) <= @sizeOf(Erased));
@@ -2537,10 +2537,10 @@ fn batchReleaseEvent(b: *Io.Batch) void {
 }
 
 /// Moves the pending operation to the completed list with `result`.
-fn batchComplete(b: *Io.Batch, operation_userdata: *BatchOperationUserdata, result: Io.Operation.Result) void {
+fn batchComplete(b: *Io.Batch, operation_userdata: *BatchOperationUserdata, result: std.Io.Operation.Result) void {
     const pending = batchRemovePending(b, operation_userdata);
     const storage: *Io.Operation.Storage = @fieldParentPtr("pending", pending);
-    const index: Io.Operation.OptionalIndex = .fromIndex(storage - b.storage.ptr);
+    const index: std.Io.Operation.OptionalIndex = .fromIndex(storage - b.storage.ptr);
     switch (b.completed.tail) {
         .none => b.completed.head = index,
         else => |tail_index| b.storage[tail_index.toIndex()].completion.node.next = index,
@@ -2553,7 +2553,7 @@ fn batchComplete(b: *Io.Batch, operation_userdata: *BatchOperationUserdata, resu
 fn batchDiscard(b: *Io.Batch, operation_userdata: *BatchOperationUserdata) void {
     const pending = batchRemovePending(b, operation_userdata);
     const storage: *Io.Operation.Storage = @fieldParentPtr("pending", pending);
-    const index: Io.Operation.OptionalIndex = .fromIndex(storage - b.storage.ptr);
+    const index: std.Io.Operation.OptionalIndex = .fromIndex(storage - b.storage.ptr);
     const tail_index = b.unused.tail;
     switch (tail_index) {
         .none => b.unused.head = index,
@@ -2647,7 +2647,7 @@ fn batchMustWait(b: *Io.Batch) bool {
 }
 
 /// If `concurrency` is false, `error.ConcurrencyUnavailable` is unreachable.
-fn batchDrainSubmitted(userdata: ?*anyopaque, b: *Io.Batch, concurrency: bool) (Io.ConcurrentError || Io.Cancelable)!void {
+fn batchDrainSubmitted(userdata: ?*anyopaque, b: *Io.Batch, concurrency: bool) (Io.ConcurrentError || std.Io.Cancelable)!void {
     const w = fromUserdata(userdata);
     var index = b.submitted.head;
     errdefer b.submitted.head = index;
@@ -2803,7 +2803,7 @@ fn batchDrainSubmitted(userdata: ?*anyopaque, b: *Io.Batch, concurrency: bool) (
     b.submitted = .{ .head = .none, .tail = .none };
 }
 
-fn batchAwaitAsync(userdata: ?*anyopaque, b: *Io.Batch) Io.Cancelable!void {
+fn batchAwaitAsync(userdata: ?*anyopaque, b: *Io.Batch) std.Io.Cancelable!void {
     defer batchReleaseEvent(b);
     batchDrainSubmitted(userdata, b, false) catch |err| switch (err) {
         error.ConcurrencyUnavailable => unreachable, // passed concurrency=false
@@ -2824,7 +2824,7 @@ fn batchAwaitAsync(userdata: ?*anyopaque, b: *Io.Batch) Io.Cancelable!void {
     }
 }
 
-fn batchAwaitConcurrent(userdata: ?*anyopaque, b: *Io.Batch, timeout: Io.Timeout) Io.Batch.AwaitConcurrentError!void {
+fn batchAwaitConcurrent(userdata: ?*anyopaque, b: *Io.Batch, timeout: std.Io.Timeout) std.Io.Batch.AwaitConcurrentError!void {
     const w = fromUserdata(userdata);
     const deadline: ?Io.Clock.Timestamp = timeout.toTimestamp(w.io());
     defer batchReleaseEvent(b);
@@ -2893,8 +2893,8 @@ fn batchCancel(userdata: ?*anyopaque, b: *Io.Batch) void {
 // that it may exceed `MAX_PATH` and is not normalized again by Win32.
 
 const windows = std.os.windows;
-const Dir = Io.Dir;
-const File = Io.File;
+const Dir = std.Io.Dir;
+const File = std.Io.File;
 const PATH_MAX_WIDE = windows.PATH_MAX_WIDE;
 
 const WindowsPath = struct {
@@ -2919,7 +2919,7 @@ const WindowsPath = struct {
     }
 };
 
-const PathError = Dir.PathNameError || error{ FileNotFound, AccessDenied } || Io.UnexpectedError;
+const PathError = Dir.PathNameError || error{ FileNotFound, AccessDenied } || std.Io.UnexpectedError;
 
 const L = std.unicode.wtf8ToWtf16LeStringLiteral;
 const verbatim_prefix = L("\\\\?\\");
@@ -3093,7 +3093,7 @@ const CreateFileOptions = struct {
     filter: OpenFilter = .any,
 };
 
-fn sleepForRetry(attempt: u5) Io.Cancelable!void {
+fn sleepForRetry(attempt: u5) std.Io.Cancelable!void {
     try sleepInternal(.{ .duration = .{
         .raw = .fromMilliseconds((@as(u32, 1) << attempt) >> 1),
         .clock = .awake,
@@ -3212,7 +3212,7 @@ const FILE_END_OF_FILE_INFO = extern struct {
 /// since a blocking `LockFileEx` cannot be canceled under Wine: it waits in a
 /// non-alertable `NtWaitForSingleObject`, which `CancelSynchronousIo` does not
 /// interrupt (and Wine does not implement lock waits on overlapped handles).
-fn lockFileRange(handle: w32.HANDLE, exclusive: bool, fail_immediately: bool) (Io.Cancelable || Io.UnexpectedError || error{ SystemResources, WouldBlock })!void {
+fn lockFileRange(handle: w32.HANDLE, exclusive: bool, fail_immediately: bool) (Io.Cancelable || std.Io.UnexpectedError || error{ SystemResources, WouldBlock })!void {
     const max_delay_ms = 16;
     var delay_ms: i64 = 1;
     while (true) {
@@ -3240,7 +3240,7 @@ fn tryLockFileRange(handle: w32.HANDLE, exclusive: bool) (Io.UnexpectedError || 
 }
 
 /// Returns whether the range was locked.
-fn unlockFileRange(handle: w32.HANDLE) Io.UnexpectedError!bool {
+fn unlockFileRange(handle: w32.HANDLE) std.Io.UnexpectedError!bool {
     var overlapped = OverlappedOperation.init(0).overlapped;
     if (w32.UnlockFileEx(handle, 0, 1, 0, &overlapped) != 0) return true;
     return switch (getLastError()) {
@@ -4024,7 +4024,7 @@ fn fileSetLength(userdata: ?*anyopaque, file: File, length: u64) File.SetLengthE
 }
 
 /// Sets attributes and/or times; zero values are left unchanged.
-fn setBasicInfo(handle: w32.HANDLE, info: *FILE_BASIC_INFO) (Io.Cancelable || Io.UnexpectedError || error{AccessDenied})!void {
+fn setBasicInfo(handle: w32.HANDLE, info: *FILE_BASIC_INFO) (Io.Cancelable || std.Io.UnexpectedError || error{AccessDenied})!void {
     const syscall: Syscall = try .start();
     while (w32.SetFileInformationByHandle(handle, .FileBasicInfo, info, @sizeOf(FILE_BASIC_INFO)) == 0) switch (getLastError()) {
         .ERROR_OPERATION_ABORTED => try syscall.checkCancel(),
@@ -4246,7 +4246,7 @@ fn getConsoleMode(handle: w32.HANDLE) ?u32 {
     return @bitCast(mode);
 }
 
-fn fileIsTty(userdata: ?*anyopaque, file: File) Io.Cancelable!bool {
+fn fileIsTty(userdata: ?*anyopaque, file: File) std.Io.Cancelable!bool {
     _ = userdata;
     if (getConsoleMode(file.handle) != null) return true;
     return isCygwinPty(file);
@@ -4266,7 +4266,7 @@ fn fileEnableAnsiEscapeCodes(userdata: ?*anyopaque, file: File) File.EnableAnsiE
     }
 }
 
-fn fileSupportsAnsiEscapeCodes(userdata: ?*anyopaque, file: File) Io.Cancelable!bool {
+fn fileSupportsAnsiEscapeCodes(userdata: ?*anyopaque, file: File) std.Io.Cancelable!bool {
     _ = userdata;
     if (getConsoleMode(file.handle)) |mode| return mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING != 0;
     return isCygwinPty(file);
@@ -4274,7 +4274,7 @@ fn fileSupportsAnsiEscapeCodes(userdata: ?*anyopaque, file: File) Io.Cancelable!
 
 /// MSYS2/cygwin ptys are named pipes named like `msys-[...]-ptyN-[...]` or
 /// `cygwin-[...]-ptyN-[...]`, for example `msys-1888ae32e00d56aa-pty0-to-master`.
-fn isCygwinPty(file: File) Io.Cancelable!bool {
+fn isCygwinPty(file: File) std.Io.Cancelable!bool {
     if (w32.GetFileType(file.handle) != FILE_TYPE_PIPE) return false;
 
     const name_bytes_offset = @offsetOf(w32.FILE_NAME_INFO, "FileName");
@@ -4431,7 +4431,7 @@ const CreateFileMapError = error{
     Unseekable,
     LockViolation,
     SectionOversize,
-} || Io.Cancelable || Io.UnexpectedError;
+} || std.Io.Cancelable || std.Io.UnexpectedError;
 
 fn createFileMap(
     file: File,
@@ -4585,10 +4585,10 @@ fn mmSyncWrite(file: File, memory: []u8, offset: u64) File.WritePositionalError!
 // is overlapped with an alertable wait, so that cancelation works the same way
 // as for nonblocking files (`CancelIoEx`).
 
-const net = Io.net;
-const PosixAddress = Io.Threaded.PosixAddress;
-const addressToPosix = Io.Threaded.addressToPosix;
-const addressFromPosix = Io.Threaded.addressFromPosix;
+const net = std.Io.net;
+const PosixAddress = std.Io.Threaded.PosixAddress;
+const addressToPosix = std.Io.Threaded.addressToPosix;
+const addressFromPosix = std.Io.Threaded.addressFromPosix;
 
 const AF_UNIX: i32 = 1;
 const AF_INET: i32 = 2;
@@ -4619,7 +4619,7 @@ fn wsaGetLastError() w32.WSA_ERROR {
     return wsaError(ws2.WSAGetLastError());
 }
 
-fn unexpectedWsaError(err: w32.WSA_ERROR) Io.UnexpectedError {
+fn unexpectedWsaError(err: w32.WSA_ERROR) std.Io.UnexpectedError {
     @branchHint(.cold);
     if (std.options.unexpected_error_tracing) {
         std.debug.print("error.Unexpected: WSAGetLastError({d}): {t}\n", .{ @backingInt(err), err });
@@ -4667,7 +4667,7 @@ const OpenSocketError = error{
 fn openSocket(w: *WinIo, family: i32, mode: net.Socket.Mode, protocol: ?net.Protocol) OpenSocketError!w32.SOCKET {
     try ensureWinsock(w);
     try Thread.checkCancel();
-    const sock_type, const proto = try Io.Threaded.posixSocketModeProtocol(@intCast(family), mode, protocol);
+    const sock_type, const proto = try std.Io.Threaded.posixSocketModeProtocol(@intCast(family), mode, protocol);
     var flags = WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT;
     while (true) {
         const socket = w32.WSASocketW(family, @intCast(sock_type), @intCast(proto), null, 0, flags);
@@ -4702,7 +4702,7 @@ fn setSocketOption(socket: w32.SOCKET, level: i32, name: i32, value: u32) error{
     }
 }
 
-fn getSockName(socket: w32.SOCKET) Io.UnexpectedError!net.IpAddress {
+fn getSockName(socket: w32.SOCKET) std.Io.UnexpectedError!net.IpAddress {
     var storage: PosixAddress = undefined;
     var len: i32 = @sizeOf(PosixAddress);
     if (w32.getsockname(socket, @ptrCast(&storage), &len) != 0) return unexpectedWsaError(wsaGetLastError());
@@ -4787,7 +4787,7 @@ fn waitOverlappedEvent(
     handle: w32.HANDLE,
     overlapped: *w32.OVERLAPPED,
     deadline: ?Io.Clock.Timestamp,
-) (Io.Cancelable || Io.Timeout.Error)!void {
+) (Io.Cancelable || std.Io.Timeout.Error)!void {
     const event = overlapped.hEvent.?;
     while (true) {
         const ms: u32 = if (deadline) |d| millisecondsUntil(d) orelse {
@@ -4823,7 +4823,7 @@ fn emptyOverlapped(event: ?w32.HANDLE) w32.OVERLAPPED {
 }
 
 /// Looks up a Winsock extension function such as `AcceptEx` or `ConnectEx`.
-fn getExtensionFunction(comptime T: type, socket: w32.SOCKET, guid: w32.Guid) Io.UnexpectedError!T {
+fn getExtensionFunction(comptime T: type, socket: w32.SOCKET, guid: w32.Guid) std.Io.UnexpectedError!T {
     var function: ?T = null;
     var guid_copy = guid;
     var bytes: u32 = 0;
@@ -5092,7 +5092,7 @@ fn netWriteFile(
     socket_handle: net.Socket.Handle,
     header: []const u8,
     file_reader: *File.Reader,
-    limit: Io.Limit,
+    limit: std.Io.Limit,
 ) net.Stream.Writer.WriteFileError!usize {
     _ = userdata;
     _ = socket_handle;
@@ -5122,7 +5122,7 @@ const SocketOperation = struct {
 
     /// `rc` is the return value of the Winsock call that was given
     /// `op.overlapped` and `completion`. Returns `null` on success.
-    fn finish(op: *SocketOperation, socket: w32.SOCKET, rc: i32) Io.Cancelable!?w32.WSA_ERROR {
+    fn finish(op: *SocketOperation, socket: w32.SOCKET, rc: i32) std.Io.Cancelable!?w32.WSA_ERROR {
         if (rc != 0) switch (wsaGetLastError()) {
             ._IO_PENDING => {},
             else => |err| return err,
@@ -5161,7 +5161,7 @@ fn addWsaBuf(bufs: []w32.WSABUF, len: *u32, bytes: []const u8) void {
     }
 }
 
-fn readError(err: w32.WSA_ERROR) Io.Operation.NetRead.Error {
+fn readError(err: w32.WSA_ERROR) std.Io.Operation.NetRead.Error {
     return switch (err) {
         .ECONNRESET, .ECONNABORTED, .ENETRESET => error.ConnectionResetByPeer,
         .ETIMEDOUT => error.ConnectionTimedOut,
@@ -5190,7 +5190,7 @@ fn netRead(socket_handle: net.Socket.Handle, data: [][]u8) net.Stream.Reader.Err
     return .{ .data_len = op.bytes };
 }
 
-fn writeError(err: w32.WSA_ERROR) Io.Operation.NetWrite.Error {
+fn writeError(err: w32.WSA_ERROR) std.Io.Operation.NetWrite.Error {
     return switch (err) {
         .ECONNRESET, .ECONNABORTED, .ENETRESET => error.ConnectionResetByPeer,
         .ENOBUFS => error.SystemResources,
@@ -5330,7 +5330,7 @@ fn netReceive(
     message_buffer: []net.IncomingMessage,
     data_buffer: []u8,
     flags: net.ReceiveFlags,
-) Io.Cancelable!struct { ?net.Socket.ReceiveError, usize } {
+) std.Io.Cancelable!struct { ?net.Socket.ReceiveError, usize } {
     var bufs: [1]w32.WSABUF = .{.{
         .buf = @ptrCast(data_buffer.ptr),
         .len = std.math.cast(u32, data_buffer.len) orelse return .{ error.MessageOversize, 0 },
@@ -5403,7 +5403,7 @@ const Dl = struct {
     /// `DnsQueryEx` once looked up. Protected by `mutex`.
     dns_query_ex: ?Dnsapi.DnsQueryExFn = null,
     dns_query_ex_looked_up: bool = false,
-    mutex: Io.Mutex = .init,
+    mutex: std.Io.Mutex = .init,
 
     const Iphlpapi = struct {
         extern "iphlpapi" fn ConvertInterfaceNameToLuidW(name: [*:0]const u16, luid: *u64) callconv(.winapi) u32;
@@ -5479,7 +5479,7 @@ fn netLookupFallible(
     host_name: HostName,
     resolved: *Io.Queue(HostName.LookupResult),
     options: HostName.LookupOptions,
-) (HostName.LookupError || Io.QueueClosedError)!void {
+) (HostName.LookupError || std.Io.QueueClosedError)!void {
     const w_io = w.io();
     const name = host_name.bytes;
     assert(name.len <= HostName.max_len);
@@ -5649,7 +5649,7 @@ fn lookupDnsQuery(
     host_name_w: [*:0]const u16,
     resolved: *Io.Queue(HostName.LookupResult),
     options: HostName.LookupOptions,
-) (HostName.LookupError || Io.QueueClosedError)!void {
+) (HostName.LookupError || std.Io.QueueClosedError)!void {
     const w_io = w.io();
     const types: []const windows.DNS.TYPE = if (options.family) |family| switch (family) {
         .ip4 => &.{.A},
@@ -5728,7 +5728,7 @@ const LookupDns = struct {
         _ = w32.QueueUserAPC(Thread.noopApc, thread, 0);
     }
 
-    fn completedFallible(lookup_dns: *LookupDns) (Io.QueueClosedError || Io.Cancelable)!void {
+    fn completedFallible(lookup_dns: *LookupDns) (Io.QueueClosedError || std.Io.Cancelable)!void {
         assert(!lookup_dns.done);
         defer lookup_dns.dnsapi.DnsFree(lookup_dns.results.pQueryRecords, .RecordList);
         if (lookup_dns.results.QueryStatus != .SUCCESS) return;
@@ -5968,7 +5968,7 @@ fn processCurrentPath(userdata: ?*anyopaque, buffer: []u8) process.CurrentPathEr
     return end_index;
 }
 
-fn setCurrentDirectory(path: [:0]const u16) (Io.Cancelable || Io.UnexpectedError || error{
+fn setCurrentDirectory(path: [:0]const u16) (Io.Cancelable || std.Io.UnexpectedError || error{
     BadPathName,
     FileNotFound,
     NoDevice,
@@ -6020,7 +6020,7 @@ fn processReplace(userdata: ?*anyopaque, options: process.ReplaceOptions) proces
     return error.OperationUnsupported; // `process.can_replace` is false on Windows.
 }
 
-fn lockStderr(userdata: ?*anyopaque, terminal_mode: ?Io.Terminal.Mode) Io.Cancelable!Io.LockedStderr {
+fn lockStderr(userdata: ?*anyopaque, terminal_mode: ?Io.Terminal.Mode) std.Io.Cancelable!Io.LockedStderr {
     const w = fromUserdata(userdata);
     const current_thread_id = w32.GetCurrentThreadId();
 
@@ -6034,7 +6034,7 @@ fn lockStderr(userdata: ?*anyopaque, terminal_mode: ?Io.Terminal.Mode) Io.Cancel
     return initLockedStderr(w, terminal_mode);
 }
 
-fn tryLockStderr(userdata: ?*anyopaque, terminal_mode: ?Io.Terminal.Mode) Io.Cancelable!?Io.LockedStderr {
+fn tryLockStderr(userdata: ?*anyopaque, terminal_mode: ?Io.Terminal.Mode) std.Io.Cancelable!?Io.LockedStderr {
     const w = fromUserdata(userdata);
     const current_thread_id = w32.GetCurrentThreadId();
 
@@ -6048,7 +6048,7 @@ fn tryLockStderr(userdata: ?*anyopaque, terminal_mode: ?Io.Terminal.Mode) Io.Can
     return try initLockedStderr(w, terminal_mode);
 }
 
-fn initLockedStderr(w: *WinIo, terminal_mode: ?Io.Terminal.Mode) Io.Cancelable!Io.LockedStderr {
+fn initLockedStderr(w: *WinIo, terminal_mode: ?Io.Terminal.Mode) std.Io.Cancelable!Io.LockedStderr {
     if (!w.stderr_writer_initialized) {
         const w_io = w.io();
         w.stderr_writer.file = .{
@@ -6103,19 +6103,19 @@ fn progressParentFile(userdata: ?*anyopaque) std.Progress.ParentFileError!File {
 
 const HANDLE_FLAG_INHERIT: u32 = 0x1;
 
-fn setInheritable(handle: w32.HANDLE, inherit: bool) Io.UnexpectedError!void {
+fn setInheritable(handle: w32.HANDLE, inherit: bool) std.Io.UnexpectedError!void {
     if (w32.SetHandleInformation(handle, HANDLE_FLAG_INHERIT, @bitCast(@as(u32, @intFromBool(inherit)))) == 0) {
         return unexpectedError(getLastError());
     }
 }
 
-fn inheritParentDir(userdata: ?*anyopaque, handle: Dir.Handle) Io.InheritParentHandleError!Dir {
+fn inheritParentDir(userdata: ?*anyopaque, handle: Dir.Handle) std.Io.InheritParentHandleError!Dir {
     _ = userdata;
     try setInheritable(handle, false);
     return .{ .handle = handle };
 }
 
-fn inheritParentFile(userdata: ?*anyopaque, handle: File.Handle, flags: File.Flags) Io.InheritParentHandleError!File {
+fn inheritParentFile(userdata: ?*anyopaque, handle: File.Handle, flags: File.Flags) std.Io.InheritParentHandleError!File {
     _ = userdata;
     try setInheritable(handle, false);
     return .{ .handle = handle, .flags = flags };
@@ -6259,7 +6259,7 @@ fn createPipe(options: CreatePipeOptions) ![2]w32.HANDLE {
 }
 
 /// Creates an inheritable duplicate of `handle` for a child process.
-fn duplicateInheritable(handle: w32.HANDLE) Io.UnexpectedError!w32.HANDLE {
+fn duplicateInheritable(handle: w32.HANDLE) std.Io.UnexpectedError!w32.HANDLE {
     var result: ?w32.HANDLE = null;
     const process_handle = w32.GetCurrentProcess();
     const DUPLICATE_SAME_ACCESS: u32 = 0x2;

@@ -210,11 +210,11 @@ test "save/load should save/load the cache state to/from a file" {
     try testing.expectEqual(@intFromPtr(&data[4]), cache_1.findAddress(&pattern_1));
     try testing.expectEqual(@intFromPtr(&data[5]), cache_1.findAddress(&pattern_2));
 
-    try cache_1.save(testing.io, "./test_assets/cache.json", 123);
-    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/cache.json") catch {
+    try cache_1.save(testing.io, "cache.json", 123);
+    defer std.Io.Dir.cwd().deleteFile(testing.io, "cache.json") catch {
         @panic("Failed to cleanup test file.");
     };
-    try cache_2.load(testing.io, "./test_assets/cache.json", 123);
+    try cache_2.load(testing.io, "cache.json", 123);
 
     data[4] = 0x44;
     data[5] = 0x55;
@@ -238,14 +238,14 @@ test "save/load should work correctly when multiple version ids are inside the f
     try testing.expectEqual(@intFromPtr(&data[5]), cache_2.findAddress(&pattern));
     data[5] = 0x05;
 
-    try cache_1.save(testing.io, "./test_assets/cache.json", 111);
-    defer std.Io.Dir.cwd().deleteFile(testing.io, "./test_assets/cache.json") catch {
+    try cache_1.save(testing.io, "cache.json", 111);
+    defer std.Io.Dir.cwd().deleteFile(testing.io, "cache.json") catch {
         @panic("Failed to cleanup test file.");
     };
-    try cache_2.save(testing.io, "./test_assets/cache.json", 222);
+    try cache_2.save(testing.io, "cache.json", 222);
 
-    try cache_1.load(testing.io, "./test_assets/cache.json", 222);
-    try cache_2.load(testing.io, "./test_assets/cache.json", 111);
+    try cache_1.load(testing.io, "cache.json", 222);
+    try cache_2.load(testing.io, "cache.json", 111);
 
     try testing.expectEqual(@intFromPtr(&data[5]), cache_1.findAddress(&pattern));
     try testing.expectEqual(@intFromPtr(&data[4]), cache_2.findAddress(&pattern));

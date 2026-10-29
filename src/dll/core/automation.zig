@@ -31,7 +31,6 @@ pub fn Automation(comptime config: AutomationConfig) type {
         pub fn processFrame(
             self: *Self,
             io: std.Io,
-            base_dir: *const sdk.misc.BaseDir,
             settings: *const model.AutomationSettings,
             controller: *config.Controller,
             frame: *const model.Frame,
@@ -39,7 +38,7 @@ pub fn Automation(comptime config: AutomationConfig) type {
             defer self.previous_frame_match_phase = frame.match_phase;
             switch (self.state) {
                 .idle => self.processIdleFrame(settings, controller, frame),
-                .recording => |source| self.processRecordingFrame(io, base_dir, settings, controller, frame, source),
+                .recording => |source| self.processRecordingFrame(io, settings, controller, frame, source),
                 .saving => self.updateSavingState(controller),
             }
         }
@@ -79,7 +78,6 @@ pub fn Automation(comptime config: AutomationConfig) type {
         fn processRecordingFrame(
             self: *Self,
             io: std.Io,
-            base_dir: *const sdk.misc.BaseDir,
             settings: *const model.AutomationSettings,
             controller: *config.Controller,
             frame: *const model.Frame,
@@ -114,7 +112,7 @@ pub fn Automation(comptime config: AutomationConfig) type {
                 .record_and_save => {
                     const last_frame = controller.getFrameAt(controller.getTotalFrames() -| 1) orelse frame;
                     var buffer: [config.Controller.FilePath.max_len]u8 = undefined;
-                    if (constructSaveFilePath(&buffer, io, base_dir, last_frame, settings.save_format)) |path| {
+                    if (constructSaveFilePath(&buffer, io, last_frame, settings.save_format)) |path| {
                         controller.save(io, path);
                         self.state = .saving;
                     } else |err| {
@@ -138,7 +136,6 @@ pub fn Automation(comptime config: AutomationConfig) type {
         fn constructSaveFilePath(
             buffer: []u8,
             io: std.Io,
-            base_dir: *const sdk.misc.BaseDir,
             last_frame: *const model.Frame,
             format: model.RecordingFormat,
         ) ![]const u8 {
@@ -146,8 +143,8 @@ pub fn Automation(comptime config: AutomationConfig) type {
             const p1: *const model.Player = last_frame.getPlayerById(.player_1);
             const p2: *const model.Player = last_frame.getPlayerById(.player_2);
 
-            writer.print("{s}\\{s}\\", .{ base_dir.get(), directory_name }) catch |err| {
-                sdk.misc.error_context.new("Failed to write directory path: {s}\\{s}\\", .{ base_dir.get(), directory_name });
+            writer.print("{s}\\", .{directory_name}) catch |err| {
+                sdk.misc.error_context.new("Failed to write directory path: {s}\\", .{directory_name});
                 return err;
             };
 
@@ -249,7 +246,6 @@ pub fn Automation(comptime config: AutomationConfig) type {
 }
 
 const testing = std.testing;
-const testing_base_dir = sdk.misc.BaseDir.fromStr("test_assets") catch unreachable;
 
 const MockController = struct {
     mode: Mode,
@@ -327,11 +323,11 @@ test "should not clear and record when disabled in settings" {
     for (settings_cases, sources) |settings, source| {
         var controller = MockController{ .mode = .live };
         var automation = Automation(.{ .Controller = MockController }){};
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .intro,
         });
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_start,
         });
@@ -350,11 +346,11 @@ test "should never clear and record in practice or replay playback" {
     for (sources) |source| {
         var controller = MockController{ .mode = .live };
         var automation = Automation(.{ .Controller = MockController }){};
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .intro,
         });
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_start,
         });
@@ -375,11 +371,11 @@ test "should not clear and record when the user is already recording, saving or 
         for (sources) |source| {
             var controller = MockController{ .mode = mode };
             var automation = Automation(.{ .Controller = MockController }){};
-            automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+            automation.processFrame(testing.io, &settings, &controller, &.{
                 .source = source,
                 .match_phase = .intro,
             });
-            automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+            automation.processFrame(testing.io, &settings, &controller, &.{
                 .source = source,
                 .match_phase = .round_start,
             });
@@ -398,25 +394,25 @@ test "should start recording on the first frame of the match" {
     for (settings_cases, sources) |settings, source| {
         var controller = MockController{ .mode = .live };
         var automation = Automation(.{ .Controller = MockController }){};
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .not_in_a_match,
         });
         try testing.expectEqual(0, controller.clear_call_count);
         try testing.expectEqual(0, controller.record_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .intro,
         });
         try testing.expectEqual(0, controller.clear_call_count);
         try testing.expectEqual(0, controller.record_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_start,
         });
         try testing.expectEqual(1, controller.clear_call_count);
         try testing.expectEqual(1, controller.record_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_start,
         });
@@ -434,53 +430,53 @@ test "should stop recording after the last frame of the match when set to only r
     for (settings_cases, sources) |settings, source| {
         var controller = MockController{ .mode = .live };
         var automation = Automation(.{ .Controller = MockController }){};
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .intro,
         });
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_start,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_start,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .mid_round,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .mid_round,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_end,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_end,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .outro,
         });
         try testing.expectEqual(1, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .outro,
         });
@@ -498,53 +494,53 @@ test "should save recording after the last frame of the match when set to record
     for (settings_cases, sources) |settings, source| {
         var controller = MockController{ .mode = .live };
         var automation = Automation(.{ .Controller = MockController }){};
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .intro,
         });
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_start,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_start,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .mid_round,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .mid_round,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_end,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_end,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .outro,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(1, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .outro,
         });
@@ -568,29 +564,29 @@ test "should stop recording and not save when disabled in settings" {
     for (enabled_cases, disabled_cases, sources) |enabled, disabled, source| {
         var controller = MockController{ .mode = .live };
         var automation = Automation(.{ .Controller = MockController }){};
-        automation.processFrame(testing.io, &testing_base_dir, &enabled, &controller, &.{
+        automation.processFrame(testing.io, &enabled, &controller, &.{
             .source = source,
             .match_phase = .intro,
         });
-        automation.processFrame(testing.io, &testing_base_dir, &enabled, &controller, &.{
+        automation.processFrame(testing.io, &enabled, &controller, &.{
             .source = source,
             .match_phase = .round_start,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &enabled, &controller, &.{
+        automation.processFrame(testing.io, &enabled, &controller, &.{
             .source = source,
             .match_phase = .round_start,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &disabled, &controller, &.{
+        automation.processFrame(testing.io, &disabled, &controller, &.{
             .source = source,
             .match_phase = .round_start,
         });
         try testing.expectEqual(1, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &disabled, &controller, &.{
+        automation.processFrame(testing.io, &disabled, &controller, &.{
             .source = source,
             .match_phase = .round_start,
         });
@@ -609,30 +605,30 @@ test "should do nothing when the user interrupts the recording" {
     for (sources) |source| {
         var controller = MockController{ .mode = .live };
         var automation = Automation(.{ .Controller = MockController }){};
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .intro,
         });
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_start,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .mid_round,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
         controller.mode = .pause;
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_end,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(0, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .outro,
         });
@@ -650,38 +646,38 @@ test "should call stop on the controller after the save is complete" {
     for (settings_cases, sources) |settings, source| {
         var controller = MockController{ .mode = .live };
         var automation = Automation(.{ .Controller = MockController }){};
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .intro,
         });
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_start,
         });
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .round_end,
         });
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .outro,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(1, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .not_in_a_match,
         });
         try testing.expectEqual(0, controller.stop_call_count);
         try testing.expectEqual(1, controller.save_call_count);
         controller.mode = .pause;
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .not_in_a_match,
         });
         try testing.expectEqual(1, controller.stop_call_count);
         try testing.expectEqual(1, controller.save_call_count);
-        automation.processFrame(testing.io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(testing.io, &settings, &controller, &.{
             .source = source,
             .match_phase = .not_in_a_match,
         });
@@ -716,19 +712,19 @@ test "should save recording to the correct path" {
             .Controller = MockController,
             .time_zone = .utc,
         }){};
-        automation.processFrame(io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(io, &settings, &controller, &.{
             .source = .live_game,
             .match_phase = .intro,
         });
-        automation.processFrame(io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(io, &settings, &controller, &.{
             .source = .live_game,
             .match_phase = .round_start,
         });
-        automation.processFrame(io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(io, &settings, &controller, &.{
             .source = .live_game,
             .match_phase = .round_end,
         });
-        automation.processFrame(io, &testing_base_dir, &settings, &controller, &.{
+        automation.processFrame(io, &settings, &controller, &.{
             .source = .live_game,
             .match_phase = .outro,
         });
@@ -736,8 +732,7 @@ test "should save recording to the correct path" {
         try testing.expectEqual(controller.last_save_io, io);
         try testing.expect(controller.last_save_path != null);
         try testing.expectEqualStrings(
-            "test_assets\\" ++
-                Automation(.{}).directory_name ++
+            Automation(.{}).directory_name ++
                 "\\__Player1__ vs __Player2__  1-2  2020-01-02T03-04-05" ++
                 comptime format.getFileExtension(),
             controller.last_save_path.?.asSlice(),
