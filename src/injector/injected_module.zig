@@ -81,8 +81,10 @@ pub const InjectedModule = struct {
 
     fn ejectModule(module: sdk.os.Module) !void {
         gracefullyEjectModule(module) catch |err_1| {
-            sdk.misc.error_context.append("Failed to gracefully eject module. Continuing with forceful ejection. ", .{});
-            sdk.misc.error_context.logWarning(err_1);
+            if (!builtin.is_test) {
+                sdk.misc.error_context.append("Failed to gracefully eject. Continuing with forceful ejection. ", .{});
+                sdk.misc.error_context.logWarning(err_1);
+            }
             forcefullyEjectModule(module) catch |err_2| {
                 sdk.misc.error_context.append("Failed to forcefully eject module.", .{});
                 return err_2;
