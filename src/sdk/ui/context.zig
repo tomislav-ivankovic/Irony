@@ -6,6 +6,7 @@ const imgui = @import("imgui");
 const misc = @import("../misc/root.zig");
 const dx11 = @import("../dx11/root.zig");
 const dx12 = @import("../dx12/root.zig");
+const os = @import("../os/root.zig");
 const ui = @import("root.zig");
 
 const font_file = @embedFile("font.ttf");
@@ -38,8 +39,22 @@ pub fn Context(comptime rendering_api: build_info.RenderingApi) type {
             errdefer imgui.igDestroyContext(imgui_context);
 
             const ini_file_path = if (io_maybe) |io| block: {
-                break :block std.Io.Dir.cwd().realPathFileAlloc(io, "imgui.ini", allocator) catch |err| {
-                    misc.error_context.append("Failed to allocate imgui.ini file path.", .{});
+                var buffer: [os.max_file_path_length]u8 = undefined;
+                const len = std.Io.Dir.cwd().realPath(io, &buffer) catch |err| {
+                    misc.error_context.append("Failed to get base directory.", .{});
+                    misc.error_context.append("Failed to set imgui.ini file path.", .{});
+                    misc.error_context.logError(err);
+                    break :block null;
+                };
+                const base = buffer[0..len];
+                break :block std.fmt.allocPrintSentinel(
+                    allocator,
+                    "{s}{c}{s}",
+                    .{ base, std.fs.path.sep, "imgui.ini" },
+                    0,
+                ) catch |err| {
+                    misc.error_context.append("Failed to allocate the absolute path.", .{});
+                    misc.error_context.append("Failed to set imgui.ini file path.", .{});
                     misc.error_context.logError(err);
                     break :block null;
                 };
