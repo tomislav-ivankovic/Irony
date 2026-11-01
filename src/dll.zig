@@ -34,6 +34,7 @@ const ListeningToEvents = enum(u8) { none, all, only_present };
 
 const dx_hooks = dx.Hooks(onPresent, beforeResize, afterResize);
 const game_hooks = dll.game.Hooks(build_info.game, onTick);
+const raw_input_hook = sdk.os.RawInputHook(getRawInputData);
 
 var dll_module: sdk.os.Module = undefined;
 var module_handle_shared_value: ?sdk.os.SharedValue(w32.HINSTANCE) = null;
@@ -292,6 +293,19 @@ pub fn main() void {
         std.log.info("DirectX hooks de-initialized.", .{});
     }
 
+    std.log.debug("Initializing raw input hook...", .{});
+    if (raw_input_hook.init(null)) {
+        std.log.info("Raw input hook initialized.", .{});
+    } else |err| {
+        sdk.misc.error_context.append("Failed to initialize raw input hook.", .{});
+        sdk.misc.error_context.logError(err);
+    }
+    defer {
+        std.log.debug("De-initializing raw input hook...", .{});
+        raw_input_hook.deinit(io);
+        std.log.info("Raw input hook de-initialized.", .{});
+    }
+
     std.log.debug("Spawning memory search task...", .{});
     var memory_search_task = if (MemorySearchTask.spawn(
         allocator,
@@ -521,17 +535,87 @@ fn afterResize(context: dx.HostContext) void {
     sendEvent(&.{ .after_resize = context });
 }
 
+threadlocal var already_holding_pending_event_mutex = false;
+
+fn getRawInputData(
+    h_raw_input: ?w32.HRAWINPUT,
+    ui_command: w32.RAW_INPUT_DATA_COMMAND_FLAGS,
+    p_data: ?*anyopaque,
+    pcb_size: ?*u32,
+    cb_size_header: u32,
+    return_value: u32,
+) u32 {
+    _ = h_raw_input;
+    _ = pcb_size;
+    _ = cb_size_header;
+    if (ui_command != .INPUT) {
+        return return_value;
+    }
+    if (return_value == std.math.maxInt(u32) or return_value < @sizeOf(w32.RAWINPUTHEADER) + @sizeOf(w32.RAWKEYBOARD)) {
+        return return_value;
+    }
+    const raw_input: *w32.RAWINPUT = @ptrCast(@alignCast(p_data orelse return return_value));
+    if (raw_input.header.dwType != @backingInt(w32.RIM_TYPEKEYBOARD)) {
+        return return_value;
+    }
+    switch (processKeyboardInput(&raw_input.data.keyboard)) {
+        .pass_through => {},
+        .block => {
+            raw_input.data.keyboard.MakeCode = 0;
+            raw_input.data.keyboard.Flags = w32.RI_KEY_BREAK;
+            raw_input.data.keyboard.VKey = 0xFF;
+            raw_input.data.keyboard.Message = w32.WM_KEYUP;
+        },
+    }
+    return return_value;
+}
+
+fn processKeyboardInput(input: *const w32.RAWKEYBOARD) dll.EventBuss.KeyboardInputAction {
+    if (already_holding_pending_event_mutex) {
+        const buss = if (event_buss) |*b| b else return .pass_through;
+        return buss.processKeyboardInput(input);
+    }
+
+    const sio = single_threaded_io.io();
+    pending_event_mutex.lock(sio) catch return .pass_through;
+    defer pending_event_mutex.unlock(sio);
+    already_holding_pending_event_mutex = true;
+    defer already_holding_pending_event_mutex = false;
+
+    const buss = if (event_buss) |*b| b else return .pass_through;
+    return buss.processKeyboardInput(input);
+}
+
 fn windowProcedure(
     window: w32.HWND,
     u_msg: u32,
     w_param: w32.WPARAM,
     l_param: w32.LPARAM,
 ) callconv(.winapi) w32.LRESULT {
-    if (event_buss) |*buss| {
-        const result = buss.processWindowMessage(window, u_msg, w_param, l_param);
-        if (result) |r| {
-            return r;
-        }
+    if (processWindowMessage(window, u_msg, w_param, l_param)) |result| {
+        return result;
+    } else {
+        return w32.CallWindowProcW(window_procedure.?.original, window, u_msg, w_param, l_param);
     }
-    return w32.CallWindowProcW(window_procedure.?.original, window, u_msg, w_param, l_param);
+}
+
+fn processWindowMessage(
+    window: w32.HWND,
+    u_msg: u32,
+    w_param: w32.WPARAM,
+    l_param: w32.LPARAM,
+) ?w32.LRESULT {
+    if (already_holding_pending_event_mutex) {
+        const buss = if (event_buss) |*b| b else return null;
+        return buss.processWindowMessage(window, u_msg, w_param, l_param);
+    }
+
+    const sio = single_threaded_io.io();
+    pending_event_mutex.lock(sio) catch return null;
+    defer pending_event_mutex.unlock(sio);
+    already_holding_pending_event_mutex = true;
+    defer already_holding_pending_event_mutex = false;
+
+    const buss = if (event_buss) |*b| b else return null;
+    return buss.processWindowMessage(window, u_msg, w_param, l_param);
 }

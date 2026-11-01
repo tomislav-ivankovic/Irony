@@ -29,6 +29,7 @@ pub const EventBuss = struct {
     const SettingsTask = sdk.misc.Task(model.Settings);
     const LatestVersionTask = sdk.misc.Task(?sdk.misc.Version);
     const UiContext = sdk.ui.Context(rendering_api);
+    pub const KeyboardInputAction = enum { pass_through, block };
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -85,7 +86,7 @@ pub const EventBuss = struct {
                     return default_settings;
                 }
             }
-        }.call, .{ io }) catch |err| block: {
+        }.call, .{io}) catch |err| block: {
             sdk.misc.error_context.append("Failed to spawn settings loading task. Using default settings.", .{});
             sdk.misc.error_context.logWarning(err);
             break :block SettingsTask.createCompleted(.{});
@@ -303,5 +304,11 @@ pub const EventBuss = struct {
             return context.processWindowMessage(window, u_msg, w_param, l_param);
         }
         return null;
+    }
+
+    pub fn processKeyboardInput(self: *Self, input: *const w32.RAWKEYBOARD) KeyboardInputAction {
+        _ = self;
+        _ = input;
+        return .pass_through;
     }
 };
