@@ -62,8 +62,9 @@ test {
     _ = @import("sdk/os/memory.zig");
     _ = @import("sdk/os/misc.zig");
     _ = @import("sdk/os/module.zig");
-    _ = @import("sdk/os/process_id.zig");
     _ = @import("sdk/os/process.zig");
+    _ = @import("sdk/os/process_id.zig");
+    _ = @import("sdk/os/raw_input_hook.zig");
     _ = @import("sdk/os/remote_slice.zig");
     _ = @import("sdk/os/remote_thread.zig");
     _ = @import("sdk/os/shared_value.zig");
