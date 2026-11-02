@@ -157,10 +157,10 @@ fn deinitialize() void {
     }
 
     std.log.debug("Destroying shutdown routine shared value...", .{});
-    if (module_handle_shared_value) |*shared_value| {
+    if (shutdown_routine_shared_value) |*shared_value| {
         if (shared_value.destroy()) {
             std.log.info("Shutdown routine shared value destroyed.", .{});
-            module_handle_shared_value = null;
+            shutdown_routine_shared_value = null;
         } else |err| {
             sdk.misc.error_context.append("Failed to destroy shutdown routine shared value.", .{});
             sdk.misc.error_context.logError(err);
