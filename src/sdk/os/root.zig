@@ -19,4 +19,5 @@ pub const RawInputHook = @import("raw_input_hook.zig").RawInputHook;
 pub const RemoteSlice = @import("remote_slice.zig").RemoteSlice;
 pub const RemoteThread = @import("remote_thread.zig").RemoteThread;
 pub const SharedValue = @import("shared_value.zig").SharedValue;
+pub const WindowProcedureCallbackFn = @import("window_procedure.zig").WindowProcedureCallbackFn;
 pub const WindowProcedure = @import("window_procedure.zig").WindowProcedure;

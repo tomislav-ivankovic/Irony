@@ -35,6 +35,7 @@ const ListeningToEvents = enum(u8) { none, all, only_present };
 const dx_hooks = dx.Hooks(onPresent, beforeResize, afterResize);
 const game_hooks = dll.game.Hooks(build_info.game, onTick);
 const raw_input_hook = sdk.os.RawInputHook(getRawInputData);
+const window_procedure = sdk.os.WindowProcedure(processWindowMessage);
 
 var dll_module: sdk.os.Module = undefined;
 var module_handle_shared_value: ?sdk.os.SharedValue(w32.HINSTANCE) = null;
@@ -51,7 +52,6 @@ var pending_event: ?Event = null;
 var listening_to_events = std.atomic.Value(ListeningToEvents).init(.none);
 
 var event_buss: ?dll.EventBuss = null;
-var window_procedure: ?sdk.os.WindowProcedure = null;
 
 pub fn DllMain(
     module_handle: std.os.windows.HINSTANCE,
@@ -333,6 +333,18 @@ pub fn main() void {
     const State = enum { starting_up, up, shutting_down };
     var state = State.starting_up;
 
+    // Initialized inside the event loop because it needs a window handle to initialize.
+    // Must be de-initialized outside of event loop to prevent deadlocks during shutdown.
+    defer {
+        std.log.debug("De-initializing window procedure...", .{});
+        if (window_procedure.deinit(io)) {
+            std.log.info("Window procedure de-initialized.", .{});
+        } else |err| {
+            sdk.misc.error_context.append("Failed to de-initialize window procedure.", .{});
+            sdk.misc.error_context.logError(err);
+        }
+    }
+
     defer producer_condition.broadcast(sio);
     pending_event_mutex.lock(sio) catch |err| {
         sdk.misc.error_context.append("Failed to get lock for pending event.", .{});
@@ -358,9 +370,8 @@ pub fn main() void {
                     std.log.info("Event buss initialized.", .{});
 
                     std.log.debug("Initializing window procedure...", .{});
-                    if (sdk.os.WindowProcedure.init(host_context.window, windowProcedure)) |procedure| {
+                    if (window_procedure.init(host_context.window)) {
                         std.log.info("Window procedure initialized.", .{});
-                        window_procedure = procedure;
                     } else |err| {
                         sdk.misc.error_context.append("Failed to initialize window procedure.", .{});
                         sdk.misc.error_context.logError(err);
@@ -376,19 +387,6 @@ pub fn main() void {
                     }
                 },
                 .shutting_down => {
-                    std.log.debug("De-initializing window procedure...", .{});
-                    if (window_procedure) |*procedure| {
-                        if (procedure.deinit()) {
-                            window_procedure = null;
-                            std.log.info("Window procedure de-initialized.", .{});
-                        } else |err| {
-                            sdk.misc.error_context.append("Failed to de-initialize window procedure.", .{});
-                            sdk.misc.error_context.logError(err);
-                        }
-                    } else {
-                        std.log.debug("Nothing to de-initialize.", .{});
-                    }
-
                     std.log.info("De-initializing event buss...", .{});
                     if (event_buss) |*buss| {
                         buss.deinit(io, host_context);
@@ -584,19 +582,6 @@ fn processKeyboardInput(input: *const w32.RAWKEYBOARD) dll.EventBuss.KeyboardInp
 
     const buss = if (event_buss) |*b| b else return .pass_through;
     return buss.processKeyboardInput(input);
-}
-
-fn windowProcedure(
-    window: w32.HWND,
-    u_msg: u32,
-    w_param: w32.WPARAM,
-    l_param: w32.LPARAM,
-) callconv(.winapi) w32.LRESULT {
-    if (processWindowMessage(window, u_msg, w_param, l_param)) |result| {
-        return result;
-    } else {
-        return w32.CallWindowProcW(window_procedure.?.original, window, u_msg, w_param, l_param);
-    }
 }
 
 fn processWindowMessage(
