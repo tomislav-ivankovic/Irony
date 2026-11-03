@@ -152,6 +152,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             std.log.debug("Releasing the DX12 command queue...", .{});
             if (g_command_queue) |command_queue| {
                 _ = command_queue.IUnknown.Release();
+                g_command_queue = null;
                 std.log.info("DX12 command queue released.", .{});
             } else {
                 std.log.debug("Nothing to release.", .{});
@@ -212,6 +213,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                 misc.error_context.logError(err);
                 return present_hook.?.original(swap_chain, sync_interval, flags);
             };
+            defer _ = device.IUnknown.Release();
             const context = dx12.HostContext{
                 .window = window,
                 .device = device,
@@ -269,6 +271,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                     swap_chain_flags,
                 );
             };
+            defer _ = device.IUnknown.Release();
 
             const context = dx12.HostContext{
                 .window = window,

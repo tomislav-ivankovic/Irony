@@ -14,6 +14,7 @@ pub fn getWindowFromSwapChain(swap_chain: *const w32.IDXGISwapChain) !w32.HWND {
     return desc.OutputWindow orelse error.NotFound;
 }
 
+// Caller needs to release the device!
 pub fn getDeviceFromSwapChain(swap_chain: *const w32.IDXGISwapChain) !(*const w32.ID3D12Device) {
     var device: *const w32.ID3D12Device = undefined;
     const result = swap_chain.IDXGIDeviceSubObject.GetDevice(w32.IID_ID3D12Device, @ptrCast(&device));
@@ -68,7 +69,24 @@ test "getDeviceFromSwapChain should return correct value" {
     }
     const context = try dx12.TestingContext.init();
     defer context.deinit();
-    try testing.expectEqual(context.device, getDeviceFromSwapChain(context.swap_chain));
+    const device = try getDeviceFromSwapChain(context.swap_chain);
+    defer _ = device.IUnknown.Release();
+    try testing.expectEqual(context.device, device);
+}
+
+test "getDeviceFromSwapChain should increment the reference count of the device" {
+    if (@import("config").skip_gpu) {
+        return error.SkipZigTest;
+    }
+    const context = try dx12.TestingContext.init();
+    defer context.deinit();
+    _ = context.device.IUnknown.AddRef();
+    const count_before = context.device.IUnknown.Release();
+    const device = try getDeviceFromSwapChain(context.swap_chain);
+    defer _ = device.IUnknown.Release();
+    _ = device.IUnknown.AddRef();
+    const count_after = device.IUnknown.Release();
+    try testing.expectEqual(count_before + 1, count_after);
 }
 
 test "getCpuDescriptorHandleForHeapStart should return non 0 value" {
@@ -88,7 +106,7 @@ test "getCpuDescriptorHandleForHeapStart should return non 0 value" {
     if (dx12.Error.from(result) != null) {
         @panic("Failed to create descriptor heap.");
     }
-    errdefer _ = heap.IUnknown.Release();
+    defer _ = heap.IUnknown.Release();
 
     const handle = getCpuDescriptorHandleForHeapStart(heap);
     try testing.expect(handle.ptr != 0);
@@ -111,7 +129,7 @@ test "getGpuDescriptorHandleForHeapStart should return non 0 value" {
     if (dx12.Error.from(result) != null) {
         @panic("Failed to create descriptor heap.");
     }
-    errdefer _ = heap.IUnknown.Release();
+    defer _ = heap.IUnknown.Release();
 
     const handle = getGpuDescriptorHandleForHeapStart(heap);
     try testing.expect(handle.ptr != 0);

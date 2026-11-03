@@ -53,12 +53,6 @@ pub const ZstdEncoder = struct {
             return err;
         }
 
-        if (resultToError(checksum_result)) |err| {
-            misc.error_context.new("{s}", .{resultToString(checksum_result)});
-            misc.error_context.append("Failed to set checksum flag to 1.", .{});
-            return err;
-        }
-
         const input_buffer = allocator.alloc(u8, zstd.ZSTD_CStreamInSize()) catch |err| {
             misc.error_context.new("Failed to allocate input buffer.", .{});
             return err;

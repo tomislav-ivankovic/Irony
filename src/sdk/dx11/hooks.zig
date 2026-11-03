@@ -127,6 +127,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                 misc.error_context.logError(err);
                 return present_hook.?.original(swap_chain, sync_interval, flags);
             };
+            defer _ = device.IUnknown.Release();
             const device_context = dx11.getDeviceContextFromDevice(device) catch |err| {
                 misc.error_context.append("Failed to get DX11 device context from device.", .{});
                 misc.error_context.logError(err);
@@ -180,6 +181,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                     swap_chain_flags,
                 );
             };
+            defer _ = device.IUnknown.Release();
             const device_context = dx11.getDeviceContextFromDevice(device) catch |err| {
                 misc.error_context.append("Failed to get DX11 device context from device.", .{});
                 misc.error_context.logError(err);

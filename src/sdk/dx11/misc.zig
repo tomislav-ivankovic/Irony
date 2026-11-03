@@ -14,6 +14,7 @@ pub fn getWindowFromSwapChain(swap_chain: *const w32.IDXGISwapChain) !w32.HWND {
     return desc.OutputWindow orelse error.NotFound;
 }
 
+// Caller needs to release the device!
 pub fn getDeviceFromSwapChain(swap_chain: *const w32.IDXGISwapChain) !(*const w32.ID3D11Device) {
     var device: *const w32.ID3D11Device = undefined;
     const result = swap_chain.IDXGIDeviceSubObject.GetDevice(w32.IID_ID3D11Device, @ptrCast(&device));
@@ -52,7 +53,9 @@ test "getDeviceFromSwapChain should return correct value" {
     }
     const context = try dx11.TestingContext.init();
     defer context.deinit();
-    try testing.expectEqual(context.device, getDeviceFromSwapChain(context.swap_chain));
+    const device = try getDeviceFromSwapChain(context.swap_chain);
+    defer _ = device.IUnknown.Release();
+    try testing.expectEqual(context.device, device);
 }
 
 test "getDeviceContextFromDevice should return correct value" {

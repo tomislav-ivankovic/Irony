@@ -165,6 +165,7 @@ pub fn Context(comptime rendering_api: build_info.RenderingApi) type {
                 misc.error_context.new("IGFD_Create returned null.", .{});
                 return error.ImguiError;
             };
+            errdefer imgui.IGFD_Destroy(file_dialog_context);
 
             const test_allocation = if (builtin.is_test) try std.testing.allocator.create(u8) else {};
 
@@ -187,12 +188,10 @@ pub fn Context(comptime rendering_api: build_info.RenderingApi) type {
                 .dx12 => ui.backend.ImGui_ImplDX12_Shutdown(),
             }
             ui.backend.ImGui_ImplWin32_Shutdown();
-            imgui.igGetIO_Nil().*.ConfigInputTrickleEventQueue = true;
-            imgui.igGetIO_Nil().*.IniFilename = null;
+            imgui.igDestroyContext(self.imgui_context);
             if (self.ini_file_path) |path| {
                 self.allocator.free(path);
             }
-            imgui.igDestroyContext(self.imgui_context);
             ui.setAllocator(self.old_allocator);
 
             if (builtin.is_test) {

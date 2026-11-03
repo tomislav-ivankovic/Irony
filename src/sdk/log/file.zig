@@ -48,13 +48,22 @@ pub fn FileLogger(comptime config: FileLoggerConfig) type {
 
         pub fn stop() void {
             const state = if (state_maybe) |*s| s else return;
-            state.file_writer.end() catch |err| {
+            var end_error: ?anyerror = null;
+            {
+                const locked = if (mutex.lock(state.io)) true else |_| false;
+                defer if (locked) mutex.unlock(state.io);
+                state.file_writer.end() catch |err| {
+                    end_error = err;
+                };
+                state.file.close(state.io);
+                state_maybe = null;
+            }
+            // Logging must happen outside of the lock since logFn locks the same mutex.
+            if (end_error) |err| {
                 misc.error_context.new("Failed to end file writer.", .{});
                 misc.error_context.append("Failed to stop file logger.", .{});
                 misc.error_context.logError(err);
-            };
-            state.file.close(state.io);
-            state_maybe = null;
+            }
         }
 
         pub fn logFn(
@@ -74,6 +83,9 @@ pub fn FileLogger(comptime config: FileLoggerConfig) type {
             const writer = &state.file_writer.interface;
             mutex.lock(state.io) catch return;
             defer mutex.unlock(state.io);
+            if (state_maybe == null) {
+                return; // Logger was stopped while waiting for the lock.
+            }
             if (timestamp) |t| {
                 writer.print("{f} " ++ level_prefix ++ scope_prefix ++ format ++ "\n", .{t} ++ args) catch |err| {
                     std.debug.print("Failed to write log message with file logger. Cause: {}\n", .{err});

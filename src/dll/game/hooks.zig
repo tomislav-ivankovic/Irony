@@ -188,7 +188,7 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
             if (process_input_hook) |*hook| {
                 if (hook.destroy()) {
                     std.log.info("Process input hook destroyed.", .{});
-                    tick_hook = null;
+                    process_input_hook = null;
                 } else |err| {
                     sdk.misc.error_context.append("Failed to destroy process input hook.", .{});
                     sdk.misc.error_context.logError(err);

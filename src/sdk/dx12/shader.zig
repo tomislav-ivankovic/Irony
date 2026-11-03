@@ -419,6 +419,7 @@ pub fn Shader(Vertex: type, Index: type, Constants: type) type {
                     misc.error_context.append("ID3D12Device.CreateCommittedResource returned a failure value.", .{});
                     return error.Dx12Error;
                 }
+                errdefer _ = resource.IUnknown.Release();
 
                 var mapped_maybe: ?*anyopaque = null;
                 const map_result = resource.Map(0, &.{ .Begin = 0, .End = 0 }, &mapped_maybe);

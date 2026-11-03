@@ -480,7 +480,7 @@ const FileDialog = struct {
             );
         }
         if (self.is_open and !is_open) {
-            defer imgui.IGFD_CloseDialog(context);
+            imgui.IGFD_CloseDialog(context);
         }
 
         const display_size = imgui.igGetIO_Nil().*.DisplaySize;
