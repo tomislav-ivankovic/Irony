@@ -134,6 +134,9 @@ pub const TaiTable = struct {
 
         const header_color = imgui.igGetStyle().*.Colors[imgui.ImGuiCol_TableHeaderBg];
 
+        self.drawImportConfirmDialog(tai, controller);
+        self.drawClearConfirmDialog(tai);
+
         var player_divide_screen_x: f32 = 0;
         if (imgui.igTableNextColumn()) {
             imgui.igPushID_Str("move");
@@ -1005,8 +1008,8 @@ pub const TaiTable = struct {
 
     fn isCancelDisabled(self: *const Self) bool {
         return switch (self.state) {
-            .idle, .selecting => true,
-            .moving, .editing, .confirming => false,
+            .idle, .selecting, .confirming => true,
+            .moving, .editing => false,
         };
     }
 
@@ -1120,31 +1123,30 @@ pub const TaiTable = struct {
     }
 
     fn drawImportButton(self: *Self, tai: *core.ToolAssistedInput, controller: *const core.Controller) void {
-        const is_confirm_open = self.state == .confirming and self.state.confirming == .import;
-        var next_confirm_open = is_confirm_open;
+        imgui.igPushStyleVar_Vec2(imgui.ImGuiStyleVar_FramePadding, .{});
+        defer imgui.igPopStyleVar(1);
 
-        {
-            imgui.igPushStyleVar_Vec2(imgui.ImGuiStyleVar_FramePadding, .{});
-            defer imgui.igPopStyleVar(1);
+        imgui.igBeginDisabled(isImportDisabled(controller));
+        defer imgui.igEndDisabled();
 
-            imgui.igBeginDisabled(isImportDisabled(controller));
-            defer imgui.igEndDisabled();
-
-            if (imgui.igButton(" → ###import", .{})) {
-                if (tai.sequence.items.len == 0) {
-                    self.editor.importFromRecording(tai, controller) catch |err| {
-                        sdk.misc.error_context.append("Failed to import tool assisted inputs from recording.", .{});
-                        sdk.misc.error_context.logError(err);
-                    };
-                } else {
-                    next_confirm_open = true;
-                }
-            }
-            if (imgui.igIsItemHovered(0)) {
-                imgui.igSetTooltip("Import Recorded Inputs [Ctrl + I]");
+        if (imgui.igButton(" → ###import", .{})) {
+            if (tai.sequence.items.len == 0) {
+                self.editor.importFromRecording(tai, controller) catch |err| {
+                    sdk.misc.error_context.append("Failed to import tool assisted inputs from recording.", .{});
+                    sdk.misc.error_context.logError(err);
+                };
+            } else {
+                self.state = .{ .confirming = .import };
             }
         }
+        if (imgui.igIsItemHovered(0)) {
+            imgui.igSetTooltip("Import Recorded Inputs [Ctrl + I]");
+        }
+    }
 
+    fn drawImportConfirmDialog(self: *Self, tai: *core.ToolAssistedInput, controller: *const core.Controller) void {
+        const is_confirm_open = self.state == .confirming and self.state.confirming == .import;
+        var next_confirm_open = is_confirm_open;
         const action = ui.drawConfirmDialog(
             &next_confirm_open,
             "Import inputs from the recording?",
@@ -1160,11 +1162,8 @@ pub const TaiTable = struct {
                 sdk.misc.error_context.logError(err);
             };
         }
-        if (is_confirm_open != next_confirm_open) {
-            switch (next_confirm_open) {
-                false => self.state = .idle,
-                true => self.state = .{ .confirming = .import },
-            }
+        if (is_confirm_open and !next_confirm_open) {
+            self.state = .idle;
         }
     }
 
@@ -1193,24 +1192,23 @@ pub const TaiTable = struct {
     }
 
     fn drawClearButton(self: *Self, tai: *core.ToolAssistedInput) void {
+        imgui.igPushStyleVar_Vec2(imgui.ImGuiStyleVar_FramePadding, .{});
+        defer imgui.igPopStyleVar(1);
+
+        imgui.igBeginDisabled(isClearDisabled(tai));
+        defer imgui.igEndDisabled();
+
+        if (imgui.igButton(" 🗑 ###clear", .{})) {
+            self.state = .{ .confirming = .clear };
+        }
+        if (imgui.igIsItemHovered(0)) {
+            imgui.igSetTooltip("Clear Table [Ctrl + Del]");
+        }
+    }
+
+    fn drawClearConfirmDialog(self: *Self, tai: *core.ToolAssistedInput) void {
         const is_confirm_open = self.state == .confirming and self.state.confirming == .clear;
         var next_confirm_open = is_confirm_open;
-
-        {
-            imgui.igPushStyleVar_Vec2(imgui.ImGuiStyleVar_FramePadding, .{});
-            defer imgui.igPopStyleVar(1);
-
-            imgui.igBeginDisabled(isClearDisabled(tai));
-            defer imgui.igEndDisabled();
-
-            if (imgui.igButton(" 🗑 ###clear", .{})) {
-                next_confirm_open = true;
-            }
-            if (imgui.igIsItemHovered(0)) {
-                imgui.igSetTooltip("Clear Table [Ctrl + Del]");
-            }
-        }
-
         const action = ui.drawConfirmDialog(
             &next_confirm_open,
             "Clear all inputs from the table?",
@@ -1223,11 +1221,8 @@ pub const TaiTable = struct {
         if (action == .confirm) {
             self.editor.clear(tai);
         }
-        if (is_confirm_open != next_confirm_open) {
-            switch (next_confirm_open) {
-                false => self.state = .idle,
-                true => self.state = .{ .confirming = .clear },
-            }
+        if (is_confirm_open and !next_confirm_open) {
+            self.state = .idle;
         }
     }
 
