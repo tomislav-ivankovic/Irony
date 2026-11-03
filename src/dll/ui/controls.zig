@@ -476,29 +476,17 @@ pub fn Controls(comptime config: ControlsConfig) type {
             if (imgui.igIsItemHovered(0)) {
                 imgui.igSetTooltip("Clear Recording [F9]");
             }
-            if (self.clear_confirm_open) {
-                imgui.igOpenPopup_Str("Clear recording?", 0);
-            }
-            if (imgui.igBeginPopupModal(
-                "Clear recording?",
+            const action = ui.drawConfirmDialog(
                 &self.clear_confirm_open,
-                imgui.ImGuiWindowFlags_AlwaysAutoResize,
-            )) {
-                defer imgui.igEndPopup();
-                imgui.igText("Are you sure you want to clear the recording?");
-                imgui.igText("Any unsaved recorded data will be lost.");
-                imgui.igSeparator();
-                if (imgui.igButton("Clear", .{})) {
-                    controller.clear();
-                    imgui.igCloseCurrentPopup();
-                    self.clear_confirm_open = false;
-                }
-                imgui.igSameLine(0, -1);
-                imgui.igSetItemDefaultFocus();
-                if (imgui.igButton("Cancel", .{})) {
-                    imgui.igCloseCurrentPopup();
-                    self.clear_confirm_open = false;
-                }
+                "Clear recording?",
+                \\Are you sure you want to clear the recording?
+                \\Any unsaved recorded data will be lost.
+            ,
+                "Clear",
+                "Cancel",
+            );
+            if (action == .confirm) {
+                controller.clear();
             }
         }
 

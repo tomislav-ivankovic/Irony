@@ -407,22 +407,18 @@ const ReloadButton = struct {
         const label = if (is_loading) "Reloading settings..." else "Reload Settings";
         if (imgui.igButton(label, .{})) {
             self.confirm_open = true;
-            imgui.igOpenPopup_Str("Reload settings?", 0);
         }
-        if (imgui.igBeginPopupModal("Reload settings?", &self.confirm_open, imgui.ImGuiWindowFlags_AlwaysAutoResize)) {
-            defer imgui.igEndPopup();
-            imgui.igText("Are you sure you want to reload settings?");
-            imgui.igText("Any settings you did not save will be lost.");
-            imgui.igSeparator();
-            if (imgui.igButton("Reload", .{})) {
-                self.loadSettings(io);
-                imgui.igCloseCurrentPopup();
-            }
-            imgui.igSameLine(0, -1);
-            imgui.igSetItemDefaultFocus();
-            if (imgui.igButton("Cancel", .{})) {
-                imgui.igCloseCurrentPopup();
-            }
+        const action = ui.drawConfirmDialog(
+            &self.confirm_open,
+            "Reload settings?",
+            \\Are you sure you want to reload settings?
+            \\Any settings you did not save will be lost.
+        ,
+            "Reload",
+            "Cancel",
+        );
+        if (action == .confirm) {
+            self.loadSettings(io);
         }
         self.checkLoadedSettings(settings);
     }
@@ -446,7 +442,7 @@ const ReloadButton = struct {
                     }
                 }
             }.call,
-            .{ io },
+            .{io},
         ) catch |err| {
             sdk.misc.error_context.new("Failed to spawn settings load task.", .{});
             sdk.misc.error_context.append("Failed to load settings.", .{});
@@ -472,26 +468,22 @@ const DefaultsButton = struct {
     fn draw(self: *Self, settings: *model.Settings, default_settings: *const model.Settings) void {
         if (imgui.igButton("Reset Settings To Defaults", .{})) {
             self.confirm_open = true;
-            imgui.igOpenPopup_Str("Reset settings to defaults?", 0);
         }
-        if (imgui.igBeginPopupModal("Reset settings to defaults?", &self.confirm_open, imgui.ImGuiWindowFlags_AlwaysAutoResize)) {
-            defer imgui.igEndPopup();
-            imgui.igText("Are you sure you want to reset all settings to default values?");
-            imgui.igText("Any settings you did not save will be lost.");
-            imgui.igText("You can however reload your saved settings.");
-            imgui.igText("(Unless you override them by saving.)");
-            imgui.igSeparator();
-            if (imgui.igButton("Reset", .{})) {
-                settings.* = default_settings.*;
-                std.log.info("Settings set to default values.", .{});
-                sdk.ui.toasts.send(.success, null, "Settings set to default values.", .{});
-                imgui.igCloseCurrentPopup();
-            }
-            imgui.igSameLine(0, -1);
-            imgui.igSetItemDefaultFocus();
-            if (imgui.igButton("Cancel", .{})) {
-                imgui.igCloseCurrentPopup();
-            }
+        const action = ui.drawConfirmDialog(
+            &self.confirm_open,
+            "Reset settings to defaults?",
+            \\Are you sure you want to reset all settings to default values?
+            \\Any settings you did not save will be lost.
+            \\You can however reload your saved settings.
+            \\(Unless you override them by saving.)
+        ,
+            "Reset",
+            "Cancel",
+        );
+        if (action == .confirm) {
+            settings.* = default_settings.*;
+            std.log.info("Settings set to default values.", .{});
+            sdk.ui.toasts.send(.success, null, "Settings set to default values.", .{});
         }
     }
 };

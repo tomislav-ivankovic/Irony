@@ -1145,32 +1145,20 @@ pub const TaiTable = struct {
             }
         }
 
-        if (next_confirm_open) {
-            imgui.igOpenPopup_Str("Import inputs from the recording?", 0);
-        }
-        if (imgui.igBeginPopupModal(
-            "Import inputs from the recording?",
+        const action = ui.drawConfirmDialog(
             &next_confirm_open,
-            imgui.ImGuiWindowFlags_AlwaysAutoResize,
-        )) {
-            defer imgui.igEndPopup();
-            imgui.igText("Are you sure you want to import inputs from the recording?");
-            imgui.igText("This will override all existing input values and can not be undone.");
-            imgui.igSeparator();
-            if (imgui.igButton("Import", .{})) {
-                self.editor.importFromRecording(tai, controller) catch |err| {
-                    sdk.misc.error_context.append("Failed to import tool assisted inputs from recording.", .{});
-                    sdk.misc.error_context.logError(err);
-                };
-                imgui.igCloseCurrentPopup();
-                next_confirm_open = false;
-            }
-            imgui.igSameLine(0, -1);
-            imgui.igSetItemDefaultFocus();
-            if (imgui.igButton("Cancel", .{})) {
-                imgui.igCloseCurrentPopup();
-                next_confirm_open = false;
-            }
+            "Import inputs from the recording?",
+            \\Are you sure you want to import inputs from the recording?
+            \\This will override all existing input values and can not be undone.
+        ,
+            "Import",
+            "Cancel",
+        );
+        if (action == .confirm) {
+            self.editor.importFromRecording(tai, controller) catch |err| {
+                sdk.misc.error_context.append("Failed to import tool assisted inputs from recording.", .{});
+                sdk.misc.error_context.logError(err);
+            };
         }
         if (is_confirm_open != next_confirm_open) {
             switch (next_confirm_open) {
@@ -1223,29 +1211,17 @@ pub const TaiTable = struct {
             }
         }
 
-        if (next_confirm_open) {
-            imgui.igOpenPopup_Str("Clear all inputs from the table?", 0);
-        }
-        if (imgui.igBeginPopupModal(
-            "Clear all inputs from the table?",
+        const action = ui.drawConfirmDialog(
             &next_confirm_open,
-            imgui.ImGuiWindowFlags_AlwaysAutoResize,
-        )) {
-            defer imgui.igEndPopup();
-            imgui.igText("Are you sure you want to clear all inputs from the table?");
-            imgui.igText("This will delete all table rows and can not be undone.");
-            imgui.igSeparator();
-            if (imgui.igButton("Clear", .{})) {
-                self.editor.clear(tai);
-                imgui.igCloseCurrentPopup();
-                next_confirm_open = false;
-            }
-            imgui.igSameLine(0, -1);
-            imgui.igSetItemDefaultFocus();
-            if (imgui.igButton("Cancel", .{})) {
-                imgui.igCloseCurrentPopup();
-                next_confirm_open = false;
-            }
+            "Clear all inputs from the table?",
+            \\Are you sure you want to clear all inputs from the table?
+            \\This will delete all table rows and can not be undone.
+        ,
+            "Clear",
+            "Cancel",
+        );
+        if (action == .confirm) {
+            self.editor.clear(tai);
         }
         if (is_confirm_open != next_confirm_open) {
             switch (next_confirm_open) {
