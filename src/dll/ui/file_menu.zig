@@ -245,19 +245,32 @@ const UnsavedDialog = struct {
         }
         defer ui.endDialog();
 
+        const s_pressed = imgui.igShortcut_Nil(imgui.ImGuiKey_S, imgui.ImGuiInputFlags_RouteFocused);
+        const d_pressed = imgui.igShortcut_Nil(imgui.ImGuiKey_D, imgui.ImGuiInputFlags_RouteFocused);
+        const escape_pressed = imgui.igShortcut_Nil(imgui.ImGuiKey_Escape, imgui.ImGuiInputFlags_RouteFocused);
+
         imgui.igText("Do you want to save changes of current file before continuing?");
         imgui.igText("Any recorded data that is not saved will be lost.");
         imgui.igSeparator();
-        if (imgui.igButton("Save", .{})) {
+        if (imgui.igButton("Save", .{}) or s_pressed) {
             action = .save;
         }
-        imgui.igSameLine(0, -1);
-        if (imgui.igButton("Don't Save", .{})) {
-            action = .dont_save;
+        if (imgui.igIsItemHovered(0)) {
+            imgui.igSetTooltip("[S]");
         }
         imgui.igSameLine(0, -1);
-        if (imgui.igButton("Cancel", .{})) {
+        if (imgui.igButton("Don't Save", .{}) or d_pressed) {
+            action = .dont_save;
+        }
+        if (imgui.igIsItemHovered(0)) {
+            imgui.igSetTooltip("[D]");
+        }
+        imgui.igSameLine(0, -1);
+        if (imgui.igButton("Cancel", .{}) or escape_pressed) {
             action = .cancel;
+        }
+        if (imgui.igIsItemHovered(0)) {
+            imgui.igSetTooltip("[Esc]");
         }
         imgui.igSetItemDefaultFocus();
     }
@@ -712,6 +725,99 @@ test "should show correctly working unsaved changes dialog when new is clicked w
             ctx.yield(1);
             try testing.expectEqual(1, controller.save_call_count);
             try testing.expectEqual(2, controller.clear_call_count);
+        }
+    };
+    Test.file_dialog_context = imgui.IGFD_Create() orelse @panic("Failed to create file dialog context.");
+    defer imgui.IGFD_Destroy(Test.file_dialog_context);
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "unsaved changes dialog should react to keyboard shortcuts" {
+    const Test = struct {
+        var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
+        var controller: MockController = .{
+            .contains_unsaved_changes = true,
+            .file_path = .fromArray("./test.irony".*),
+        };
+        var is_ui_open: bool = true;
+        var file_menu: FileMenu(.{ .Controller = MockController, .selfShutDown = selfShutdown }) = .{};
+
+        fn selfShutdown() void {}
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            defer imgui.igEnd();
+            if (!imgui.igBeginMenuBar()) return;
+            defer imgui.igEndMenuBar();
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window");
+            ctx.menuClick("File/New");
+            ctx.keyPress(imgui.ImGuiKey_Escape, 1);
+            ctx.yield(3); // Test engine caches item lookups for 2 frames.
+            try testing.expectEqual(0, controller.save_call_count);
+            try testing.expectEqual(0, controller.clear_call_count);
+            try ctx.expectItemNotExists("//Unsaved Changes/Cancel");
+
+            ctx.setRef("Window");
+            ctx.menuClick("File/New");
+            ctx.keyPress(imgui.ImGuiKey_D, 1);
+            ctx.yield(3); // Test engine caches item lookups for 2 frames.
+            try testing.expectEqual(0, controller.save_call_count);
+            try testing.expectEqual(1, controller.clear_call_count);
+            try ctx.expectItemNotExists("//Unsaved Changes/Cancel");
+
+            ctx.setRef("Window");
+            ctx.menuClick("File/New");
+            ctx.keyPress(imgui.ImGuiKey_S, 1);
+            try testing.expectEqual(1, controller.save_call_count);
+            try testing.expectEqual(1, controller.clear_call_count);
+            try testing.expectStringEndsWith(controller.last_save_path.?.asSlice(), "test.irony");
+            controller.mode = .live;
+            controller.did_last_save_or_load_succeed = true;
+            ctx.yield(3); // Test engine caches item lookups for 2 frames.
+            try testing.expectEqual(1, controller.save_call_count);
+            try testing.expectEqual(2, controller.clear_call_count);
+            try ctx.expectItemNotExists("//Unsaved Changes/Cancel");
+        }
+    };
+    Test.file_dialog_context = imgui.IGFD_Create() orelse @panic("Failed to create file dialog context.");
+    defer imgui.IGFD_Destroy(Test.file_dialog_context);
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "unsaved changes dialog shortcuts should do nothing when dialog is closed" {
+    const Test = struct {
+        var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
+        var controller: MockController = .{
+            .contains_unsaved_changes = true,
+            .file_path = .fromArray("./test.irony".*),
+        };
+        var is_ui_open: bool = true;
+        var file_menu: FileMenu(.{ .Controller = MockController, .selfShutDown = selfShutdown }) = .{};
+
+        fn selfShutdown() void {}
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            defer imgui.igEnd();
+            if (!imgui.igBeginMenuBar()) return;
+            defer imgui.igEndMenuBar();
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.keyPress(imgui.ImGuiKey_S, 1);
+            ctx.keyPress(imgui.ImGuiKey_D, 1);
+            ctx.keyPress(imgui.ImGuiKey_Escape, 1);
+            try testing.expectEqual(0, controller.save_call_count);
+            try testing.expectEqual(0, controller.clear_call_count);
         }
     };
     Test.file_dialog_context = imgui.IGFD_Create() orelse @panic("Failed to create file dialog context.");
