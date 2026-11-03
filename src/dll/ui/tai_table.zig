@@ -48,6 +48,8 @@ pub const TaiTable = struct {
         idle,
         play,
     };
+    const table_route = imgui.ImGuiInputFlags_RouteFocused;
+    const window_route = imgui.ImGuiInputFlags_RouteFocused | imgui.ImGuiInputFlags_RouteFromRootWindow;
 
     pub fn init(allocator: std.mem.Allocator) Self {
         return .{
@@ -669,38 +671,50 @@ pub const TaiTable = struct {
             return;
         }
 
+        const flags = table_route | imgui.ImGuiInputFlags_Repeat;
+        const shift = imgui.ImGuiMod_Shift;
+        const enter_pressed = imgui.igShortcut_Nil(imgui.ImGuiKey_Enter, flags);
+        const shift_enter_pressed = imgui.igShortcut_Nil(shift | imgui.ImGuiKey_Enter, flags);
+        const up_pressed_no_shift = imgui.igShortcut_Nil(imgui.ImGuiKey_UpArrow, flags);
+        const down_pressed_no_shift = imgui.igShortcut_Nil(imgui.ImGuiKey_DownArrow, flags);
+        const left_pressed_no_shift = imgui.igShortcut_Nil(imgui.ImGuiKey_LeftArrow, flags);
+        const right_pressed_no_shift = imgui.igShortcut_Nil(imgui.ImGuiKey_RightArrow, flags);
+        const up_pressed_shift = imgui.igShortcut_Nil(shift | imgui.ImGuiKey_UpArrow, flags);
+        const down_pressed_shift = imgui.igShortcut_Nil(shift | imgui.ImGuiKey_DownArrow, flags);
+        const left_pressed_shift = imgui.igShortcut_Nil(shift | imgui.ImGuiKey_LeftArrow, flags);
+        const right_pressed_shift = imgui.igShortcut_Nil(shift | imgui.ImGuiKey_RightArrow, flags);
+
         const selection = &self.editor.selection;
         var next_cell = self.editor.selection.end;
-        if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_Enter, true)) {
-            const mods = imgui.igGetIO_Nil().*.KeyMods;
-            if (mods == 0) {
-                if (selection.start.index == sequence_len and selection.end.index == sequence_len) {
-                    self.editor.insertRows() catch |err| {
-                        sdk.misc.error_context.append("Failed to insert row.", .{});
-                        sdk.misc.error_context.logError(err);
-                    };
-                    next_cell.index += 1;
-                    selection.* = .{ .start = next_cell, .end = next_cell };
-                    return;
-                }
-                if (next_cell.index < sequence_len) {
-                    next_cell.index += 1;
-                }
-                selection.* = .{ .start = next_cell, .end = next_cell };
-                return;
-            } else if (mods == imgui.ImGuiMod_Shift) {
-                if (next_cell.index > 0) {
-                    next_cell.index -= 1;
-                }
+        if (enter_pressed) {
+            if (selection.start.index == sequence_len and selection.end.index == sequence_len) {
+                self.editor.insertRows() catch |err| {
+                    sdk.misc.error_context.append("Failed to insert row.", .{});
+                    sdk.misc.error_context.logError(err);
+                };
+                next_cell.index += 1;
                 selection.* = .{ .start = next_cell, .end = next_cell };
                 return;
             }
+            if (next_cell.index < sequence_len) {
+                next_cell.index += 1;
+            }
+            selection.* = .{ .start = next_cell, .end = next_cell };
+            return;
+        }
+        if (shift_enter_pressed) {
+            if (next_cell.index > 0) {
+                next_cell.index -= 1;
+            }
+            selection.* = .{ .start = next_cell, .end = next_cell };
+            return;
         }
 
-        const up_pressed = imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_UpArrow, true);
-        const down_pressed = imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_DownArrow, true);
-        const left_pressed = imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_LeftArrow, true);
-        const right_pressed = imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_RightArrow, true);
+        const up_pressed = up_pressed_no_shift or up_pressed_shift;
+        const down_pressed = down_pressed_no_shift or down_pressed_shift;
+        const left_pressed = left_pressed_no_shift or left_pressed_shift;
+        const right_pressed = right_pressed_no_shift or right_pressed_shift;
+        const shift_pressed = up_pressed_shift or down_pressed_shift or left_pressed_shift or right_pressed_shift;
         var detected_press = false;
         if (up_pressed and !down_pressed) {
             detected_press = true;
@@ -723,11 +737,10 @@ pub const TaiTable = struct {
             next_cell.player_id = .player_2;
         }
         if (detected_press) {
-            const mods = imgui.igGetIO_Nil().*.KeyMods;
-            if (mods == 0) {
-                selection.* = .{ .start = next_cell, .end = next_cell };
-            } else if (mods == imgui.ImGuiMod_Shift) {
+            if (shift_pressed) {
                 selection.end = next_cell;
+            } else {
+                selection.* = .{ .start = next_cell, .end = next_cell };
             }
         }
     }
@@ -768,10 +781,7 @@ pub const TaiTable = struct {
         if (self.state != .idle) {
             return;
         }
-        if (imgui.igGetIO_Nil().*.KeyMods != imgui.ImGuiMod_Ctrl) {
-            return;
-        }
-        if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_A, false)) {
+        if (!imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_A, table_route)) {
             return;
         }
         self.editor.selection = .{
@@ -784,15 +794,16 @@ pub const TaiTable = struct {
         if (self.state != .idle) {
             return;
         }
-        if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_Backspace, true)) {
-            return;
-        }
+        const backspace_pressed = imgui.igShortcut_Nil(
+            imgui.ImGuiKey_Backspace,
+            table_route | imgui.ImGuiInputFlags_Repeat,
+        );
+        const shift_backspace_pressed = imgui.igShortcut_Nil(
+            imgui.ImGuiMod_Shift | imgui.ImGuiKey_Backspace,
+            table_route | imgui.ImGuiInputFlags_Repeat,
+        );
         const Direction = enum { up, down };
-        const direction: Direction = switch (imgui.igGetIO_Nil().*.KeyMods) {
-            0 => .down,
-            imgui.ImGuiMod_Shift => .up,
-            else => return,
-        };
+        const direction: Direction = if (backspace_pressed) .down else if (shift_backspace_pressed) .up else return;
         const selection = &self.editor.selection;
         if (selection.start.index == sequence_len and selection.end.index == sequence_len) {
             return;
@@ -813,12 +824,10 @@ pub const TaiTable = struct {
     }
 
     fn handleEditShortcut(self: *Self, tai: *const core.ToolAssistedInput) void {
+        imgui.igSetNextFrameWantCaptureKeyboard(true);
         switch (self.state) {
-            .idle => switch (imgui.igGetIO_Nil().*.KeyMods) {
-                imgui.ImGuiMod_Ctrl => {
-                    if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_E, false)) {
-                        return;
-                    }
+            .idle => switch (imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_E, table_route)) {
+                true => {
                     const cell = &self.editor.selection.end;
                     if (cell.index >= tai.sequence.items.len) {
                         self.state = .{ .editing = .{ .text_buffer = State.Editing.empty_buffer, .select_all = true } };
@@ -837,7 +846,10 @@ pub const TaiTable = struct {
                     };
                     self.state = .{ .editing = .{ .text_buffer = buffer, .select_all = true } };
                 },
-                0 => {
+                false => {
+                    if (imgui.igGetIO_Nil().*.KeyMods != 0) {
+                        return;
+                    }
                     const queue = &imgui.igGetIO_Nil().*.InputQueueCharacters;
                     if (queue.*.Size <= 0) {
                         return;
@@ -867,7 +879,6 @@ pub const TaiTable = struct {
                     buffer[len] = 0;
                     self.state = .{ .editing = .{ .text_buffer = buffer, .select_all = false } };
                 },
-                else => {},
             },
             .editing => |*editing| {
                 if (editing.input_activated) {
@@ -982,14 +993,11 @@ pub const TaiTable = struct {
     }
 
     fn handleEnabledShortcut(enabled: *bool, player_id: model.PlayerId) void {
-        if (imgui.igGetIO_Nil().*.KeyMods != imgui.ImGuiMod_Ctrl) {
-            return;
-        }
-        const key: c_uint = switch (player_id) {
-            .player_1 => imgui.ImGuiKey_1,
-            .player_2 => imgui.ImGuiKey_2,
+        const key_chord = switch (player_id) {
+            .player_1 => imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_1,
+            .player_2 => imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_2,
         };
-        if (!imgui.igIsKeyPressed_Bool(key, false)) {
+        if (!imgui.igShortcut_Nil(key_chord, window_route)) {
             return;
         }
         enabled.* = !enabled.*;
@@ -1021,10 +1029,11 @@ pub const TaiTable = struct {
     }
 
     fn handleCancelShortcut(self: *Self) void {
-        if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_Escape, false)) {
+        if (self.isCancelDisabled()) {
             return;
         }
-        if (self.isCancelDisabled()) {
+        const flags = imgui.ImGuiInputFlags_RouteGlobal | imgui.ImGuiInputFlags_RouteOverActive;
+        if (!imgui.igShortcut_Nil(imgui.ImGuiKey_Escape, flags)) {
             return;
         }
         self.state = .idle;
@@ -1059,10 +1068,7 @@ pub const TaiTable = struct {
         if (self.isUndoDisabled()) {
             return;
         }
-        if (imgui.igGetIO_Nil().*.KeyMods != imgui.ImGuiMod_Ctrl) {
-            return;
-        }
-        if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_Z, true)) {
+        if (!imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_Z, window_route | imgui.ImGuiInputFlags_Repeat)) {
             return;
         }
         self.editor.undo(tai) catch |err| {
@@ -1100,10 +1106,7 @@ pub const TaiTable = struct {
         if (self.isRedoDisabled()) {
             return;
         }
-        if (imgui.igGetIO_Nil().*.KeyMods != imgui.ImGuiMod_Ctrl) {
-            return;
-        }
-        if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_Y, true)) {
+        if (!imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_Y, window_route | imgui.ImGuiInputFlags_Repeat)) {
             return;
         }
         self.editor.redo(tai) catch |err| {
@@ -1184,10 +1187,7 @@ pub const TaiTable = struct {
         if (isImportDisabled(controller)) {
             return;
         }
-        if (imgui.igGetIO_Nil().*.KeyMods != imgui.ImGuiMod_Ctrl) {
-            return;
-        }
-        if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_I, false)) {
+        if (!imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_I, window_route)) {
             return;
         }
         if (tai.sequence.items.len == 0) {
@@ -1262,10 +1262,7 @@ pub const TaiTable = struct {
         if (isClearDisabled(tai)) {
             return;
         }
-        if (imgui.igGetIO_Nil().*.KeyMods != imgui.ImGuiMod_Ctrl) {
-            return;
-        }
-        if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_Delete, false)) {
+        if (!imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_Delete, window_route)) {
             return;
         }
         self.state = .{ .confirming = .clear };
@@ -1428,11 +1425,14 @@ pub const TaiTable = struct {
         if (self.state != .idle) {
             return;
         }
-        if (imgui.igGetIO_Nil().*.KeyMods != imgui.ImGuiMod_Alt) {
-            return;
-        }
-        const up_pressed = imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_UpArrow, true);
-        const down_pressed = imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_DownArrow, true);
+        const up_pressed = imgui.igShortcut_Nil(
+            imgui.ImGuiMod_Alt | imgui.ImGuiKey_UpArrow,
+            table_route | imgui.ImGuiInputFlags_Repeat,
+        );
+        const down_pressed = imgui.igShortcut_Nil(
+            imgui.ImGuiMod_Alt | imgui.ImGuiKey_DownArrow,
+            table_route | imgui.ImGuiInputFlags_Repeat,
+        );
         const selection = &self.editor.selection;
         const min_index = selection.getMinIndex();
         const max_index = selection.getMaxIndex();
@@ -1513,11 +1513,8 @@ pub const TaiTable = struct {
         if (self.state != .idle) {
             return;
         }
-        if (imgui.igGetIO_Nil().*.KeyMods != imgui.ImGuiMod_Alt) {
-            return;
-        }
-        const left_pressed = imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_LeftArrow, false);
-        const right_pressed = imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_RightArrow, false);
+        const left_pressed = imgui.igShortcut_Nil(imgui.ImGuiMod_Alt | imgui.ImGuiKey_LeftArrow, table_route);
+        const right_pressed = imgui.igShortcut_Nil(imgui.ImGuiMod_Alt | imgui.ImGuiKey_RightArrow, table_route);
         const selection = &self.editor.selection;
         const swap = block: {
             if (selection.start.player_id == selection.end.player_id) {
@@ -1584,10 +1581,7 @@ pub const TaiTable = struct {
         if (self.state != .idle) {
             return;
         }
-        if (imgui.igGetIO_Nil().*.KeyMods != 0) {
-            return;
-        }
-        if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_Insert, true)) {
+        if (!imgui.igShortcut_Nil(imgui.ImGuiKey_Insert, window_route | imgui.ImGuiInputFlags_Repeat)) {
             return;
         }
         self.editor.insertRows() catch |err| {
@@ -1645,13 +1639,10 @@ pub const TaiTable = struct {
         if (self.state != .idle) {
             return;
         }
-        if (imgui.igGetIO_Nil().*.KeyMods != 0) {
-            return;
-        }
-        if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_Delete, true)) {
-            return;
-        }
         if (sequence_len == 0) {
+            return;
+        }
+        if (!imgui.igShortcut_Nil(imgui.ImGuiKey_Delete, window_route | imgui.ImGuiInputFlags_Repeat)) {
             return;
         }
         self.editor.deleteRows(sequence_len) catch |err| {
@@ -1664,13 +1655,10 @@ pub const TaiTable = struct {
         if (self.state != .idle) {
             return;
         }
-        if (imgui.igGetIO_Nil().*.KeyMods != imgui.ImGuiMod_Ctrl) {
-            return;
-        }
-        if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_C, false)) {
-            return;
-        }
         if (tai.sequence.items.len == 0) {
+            return;
+        }
+        if (!imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_C, window_route)) {
             return;
         }
         const setClipboardText = struct {
@@ -1690,10 +1678,7 @@ pub const TaiTable = struct {
         if (self.state != .idle) {
             return;
         }
-        if (imgui.igGetIO_Nil().*.KeyMods != imgui.ImGuiMod_Ctrl) {
-            return;
-        }
-        if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_V, false)) {
+        if (!imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_V, window_route)) {
             return;
         }
         const text = imgui.igGetClipboardText();

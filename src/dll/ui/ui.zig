@@ -141,11 +141,14 @@ pub const Ui = struct {
     }
 
     fn handleOpenKey(self: *Self) void {
-        const mods = imgui.igGetIO_Nil().*.KeyMods;
-        if (mods != 0 and mods != imgui.ImGuiMod_Shift) {
-            return;
-        }
-        if (!imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_Tab, false)) {
+        _ = imgui.igShortcut_Nil(imgui.ImGuiKey_Tab, imgui.ImGuiInputFlags_RouteGlobal);
+        _ = imgui.igShortcut_Nil(imgui.ImGuiMod_Shift | imgui.ImGuiKey_Tab, imgui.ImGuiInputFlags_RouteGlobal);
+        const tab_pressed = imgui.igShortcut_Nil(imgui.ImGuiKey_Tab, imgui.ImGuiInputFlags_RouteAlways);
+        const shift_tab_pressed = imgui.igShortcut_Nil(
+            imgui.ImGuiMod_Shift | imgui.ImGuiKey_Tab,
+            imgui.ImGuiInputFlags_RouteAlways,
+        );
+        if (!tab_pressed and !shift_tab_pressed) {
             return;
         }
         self.is_open = !self.is_open;

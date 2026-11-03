@@ -174,7 +174,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
             if (isPlayDisabled(controller)) {
                 return;
             }
-            if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F1, false)) {
+            if (imgui.igShortcut_Nil(imgui.ImGuiKey_F1, imgui.ImGuiInputFlags_RouteGlobal)) {
                 controller.play();
             }
         }
@@ -203,7 +203,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
             if (isPauseDisabled(controller)) {
                 return;
             }
-            if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F2, false)) {
+            if (imgui.igShortcut_Nil(imgui.ImGuiKey_F2, imgui.ImGuiInputFlags_RouteGlobal)) {
                 controller.pause();
             }
         }
@@ -232,7 +232,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
             if (isStopDisabled(controller)) {
                 return;
             }
-            if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F3, false)) {
+            if (imgui.igShortcut_Nil(imgui.ImGuiKey_F3, imgui.ImGuiInputFlags_RouteGlobal)) {
                 controller.stop();
             }
         }
@@ -260,7 +260,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
             if (isRecordDisabled(controller)) {
                 return;
             }
-            if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F4, false)) {
+            if (imgui.igShortcut_Nil(imgui.ImGuiKey_F4, imgui.ImGuiInputFlags_RouteGlobal)) {
                 controller.record();
             }
         }
@@ -292,7 +292,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
             if (isRewindDisabled(controller)) {
                 return;
             }
-            if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F5, false)) {
+            if (imgui.igShortcut_Nil(imgui.ImGuiKey_F5, imgui.ImGuiInputFlags_RouteGlobal)) {
                 self.startRewind(controller);
             }
             if (imgui.igIsKeyReleased_Nil(imgui.ImGuiKey_F5)) {
@@ -345,7 +345,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
             if (isFastForwardDisabled(controller)) {
                 return;
             }
-            if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F8, false)) {
+            if (imgui.igShortcut_Nil(imgui.ImGuiKey_F8, imgui.ImGuiInputFlags_RouteGlobal)) {
                 self.startFastForward(controller);
             }
             if (imgui.igIsKeyReleased_Nil(imgui.ImGuiKey_F8)) {
@@ -396,7 +396,8 @@ pub fn Controls(comptime config: ControlsConfig) type {
             if (isPreviousFrameDisabled(controller)) {
                 return;
             }
-            if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F6, true)) {
+            const flags = imgui.ImGuiInputFlags_RouteGlobal | imgui.ImGuiInputFlags_Repeat;
+            if (imgui.igShortcut_Nil(imgui.ImGuiKey_F6, flags)) {
                 goToPreviousFrame(controller);
             }
         }
@@ -437,7 +438,8 @@ pub fn Controls(comptime config: ControlsConfig) type {
             if (isNextFrameDisabled(controller)) {
                 return;
             }
-            if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F7, true)) {
+            const flags = imgui.ImGuiInputFlags_RouteGlobal | imgui.ImGuiInputFlags_Repeat;
+            if (imgui.igShortcut_Nil(imgui.ImGuiKey_F7, flags)) {
                 goToNextFrame(controller);
             }
         }
@@ -504,7 +506,7 @@ pub fn Controls(comptime config: ControlsConfig) type {
             if (isClearDisabled(controller)) {
                 return;
             }
-            if (imgui.igIsKeyPressed_Bool(imgui.ImGuiKey_F9, false)) {
+            if (imgui.igShortcut_Nil(imgui.ImGuiKey_F9, imgui.ImGuiInputFlags_RouteGlobal)) {
                 if (controller.getTotalFrames() < total_frames_for_clear_confirm) {
                     controller.clear();
                 } else {
