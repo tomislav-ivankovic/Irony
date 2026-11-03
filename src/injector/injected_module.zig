@@ -53,10 +53,14 @@ pub const InjectedModule = struct {
             sdk.misc.error_context.append("Failed to create remote slice containing value: {s}", .{module_path});
             return err;
         };
-        defer remote_string.destroy() catch |err| {
-            sdk.misc.error_context.append("Failed to create destroy remote slice.", .{});
-            sdk.misc.error_context.logError(err);
-        };
+        defer {
+            const saved = sdk.misc.error_context.save();
+            defer sdk.misc.error_context.restore(&saved);
+            remote_string.destroy() catch |err| {
+                sdk.misc.error_context.append("Failed to create destroy remote slice.", .{});
+                sdk.misc.error_context.logError(err);
+            };
+        }
         const remote_thread = sdk.os.RemoteThread.spawn(
             &process,
             @ptrFromInt(load_library_address),
@@ -65,10 +69,14 @@ pub const InjectedModule = struct {
             sdk.misc.error_context.append("Failed to spawn remote thread: LoadLibraryW", .{});
             return err;
         };
-        defer remote_thread.clean() catch |err| {
-            sdk.misc.error_context.append("Failed to clean remote thread: LoadLibraryW", .{});
-            sdk.misc.error_context.logError(err);
-        };
+        defer {
+            const saved = sdk.misc.error_context.save();
+            defer sdk.misc.error_context.restore(&saved);
+            remote_thread.clean() catch |err| {
+                sdk.misc.error_context.append("Failed to clean remote thread: LoadLibraryW", .{});
+                sdk.misc.error_context.logError(err);
+            };
+        }
         const module_handle_part = remote_thread.join() catch |err| {
             sdk.misc.error_context.append("Failed to join remote thread: LoadLibraryW", .{});
             return err;
@@ -101,10 +109,14 @@ pub const InjectedModule = struct {
             sdk.misc.error_context.append("Failed to open shutdown routine shared value.", .{});
             return err;
         };
-        defer shared_value.close() catch |err| {
-            sdk.misc.error_context.append("Failed to close shutdown routine shared value.", .{});
-            sdk.misc.error_context.logError(err);
-        };
+        defer {
+            const saved = sdk.misc.error_context.save();
+            defer sdk.misc.error_context.restore(&saved);
+            shared_value.close() catch |err| {
+                sdk.misc.error_context.append("Failed to close shutdown routine shared value.", .{});
+                sdk.misc.error_context.logError(err);
+            };
+        }
         const shutdown_routine_address = shared_value.read() catch |err| {
             sdk.misc.error_context.append("Failed to read shutdown routine shared value.", .{});
             return err;
@@ -117,10 +129,14 @@ pub const InjectedModule = struct {
             sdk.misc.error_context.append("Failed to spawn shutdown routine remote thread.", .{});
             return err;
         };
-        defer remote_thread.clean() catch |err| {
-            sdk.misc.error_context.append("Failed to clean shutdown routine remote thread.", .{});
-            sdk.misc.error_context.logError(err);
-        };
+        defer {
+            const saved = sdk.misc.error_context.save();
+            defer sdk.misc.error_context.restore(&saved);
+            remote_thread.clean() catch |err| {
+                sdk.misc.error_context.append("Failed to clean shutdown routine remote thread.", .{});
+                sdk.misc.error_context.logError(err);
+            };
+        }
         _ = remote_thread.join() catch |err| {
             sdk.misc.error_context.append("Failed to join shutdown routine remote thread.", .{});
             return err;
@@ -144,10 +160,14 @@ pub const InjectedModule = struct {
             sdk.misc.error_context.append("Failed to spawn remote thread: FreeLibrary", .{});
             return err;
         };
-        defer remote_thread.clean() catch |err| {
-            sdk.misc.error_context.append("Failed to clean remote thread: FreeLibrary", .{});
-            sdk.misc.error_context.logError(err);
-        };
+        defer {
+            const saved = sdk.misc.error_context.save();
+            defer sdk.misc.error_context.restore(&saved);
+            remote_thread.clean() catch |err| {
+                sdk.misc.error_context.append("Failed to clean remote thread: FreeLibrary", .{});
+                sdk.misc.error_context.logError(err);
+            };
+        }
         const return_code = remote_thread.join() catch |err| {
             sdk.misc.error_context.append("Failed to join remote thread: FreeLibrary", .{});
             return err;

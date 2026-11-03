@@ -125,6 +125,14 @@ pub fn ErrorContext(comptime config: ErrorContextConfig) type {
             self.items.clear();
         }
 
+        pub fn save(self: *const Self) Self {
+            return self.*;
+        }
+
+        pub fn restore(self: *Self, snapshot: *const Self) void {
+            self.* = snapshot.*;
+        }
+
         pub fn logError(self: *const Self, err: anyerror) void {
             if (self.items.getLast() catch null) |last_item| {
                 const message = switch (last_item.message) {
@@ -190,6 +198,33 @@ test "should correctly format error message" {
     const message_3 = try std.fmt.allocPrint(testing.allocator, "{f}", .{context});
     defer testing.allocator.free(message_3);
     try testing.expectEqualStrings("No items inside the error context.", message_3);
+}
+
+test "restore should bring back the state captured by save" {
+    var context = ErrorContext(.{
+        .buffer_size = 32,
+        .max_items = 64,
+    }){};
+    var number: i32 = 0;
+
+    number = 1;
+    context.new("Error: {}", .{number});
+    context.append("Static error.", .{});
+    number = 2;
+    context.append("Error: {}", .{number});
+    const saved = context.save();
+
+    number = 3;
+    context.new("Error: {}", .{number});
+    number = 4;
+    context.append("Error: {}", .{number});
+    number = 5;
+    context.append("Error: {}", .{number});
+    context.restore(&saved);
+
+    const message = try std.fmt.allocPrint(testing.allocator, "{f}", .{context});
+    defer testing.allocator.free(message);
+    try testing.expectEqualStrings("1) Error: 2\n2) Static error.\n3) Error: 1\n", message);
 }
 
 test "should discard earliest items when exceeding max items" {

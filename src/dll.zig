@@ -432,6 +432,8 @@ fn createModuleHandleSharedValue(module_handle: w32.HINSTANCE) !sdk.os.SharedVal
         return err;
     };
     errdefer {
+        const saved = sdk.misc.error_context.save();
+        defer sdk.misc.error_context.restore(&saved);
         shared_value.destroy() catch |err| {
             sdk.misc.error_context.append("Failed to destroy shared value.", .{});
             sdk.misc.error_context.logError(err);
@@ -451,6 +453,8 @@ fn createShutdownRoutineSharedValue() !sdk.os.SharedValue(w32.LPTHREAD_START_ROU
         return err;
     };
     errdefer {
+        const saved = sdk.misc.error_context.save();
+        defer sdk.misc.error_context.restore(&saved);
         shared_value.destroy() catch |err| {
             sdk.misc.error_context.append("Failed to destroy shared value.", .{});
             sdk.misc.error_context.logError(err);

@@ -31,6 +31,8 @@ pub fn RemoteSlice(comptime Element: type, comptime sentinel: ?Element) type {
                 return error.OsError;
             };
             errdefer {
+                const saved = misc.error_context.save();
+                defer misc.error_context.restore(&saved);
                 const success = w32.VirtualFreeEx(process.handle, address, 0, .RELEASE);
                 if (success == 0) {
                     misc.error_context.new("{f}", .{os.Error.getLast()});

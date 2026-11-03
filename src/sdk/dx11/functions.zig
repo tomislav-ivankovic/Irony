@@ -50,6 +50,8 @@ pub const Functions = struct {
             return error.OsError;
         }
         defer {
+            const saved = misc.error_context.save();
+            defer misc.error_context.restore(&saved);
             const success = w32.UnregisterClassW(window_class.lpszClassName, window_class.hInstance);
             if (success == 0) {
                 misc.error_context.new("{f}", .{os.Error.getLast()});
@@ -78,6 +80,8 @@ pub const Functions = struct {
             return error.OsError;
         };
         defer {
+            const saved = misc.error_context.save();
+            defer misc.error_context.restore(&saved);
             const success = w32.DestroyWindow(window);
             if (success == 0) {
                 misc.error_context.new("{f}", .{os.Error.getLast()});

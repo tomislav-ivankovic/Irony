@@ -73,7 +73,7 @@ pub const ManagedContext = struct {
             misc.error_context.append("Failed to create DSV descriptor heap.", .{});
             return error.Dx12Error;
         }
-        errdefer _ = rtv_descriptor_heap.IUnknown.Release();
+        errdefer _ = dsv_descriptor_heap.IUnknown.Release();
 
         var srv_descriptor_heap: *w32.ID3D12DescriptorHeap = undefined;
         const srv_result = host_context.device.CreateDescriptorHeap(&.{
@@ -103,9 +103,13 @@ pub const ManagedContext = struct {
 
         var buffer_contexts_buffer: [max_buffer_count]BufferContext = undefined;
         var buffer_contexts_len: usize = 0;
-        errdefer for (0..buffer_contexts_len) |index| {
-            buffer_contexts_buffer[index].deinit();
-        };
+        errdefer {
+            const saved = misc.error_context.save();
+            defer misc.error_context.restore(&saved);
+            for (0..buffer_contexts_len) |index| {
+                buffer_contexts_buffer[index].deinit();
+            }
+        }
         for (0..buffer_count) |index| {
             buffer_contexts_buffer[index] = BufferContext.init(
                 host_context.device,
@@ -274,6 +278,8 @@ pub const BufferContext = struct {
             return error.OsError;
         };
         errdefer {
+            const saved = misc.error_context.save();
+            defer misc.error_context.restore(&saved);
             const success = w32.CloseHandle(fence_event);
             if (success == 0) {
                 misc.error_context.new("{f}", .{os.Error.getLast()});

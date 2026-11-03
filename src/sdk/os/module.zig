@@ -49,10 +49,14 @@ pub const Module = struct {
             misc.error_context.append("Failed to open shared value.", .{});
             return err;
         };
-        defer shared_value.close() catch |err| {
-            misc.error_context.append("Failed to close shared value.", .{});
-            misc.error_context.logError(err);
-        };
+        defer {
+            const saved = misc.error_context.save();
+            defer misc.error_context.restore(&saved);
+            shared_value.close() catch |err| {
+                misc.error_context.append("Failed to close shared value.", .{});
+                misc.error_context.logError(err);
+            };
+        }
         const handle = shared_value.read() catch |err| {
             misc.error_context.append("Failed to read shared value.", .{});
             return err;
@@ -77,6 +81,8 @@ pub const Module = struct {
             return error.OsError;
         }
         defer {
+            const saved = misc.error_context.save();
+            defer misc.error_context.restore(&saved);
             const success = w32.CloseHandle(snapshot_handle);
             if (success == 0) {
                 misc.error_context.new("{f}", .{os.Error.getLast()});

@@ -38,6 +38,8 @@ pub fn RawInputHook(callback: *const RawInputHookCallbackFn) type {
                 return err;
             };
             errdefer {
+                const saved = misc.error_context.save();
+                defer misc.error_context.restore(&saved);
                 if (hook.?.destroy()) {
                     hook = null;
                 } else |err| {

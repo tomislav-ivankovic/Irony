@@ -33,6 +33,8 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             };
             std.log.info("Execute command lists hook created.", .{});
             errdefer {
+                const saved = misc.error_context.save();
+                defer misc.error_context.restore(&saved);
                 execute_command_lists_hook.?.destroy() catch |err| {
                     misc.error_context.append("Failed to destroy execute command lists hook.", .{});
                     misc.error_context.logError(err);
@@ -50,6 +52,8 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             };
             std.log.info("Resize buffers hook created.", .{});
             errdefer {
+                const saved = misc.error_context.save();
+                defer misc.error_context.restore(&saved);
                 resize_buffers_hook.?.destroy() catch |err| {
                     misc.error_context.append("Failed to destroy resize buffers hook.", .{});
                     misc.error_context.logError(err);
@@ -67,6 +71,8 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             };
             std.log.info("Present hook created.", .{});
             errdefer {
+                const saved = misc.error_context.save();
+                defer misc.error_context.restore(&saved);
                 present_hook.?.destroy() catch |err| {
                     misc.error_context.append("Failed to destroy present hook hook.", .{});
                     misc.error_context.logError(err);
