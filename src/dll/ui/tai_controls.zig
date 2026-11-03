@@ -199,15 +199,15 @@ pub const TaiControls = struct {
         }
         if (imgui.igIsItemHovered(0)) {
             const tooltip = switch (self.play_only_selection) {
-                false => "Play Only Selection [Ctrl + O]",
-                true => "Play Entire Sequence [Ctrl + O]",
+                false => "Play Only Selection [Ctrl + P]",
+                true => "Play Entire Sequence [Ctrl + P]",
             };
             imgui.igSetTooltip(tooltip);
         }
     }
 
     fn handleSelectionShortcut(self: *Self) void {
-        if (!imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_O, window_route)) {
+        if (!imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_P, window_route)) {
             return;
         }
         self.play_only_selection = !self.play_only_selection;
@@ -363,7 +363,7 @@ test "should toggle repeat when repeat button is clicked or Ctrl+R is pressed" {
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should toggle between selection and whole sequence when repeat button is clicked or Ctrl+O is pressed" {
+test "should toggle between selection and whole sequence when selection button is clicked or Ctrl+P is pressed" {
     const Test = struct {
         var tai = core.ToolAssistedInput.init(testing.allocator);
         var coordinator = core.TaiRecordingCoordinator{};
@@ -408,19 +408,19 @@ test "should toggle between selection and whole sequence when repeat button is c
             try testing.expectEqual(false, tai.play_config.enable_player_2);
             try testing.expectEqual(0, tai.play_config.start_index);
             try testing.expectEqual(std.math.maxInt(usize), tai.play_config.length);
-            ctx.keyPress(imgui.ImGuiKey_O, 1);
+            ctx.keyPress(imgui.ImGuiKey_P, 1);
             try testing.expectEqual(false, tai.play_config.enable_player_1);
             try testing.expectEqual(true, tai.play_config.enable_player_2);
             try testing.expectEqual(1, tai.play_config.start_index);
             try testing.expectEqual(2, tai.play_config.length);
-            ctx.keyPress(imgui.ImGuiKey_O, 1);
+            ctx.keyPress(imgui.ImGuiKey_P, 1);
             try testing.expectEqual(true, tai.play_config.enable_player_1);
             try testing.expectEqual(false, tai.play_config.enable_player_2);
             try testing.expectEqual(0, tai.play_config.start_index);
             try testing.expectEqual(std.math.maxInt(usize), tai.play_config.length);
             ctx.keyUp(imgui.ImGuiKey_LeftCtrl);
 
-            ctx.keyPress(imgui.ImGuiKey_O, 1);
+            ctx.keyPress(imgui.ImGuiKey_P, 1);
             try testing.expectEqual(true, tai.play_config.enable_player_1);
             try testing.expectEqual(false, tai.play_config.enable_player_2);
             try testing.expectEqual(0, tai.play_config.start_index);

@@ -224,38 +224,54 @@ const MenuBar = struct {
         var action = Action.no_action;
         defer self.action = action;
 
+        const can_new = is_idle and !is_recording_empty;
+        const can_open = is_idle;
+        const can_save = is_idle and !is_recording_empty;
+        const can_exit = is_idle;
+
+        if (imgui.igGetTopMostPopupModal() == null) {
+            const route = imgui.ImGuiInputFlags_RouteGlobal;
+            if (can_new and imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_N, route)) {
+                action = .new;
+            }
+            if (can_open and imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_O, route)) {
+                action = .open;
+            }
+            if (can_save and imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_S, route)) {
+                action = .save;
+            }
+            if (can_save and imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiMod_Shift | imgui.ImGuiKey_S, route)) {
+                action = .save_as;
+            }
+            if (can_exit and imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_Q, route)) {
+                action = .exit;
+            }
+        }
+
         if (!imgui.igBeginMenu("File", true)) {
             return;
         }
         defer imgui.igEndMenu();
 
-        imgui.igBeginDisabled(!is_idle);
-        imgui.igBeginDisabled(is_recording_empty);
-        if (imgui.igMenuItem_Bool("New", null, false, true)) {
+        if (imgui.igMenuItem_Bool("New", "Ctrl + N", false, can_new)) {
             action = .new;
         }
-        imgui.igEndDisabled();
-        if (imgui.igMenuItem_Bool("Open", null, false, true)) {
+        if (imgui.igMenuItem_Bool("Open", "Ctrl + O", false, can_open)) {
             action = .open;
         }
-        imgui.igBeginDisabled(is_recording_empty);
-        if (imgui.igMenuItem_Bool("Save", null, false, true)) {
+        if (imgui.igMenuItem_Bool("Save", "Ctrl + S", false, can_save)) {
             action = .save;
         }
-        if (imgui.igMenuItem_Bool("Save As", null, false, true)) {
+        if (imgui.igMenuItem_Bool("Save As", "Ctrl + Shift + S", false, can_save)) {
             action = .save_as;
         }
-        imgui.igEndDisabled();
-        imgui.igEndDisabled();
         imgui.igSeparator();
-        if (imgui.igMenuItem_Bool("Close UI", null, false, true)) {
+        if (imgui.igMenuItem_Bool("Close UI", "Tab", false, true)) {
             action = .close_ui;
         }
-        imgui.igBeginDisabled(!is_idle);
-        if (imgui.igMenuItem_Bool("Exit " ++ build_info.display_name, null, false, true)) {
+        if (imgui.igMenuItem_Bool("Exit " ++ build_info.display_name, "Ctrl + Q", false, can_exit)) {
             action = .exit;
         }
-        imgui.igEndDisabled();
     }
 };
 
@@ -1633,6 +1649,154 @@ test "should set is_ui_open to false when close ui button is clicked" {
             ctx.setRef("Window");
             ctx.menuClick("File/Close UI");
             try testing.expectEqual(false, is_ui_open);
+        }
+    };
+    Test.file_dialog_context = imgui.IGFD_Create() orelse @panic("Failed to create file dialog context.");
+    defer imgui.IGFD_Destroy(Test.file_dialog_context);
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should trigger file menu actions with keyboard shortcuts while menu is closed" {
+    const Test = struct {
+        var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
+        var controller: MockController = .{
+            .contains_unsaved_changes = false,
+            .file_path = .fromArray("./test.irony".*),
+        };
+        var is_ui_open: bool = true;
+        var shutdown_call_count: usize = 0;
+        var file_menu: FileMenu(.{ .Controller = MockController, .selfShutDown = selfShutdown }) = .{};
+
+        fn selfShutdown() void {
+            shutdown_call_count += 1;
+        }
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            defer imgui.igEnd();
+            if (!imgui.igBeginMenuBar()) return;
+            defer imgui.igEndMenuBar();
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_N, 1);
+            try testing.expectEqual(1, controller.clear_call_count);
+
+            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_S, 1);
+            try testing.expectEqual(1, controller.save_call_count);
+            try testing.expectEqualStrings("./test.irony", controller.last_save_path.?.asSlice());
+            controller.mode = .live;
+            controller.did_last_save_or_load_succeed = true;
+            // Frame 1: file menu becomes idle. Frame 2: shortcut routes get registered again.
+            // Routes only take effect on the frame after they get registered, so the key press comes on frame 3.
+            ctx.yield(2);
+
+            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiMod_Shift | imgui.ImGuiKey_S, 1);
+            ctx.yield(1);
+            try ctx.expectItemExists("//Save As##save_dialog/**/##FileName");
+            try testing.expectEqual(1, controller.save_call_count);
+            ctx.keyPress(imgui.ImGuiKey_Escape, 1);
+            ctx.yield(3); // Test engine caches item lookups for 2 frames.
+            try ctx.expectItemNotExists("//Save As##save_dialog/**/##FileName");
+
+            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_O, 1);
+            ctx.yield(1);
+            try ctx.expectItemExists("//Open##open_dialog/**/##FileName");
+            ctx.keyPress(imgui.ImGuiKey_Escape, 1);
+            ctx.yield(3); // Test engine caches item lookups for 2 frames.
+            try ctx.expectItemNotExists("//Open##open_dialog/**/##FileName");
+
+            try testing.expectEqual(0, shutdown_call_count);
+            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_Q, 1);
+            try testing.expectEqual(1, shutdown_call_count);
+
+            try testing.expectEqual(1, controller.clear_call_count);
+            try testing.expectEqual(1, controller.save_call_count);
+            try testing.expectEqual(0, controller.load_call_count);
+        }
+    };
+    Test.file_dialog_context = imgui.IGFD_Create() orelse @panic("Failed to create file dialog context.");
+    defer imgui.IGFD_Destroy(Test.file_dialog_context);
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "keyboard shortcuts should not trigger disabled file menu actions" {
+    const Test = struct {
+        var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
+        var controller: MockController = .{ .total_frames = 0, .file_path = .fromArray("./test.irony".*) };
+        var is_ui_open: bool = true;
+        var file_menu: FileMenu(.{ .Controller = MockController, .selfShutDown = selfShutdown }) = .{};
+
+        fn selfShutdown() void {}
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            defer imgui.igEnd();
+            if (!imgui.igBeginMenuBar()) return;
+            defer imgui.igEndMenuBar();
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_N, 1);
+            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_S, 1);
+            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiMod_Shift | imgui.ImGuiKey_S, 1);
+            ctx.yield(3); // Test engine caches item lookups for 2 frames.
+            try testing.expectEqual(0, controller.clear_call_count);
+            try testing.expectEqual(0, controller.save_call_count);
+            try ctx.expectItemNotExists("//Save As##save_dialog/**/##FileName");
+        }
+    };
+    Test.file_dialog_context = imgui.IGFD_Create() orelse @panic("Failed to create file dialog context.");
+    defer imgui.IGFD_Destroy(Test.file_dialog_context);
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "file menu keyboard shortcuts should be ignored while another modal dialog is open" {
+    const Test = struct {
+        var file_dialog_context: *imgui.ImGuiFileDialog = undefined;
+        var controller: MockController = .{ .contains_unsaved_changes = false };
+        var is_ui_open: bool = true;
+        var is_other_dialog_open: bool = true;
+        var shutdown_call_count: usize = 0;
+        var file_menu: FileMenu(.{ .Controller = MockController, .selfShutDown = selfShutdown }) = .{};
+
+        fn selfShutdown() void {
+            shutdown_call_count += 1;
+        }
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            defer imgui.igEnd();
+            if (ui.beginDialog(&is_other_dialog_open, "Other Dialog")) {
+                defer ui.endDialog();
+                _ = imgui.igButton("Content", .{});
+            }
+            if (!imgui.igBeginMenuBar()) return;
+            defer imgui.igEndMenuBar();
+            file_menu.draw(testing.io, file_dialog_context, &controller, &is_ui_open);
+            file_menu.update(testing.io, &controller);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            try ctx.expectItemExists("//Other Dialog/Content");
+            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_N, 1);
+            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_Q, 1);
+            try testing.expectEqual(0, controller.clear_call_count);
+            try testing.expectEqual(0, shutdown_call_count);
+
+            is_other_dialog_open = false;
+            ctx.yield(1);
+            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_N, 1);
+            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_Q, 1);
+            try testing.expectEqual(1, controller.clear_call_count);
+            try testing.expectEqual(1, shutdown_call_count);
         }
     };
     Test.file_dialog_context = imgui.IGFD_Create() orelse @panic("Failed to create file dialog context.");
