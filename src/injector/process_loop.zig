@@ -143,8 +143,12 @@ test "should do nothing when no process is found" {
 }
 
 test "should open process when process exists and onProcessOpen returns true" {
-    var wait_process = try std.process.spawn(testing.io, .{ .argv = &.{"wait.exe"} });
-    defer wait_process.kill(testing.io);
+    var win_io = sdk.io.WinIo.init(testing.allocator, .{});
+    defer win_io.deinit();
+    const io = win_io.io();
+
+    var wait_process = try std.process.spawn(io, .{ .argv = &.{"wait.exe"} });
+    defer wait_process.kill(io);
     const pid = w32.GetProcessId(wait_process.id);
 
     const OnProcessOpen = struct {
@@ -195,8 +199,12 @@ test "should open process when process exists and onProcessOpen returns true" {
 }
 
 test "should open and close process when process exists and onProcessOpen returns false" {
-    var wait_process = try std.process.spawn(testing.io, .{ .argv = &.{"wait.exe"} });
-    defer wait_process.kill(testing.io);
+    var win_io = sdk.io.WinIo.init(testing.allocator, .{});
+    defer win_io.deinit();
+    const io = win_io.io();
+
+    var wait_process = try std.process.spawn(io, .{ .argv = &.{"wait.exe"} });
+    defer wait_process.kill(io);
     const pid = w32.GetProcessId(wait_process.id);
 
     const OnProcessOpen = struct {
@@ -243,7 +251,11 @@ test "should open and close process when process exists and onProcessOpen return
 }
 
 test "should close process when process stops running" {
-    var wait_process = try std.process.spawn(testing.io, .{ .argv = &.{"wait.exe"} });
+    var win_io = sdk.io.WinIo.init(testing.allocator, .{});
+    defer win_io.deinit();
+    const io = win_io.io();
+
+    var wait_process = try std.process.spawn(io, .{ .argv = &.{"wait.exe"} });
     const pid = w32.GetProcessId(wait_process.id);
 
     const OnProcessOpen = struct {
@@ -281,7 +293,7 @@ test "should close process when process stops running" {
             OnProcessClose.call,
         );
     }
-    wait_process.kill(testing.io);
+    wait_process.kill(io);
     for (0..3) |_| {
         runLoopLogic(
             &open_processes,

@@ -78,7 +78,7 @@ test {
 
     _ = @import("injector.zig");
     _ = @import("injector/injected_module.zig");
-    // _ = @import("injector/process_loop.zig"); TODO uncomment this after fixing stalling tests
+    _ = @import("injector/process_loop.zig");
 
     _ = @import("dll.zig");
     _ = @import("dll/event_buss.zig");
