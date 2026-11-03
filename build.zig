@@ -271,6 +271,17 @@ fn imguiDependency(
     patch_file_path.addArg("fs::path fpath = fs::u8path(vFilePathName);");
     const imgui_file_dialog_patched_2 = patch_file_path.captureStdOut(.{});
 
+    const patch_file_name_focus = b.addRunArtifact(find_replace_patcher);
+    patch_file_name_focus.addFileArg(imgui_file_dialog_patched_2);
+    patch_file_name_focus.addArg(
+        \\if (ImGui::InputText("##FileName"
+    );
+    patch_file_name_focus.addArg(
+        \\if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+        \\if (ImGui::InputText("##FileName"
+    );
+    const imgui_file_dialog_patched_3 = patch_file_name_focus.captureStdOut(.{});
+
     const patch_win32_key_event = b.addRunArtifact(find_replace_patcher);
     patch_win32_key_event.addFileArg(b.dependency("imgui", .{}).path("backends/imgui_impl_win32.cpp"));
     const key_event_declaration = "ImGuiKey ImGui_ImplWin32_KeyEventToImGuiKey(WPARAM wParam, LPARAM lParam);";
@@ -283,7 +294,7 @@ fn imguiDependency(
     _ = files.addCopyDirectory(b.dependency("imgui", .{}).path("."), "./imgui", .{});
     _ = files.addCopyFile(win32_backend_patched, "./imgui/backends/imgui_impl_win32_patched.cpp");
     _ = files.addCopyDirectory(b.dependency("imgui_file_dialog", .{}).path("."), "./imgui_file_dialog", .{});
-    _ = files.addCopyFile(imgui_file_dialog_patched_2, "./imgui_file_dialog/ImGuiFileDialog_patched.cpp");
+    _ = files.addCopyFile(imgui_file_dialog_patched_3, "./imgui_file_dialog/ImGuiFileDialog_patched.cpp");
     if (use_test_engine) {
         _ = files.addCopyDirectory(
             b.dependency("imgui_test_engine", .{}).path("./imgui_test_engine"),
