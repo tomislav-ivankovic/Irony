@@ -128,6 +128,7 @@ test {
     _ = @import("dll/ui/controls.zig");
     _ = @import("dll/ui/data.zig");
     _ = @import("dll/ui/details.zig");
+    _ = @import("dll/ui/dialog.zig");
     _ = @import("dll/ui/file_menu.zig");
     _ = @import("dll/ui/forward_directions.zig");
     _ = @import("dll/ui/frame_window.zig");

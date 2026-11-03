@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const imgui = @import("imgui");
 const sdk = @import("../../sdk/root.zig");
+const dialog = @import("dialog.zig");
 
 pub const ConfirmDialogAction = enum { none, confirm, abort };
 
@@ -13,17 +14,14 @@ pub fn drawConfirmDialog(
     abort_label: [:0]const u8,
 ) ConfirmDialogAction {
     const was_open = open.*;
-    if (open.* and !imgui.igIsPopupOpen_Str(title, 0)) {
-        imgui.igOpenPopup_Str(title, 0);
-    }
-    if (!imgui.igBeginPopupModal(title, open, imgui.ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (!dialog.beginDialog(open, title)) {
         if (was_open and !open.*) {
             return .abort; // Closed by the title bar X button.
         } else {
             return .none;
         }
     }
-    defer imgui.igEndPopup();
+    defer dialog.endDialog();
 
     const enter_pressed = imgui.igShortcut_Nil(imgui.ImGuiKey_Enter, imgui.ImGuiInputFlags_RouteFocused);
     const keypad_enter_pressed = imgui.igShortcut_Nil(imgui.ImGuiKey_KeypadEnter, imgui.ImGuiInputFlags_RouteFocused);
@@ -48,10 +46,7 @@ pub fn drawConfirmDialog(
     }
     switch (action) {
         .none => {},
-        .confirm, .abort => {
-            imgui.igCloseCurrentPopup();
-            open.* = false;
-        },
+        .confirm, .abort => open.* = false,
     }
     return action;
 }

@@ -5,6 +5,7 @@ const dll = @import("../../dll.zig");
 const sdk = @import("../../sdk/root.zig");
 const core = @import("../core/root.zig");
 const model = @import("../model/root.zig");
+const ui = @import("root.zig");
 
 pub const FileMenuConfig = struct {
     Controller: type = core.Controller,
@@ -226,30 +227,23 @@ const MenuBar = struct {
 };
 
 const UnsavedDialog = struct {
-    is_open: bool = false,
     action: Action = .no_action,
 
     const Self = @This();
     pub const Action = enum { no_action, save, dont_save, cancel };
 
     pub fn draw(self: *Self, is_open: bool) void {
-        defer self.is_open = is_open;
         var action = Action.no_action;
         defer self.action = action;
 
-        if (!self.is_open and is_open) {
-            imgui.igOpenPopup_Str("Unsaved Changes", 0);
-        }
-
-        var remains_open = self.is_open or is_open;
-        if (!imgui.igBeginPopupModal(
-            "Unsaved Changes",
-            &remains_open,
-            imgui.ImGuiWindowFlags_AlwaysAutoResize,
-        )) {
+        var next_open = is_open;
+        if (!ui.beginDialog(&next_open, "Unsaved Changes")) {
+            if (is_open and !next_open) {
+                action = .cancel;
+            }
             return;
         }
-        defer imgui.igEndPopup();
+        defer ui.endDialog();
 
         imgui.igText("Do you want to save changes of current file before continuing?");
         imgui.igText("Any recorded data that is not saved will be lost.");
@@ -266,12 +260,6 @@ const UnsavedDialog = struct {
             action = .cancel;
         }
         imgui.igSetItemDefaultFocus();
-        if (!remains_open) {
-            action = .cancel;
-        }
-        if (!is_open) {
-            imgui.igCloseCurrentPopup();
-        }
     }
 };
 
