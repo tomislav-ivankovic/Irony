@@ -185,15 +185,24 @@ pub const MainWindow = struct {
     }
 
     fn drawWindowMenu(ui_instance: *ui.Ui) void {
+        handleWindowToggleShortcut(
+            imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_T,
+            &ui_instance.tai_window.is_open,
+        );
+        handleWindowToggleShortcut(
+            imgui.ImGuiMod_Ctrl | imgui.ImGuiMod_Alt | imgui.ImGuiKey_S,
+            &ui_instance.settings_window.is_open,
+        );
+
         if (!imgui.igBeginMenu("Window", true)) {
             return;
         }
         defer imgui.igEndMenu();
-        if (imgui.igMenuItem_Bool(ui.TaiWindow.name, null, false, true)) {
+        if (imgui.igMenuItem_Bool(ui.TaiWindow.name, "Ctrl + T", false, true)) {
             ui_instance.tai_window.is_open = true;
             imgui.igSetWindowFocus_Str(ui.TaiWindow.name);
         }
-        if (imgui.igMenuItem_Bool(ui.SettingsWindow.name, null, false, true)) {
+        if (imgui.igMenuItem_Bool(ui.SettingsWindow.name, "Ctrl + Alt + S", false, true)) {
             ui_instance.settings_window.is_open = true;
             imgui.igSetWindowFocus_Str(ui.SettingsWindow.name);
         }
@@ -206,6 +215,16 @@ pub const MainWindow = struct {
             ui_instance.frame_window.is_open = true;
             imgui.igSetWindowFocus_Str(ui.FrameWindow.name);
         }
+    }
+
+    fn handleWindowToggleShortcut(key_chord: imgui.ImGuiKeyChord, is_open: *bool) void {
+        if (imgui.igGetTopMostPopupModal() != null) {
+            return;
+        }
+        if (!imgui.igShortcut_Nil(key_chord, imgui.ImGuiInputFlags_RouteGlobal)) {
+            return;
+        }
+        is_open.* = !is_open.*;
     }
 
     fn drawHelpMenu(ui_instance: *ui.Ui) void {

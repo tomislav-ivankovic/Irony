@@ -145,17 +145,30 @@ pub const Camera = struct {
     }
 
     pub fn drawMenuBar(self: *Self) void {
+        if (imgui.igGetTopMostPopupModal() == null) {
+            const route = imgui.ImGuiInputFlags_RouteGlobal;
+            if (imgui.igShortcut_Nil(imgui.ImGuiMod_Shift | imgui.ImGuiKey_1, route)) {
+                self.follow_target = .ingame_camera;
+            }
+            if (imgui.igShortcut_Nil(imgui.ImGuiMod_Shift | imgui.ImGuiKey_2, route)) {
+                self.follow_target = .players;
+            }
+            if (imgui.igShortcut_Nil(imgui.ImGuiMod_Shift | imgui.ImGuiKey_3, route)) {
+                self.follow_target = .stage;
+            }
+        }
+
         if (!imgui.igBeginMenu("Camera", true)) {
             return;
         }
         defer imgui.igEndMenu();
-        if (imgui.igMenuItem_Bool("Follow Ingame Camera", null, self.follow_target == .ingame_camera, true)) {
+        if (imgui.igMenuItem_Bool("Follow Ingame Camera", "Shift + 1", self.follow_target == .ingame_camera, true)) {
             self.follow_target = .ingame_camera;
         }
-        if (imgui.igMenuItem_Bool("Follow Players", null, self.follow_target == .players, true)) {
+        if (imgui.igMenuItem_Bool("Follow Players", "Shift + 2", self.follow_target == .players, true)) {
             self.follow_target = .players;
         }
-        if (imgui.igMenuItem_Bool("Follow Stage Bounds", null, self.follow_target == .stage, true)) {
+        if (imgui.igMenuItem_Bool("Follow Stage Bounds", "Shift + 3", self.follow_target == .stage, true)) {
             self.follow_target = .stage;
         }
         imgui.igSeparator();
@@ -1274,6 +1287,32 @@ test "should change follow target when a target is selected by clicking a menu b
             try testing.expectEqual(.players, camera.follow_target);
             ctx.menuClick("Camera/Follow Stage Bounds");
             try testing.expectEqual(.stage, camera.follow_target);
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should change follow target when a target a keyboard shortcut is pressed" {
+    const Test = struct {
+        var camera: Camera = .{ .follow_target = .players };
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
+            defer imgui.igEnd();
+            if (!imgui.igBeginMenuBar()) return;
+            defer imgui.igEndMenuBar();
+            camera.drawMenuBar();
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            try testing.expectEqual(.players, camera.follow_target);
+            ctx.keyPress(imgui.ImGuiMod_Shift | imgui.ImGuiKey_1, 1);
+            try testing.expectEqual(.ingame_camera, camera.follow_target);
+            ctx.keyPress(imgui.ImGuiMod_Shift | imgui.ImGuiKey_3, 1);
+            try testing.expectEqual(.stage, camera.follow_target);
+            ctx.keyPress(imgui.ImGuiMod_Shift | imgui.ImGuiKey_2, 1);
+            try testing.expectEqual(.players, camera.follow_target);
         }
     };
     const context = try sdk.ui.getTestingContext();
