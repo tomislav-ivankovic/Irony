@@ -263,19 +263,27 @@ fn imguiDependency(
         \\    return std::string(buffer);
         \\}
     );
-    const patched_1 = patch_round_number.captureStdOut(.{});
+    const imgui_file_dialog_patched_1 = patch_round_number.captureStdOut(.{});
 
     const patch_file_path = b.addRunArtifact(find_replace_patcher);
-    patch_file_path.addFileArg(patched_1);
+    patch_file_path.addFileArg(imgui_file_dialog_patched_1);
     patch_file_path.addArg("fs::path fpath(vFilePathName);");
     patch_file_path.addArg("fs::path fpath = fs::u8path(vFilePathName);");
-    const patched_2 = patch_file_path.captureStdOut(.{});
+    const imgui_file_dialog_patched_2 = patch_file_path.captureStdOut(.{});
+
+    const patch_win32_key_event = b.addRunArtifact(find_replace_patcher);
+    patch_win32_key_event.addFileArg(b.dependency("imgui", .{}).path("backends/imgui_impl_win32.cpp"));
+    const key_event_declaration = "ImGuiKey ImGui_ImplWin32_KeyEventToImGuiKey(WPARAM wParam, LPARAM lParam);";
+    patch_win32_key_event.addArg(key_event_declaration);
+    patch_win32_key_event.addArg("IMGUI_IMPL_API " ++ key_event_declaration);
+    const win32_backend_patched = patch_win32_key_event.captureStdOut(.{});
 
     const files = b.addWriteFiles();
     _ = files.addCopyDirectory(b.dependency("cimgui", .{}).path("."), ".", .{});
     _ = files.addCopyDirectory(b.dependency("imgui", .{}).path("."), "./imgui", .{});
+    _ = files.addCopyFile(win32_backend_patched, "./imgui/backends/imgui_impl_win32_patched.cpp");
     _ = files.addCopyDirectory(b.dependency("imgui_file_dialog", .{}).path("."), "./imgui_file_dialog", .{});
-    _ = files.addCopyFile(patched_2, "./imgui_file_dialog/ImGuiFileDialog_patched.cpp");
+    _ = files.addCopyFile(imgui_file_dialog_patched_2, "./imgui_file_dialog/ImGuiFileDialog_patched.cpp");
     if (use_test_engine) {
         _ = files.addCopyDirectory(
             b.dependency("imgui_test_engine", .{}).path("./imgui_test_engine"),
@@ -320,7 +328,7 @@ fn imguiDependency(
         "./imgui/imgui_widgets.cpp",
         "./imgui/backends/imgui_impl_dx11.cpp",
         "./imgui/backends/imgui_impl_dx12.cpp",
-        "./imgui/backends/imgui_impl_win32.cpp",
+        "./imgui/backends/imgui_impl_win32_patched.cpp",
         "./imgui_file_dialog/ImGuiFileDialog_patched.cpp",
     } });
     if (use_test_engine) {

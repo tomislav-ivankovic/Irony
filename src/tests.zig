@@ -73,6 +73,7 @@ test {
     _ = @import("sdk/ui/allocator.zig");
     _ = @import("sdk/ui/context.zig"); // Make sure this test gets executed before UI testing context is initialized.
     _ = @import("sdk/ui/testing_context.zig"); // First test using UI testing context.
+    _ = @import("sdk/ui/keyboard.zig");
     _ = @import("sdk/ui/toasts.zig");
 
     _ = @import("injector.zig");

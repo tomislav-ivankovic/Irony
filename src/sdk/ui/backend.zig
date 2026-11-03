@@ -49,3 +49,4 @@ pub extern fn ImGui_ImplWin32_WndProcHandler(
     w_param: w32.WPARAM,
     l_param: w32.LPARAM,
 ) w32.LRESULT;
+pub extern fn ImGui_ImplWin32_KeyEventToImGuiKey(w_param: w32.WPARAM, l_param: w32.LPARAM) imgui.ImGuiKey;

@@ -241,11 +241,36 @@ pub fn Context(comptime rendering_api: build_info.RenderingApi) type {
             if (is_mouse_event and imgui.igGetIO_Nil().*.WantCaptureMouse) {
                 return 1;
             }
-            const is_keyboard_event = u_msg >= w32.WM_KEYFIRST and u_msg <= w32.WM_KEYLAST;
-            if (is_keyboard_event and imgui.igGetIO_Nil().*.WantCaptureKeyboard) {
-                return 1;
+            switch (u_msg) {
+                w32.WM_KEYDOWN, w32.WM_SYSKEYDOWN => if (shouldBlockKeyPress(w_param, l_param)) {
+                    return 1;
+                },
+                w32.WM_KEYUP, w32.WM_SYSKEYUP => {},
+                else => {
+                    const is_keyboard_event = u_msg >= w32.WM_KEYFIRST and u_msg <= w32.WM_KEYLAST;
+                    if (is_keyboard_event and imgui.igGetIO_Nil().*.WantCaptureKeyboard) {
+                        return 1;
+                    }
+                },
             }
             return null;
+        }
+
+        pub fn shouldBlockRawKeyboardInput(self: *const Self, input: *const w32.RAWKEYBOARD) bool {
+            if ((input.Flags & w32.RI_KEY_BREAK) != 0) {
+                return false;
+            }
+            imgui.igSetCurrentContext(self.imgui_context);
+            const event = ui.keyEventFromRawKeyboard(input);
+            return shouldBlockKeyPress(event.w_param, event.l_param);
+        }
+
+        fn shouldBlockKeyPress(w_param: w32.WPARAM, l_param: w32.LPARAM) bool {
+            if (imgui.igGetIO_Nil().*.WantCaptureKeyboard) {
+                return true;
+            }
+            const key_chord = ui.keyChordFromKeyEvent(w_param, l_param) orelse return false;
+            return ui.hasShortcutRoute(key_chord);
         }
     };
 }

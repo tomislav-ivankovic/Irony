@@ -307,8 +307,11 @@ pub const EventBuss = struct {
     }
 
     pub fn processKeyboardInput(self: *Self, input: *const w32.RAWKEYBOARD) KeyboardInputAction {
-        _ = self;
-        _ = input;
+        if (self.ui_context) |*context| {
+            if (context.shouldBlockRawKeyboardInput(input)) {
+                return .block;
+            }
+        }
         return .pass_through;
     }
 };
