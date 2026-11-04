@@ -215,7 +215,7 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
 
             while (active_hook_calls.load(.seq_cst) > 0) {
                 io.sleep(.fromMilliseconds(10), .awake) catch |err| {
-                    sdk.misc.error_context.append("Failed to sleep for 10 ms while waiting on active game hooks.", .{});
+                    sdk.misc.error_context.new("Failed to sleep for 10 ms while waiting on active game hooks.", .{});
                     sdk.misc.error_context.logError(err);
                 };
             }

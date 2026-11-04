@@ -400,7 +400,7 @@ pub const Controller = struct {
         }
         std.log.info("Loading recording... {s}", .{file_path});
         const bounded_path = FilePath.fromSlice(file_path) catch |err| {
-            sdk.misc.error_context.new("Failed to make a copy of file path: {s}", .{file_path});
+            sdk.misc.error_context.append("Failed to make a copy of file path: {s}", .{file_path});
             sdk.misc.error_context.append("Failed to load recording: {s}", .{file_path});
             sdk.misc.error_context.logError(err);
             return;
@@ -440,7 +440,7 @@ pub const Controller = struct {
         }
         std.log.info("Saving recording... {s}", .{file_path});
         const bounded_path = FilePath.fromSlice(file_path) catch |err| {
-            sdk.misc.error_context.new("Failed to make a copy of file path: {s}", .{file_path});
+            sdk.misc.error_context.append("Failed to make a copy of file path: {s}", .{file_path});
             sdk.misc.error_context.append("Failed to save recording: {s}", .{file_path});
             sdk.misc.error_context.logError(err);
             return;

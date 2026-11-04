@@ -11,7 +11,10 @@ pub fn getWindowFromSwapChain(swap_chain: *const w32.IDXGISwapChain) !w32.HWND {
         misc.error_context.append("IDXGISwapChain.GetDesc returned a failure value.", .{});
         return error.Dx12Error;
     }
-    return desc.OutputWindow orelse error.NotFound;
+    return desc.OutputWindow orelse {
+        misc.error_context.new("IDXGISwapChain.GetDesc returned a null output window.", .{});
+        return error.NotFound;
+    };
 }
 
 // Caller needs to release the device!

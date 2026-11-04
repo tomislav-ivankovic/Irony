@@ -56,7 +56,7 @@ pub fn WindowProcedure(callback: *const WindowProcedureCallbackFn) type {
             window = null;
             while (active_calls.load(.seq_cst) > 0) {
                 io.sleep(.fromMilliseconds(10), .awake) catch |err| {
-                    misc.error_context.append("Failed to sleep for 10 ms while waiting on window procedure.", .{});
+                    misc.error_context.new("Failed to sleep for 10 ms while waiting on window procedure.", .{});
                     misc.error_context.logError(err);
                 };
             }

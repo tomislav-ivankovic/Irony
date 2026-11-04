@@ -156,7 +156,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
 
             while (active_hook_calls.load(.seq_cst) > 0) {
                 io.sleep(.fromMilliseconds(10), .awake) catch |err| {
-                    misc.error_context.append("Failed to sleep for 10 ms while waiting on active DX12 hooks.", .{});
+                    misc.error_context.new("Failed to sleep for 10 ms while waiting on active DX12 hooks.", .{});
                     misc.error_context.logError(err);
                 };
             }

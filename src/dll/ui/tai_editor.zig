@@ -426,7 +426,7 @@ pub const TaiEditor = struct {
             number_of_changes_applied += 1;
             if (changed_something) {
                 self.undo_stack.append(self.allocator, change.*) catch |err| {
-                    sdk.misc.error_context.append("Failed to append change {} to undo stack.", .{change_index});
+                    sdk.misc.error_context.new("Failed to append change {} to undo stack.", .{change_index});
                     return err;
                 };
                 number_of_changes_appended += 1;

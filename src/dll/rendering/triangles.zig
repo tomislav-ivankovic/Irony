@@ -68,7 +68,7 @@ pub fn Triangles(comptime rendering_api: build_info.RenderingApi) type {
 
         pub fn addVertex(self: *Self, position: sdk.math.Vec3, color: sdk.math.Vec4) void {
             self.vertices.append(self.allocator, .{ .position = position, .color = color }) catch |err| {
-                sdk.misc.error_context.append("Failed to append vertex to vertex list.", .{});
+                sdk.misc.error_context.new("Failed to append vertex to vertex list.", .{});
                 sdk.misc.error_context.append("Failed to add a vertex to triangle renderer.", .{});
                 sdk.misc.error_context.logError(err);
             };
@@ -76,7 +76,7 @@ pub fn Triangles(comptime rendering_api: build_info.RenderingApi) type {
 
         pub fn addTriangle(self: *Self, index_1: Index, index_2: Index, index_3: Index) void {
             self.indices.appendSlice(self.allocator, &.{ index_1, index_2, index_3 }) catch |err| {
-                sdk.misc.error_context.append("Failed to append indices to index list.", .{});
+                sdk.misc.error_context.new("Failed to append indices to index list.", .{});
                 sdk.misc.error_context.append("Failed to add a triangle to triangle renderer.", .{});
                 sdk.misc.error_context.logError(err);
             };

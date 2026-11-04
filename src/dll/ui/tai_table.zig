@@ -773,7 +773,7 @@ pub const TaiTable = struct {
         };
         var buffer: [State.Editing.buffer_size]u8 = undefined;
         _ = std.fmt.bufPrintSentinel(&buffer, "{f}", .{input}, 0) catch |err| {
-            sdk.misc.error_context.append("Failed to convert input to text.", .{});
+            sdk.misc.error_context.new("Failed to convert input to text.", .{});
             sdk.misc.error_context.logError(err);
             return;
         };
@@ -843,7 +843,7 @@ pub const TaiTable = struct {
                     };
                     var buffer: [State.Editing.buffer_size]u8 = undefined;
                     _ = std.fmt.bufPrintSentinel(&buffer, "{f}", .{input}, 0) catch |err| {
-                        sdk.misc.error_context.append("Failed to convert input to text.", .{});
+                        sdk.misc.error_context.new("Failed to convert input to text.", .{});
                         sdk.misc.error_context.logError(err);
                         return;
                     };

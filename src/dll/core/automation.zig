@@ -149,7 +149,7 @@ pub fn Automation(comptime config: AutomationConfig) type {
             };
 
             std.Io.Dir.cwd().createDirPath(io, buffer[0..writer.end]) catch |err| {
-                sdk.misc.error_context.append("Failed to make directory: {s}", .{buffer[0..writer.end]});
+                sdk.misc.error_context.new("Failed to make directory: {s}", .{buffer[0..writer.end]});
                 return err;
             };
 

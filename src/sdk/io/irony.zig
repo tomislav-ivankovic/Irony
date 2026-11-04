@@ -86,7 +86,7 @@ pub fn writeIronyFormat(
     };
 
     encoder_writer.flush() catch |err| {
-        misc.error_context.append("Failed to flush encoder writer.", .{});
+        misc.error_context.new("Failed to flush encoder writer.", .{});
         return err;
     };
 }

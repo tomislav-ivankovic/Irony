@@ -41,7 +41,7 @@ pub fn Context(comptime rendering_api: build_info.RenderingApi) type {
             const ini_file_path = if (io_maybe) |io| block: {
                 var buffer: [os.max_file_path_length]u8 = undefined;
                 const len = std.Io.Dir.cwd().realPath(io, &buffer) catch |err| {
-                    misc.error_context.append("Failed to get base directory.", .{});
+                    misc.error_context.new("Failed to get base directory.", .{});
                     misc.error_context.append("Failed to set imgui.ini file path.", .{});
                     misc.error_context.logError(err);
                     break :block null;
@@ -53,7 +53,7 @@ pub fn Context(comptime rendering_api: build_info.RenderingApi) type {
                     .{ base, std.fs.path.sep, "imgui.ini" },
                     0,
                 ) catch |err| {
-                    misc.error_context.append("Failed to allocate the absolute path.", .{});
+                    misc.error_context.new("Failed to allocate the absolute path.", .{});
                     misc.error_context.append("Failed to set imgui.ini file path.", .{});
                     misc.error_context.logError(err);
                     break :block null;

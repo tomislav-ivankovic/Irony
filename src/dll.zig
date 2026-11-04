@@ -347,7 +347,7 @@ pub fn main() void {
 
     defer producer_condition.broadcast(sio);
     pending_event_mutex.lock(sio) catch |err| {
-        sdk.misc.error_context.append("Failed to get lock for pending event.", .{});
+        sdk.misc.error_context.new("Failed to get lock for pending event.", .{});
         sdk.misc.error_context.logError(err);
         return;
     };

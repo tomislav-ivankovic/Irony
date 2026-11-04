@@ -196,7 +196,7 @@ pub fn FileMenu(comptime config: FileMenuConfig) type {
                 error.FileNotFound => return false,
                 else => {
                     // Assuming the file exists, so that the user gets asked before anything gets overwritten.
-                    sdk.misc.error_context.append("Failed to check if file exists: {s}", .{path});
+                    sdk.misc.error_context.new("Failed to check if file exists: {s}", .{path});
                     sdk.misc.error_context.logError(err);
                     return true;
                 },
@@ -539,7 +539,7 @@ const FileDialog = struct {
 
     fn getBaseDirectory(buffer: *[sdk.os.max_file_path_length]u8, io: std.Io) [:0]const u8 {
         const len = std.Io.Dir.cwd().realPath(io, buffer[0..(buffer.len - 1)]) catch |err| {
-            sdk.misc.error_context.append("Failed to construct base directory path.", .{});
+            sdk.misc.error_context.new("Failed to construct base directory path.", .{});
             sdk.misc.error_context.logError(err);
             return ".";
         };
@@ -549,11 +549,11 @@ const FileDialog = struct {
 
     fn createAndGetRecordingsDirectory(buffer: *[sdk.os.max_file_path_length]u8, io: std.Io) ![:0]const u8 {
         std.Io.Dir.cwd().createDirPath(io, directory_name) catch |err| {
-            sdk.misc.error_context.append("Failed to make directory: {s}", .{directory_name});
+            sdk.misc.error_context.new("Failed to make directory: {s}", .{directory_name});
             return err;
         };
         const len = std.Io.Dir.cwd().realPathFile(io, directory_name, buffer[0..(buffer.len - 1)]) catch |err| {
-            sdk.misc.error_context.append("Failed to construct \"{s}\" directory path.", .{directory_name});
+            sdk.misc.error_context.new("Failed to construct \"{s}\" directory path.", .{directory_name});
             return err;
         };
         buffer[len] = 0;
@@ -572,7 +572,7 @@ const FileDialog = struct {
             .{ @abs(ts.year), ts.month, ts.day, ts.hour, ts.minute, ts.second },
             0,
         ) catch |err| {
-            sdk.misc.error_context.append("Failed to construct timestamp string for nano timestamp: {}", .{nano});
+            sdk.misc.error_context.new("Failed to construct timestamp string for nano timestamp: {}", .{nano});
             return err;
         };
     }

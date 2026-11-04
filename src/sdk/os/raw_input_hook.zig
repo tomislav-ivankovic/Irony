@@ -66,7 +66,7 @@ pub fn RawInputHook(callback: *const RawInputHookCallbackFn) type {
             }
             while (active_hook_calls.load(.seq_cst) > 0) {
                 io.sleep(.fromMilliseconds(10), .awake) catch |err| {
-                    misc.error_context.append("Failed to sleep for 10 ms while waiting on raw input hook.", .{});
+                    misc.error_context.new("Failed to sleep for 10 ms while waiting on raw input hook.", .{});
                     misc.error_context.logError(err);
                 };
             }

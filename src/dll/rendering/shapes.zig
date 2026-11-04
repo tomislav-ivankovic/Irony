@@ -115,7 +115,7 @@ pub const Shapes = struct {
 
     fn add(self: *Self, shape: Shape) void {
         self.list.append(self.allocator, shape) catch |err| {
-            sdk.misc.error_context.append("Failed to add the shape to the array list.", .{});
+            sdk.misc.error_context.new("Failed to add the shape to the array list.", .{});
             sdk.misc.error_context.append("Failed to add a shape to shape renderer.", .{});
             sdk.misc.error_context.logError(err);
             return;

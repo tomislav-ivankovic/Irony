@@ -14,7 +14,7 @@ pub const VirtualCwdIo = struct {
 
     pub fn init(base_io: std.Io, path: []const u8) !Self {
         const dir = std.Io.Dir.openDir(.cwd(), base_io, path, .{ .iterate = true }) catch |err| {
-            misc.error_context.append("Failed to open directory: {s}", .{path});
+            misc.error_context.new("Failed to open directory: {s}", .{path});
             return err;
         };
         errdefer dir.close(base_io);

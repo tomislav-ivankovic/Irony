@@ -74,7 +74,7 @@ pub fn saveRecording(
                 return err;
             };
             encoder_writer.flush() catch |err| {
-                sdk.misc.error_context.append("Failed to flush zstd encoder.", .{});
+                sdk.misc.error_context.new("Failed to flush zstd encoder.", .{});
                 return err;
             };
         },

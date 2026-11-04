@@ -372,7 +372,7 @@ const SaveButton = struct {
             }.call,
             .{ io, settings.* },
         ) catch |err| {
-            sdk.misc.error_context.new("Failed to spawn settings save task.", .{});
+            sdk.misc.error_context.append("Failed to spawn settings save task.", .{});
             sdk.misc.error_context.append("Failed to save settings.", .{});
             sdk.misc.error_context.logError(err);
             return;
@@ -444,7 +444,7 @@ const ReloadButton = struct {
             }.call,
             .{io},
         ) catch |err| {
-            sdk.misc.error_context.new("Failed to spawn settings load task.", .{});
+            sdk.misc.error_context.append("Failed to spawn settings load task.", .{});
             sdk.misc.error_context.append("Failed to load settings.", .{});
             sdk.misc.error_context.logError(err);
             return;

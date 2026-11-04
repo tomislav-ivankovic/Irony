@@ -146,7 +146,7 @@ pub fn onProcessOpen(io: std.Io, index: usize, process: *const sdk.os.Process) b
     std.log.debug("Getting full path of \"{s}\"...", .{module_name});
     var buffer: [sdk.os.max_file_path_length]u8 = undefined;
     const full_path_len = std.Io.Dir.cwd().realPathFile(io, module_name, &buffer) catch |err| {
-        sdk.misc.error_context.append("Failed to get full file path of: {s}", .{module_name});
+        sdk.misc.error_context.new("Failed to get full file path of: {s}", .{module_name});
         sdk.misc.error_context.logError(err);
         return false;
     };

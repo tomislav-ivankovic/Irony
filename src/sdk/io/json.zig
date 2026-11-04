@@ -153,7 +153,7 @@ pub fn readLargeJsonArray(
             return err;
         };
         list.append(allocator, element) catch |err| {
-            misc.error_context.append("Failed to append read element to the result list.", .{});
+            misc.error_context.new("Failed to append read element to the result list.", .{});
             return err;
         };
         index += 1;
@@ -228,7 +228,7 @@ fn readValue(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.A
     return value_or_error catch |err_1| {
         if (reader.stackHeight() != start_height) {
             reader.skipUntilStackHeight(start_height) catch |err_2| {
-                misc.error_context.append("Failed to skip the invalid value.", .{});
+                misc.error_context.new("Failed to skip the invalid value.", .{});
                 return err_2;
             };
         }
