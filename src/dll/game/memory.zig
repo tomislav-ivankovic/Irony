@@ -615,12 +615,17 @@ fn relativeOffset(comptime Offset: type, address: anyerror!usize) !usize {
 
 fn add(comptime addition: comptime_int, address: anyerror!usize) !usize {
     const addr = try address;
-    const result = if (addition >= 0) @addWithOverflow(addr, addition) else @subWithOverflow(addr, -addition);
-    if (result[1] == 1) {
-        sdk.misc.error_context.new("Adding 0x{X} to address 0x{X} resulted in a overflow.", .{ addr, addition });
-        return error.Overflow;
+    if (addition >= 0) {
+        return std.math.add(usize, addr, addition) catch |err| {
+            sdk.misc.error_context.new("Adding 0x{X} to address 0x{X} resulted in an overflow.", .{ addition, addr });
+            return err;
+        };
+    } else {
+        return std.math.sub(usize, addr, -addition) catch |err| {
+            sdk.misc.error_context.new("Adding -0x{X} to address 0x{X} resulted in an overflow.", .{ -addition, addr });
+            return err;
+        };
     }
-    return result[0];
 }
 
 const testing = std.testing;

@@ -61,11 +61,7 @@ fn isMemoryAccessibleAndInOneOfModes(
         } else {
             return false;
         }
-        const next_address = @addWithOverflow(@intFromPtr(info.BaseAddress), info.RegionSize);
-        if (next_address[1] == 1) {
-            return true;
-        }
-        current_address = next_address[0];
+        current_address = std.math.add(usize, @intFromPtr(info.BaseAddress), info.RegionSize) catch return true;
     }
     return true;
 }

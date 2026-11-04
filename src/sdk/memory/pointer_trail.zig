@@ -38,12 +38,7 @@ pub const PointerTrail = struct {
         var current_address: usize = 0;
         for (offsets, 0..) |optional_offset, i| {
             const offset = optional_offset orelse return null;
-            const result = @addWithOverflow(current_address, offset);
-            const offset_address = result[0];
-            const overflow = result[1];
-            if (overflow == 1) {
-                return null;
-            }
+            const offset_address = std.math.add(usize, current_address, offset) catch return null;
             current_address = offset_address;
             if (i == offsets.len - 1) {
                 break;

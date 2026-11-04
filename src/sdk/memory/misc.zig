@@ -23,23 +23,22 @@ pub fn resolveRelativeOffset(comptime Offset: type, address: usize) !usize {
     }
     const pointer: *align(1) Offset = @ptrFromInt(address);
     const offset = pointer.*;
-    const addition_1 = @addWithOverflow(address, @sizeOf(Offset));
-    if (addition_1[1] == 1) {
+    const base_address = std.math.add(usize, address, @sizeOf(Offset)) catch |err| {
         misc.error_context.new("Relative offset overflew the address space.", .{});
-        return error.Overflow;
-    }
-    const addition_2 = if (offset >= 0) block: {
-        const abs_offset: usize = @intCast(offset);
-        break :block @addWithOverflow(addition_1[0], abs_offset);
-    } else block: {
-        const abs_offset: usize = @intCast(-offset);
-        break :block @subWithOverflow(addition_1[0], abs_offset);
+        return err;
     };
-    if (addition_2[1] == 1) {
-        misc.error_context.new("Relative offset overflew the address space.", .{});
-        return error.Overflow;
+    const abs_offset: usize = @abs(offset);
+    if (offset >= 0) {
+        return std.math.add(usize, base_address, abs_offset) catch |err| {
+            misc.error_context.new("Relative offset overflew the address space.", .{});
+            return err;
+        };
+    } else {
+        return std.math.sub(usize, base_address, abs_offset) catch |err| {
+            misc.error_context.new("Relative offset overflew the address space.", .{});
+            return err;
+        };
     }
-    return addition_2[0];
 }
 
 const testing = std.testing;

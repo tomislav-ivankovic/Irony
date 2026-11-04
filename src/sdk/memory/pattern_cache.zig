@@ -44,12 +44,10 @@ pub const PatternCache = struct {
                 misc.error_context.new("Cached address is outside of memory range.", .{});
                 return error.NotFound;
             }
-            const address = @addWithOverflow(self.memory_range.base_address, offset);
-            if (address[1] == 1) {
+            return std.math.add(usize, self.memory_range.base_address, offset) catch |err| {
                 misc.error_context.new("Memory address overflow.", .{});
-                return error.NotFound;
-            }
-            return address[0];
+                return err;
+            };
         }
         const address = pattern.findAddress(self.memory_range) catch |err_1| {
             if (err_1 == error.NotFound) {
@@ -59,12 +57,11 @@ pub const PatternCache = struct {
             }
             return err_1;
         };
-        const offset = @subWithOverflow(address, self.memory_range.base_address);
-        if (offset[1] == 1) {
+        const offset = std.math.sub(usize, address, self.memory_range.base_address) catch {
             std.log.warn("Failed to put memory pattern \"{f}\" into cache. Memory offset underflow.", .{pattern});
             return address;
-        }
-        self.map.put(pattern.*, offset[0]) catch |err| {
+        };
+        self.map.put(pattern.*, offset) catch |err| {
             std.log.warn("Failed to put memory pattern \"{f}\" into cache. [{}]", .{ pattern, err });
         };
         return address;
