@@ -55,18 +55,28 @@ pub fn RawInputHook(callback: *const RawInputHookCallbackFn) type {
 
         pub fn deinit(io: std.Io) void {
             if (hook) |*h| {
-                if (h.destroy()) {
-                    hook = null;
-                } else |err| {
-                    misc.error_context.append("Failed to destroy GetRawInputData hook.", .{});
-                    misc.error_context.logError(err);
-                }
+                h.disable() catch |err| switch (err) {
+                    error.HookDisabled => {},
+                    else => {
+                        misc.error_context.append("Failed to disable GetRawInputData hook.", .{});
+                        misc.error_context.logError(err);
+                        return;
+                    },
+                };
             }
             while (active_hook_calls.load(.seq_cst) > 0) {
                 io.sleep(.fromMilliseconds(10), .awake) catch |err| {
                     misc.error_context.append("Failed to sleep for 10 ms while waiting on raw input hook.", .{});
                     misc.error_context.logError(err);
                 };
+            }
+            if (hook) |*h| {
+                if (h.destroy()) {
+                    hook = null;
+                } else |err| {
+                    misc.error_context.append("Failed to destroy GetRawInputData hook.", .{});
+                    misc.error_context.logError(err);
+                }
             }
         }
 

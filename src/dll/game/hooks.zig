@@ -143,10 +143,89 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
         }
 
         pub fn deinit(io: std.Io) void {
+            var is_render_targets_hook_disabled = false;
+            if (game_id == .t8) {
+                std.log.debug("Disabling render targets hook...", .{});
+                if (render_targets_hook) |*hook| {
+                    if (hook.disable()) {
+                        is_render_targets_hook_disabled = true;
+                        std.log.info("Render targets hook disabled.", .{});
+                    } else |err| switch (err) {
+                        error.HookDisabled => is_render_targets_hook_disabled = true,
+                        else => {
+                            sdk.misc.error_context.append("Failed to disable render targets hook.", .{});
+                            sdk.misc.error_context.logError(err);
+                        },
+                    }
+                } else {
+                    std.log.debug("Nothing to disable.", .{});
+                }
+            }
+
+            std.log.debug("Disabling cancel requirements hook...", .{});
+            var is_cancel_requirements_hook_disabled = false;
+            if (cancel_requirements_hook) |*hook| {
+                if (hook.disable()) {
+                    is_cancel_requirements_hook_disabled = true;
+                    std.log.info("Cancel requirements hook disabled.", .{});
+                } else |err| switch (err) {
+                    error.HookDisabled => is_cancel_requirements_hook_disabled = true,
+                    else => {
+                        sdk.misc.error_context.append("Failed to disable cancel requirements hook.", .{});
+                        sdk.misc.error_context.logError(err);
+                    },
+                }
+            } else {
+                std.log.debug("Nothing to disable.", .{});
+            }
+
+            std.log.debug("Disabling tick hook...", .{});
+            var is_tick_hook_disabled = false;
+            if (tick_hook) |*hook| {
+                if (hook.disable()) {
+                    is_tick_hook_disabled = true;
+                    std.log.info("Tick hook disabled.", .{});
+                } else |err| switch (err) {
+                    error.HookDisabled => is_tick_hook_disabled = true,
+                    else => {
+                        sdk.misc.error_context.append("Failed to disable tick hook.", .{});
+                        sdk.misc.error_context.logError(err);
+                    },
+                }
+            } else {
+                std.log.debug("Nothing to disable.", .{});
+            }
+
+            std.log.debug("Disabling process input hook...", .{});
+            var is_process_input_hook_disabled = false;
+            if (process_input_hook) |*hook| {
+                if (hook.disable()) {
+                    is_process_input_hook_disabled = true;
+                    std.log.info("Process input hook disabled.", .{});
+                } else |err| switch (err) {
+                    error.HookDisabled => is_process_input_hook_disabled = true,
+                    else => {
+                        sdk.misc.error_context.append("Failed to disable process input hook.", .{});
+                        sdk.misc.error_context.logError(err);
+                    },
+                }
+            } else {
+                std.log.debug("Nothing to disable.", .{});
+            }
+
+            while (active_hook_calls.load(.seq_cst) > 0) {
+                io.sleep(.fromMilliseconds(10), .awake) catch |err| {
+                    sdk.misc.error_context.append("Failed to sleep for 10 ms while waiting on active game hooks.", .{});
+                    sdk.misc.error_context.logError(err);
+                };
+            }
+
             if (game_id == .t8) {
                 std.log.debug("Destroying render targets hook...", .{});
                 if (render_targets_hook) |*hook| {
-                    if (hook.destroy()) {
+                    if (!is_render_targets_hook_disabled) {
+                        std.log.warn("Skipping the destruction of render targets hook since disabling it failed.", .{});
+                    } else if (hook.destroy()) {
                         std.log.info("Render targets hook destroyed.", .{});
                         render_targets_hook = null;
                     } else |err| {
@@ -160,7 +239,12 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
 
             std.log.debug("Destroying cancel requirements hook...", .{});
             if (cancel_requirements_hook) |*hook| {
-                if (hook.destroy()) {
+                if (!is_cancel_requirements_hook_disabled) {
+                    std.log.warn(
+                        "Skipping the destruction of cancel requirements hook since disabling it failed.",
+                        .{},
+                    );
+                } else if (hook.destroy()) {
                     std.log.info("Cancel requirements hook destroyed.", .{});
                     cancel_requirements_hook = null;
                 } else |err| {
@@ -173,7 +257,9 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
 
             std.log.debug("Destroying tick hook...", .{});
             if (tick_hook) |*hook| {
-                if (hook.destroy()) {
+                if (!is_tick_hook_disabled) {
+                    std.log.warn("Skipping the destruction of tick hook since disabling it failed.", .{});
+                } else if (hook.destroy()) {
                     std.log.info("Tick hook destroyed.", .{});
                     tick_hook = null;
                 } else |err| {
@@ -186,7 +272,9 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
 
             std.log.debug("Destroying process input hook...", .{});
             if (process_input_hook) |*hook| {
-                if (hook.destroy()) {
+                if (!is_process_input_hook_disabled) {
+                    std.log.warn("Skipping the destruction of process input hook since disabling it failed.", .{});
+                } else if (hook.destroy()) {
                     std.log.info("Process input hook destroyed.", .{});
                     process_input_hook = null;
                 } else |err| {
@@ -195,13 +283,6 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
                 }
             } else {
                 std.log.debug("Nothing to destroy.", .{});
-            }
-
-            while (active_hook_calls.load(.seq_cst) > 0) {
-                io.sleep(.fromMilliseconds(10), .awake) catch |err| {
-                    sdk.misc.error_context.append("Failed to sleep for 10 ms while waiting on active game hooks.", .{});
-                    sdk.misc.error_context.logError(err);
-                };
             }
         }
 
