@@ -51,7 +51,7 @@ var producer_condition = std.Io.Condition.init;
 var pending_event: ?Event = null;
 var listening_to_events = std.atomic.Value(ListeningToEvents).init(.none);
 
-var event_buss: ?dll.EventBuss = null;
+var event_bus: ?dll.EventBus = null;
 
 pub fn DllMain(
     module_handle: std.os.windows.HINSTANCE,
@@ -365,9 +365,9 @@ pub fn main() void {
         switch (event) {
             .present => |*host_context| switch (state) {
                 .starting_up => {
-                    std.log.info("Initializing event buss...", .{});
-                    event_buss = .init(allocator, io, host_context);
-                    std.log.info("Event buss initialized.", .{});
+                    std.log.info("Initializing event bus...", .{});
+                    event_bus = .init(allocator, io, host_context);
+                    std.log.info("Event bus initialized.", .{});
 
                     std.log.debug("Initializing window procedure...", .{});
                     if (window_procedure.init(host_context.window)) {
@@ -380,18 +380,18 @@ pub fn main() void {
                     state = .up;
                 },
                 .up => {
-                    if (event_buss) |*buss| {
+                    if (event_bus) |*bus| {
                         const game_memory = memory_search_task.peek();
                         const memory_usage = main_allocator.total_requested_bytes;
-                        buss.draw(io, host_context, game_memory, memory_usage);
+                        bus.draw(io, host_context, game_memory, memory_usage);
                     }
                 },
                 .shutting_down => {
-                    std.log.info("De-initializing event buss...", .{});
-                    if (event_buss) |*buss| {
-                        buss.deinit(io, host_context);
-                        event_buss = null;
-                        std.log.info("Event buss de-initialized.", .{});
+                    std.log.info("De-initializing event bus...", .{});
+                    if (event_bus) |*bus| {
+                        bus.deinit(io, host_context);
+                        event_bus = null;
+                        std.log.info("Event bus de-initialized.", .{});
                     } else {
                         std.log.info("Nothing to de-initialize.", .{});
                     }
@@ -400,21 +400,21 @@ pub fn main() void {
                 },
             },
             .tick => {
-                if (event_buss) |*buss| {
+                if (event_bus) |*bus| {
                     const game_memory = memory_search_task.join();
-                    buss.tick(io, game_memory, &game_hooks.input_override);
+                    bus.tick(io, game_memory, &game_hooks.input_override);
                 }
             },
             .before_resize => |*host_context| {
                 std.log.info("Detected before resize event.", .{});
-                if (event_buss) |*buss| {
-                    buss.beforeResize(host_context);
+                if (event_bus) |*bus| {
+                    bus.beforeResize(host_context);
                 }
             },
             .after_resize => |*host_context| {
                 std.log.info("Detected after resize event.", .{});
-                if (event_buss) |*buss| {
-                    buss.afterResize(host_context);
+                if (event_bus) |*bus| {
+                    bus.afterResize(host_context);
                 }
             },
             .shut_down => {
@@ -572,10 +572,10 @@ fn getRawInputData(
     return return_value;
 }
 
-fn processKeyboardInput(input: *const w32.RAWKEYBOARD) dll.EventBuss.KeyboardInputAction {
+fn processKeyboardInput(input: *const w32.RAWKEYBOARD) dll.EventBus.KeyboardInputAction {
     if (already_holding_pending_event_mutex) {
-        const buss = if (event_buss) |*b| b else return .pass_through;
-        return buss.processKeyboardInput(input);
+        const bus = if (event_bus) |*b| b else return .pass_through;
+        return bus.processKeyboardInput(input);
     }
 
     const sio = single_threaded_io.io();
@@ -584,8 +584,8 @@ fn processKeyboardInput(input: *const w32.RAWKEYBOARD) dll.EventBuss.KeyboardInp
     already_holding_pending_event_mutex = true;
     defer already_holding_pending_event_mutex = false;
 
-    const buss = if (event_buss) |*b| b else return .pass_through;
-    return buss.processKeyboardInput(input);
+    const bus = if (event_bus) |*b| b else return .pass_through;
+    return bus.processKeyboardInput(input);
 }
 
 fn processWindowMessage(
@@ -595,8 +595,8 @@ fn processWindowMessage(
     l_param: w32.LPARAM,
 ) ?w32.LRESULT {
     if (already_holding_pending_event_mutex) {
-        const buss = if (event_buss) |*b| b else return null;
-        return buss.processWindowMessage(window, u_msg, w_param, l_param);
+        const bus = if (event_bus) |*b| b else return null;
+        return bus.processWindowMessage(window, u_msg, w_param, l_param);
     }
 
     const sio = single_threaded_io.io();
@@ -605,6 +605,6 @@ fn processWindowMessage(
     already_holding_pending_event_mutex = true;
     defer already_holding_pending_event_mutex = false;
 
-    const buss = if (event_buss) |*b| b else return null;
-    return buss.processWindowMessage(window, u_msg, w_param, l_param);
+    const bus = if (event_bus) |*b| b else return null;
+    return bus.processWindowMessage(window, u_msg, w_param, l_param);
 }

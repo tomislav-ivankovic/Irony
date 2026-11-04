@@ -81,7 +81,7 @@ test {
     _ = @import("injector/process_loop.zig");
 
     _ = @import("dll.zig");
-    _ = @import("dll/event_buss.zig");
+    _ = @import("dll/event_bus.zig");
 
     _ = @import("dll/core/automation.zig");
     _ = @import("dll/core/controller.zig");

@@ -15,7 +15,7 @@ const dx = switch (rendering_api) {
     .dx12 => sdk.dx12,
 };
 
-pub const EventBuss = struct {
+pub const EventBus = struct {
     timer: sdk.misc.Timer,
     managed_dx_context: ?dx.ManagedContext,
     ui_context: ?UiContext,
