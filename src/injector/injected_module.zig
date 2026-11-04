@@ -12,13 +12,13 @@ pub const InjectedModule = struct {
         const file_name = sdk.os.pathToFileName(module_path);
         if (sdk.os.Module.getRemote(process, file_name) catch null) |module| {
             ejectModule(module) catch |err| {
-                sdk.misc.error_context.append("Failed eject already loaded module: {s}", .{file_name});
+                sdk.misc.error_context.append("Failed to eject already loaded module: {s}", .{file_name});
                 return err;
             };
         }
         try injectModule(process, module_path);
         const module = sdk.os.Module.getRemote(process, file_name) catch |err| {
-            sdk.misc.error_context.append("Failed get remote module: {s}", .{file_name});
+            sdk.misc.error_context.append("Failed to get remote module: {s}", .{file_name});
             return err;
         };
         return .{
@@ -57,7 +57,7 @@ pub const InjectedModule = struct {
             const saved = sdk.misc.error_context.save();
             defer sdk.misc.error_context.restore(&saved);
             remote_string.destroy() catch |err| {
-                sdk.misc.error_context.append("Failed to create destroy remote slice.", .{});
+                sdk.misc.error_context.append("Failed to destroy remote slice.", .{});
                 sdk.misc.error_context.logError(err);
             };
         }
@@ -90,7 +90,7 @@ pub const InjectedModule = struct {
     fn ejectModule(module: sdk.os.Module) !void {
         gracefullyEjectModule(module) catch |err_1| {
             if (!builtin.is_test) {
-                sdk.misc.error_context.append("Failed to gracefully eject. Continuing with forceful ejection. ", .{});
+                sdk.misc.error_context.append("Failed to gracefully eject. Continuing with forceful ejection.", .{});
                 sdk.misc.error_context.logWarning(err_1);
             }
             forcefullyEjectModule(module) catch |err_2| {

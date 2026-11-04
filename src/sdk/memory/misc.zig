@@ -3,7 +3,7 @@ const misc = @import("../misc/root.zig");
 const os = @import("../os/root.zig");
 
 pub fn dereferenceMisaligned(comptime Type: type, address: usize) !Type {
-    if (!os.isMemoryReadable(address, @sizeOf(usize))) {
+    if (!os.isMemoryReadable(address, @sizeOf(Type))) {
         misc.error_context.new("Memory address 0x{X} is not readable.", .{address});
         return error.NotReadable;
     }
@@ -24,18 +24,18 @@ pub fn resolveRelativeOffset(comptime Offset: type, address: usize) !usize {
     const pointer: *align(1) Offset = @ptrFromInt(address);
     const offset = pointer.*;
     const base_address = std.math.add(usize, address, @sizeOf(Offset)) catch |err| {
-        misc.error_context.new("Relative offset overflew the address space.", .{});
+        misc.error_context.new("Relative offset overflowed the address space.", .{});
         return err;
     };
     const abs_offset: usize = @abs(offset);
     if (offset >= 0) {
         return std.math.add(usize, base_address, abs_offset) catch |err| {
-            misc.error_context.new("Relative offset overflew the address space.", .{});
+            misc.error_context.new("Relative offset overflowed the address space.", .{});
             return err;
         };
     } else {
         return std.math.sub(usize, base_address, abs_offset) catch |err| {
-            misc.error_context.new("Relative offset overflew the address space.", .{});
+            misc.error_context.new("Relative offset overflowed the address space.", .{});
             return err;
         };
     }

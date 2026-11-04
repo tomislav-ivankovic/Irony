@@ -153,14 +153,14 @@ pub fn readLargeJsonArray(
             return err;
         };
         list.append(allocator, element) catch |err| {
-            misc.error_context.append("Failed to append red element to the result list.", .{});
+            misc.error_context.append("Failed to append read element to the result list.", .{});
             return err;
         };
         index += 1;
     }
 
     _ = json_reader.next() catch |err| {
-        misc.error_context.new("Failed to read bounded array end token.", .{});
+        misc.error_context.new("Failed to read array end token.", .{});
         return err;
     };
     return list;
@@ -254,7 +254,7 @@ fn writeVoid(writer: *std.Io.Writer) !void {
 
 fn readVoid(reader: *std.json.Reader) !void {
     const token_type = reader.peekNextTokenType() catch |err| {
-        misc.error_context.new("Failed to peak void token type.", .{});
+        misc.error_context.new("Failed to peek void token type.", .{});
         return err;
     };
     if (token_type != .object_begin) {
@@ -347,7 +347,7 @@ fn writeEnum(writer: *std.Io.Writer, value: anytype) !void {
     const info = &@typeInfo(Type).@"enum";
     switch (info.mode) {
         .exhaustive => {},
-        .nonexhaustive => @compileError("Enum " ++ @typeName(Type) ++ " is nonexhaustive and therefor not supported."),
+        .nonexhaustive => @compileError("Enum " ++ @typeName(Type) ++ " is nonexhaustive and therefore not supported."),
     }
     const tag_name = @tagName(value);
     std.json.Stringify.encodeJsonString(tag_name, .{}, writer) catch |err| {
@@ -360,7 +360,7 @@ fn readEnum(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.Al
     const info = &@typeInfo(Type).@"enum";
     switch (info.mode) {
         .exhaustive => {},
-        .nonexhaustive => @compileError("Enum " ++ @typeName(Type) ++ " is nonexhaustive and therefor not supported."),
+        .nonexhaustive => @compileError("Enum " ++ @typeName(Type) ++ " is nonexhaustive and therefore not supported."),
     }
     const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
         misc.error_context.new("Failed to read enum value token.", .{});
@@ -609,7 +609,7 @@ fn writeStruct(writer: *std.Io.Writer, value_pointer: anytype, whitespace: *cons
         return err;
     };
     indented_whitespace.write(writer) catch |err| {
-        misc.error_context.append("Failed first field whitespace.", .{});
+        misc.error_context.append("Failed to write first field whitespace.", .{});
         return err;
     };
     inline for (info.field_names, 0..) |field_name, index| {
@@ -678,7 +678,7 @@ fn readStruct(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.
             .allocated_string => |string| string,
             .object_end => break,
             else => {
-                misc.error_context.new("Expected string or object end token but got: {s}", .{@tagName(begin_token)});
+                misc.error_context.new("Expected string or object end token but got: {s}", .{@tagName(token)});
                 return error.UnexpectedToken;
             },
         };
@@ -743,7 +743,7 @@ fn writeUnion(writer: *std.Io.Writer, value_pointer: anytype, whitespace: *const
     const Type = @TypeOf(value_pointer.*);
     const info = @typeInfo(Type).@"union";
     if (info.tag_type == null) {
-        @compileError("Union " ++ @typeName(Type) ++ " is not tagged and therefor not serializable.");
+        @compileError("Union " ++ @typeName(Type) ++ " is not tagged and therefore not serializable.");
     }
     const tag_name = @tagName(value_pointer.*);
     writer.writeAll("{ ") catch |err| {
@@ -779,7 +779,7 @@ fn writeUnion(writer: *std.Io.Writer, value_pointer: anytype, whitespace: *const
 fn readUnion(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.Allocator, default: anytype) !Type {
     const info = @typeInfo(Type).@"union";
     const Tag = info.tag_type orelse {
-        @compileError("Union " ++ @typeName(Type) ++ " is not tagged and therefor not serializable.");
+        @compileError("Union " ++ @typeName(Type) ++ " is not tagged and therefore not serializable.");
     };
     const begin_token = reader.next() catch |err| {
         misc.error_context.new("Failed to read union begin token.", .{});
@@ -815,7 +815,7 @@ fn readUnion(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.A
         return err;
     };
     if (end_token != .object_end) {
-        misc.error_context.new("Expected object end token but got: {s}", .{@tagName(begin_token)});
+        misc.error_context.new("Expected object end token but got: {s}", .{@tagName(end_token)});
         return error.UnexpectedToken;
     }
     return tagged_union;
@@ -1029,7 +1029,7 @@ fn readEnumArray(comptime Type: type, reader: *std.json.Reader, allocator: std.m
             .allocated_string => |string| string,
             .object_end => break,
             else => {
-                misc.error_context.new("Expected string or object end token but got: {s}", .{@tagName(begin_token)});
+                misc.error_context.new("Expected string or object end token but got: {s}", .{@tagName(token)});
                 return error.UnexpectedToken;
             },
         };
@@ -1320,7 +1320,7 @@ test "readLargeJsonArray should read the same value that writeLargeJsonArray sav
     try testing.expectEqualSlices(Element, &array, list.items);
 }
 
-test "readJsonValue should succeed when json has more values then expected" {
+test "readJsonValue should succeed when json has more values than expected" {
     const Value = struct {
         a: f32,
         d: struct { d1: f32 },

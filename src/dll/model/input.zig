@@ -152,7 +152,7 @@ test "clean should remove simultaneous opposite directional inputs" {
     );
 }
 
-test "equalsIgnoringLeftRight should return correct true only if every flag except left or right are equal" {
+test "equalsIgnoringLeftRight should return true only if every flag except left or right is equal" {
     try testing.expectEqual(true, Input.equalsIgnoringLeftRight(
         Input{ .forward = true, .left = true, .button_1 = true, .heat = true },
         Input{ .forward = true, .left = true, .button_1 = true, .heat = true },

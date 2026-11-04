@@ -1756,7 +1756,7 @@ fn condWait(cond: *Io.Condition, mutex: *Io.Mutex) void {
     while (true) {
         Thread.futexWaitUncancelable(&cond.epoch.raw, epoch, null);
 
-        epoch = cond.epoch.load(.acquire); // `.acquire` to ensure ordered before `state` laod
+        epoch = cond.epoch.load(.acquire); // `.acquire` to ensure ordered before `state` load
 
         var prev_state = cond.state.load(.monotonic);
         while (prev_state.signals > 0) {

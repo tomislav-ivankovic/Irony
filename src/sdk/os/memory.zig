@@ -135,7 +135,7 @@ test "isMemoryRangeValid should return true when range does not overflow" {
     try testing.expectEqual(true, isMemoryRangeValid(std.math.maxInt(usize) - 4, 5));
 }
 
-test "isMemoryRangeValid should return true when range overflows" {
+test "isMemoryRangeValid should return false when range overflows" {
     try testing.expectEqual(false, isMemoryRangeValid(std.math.maxInt(usize) / 2, std.math.maxInt(usize)));
     try testing.expectEqual(false, isMemoryRangeValid(2, std.math.maxInt(usize)));
     try testing.expectEqual(false, isMemoryRangeValid(std.math.maxInt(usize) - 4, 6));

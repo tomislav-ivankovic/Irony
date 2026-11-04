@@ -373,7 +373,7 @@ test "should detect a mid crush correctly" {
     }
 }
 
-test "should detect a anti air only crush correctly" {
+test "should detect an anti air only crush correctly" {
     const whiffed_line = sdk.math.LineSegment3{
         .point_1 = .fromArray(.{ -2, 0, 0 }),
         .point_2 = .fromArray(.{ -1, 0, 0 }),

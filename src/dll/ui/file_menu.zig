@@ -572,7 +572,7 @@ const FileDialog = struct {
             .{ @abs(ts.year), ts.month, ts.day, ts.hour, ts.minute, ts.second },
             0,
         ) catch |err| {
-            sdk.misc.error_context.append("Failed to construct timestamp string for nano time: {}", .{nano});
+            sdk.misc.error_context.append("Failed to construct timestamp string for nano timestamp: {}", .{nano});
             return err;
         };
     }

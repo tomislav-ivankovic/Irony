@@ -45,7 +45,7 @@ fn runProcessLogic(
     if (open_process.*) |process| {
         std.log.debug("Checking if the process (PID = {f}) is still running...", .{process.id});
         const still_running = process.isStillRunning() catch |err| c: {
-            sdk.misc.error_context.append("Failed to figure out if process (PID={f}) is still running.", .{process.id});
+            sdk.misc.error_context.append("Failed to figure out if process (PID = {f}) is still running.", .{process.id});
             sdk.misc.error_context.logError(err);
             break :c false;
         };
@@ -61,7 +61,7 @@ fn runProcessLogic(
         if (process.close()) {
             std.log.info("Process closed successfully.", .{});
         } else |err| {
-            sdk.misc.error_context.append("Failed close process with PID: {f}", .{process.id});
+            sdk.misc.error_context.append("Failed to close process with PID: {f}", .{process.id});
             sdk.misc.error_context.logError(err);
         }
         open_process.* = null;
@@ -96,7 +96,7 @@ fn runProcessLogic(
             if (process.close()) {
                 std.log.info("Process closed successfully.", .{});
             } else |err| {
-                sdk.misc.error_context.append("Failed close process with PID: {f}", .{process.id});
+                sdk.misc.error_context.append("Failed to close process with PID: {f}", .{process.id});
                 sdk.misc.error_context.logError(err);
             }
         }

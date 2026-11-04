@@ -109,7 +109,7 @@ pub fn enumArrayToEnumFieldStruct(
 ) std.enums.EnumFieldStruct(Enum, Value, null) {
     const info = switch (@typeInfo(Enum)) {
         .@"enum" => |info| info,
-        else => @compileError("Expected Enum to be a enum type but got: " ++ @typeName(Enum)),
+        else => @compileError("Expected Enum to be an enum type but got: " ++ @typeName(Enum)),
     };
     var field_struct: std.enums.EnumFieldStruct(Enum, Value, null) = undefined;
     inline for (info.field_names, info.field_values) |field_name, field_value| {
@@ -184,7 +184,7 @@ test "Partial should make every field's default value null" {
     try testing.expectEqual(null, partial.field_3);
 }
 
-test "areAllFieldsNull should return null only if all fields of provided struct are null" {
+test "areAllFieldsNull should return true only if all fields of provided struct are null" {
     const Struct = struct {
         field_1: ?u8,
         field_2: ?u16,

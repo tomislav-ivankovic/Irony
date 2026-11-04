@@ -340,10 +340,10 @@ const SaveButton = struct {
         var content_size: imgui.ImVec2 = undefined;
         imgui.igGetContentRegionAvail(&content_size);
 
-        const is_loading = self.task.peek() == null;
-        imgui.igBeginDisabled(is_loading);
+        const is_saving = self.task.peek() == null;
+        imgui.igBeginDisabled(is_saving);
         defer imgui.igEndDisabled();
-        const label = if (is_loading) "Saving..." else "Save";
+        const label = if (is_saving) "Saving..." else "Save";
         if (imgui.igButton(label, .{ .x = content_size.x })) {
             self.saveSettings(io, settings);
         }
@@ -354,7 +354,7 @@ const SaveButton = struct {
 
     fn saveSettings(self: *Self, io: std.Io, settings: *const model.Settings) void {
         std.log.info("Saving settings...", .{});
-        std.log.debug("Spawning settings save thread...", .{});
+        std.log.debug("Spawning settings save task...", .{});
         _ = self.task.join();
         self.task = Task.spawn(
             self.allocator,
@@ -425,7 +425,7 @@ const ReloadButton = struct {
 
     fn loadSettings(self: *Self, io: std.Io) void {
         std.log.info("Loading settings...", .{});
-        std.log.debug("Spawning settings load thread...", .{});
+        std.log.debug("Spawning settings load task...", .{});
         _ = self.task.join();
         self.task = Task.spawn(
             self.allocator,
@@ -992,7 +992,7 @@ fn drawDetailsSettings(value: *model.DetailsSettings, default: *const model.Deta
         .player_2 = "Player 2",
         .left_player = "Left Player",
         .right_player = "Right Player",
-        .main_player = "Main Player ",
+        .main_player = "Main Player",
         .secondary_player = "Secondary Player",
     };
     drawEnum(model.DetailsSettings.Column, "Column 1", &column_names, &value.column_1, &default.column_1);
@@ -1060,7 +1060,7 @@ fn drawEnum(
 ) void {
     const info = switch (@typeInfo(Type)) {
         .@"enum" => |info| info,
-        else => @compileError("Expected Type to be a enum type but got: " ++ @typeName(Type)),
+        else => @compileError("Expected Type to be an enum type but got: " ++ @typeName(Type)),
     };
     imgui.igPushID_Str(label);
     drawDefaultButton(value, default);
@@ -1172,7 +1172,7 @@ test "reload settings button should load the same settings that the save button 
                 ctx.yield(1);
             }
             defer std.Io.Dir.cwd().deleteFile(testing.io, model.Settings.file_name) catch {
-                @panic("Failed to cleanup test file.");
+                @panic("Failed to clean up test file.");
             };
             try ctx.expectItemExists("Save");
 

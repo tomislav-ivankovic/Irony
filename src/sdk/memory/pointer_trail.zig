@@ -15,7 +15,7 @@ pub const PointerTrail = struct {
         }
         if (array.len > max_len) {
             @compileError(std.fmt.comptimePrint(
-                "The provided array with length {} is larger then maximum pointer trail length: {}",
+                "The provided array with length {} is larger than maximum pointer trail length: {}",
                 .{ array.len, max_len },
             ));
         }

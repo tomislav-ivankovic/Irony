@@ -1,6 +1,6 @@
 # Irony
 
-Application that gives it's users the ability to examine situations and inner workings of the T8 and T7 game in forensic detail.
+Application that gives its users the ability to examine situations and inner workings of the T8 and T7 games in forensic detail.
 The application only works with the PC version of both games.
 
 ## Features
@@ -55,9 +55,9 @@ The application only works with the PC version of both games.
     ```bash
     flatpak run --command=bash com.valvesoftware.Steam -c '
     STEAM_COMPAT_CLIENT_INSTALL_PATH=$HOME/.var/app/com.valvesoftware.Steam/.steam/root \
-    STEAM_COMPAT_DATA_PATH=$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapp/compatdata/1778820 \
-    WINEPREFIX=$HOME/.var/app/com.valvesoftware.Steam/.loca/share/Steam/steamapps/compatdata/1778820/pfx \
-    $HOME/.var/app/com.valvesoftware.Steam/.steam/roo/compatibilitytools.d/GE-Proton10-20/proton run \
+    STEAM_COMPAT_DATA_PATH=$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/compatdata/1778820 \
+    WINEPREFIX=$HOME/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/compatdata/1778820/pfx \
+    $HOME/.var/app/com.valvesoftware.Steam/.steam/root/compatibilitytools.d/GE-Proton10-20/proton run \
     Z:/home/user_name/path_to_irony_folder/irony_injector.exe only_inject
     '
     ```
@@ -73,9 +73,9 @@ The application only works with the PC version of both games.
 
 Take a look inside the [build.zig.zon](./build.zig.zon) file.
 Under the property `.zig_version` there is a version of the Zig programming language that the project is to be compiled with.
-Install that version of the ZIG compiler onto your machine using the [official Zig tutorial](https://ziglang.org/learn/getting-started).
+Install that version of the Zig compiler onto your machine using the [official Zig tutorial](https://ziglang.org/learn/getting-started).
 
-Make sure that your version of the Zig compiler matches the `.zig_version`, execute:
+To make sure that your version of the Zig compiler matches the `.zig_version`, execute:
 
 ```bash
 zig version
@@ -93,7 +93,7 @@ To build the project in release mode execute:
 zig build --release=fast
 ```
 
-Ether way, after the compilation is over the binaries will be placed inside `zig-out/bin`.
+Either way, after the compilation is over the binaries will be placed inside `zig-out/bin`.
 
 To run the application while developing execute:
 
@@ -101,7 +101,7 @@ To run the application while developing execute:
 zig build run
 ```
 
-If you have only one of the games running you can disable the compilation of the other game's DLL by game using `-Dt7=false` or `-Dt8=false` command line arguments:
+If you have only one of the games running you can disable the compilation of the other game's DLL using `-Dt7=false` or `-Dt8=false` command line arguments:
 
 ```bash
 zig build run -Dt7=false
@@ -129,7 +129,7 @@ winetricks dxvk vkd3d
 
 ## Not Open Source
 
-While this application is free to download and it's source code is publicly available for inspection, the license that the code is under limits the legal rights of the public in a way that makes this software NOT open source.
+While this application is free to download and its source code is publicly available for inspection, the license that the code is under limits the legal rights of the public in a way that makes this software NOT open source.
 A more accurate way to describe this software is "source-available".
 For more details look at the [license](./LICENSE.md).
 
@@ -140,5 +140,4 @@ To support me and this project you can donate using one of the following links:
 - [One Time Donation](https://donate.stripe.com/5kQ8wI2qi1zbdWkgUPao800)
 - [Recurring Donation](https://donate.stripe.com/fZu4gsd4W0v77xWeMHao801)
 
-Additionally.
-If you are recruiting software developers, and you like what you see here, you can offer me a job by contacting me via email: [jobs@tomislav-ivankovic.from.hr](mailto:jobs@tomislav-ivankovic.from.hr)
+Additionally, if you are recruiting software developers, and you like what you see here, you can offer me a job by contacting me via email: [jobs@tomislav-ivankovic.from.hr](mailto:jobs@tomislav-ivankovic.from.hr)

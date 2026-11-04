@@ -149,7 +149,7 @@ pub const TaiControls = struct {
     fn drawInitialStateButton() void {
         imgui.igBeginDisabled(true);
         defer imgui.igEndDisabled();
-        _ = imgui.igButton(" 🯅 ###intial_state", .{});
+        _ = imgui.igButton(" 🯅 ###initial_state", .{});
         if (imgui.igIsItemHovered(imgui.ImGuiHoveredFlags_AllowWhenDisabled)) {
             imgui.igSetTooltip("Use Recorded Initial State (Not yet implemented.)");
         }

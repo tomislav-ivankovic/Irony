@@ -707,7 +707,7 @@ pub const TestContext = struct {
         if (ref_object.Path != null) {
             self.logError("Item was expected not to exist but was still found: \"%s\"", .{ref_object.Path});
         } else {
-            self.logError("Item was expected not to exist but was still found: %d", .{ref_object.Path});
+            self.logError("Item was expected not to exist but was still found: %d", .{ref_object.ID});
         }
         return error.UnexpectedItemFound;
     }

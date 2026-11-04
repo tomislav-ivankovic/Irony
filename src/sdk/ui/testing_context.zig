@@ -20,7 +20,7 @@ pub fn getTestingContext() !(*const TestingContext) {
         times_initialized += 1;
         if (times_initialized > 1) {
             std.log.err(
-                "UI testing context initialized {} times." ++
+                "UI testing context initialized {} times. " ++
                     "This could be because the de-initialization happened in-between UI tests and not after all UI tests.",
                 .{times_initialized},
             );

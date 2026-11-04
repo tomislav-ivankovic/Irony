@@ -383,7 +383,7 @@ test "should discard earliest entries when exceeding buffer size" {
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should discard all toasts when message is larger then the buffer" {
+test "should discard all toasts when message is larger than the buffer" {
     const toasts = Toasts(.{
         .buffer_size = 12,
         .max_toasts = 32,

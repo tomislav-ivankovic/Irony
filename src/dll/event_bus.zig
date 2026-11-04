@@ -153,11 +153,11 @@ pub const EventBus = struct {
         self.rendering.deinit(if (dx_context) |*dxc| dxc else null);
         std.log.info("Rendering de-initialized.", .{});
 
-        std.log.debug("Deinitializing UI...", .{});
+        std.log.debug("De-initializing UI...", .{});
         self.ui.deinit();
         std.log.info("UI de-initialized.", .{});
 
-        std.log.debug("Joining latest version fetching loading task...", .{});
+        std.log.debug("Joining latest version fetching task...", .{});
         _ = self.latest_version_task.join();
         std.log.info("Latest version fetching task joined.", .{});
 

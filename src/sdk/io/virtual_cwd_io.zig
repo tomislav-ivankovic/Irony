@@ -281,7 +281,7 @@ test "init should return self with the provided path and correct virtual dir whe
     try testing.expectEqualStrings(expected_path, actual_path);
 }
 
-test "initFromModule init should return self with path to the directory of the provided module" {
+test "initFromModule should return self with path to the directory of the provided module" {
     const module = try os.Module.getMain();
     const virtual_cwd_io = try VirtualCwdIo.initFromModule(testing.io, &module);
     defer virtual_cwd_io.deinit();
@@ -293,7 +293,7 @@ test "initFromModule init should return self with path to the directory of the p
     try testing.expectEqualStrings(module_directory, virtual_cwd_io.path.asSlice());
 }
 
-test "initFromModule init should return self with path to the directory of the main module" {
+test "initFromMainModule should return self with path to the directory of the main module" {
     const virtual_cwd_io = try VirtualCwdIo.initFromMainModule(testing.io);
     defer virtual_cwd_io.deinit();
 

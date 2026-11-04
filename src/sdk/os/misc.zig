@@ -97,7 +97,7 @@ pub fn getExecutableTimestamp() !u32 {
     };
     const dos_header: *align(1) const w32.IMAGE_DOS_HEADER = @ptrCast(handle);
     if (!os.isMemoryReadable(@intFromPtr(dos_header), @sizeOf(w32.IMAGE_DOS_HEADER))) {
-        misc.error_context.new("Dos header memory not readable.", .{});
+        misc.error_context.new("DOS header memory not readable.", .{});
         return error.NotReadable;
     }
     if (dos_header.e_magic != w32.IMAGE_DOS_SIGNATURE) {
@@ -151,7 +151,7 @@ test "getFullPath should produce correct full path" {
     try testing.expectStringEndsWith(full_path, "\\test_1\\test_2\\test_3.txt");
 }
 
-test "getExecutableTimestamp should return a value grater then 1 day ago and less or equal then now" {
+test "getExecutableTimestamp should return a value greater than 1 day ago and less than or equal to now" {
     const timestamp = try getExecutableTimestamp();
     const now: u32 = @intCast(std.Io.Clock.real.now(testing.io).toSeconds());
     const day_ago = now - std.time.s_per_day;

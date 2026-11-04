@@ -62,7 +62,7 @@ pub fn Proxy(comptime Type: type) type {
 
 const testing = std.testing;
 
-test "fromPointer should return a proxy with trail that points to pointers address when pointer is provided" {
+test "fromPointer should return a proxy with trail that points to pointer's address when pointer is provided" {
     const Struct = struct {};
     const str = Struct{};
     const proxy = Proxy(Struct).fromPointer(&str);
@@ -128,7 +128,7 @@ test "toConstPointer should return null when trail is not resolvable, address is
     try testing.expectEqual(null, proxy(.{ str_address_address, field_1_offset + 1 }).toConstPointer());
 }
 
-test "toMutablePointer should return a pointer when trail is resolvable, address is aligned and memory is writable" {
+test "toMutablePointer should return a pointer when trail is resolvable, address is aligned and memory is writeable" {
     const Struct = extern struct { field_1: i32, field_2: i32 };
     const field_1_offset = @offsetOf(Struct, "field_1");
     const field_2_offset = @offsetOf(Struct, "field_2");
@@ -147,7 +147,7 @@ test "toMutablePointer should return a pointer when trail is resolvable, address
     try testing.expectEqual(&str.field_2, proxy(.{ str_address_address_address, 0, field_2_offset }).toMutablePointer());
 }
 
-test "toMutablePointer should return null when trail is not resolvable, address is misaligned or memory is not writable" {
+test "toMutablePointer should return null when trail is not resolvable, address is misaligned or memory is not writeable" {
     const Struct = extern struct { field_1: i32, field_2: i32 };
     const field_1_offset = @offsetOf(Struct, "field_1");
     const field_2_offset = @offsetOf(Struct, "field_2");

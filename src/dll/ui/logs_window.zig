@@ -37,7 +37,7 @@ pub const LogsWindow = struct {
                 drawColoredText(getLogColor(entry.level), entry.full_message);
             }
         } else |err| {
-            sdk.misc.error_context.append("Failed to lock buffered locker and get it's entities.", .{});
+            sdk.misc.error_context.append("Failed to lock buffer logger and get its entries.", .{});
             sdk.misc.error_context.logError(err);
         }
 

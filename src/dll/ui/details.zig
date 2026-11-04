@@ -9,7 +9,7 @@ pub const Details = struct {
         "Irony Version",
         \\Version of Irony that data was recorded with.
         \\Can be used to check what version of Irony was used to record old recordings.
-        \\If blank, the data was recorded by version of Irony older then 2.4.0.
+        \\If blank, the data was recorded by version of Irony older than 2.4.0.
     ,
         model.IronyVersion,
         null,
@@ -19,7 +19,7 @@ pub const Details = struct {
         "Game",
         \\Game that the data was recorded from.
         \\You can open recordings of T8 inside T7 and recordings of T7 inside T8.
-        \\If blank, the data was recorded by version of Irony older then 2.4.0.
+        \\If blank, the data was recorded by version of Irony older than 2.4.0.
     ,
         model.Game,
         null,
@@ -28,8 +28,8 @@ pub const Details = struct {
     game_version: Row(
         "Game Version",
         \\Version of the game that the data was recorded from.
-        \\Can be used to check what the version the game was when an old recording was recorded.
-        \\If blank, Irony failed to read the game version or data was recorded by version of Irony older then 2.4.0.
+        \\Can be used to check what version the game was when an old recording was recorded.
+        \\If blank, Irony failed to read the game version or data was recorded by version of Irony older than 2.4.0.
     ,
         model.GameVersion,
         .empty,
@@ -41,7 +41,7 @@ pub const Details = struct {
         \\Practice - Data was recorded inside practice mode.
         \\Live Game - Data was recorded while a live match was played.
         \\Replay Loading - Data was recorded during the fast game simulation while a replay was loading.
-        \\Replay Playback - Data was recorded from a manual playback of a already loaded replay.
+        \\Replay Playback - Data was recorded from a manual playback of an already loaded replay.
     ,
         model.Source,
         null,
@@ -137,7 +137,7 @@ pub const Details = struct {
         \\One of the following:
         \\Available - Rage not active but can get activated once player's health drops low enough.
         \\Activated - Player's health dropped low enough to activate rage, but player did not use rage art yet.
-        \\Used Up - Player previously used rage art and therefor can no longer enter rage in this round.
+        \\Used Up - Player previously used rage art and therefore can no longer enter rage in this round.
     ,
         model.Rage,
         null,
@@ -206,7 +206,7 @@ pub const Details = struct {
     move_frame: Row(
         "Move Frame",
         \\In most situations, same as "Animation Frame".
-        \\However, in situations where the game freezes ether player's animation, this number stops increasing in value.
+        \\However, in situations where the game freezes either player's animation, this number stops increasing in value.
         \\This causes the value to diverge from "Animation Frame", but makes the value better for frame data math.
     ,
         u32,
@@ -216,7 +216,7 @@ pub const Details = struct {
     startup_frames: Row(
         "Startup Frames",
         \\Number of frames that the current attack is in start up phase.
-        \\Frames in which ether player's animation is frozen are not counted in this value.
+        \\Frames in which either player's animation is frozen are not counted in this value.
         \\The value outside brackets indicates the startup frames in the current interaction.
         \\The values inside brackets indicate the minimum and maximum possible startup frames for the current attack.
     ,
@@ -228,7 +228,7 @@ pub const Details = struct {
         "Active Frames",
         \\Number of frames that the current attack is in active phase.
         \\The value outside brackets indicates the active frames in the current interaction.
-        \\The values inside brackets indicate the minimum and maximum possible active frames for the current attack.
+        \\The value inside brackets indicates the maximum possible active frames for the current attack.
     ,
         model.U32ActualMax,
         .nulls,
@@ -237,7 +237,7 @@ pub const Details = struct {
     recovery_frames: Row(
         "Recovery Frames",
         \\Number of frames that the current move is in recovery phase.
-        \\Frames in which ether player's animation is frozen are not counted in this value.
+        \\Frames in which either player's animation is frozen are not counted in this value.
         \\The value outside brackets indicates the recovery frames in the current interaction.
         \\The values inside brackets indicate the minimum and maximum possible recovery frames for the current move.
     ,
@@ -247,9 +247,9 @@ pub const Details = struct {
     ) = .{},
     total_frames: Row(
         "Total Frames",
-        \\For most moves, same as "Total Animation Frame".
-        \\However, frames in which ether player's animation is frozen are not counted in this value.
-        \\This causes the value to diverge from "Total Animation Frame", but makes the value better for frame data math.
+        \\For most moves, same as "Animation Total Frames".
+        \\However, frames in which either player's animation is frozen are not counted in this value.
+        \\This causes the value to diverge from "Animation Total Frames", but makes the value better for frame data math.
     ,
         u32,
         null,
@@ -258,8 +258,8 @@ pub const Details = struct {
     frame_advantage: Row(
         "Frame Advantage",
         \\Difference of recovery time in frames between the player and his opponent.
-        \\Positive value indicates the player recovering sooner then the opponent.
-        \\Negative value indicates the opponent recovering sooner then the player.
+        \\Positive value indicates the player recovering sooner than the opponent.
+        \\Negative value indicates the opponent recovering sooner than the player.
         \\Zero indicates simultaneous recovery.
         \\The value outside brackets indicates the frame advantage in the current interaction.
         \\The values inside brackets indicate the minimum and maximum possible frame advantage for the current move.
@@ -290,7 +290,7 @@ pub const Details = struct {
         "Attack Range [m]",
         \\Distance between the most exposed point on player's hurt cylinders taken 1 frame before the start of the
         \\attack animation and the furthest reaching point on attack's hit lines.
-        \\Everything is first projected to the line that points in the direction the player is looking at at the first
+        \\Everything is first projected to the line that points in the direction the player is facing at the first
         \\frame of attack animation. The distance is then measured on that projection line.
     ,
         f32,
@@ -308,7 +308,7 @@ pub const Details = struct {
         "Recovery Range [m]",
         \\Distance between the furthest reaching point on attack's hit lines and the most exposed point on player's
         \\hurt cylinders taken at the last recovery frame.
-        \\Everything is first projected to the line that points in the direction the player was looking at at the first
+        \\Everything is first projected to the line that points in the direction the player was facing at the first
         \\frame of attack animation. The distance is then measured on that projection line.
         \\Positive value indicates that the player recovered behind attack's hit lines.
         \\Negative value indicates that the player recovered in front of attack's hit lines.
@@ -343,8 +343,8 @@ pub const Details = struct {
     posture: Row(
         "Posture",
         \\One of the following:
-        \\Standing - Can block mid and high attacks. Gets hit my lows attacks.
-        \\Crouching - Can block low attacks. Gets hit my mid attacks. Crushes high attacks.
+        \\Standing - Can block mid and high attacks. Gets hit by low attacks.
+        \\Crouching - Can block low attacks. Gets hit by mid attacks. Crushes high attacks.
         \\Downed Face Up - Gets hit by mid and low attacks. Crushes high attacks.
         \\Downed Face Down - Gets hit by mid and low attacks. Crushes high attacks.
         \\Airborne - Getting hit results in getting floated. Does not necessarily crush low attacks.
@@ -396,7 +396,7 @@ pub const Details = struct {
     throw_escape_phase: Row(
         "Throw Escape Phase",
         \\One of the following:
-        \\In Escape Window - Player is able input buttons to escape the throw.
+        \\In Escape Window - Player is able to input buttons to escape the throw.
         \\Escape Success - Player succeeded in escaping the throw.
         \\Escape Fail - Player failed in escaping the throw.
     ,
@@ -420,7 +420,7 @@ pub const Details = struct {
         \\1 - The current throw can be escaped by inputting only left punch.
         \\2 - The current throw can be escaped by inputting only right punch.
         \\1+2 - The current throw can be escaped by inputting left and right punch simultaneously.
-        \\1 or 2 - The current throw can be escaped by inputting ether only left punch or only right punch.
+        \\1 or 2 - The current throw can be escaped by inputting either only left punch or only right punch.
     ,
         model.ThrowEscapeInputs,
         .{},
@@ -1151,7 +1151,7 @@ fn drawCrushing(value: model.Crushing, alpha: f32) void {
     var is_first = true;
     if (value.invincibility) {
         if (!is_first) {
-            writer.writeByte('+') catch {};
+            writer.writeAll(", ") catch {};
         }
         writer.writeAll("Everything") catch {};
         is_first = false;
@@ -1436,7 +1436,7 @@ test "should put text into clipboard when clicking text" {
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should should slowly fade out from last present value to null or empty value" {
+test "should slowly fade out from last present value to null or empty value" {
     const Test = struct {
         var settings = model.DetailsSettings{ .rows_enabled = .{} };
         var details = Details{};
@@ -2832,7 +2832,7 @@ test "should draw combo hits correctly" {
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should draw combo damage" {
+test "should draw combo damage correctly" {
     const Test = struct {
         var settings = model.DetailsSettings{ .rows_enabled = .{} };
         var details = Details{};

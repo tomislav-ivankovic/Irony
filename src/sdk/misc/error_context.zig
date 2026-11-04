@@ -77,7 +77,7 @@ pub fn ErrorContext(comptime config: ErrorContextConfig) type {
             }
             self.addDynamicItem(&self.buffer, fmt, args) catch {
                 if (!builtin.is_test) {
-                    std.log.err("Failed to add item to error context. Error message is larger then the buffer.", .{});
+                    std.log.err("Failed to add item to error context. Error message is larger than the buffer.", .{});
                 }
             };
         }
@@ -278,7 +278,7 @@ test "should discard earliest items when exceeding buffer size" {
     try testing.expectEqualStrings("1) Error: 123\n", message_3);
 }
 
-test "should discard all items when message is larger then the buffer" {
+test "should discard all items when message is larger than the buffer" {
     var context = ErrorContext(.{
         .buffer_size = 16,
         .max_items = 64,

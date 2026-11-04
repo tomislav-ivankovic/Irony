@@ -205,15 +205,15 @@ pub fn Automation(comptime config: AutomationConfig) type {
                     }
                 }
                 writer.writeAll("  ") catch |err| {
-                    sdk.misc.error_context.new("Failed to write player names: {s} vs {s}", .{ p1_name, p2_name });
+                    sdk.misc.error_context.new("Failed to write the separator after player names.", .{});
                     return err;
                 };
             }
 
             if (p1.rounds_won) |p1_rounds| {
-                if (p2.rounds_won) |p2_round| {
-                    writer.print("{}-{}  ", .{ p1_rounds, p2_round }) catch |err| {
-                        sdk.misc.error_context.new("Failed to write match score: {}-{}", .{ p1_rounds, p2_round });
+                if (p2.rounds_won) |p2_rounds| {
+                    writer.print("{}-{}  ", .{ p1_rounds, p2_rounds }) catch |err| {
+                        sdk.misc.error_context.new("Failed to write match score: {}-{}", .{ p1_rounds, p2_rounds });
                         return err;
                     };
                 }

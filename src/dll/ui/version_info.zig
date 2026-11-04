@@ -21,7 +21,7 @@ pub fn drawVersionInfo(latest_version: LatestVersion, comptime config: VersionIn
             .gt => .{
                 std.fmt.bufPrintSentinel(
                     &tool_tip_buffer,
-                    \\Using a unreleased version: {f}
+                    \\Using an unreleased version: {f}
                     \\Latest released version is: {f}
                     \\Are you a developer?
                 ,

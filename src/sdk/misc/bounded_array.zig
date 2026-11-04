@@ -35,7 +35,7 @@ pub fn BoundedArray(
             }
             if (array.len > capacity) {
                 @compileError(std.fmt.comptimePrint(
-                    "The provided array with length {} is larger then capacity: {}",
+                    "The provided array with length {} is larger than capacity: {}",
                     .{ array.len, capacity },
                 ));
             }
@@ -49,7 +49,7 @@ pub fn BoundedArray(
         pub fn fromSlice(slice: []const Element) !Self {
             if (slice.len > capacity) {
                 misc.error_context.new(
-                    "The provided slice with length {} is larger then capacity: {}",
+                    "The provided slice with length {} is larger than capacity: {}",
                     .{ slice.len, capacity },
                 );
                 return error.NoSpaceLeft;
@@ -155,7 +155,7 @@ test "fromSliceTrimmed should return a bounded array with elements from provided
     try testing.expectEqual(4, array_4.len);
 }
 
-test "append should add a element to the end of the bounded array when it's not full" {
+test "append should add an element to the end of the bounded array when it's not full" {
     var array = BoundedArray(3, u8, 123, true).empty;
     try testing.expectEqual([4]u8{ 123, 123, 123, 123 }, array.buffer);
     try testing.expectEqual(0, array.len);
@@ -196,7 +196,7 @@ test "appendAll should error when elements don't fit into bounded array" {
     try testing.expectError(error.NoSpaceLeft, array_2.appendAll(&.{ 3, 4, 5 }));
 }
 
-test "asSlice should return slice that point to the non empty elements inside the buffer" {
+test "asSlice should return slice that points to the non empty elements inside the buffer" {
     const array_1 = BoundedArray(4, u8, 123, false).fromArray(.{ 1, 2 });
     try testing.expectEqual(array_1.buffer[0..2], array_1.asSlice());
     const array_2 = BoundedArray(4, u8, 123, true).fromArray(.{ 1, 2 });

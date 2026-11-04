@@ -403,7 +403,7 @@ test "should prolong correct inputs until the end of escape animation when escap
     try testing.expectEqual(null, frame.players[1].throw_escape);
 }
 
-test "should correctly detect attempted input in strict one plus press two mode" {
+test "should correctly detect attempted input in strict one plus two press mode" {
     var frame = model.Frame{};
     var detector = ThrowEscapeDetector(.{ .one_plus_two_mode = .strict }){};
 

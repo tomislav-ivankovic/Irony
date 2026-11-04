@@ -188,7 +188,7 @@ test "should set correct values to entry fields" {
     try testing.expectEqual(1577934245123456789, entry_3.timestamp);
     try testing.expectEqualStrings("2020-01-02T03:04:05.123456789", entry_3.timestamp_str);
     try testing.expectEqual(.warn, entry_3.level);
-    try testing.expectEqualStrings("scope_2", entry_3.scope orelse @panic("entry_2.scope is null"));
+    try testing.expectEqualStrings("scope_2", entry_3.scope orelse @panic("entry_3.scope is null"));
     try testing.expectEqualStrings("Message: 3", entry_3.message);
     try testing.expectEqualStrings("2020-01-02T03:04:05.123456789 [warning] (scope_2) Message: 3", entry_3.full_message);
     try testing.expectEqual(0, entry_3.message[entry_3.message.len]);
@@ -318,7 +318,7 @@ test "should discard earliest entries when exceeding buffer size" {
     );
 }
 
-test "should discard all entries when full message is larger then the buffer" {
+test "should discard all entries when full message is larger than the buffer" {
     var io = testing.io;
     var vtable = io.vtable.*;
     vtable.now = struct {

@@ -187,7 +187,7 @@ pub fn onProcessClose(io: std.Io, index: usize) void {
         std.log.info("Nothing to eject.", .{});
         return;
     };
-    std.log.info("Attempting to eject module \"{s}\"... ", .{module_name});
+    std.log.info("Attempting to eject module \"{s}\"...", .{module_name});
     if (module.eject()) {
         std.log.info("Module ejected successfully.", .{});
     } else |_| {
@@ -203,7 +203,7 @@ pub fn onConsoleClose() void {
         const module_name = targets[index].module_name;
         const module = if (injected_modules[index]) |*m| m else continue;
 
-        std.log.info("Ejecting module \"{s}\"... ", .{module_name});
+        std.log.info("Ejecting module \"{s}\"...", .{module_name});
         if (module.eject()) {
             std.log.info("Module ejected successfully.", .{});
         } else |err| {

@@ -217,11 +217,11 @@ pub fn Lines(comptime rendering_api: build_info.RenderingApi) type {
             context: *const dx.Context,
             buffer_context: *const dx.BufferContext,
             shader: *Shader,
-            vetices: []const Vertex,
+            vertices: []const Vertex,
             indices: []const Index,
             constants: *const Constants,
         ) !void {
-            shader.setVertices(context, vetices) catch |err| {
+            shader.setVertices(context, vertices) catch |err| {
                 sdk.misc.error_context.append("Failed to set shader vertices.", .{});
                 return err;
             };

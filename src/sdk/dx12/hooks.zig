@@ -74,7 +74,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                 const saved = misc.error_context.save();
                 defer misc.error_context.restore(&saved);
                 present_hook.?.destroy() catch |err| {
-                    misc.error_context.append("Failed to destroy present hook hook.", .{});
+                    misc.error_context.append("Failed to destroy present hook.", .{});
                     misc.error_context.logError(err);
                 };
                 present_hook = null;
@@ -169,7 +169,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                     present_hook = null;
                     std.log.info("Present hook destroyed.", .{});
                 } else |err| {
-                    misc.error_context.append("Failed destroy present hook.", .{});
+                    misc.error_context.append("Failed to destroy present hook.", .{});
                     misc.error_context.logError(err);
                 }
             } else {
@@ -184,7 +184,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                     resize_buffers_hook = null;
                     std.log.info("Resize buffers hook destroyed.", .{});
                 } else |err| {
-                    misc.error_context.append("Failed destroy resize buffers hook.", .{});
+                    misc.error_context.append("Failed to destroy resize buffers hook.", .{});
                     misc.error_context.logError(err);
                 }
             } else {
@@ -202,7 +202,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                     execute_command_lists_hook = null;
                     std.log.info("Execute command lists hook destroyed.", .{});
                 } else |err| {
-                    misc.error_context.append("Failed destroy execute command lists hook.", .{});
+                    misc.error_context.append("Failed to destroy execute command lists hook.", .{});
                     misc.error_context.logError(err);
                 }
             } else {

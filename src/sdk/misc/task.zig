@@ -80,7 +80,7 @@ pub fn Task(comptime Result: type) type {
 
 const testing = std.testing;
 
-test "join should should block and return the result when the task is done" {
+test "join should block and return the result when the task is done" {
     var task = try Task(usize).spawn(testing.allocator, struct {
         fn call() usize {
             var counter: usize = 0;
@@ -120,7 +120,7 @@ test "peek should not block and return null while task is getting executed and r
     try testing.expectEqual(10, task.peek().?.*);
 }
 
-test "createCompleted should create a task that make peek and join to instantly return the value" {
+test "createCompleted should create a task that makes peek and join instantly return the value" {
     var task = Task(usize).createCompleted(123);
     try testing.expect(task.peek() != null);
     try testing.expectEqual(123, task.peek().?.*);

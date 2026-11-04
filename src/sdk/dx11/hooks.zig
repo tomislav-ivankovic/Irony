@@ -53,7 +53,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                 const saved = misc.error_context.save();
                 defer misc.error_context.restore(&saved);
                 present_hook.?.destroy() catch |err| {
-                    misc.error_context.append("Failed to destroy present hook hook.", .{});
+                    misc.error_context.append("Failed to destroy present hook.", .{});
                     misc.error_context.logError(err);
                 };
                 present_hook = null;
@@ -124,7 +124,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                     present_hook = null;
                     std.log.info("Present hook destroyed.", .{});
                 } else |err| {
-                    misc.error_context.append("Failed destroy present hook.", .{});
+                    misc.error_context.append("Failed to destroy present hook.", .{});
                     misc.error_context.logError(err);
                 }
             } else {
@@ -139,7 +139,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                     resize_buffers_hook = null;
                     std.log.info("Resize buffers hook destroyed.", .{});
                 } else |err| {
-                    misc.error_context.append("Failed destroy resize buffers hook.", .{});
+                    misc.error_context.append("Failed to destroy resize buffers hook.", .{});
                     misc.error_context.logError(err);
                 }
             } else {
@@ -156,7 +156,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             defer _ = active_hook_calls.fetchSub(1, .seq_cst);
 
             const window = dx11.getWindowFromSwapChain(swap_chain) catch |err| {
-                misc.error_context.append("Failed to get the window from DX12 swap chain.", .{});
+                misc.error_context.append("Failed to get the window from DX11 swap chain.", .{});
                 misc.error_context.logError(err);
                 return present_hook.?.original(swap_chain, sync_interval, flags);
             };
@@ -196,7 +196,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             defer _ = active_hook_calls.fetchSub(1, .seq_cst);
 
             const window = dx11.getWindowFromSwapChain(swap_chain) catch |err| {
-                misc.error_context.append("Failed to get the window from DX12 swap chain.", .{});
+                misc.error_context.append("Failed to get the window from DX11 swap chain.", .{});
                 misc.error_context.logError(err);
                 return resize_buffers_hook.?.original(
                     swap_chain,
@@ -208,7 +208,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                 );
             };
             const device = dx11.getDeviceFromSwapChain(swap_chain) catch |err| {
-                misc.error_context.append("Failed to get DX12 device from swap chain.", .{});
+                misc.error_context.append("Failed to get DX11 device from swap chain.", .{});
                 misc.error_context.logError(err);
                 return resize_buffers_hook.?.original(
                     swap_chain,

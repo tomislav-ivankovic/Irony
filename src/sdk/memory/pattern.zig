@@ -20,7 +20,7 @@ pub const Pattern = struct {
             } else if (char == '?') {
                 if (previous_char == '?') {
                     if (len >= max_len) {
-                        const fmt = "Memory pattern \"{s}\" is longer then then maximum length: {}";
+                        const fmt = "Memory pattern \"{s}\" is longer than the maximum length: {}";
                         const args = .{ pattern, max_len };
                         if (@inComptime()) @compileError(std.fmt.comptimePrint(fmt, args));
                         misc.error_context.new(fmt, args);
@@ -47,7 +47,7 @@ pub const Pattern = struct {
                     return error.MixedByte;
                 } else if (previous_char) |p_char| {
                     if (len >= max_len) {
-                        const fmt = "Memory pattern \"{s}\" is longer then then maximum length: {}";
+                        const fmt = "Memory pattern \"{s}\" is longer than the maximum length: {}";
                         const args = .{ pattern, max_len };
                         if (@inComptime()) @compileError(std.fmt.comptimePrint(fmt, args));
                         misc.error_context.new(fmt, args);
@@ -62,7 +62,7 @@ pub const Pattern = struct {
                     previous_char = char;
                 }
             } else {
-                const fmt = "Memory pattern \"{s}\" contains a invalid character: {c}";
+                const fmt = "Memory pattern \"{s}\" contains an invalid character: {c}";
                 const args = .{ pattern, char };
                 if (@inComptime()) @compileError(std.fmt.comptimePrint(fmt, args));
                 misc.error_context.new(fmt, args);
@@ -70,7 +70,7 @@ pub const Pattern = struct {
             }
         }
         if (previous_char) |p_char| {
-            const fmt = "Memory pattern \"{s}\" ends with a incomplete byte: {c}";
+            const fmt = "Memory pattern \"{s}\" ends with an incomplete byte: {c}";
             const args = .{ pattern, p_char };
             if (@inComptime()) @compileError(std.fmt.comptimePrint(fmt, args));
             misc.error_context.new(fmt, args);

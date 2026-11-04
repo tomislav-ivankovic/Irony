@@ -36,7 +36,7 @@ test "fromPointer should return correct base address and size" {
     try testing.expectEqual(memory_range.size_in_bytes, array.len);
 }
 
-test "isReadable should return true when memory is readable and writable" {
+test "isReadable should return true when memory is readable and writeable" {
     var array = [_]u8{ 0, 1, 2, 3, 4 };
     const memory_range = Range.fromPointer(&array);
     try testing.expectEqual(true, memory_range.isReadable());
@@ -64,7 +64,7 @@ test "isReadable should return false when base address is null" {
     try testing.expectEqual(false, memory_range.isReadable());
 }
 
-test "isWriteable should return true when memory is readable and writable" {
+test "isWriteable should return true when memory is readable and writeable" {
     var array = [_]u8{ 0, 1, 2, 3, 4 };
     const memory_range = Range.fromPointer(&array);
     try testing.expectEqual(true, memory_range.isWriteable());
@@ -100,7 +100,7 @@ test "isValid should return true when range does not overflow" {
     try testing.expectEqual(true, memory_range.isValid());
 }
 
-test "isValid should return true when range overflows" {
+test "isValid should return false when range overflows" {
     const memory_range = Range{
         .base_address = std.math.maxInt(usize) - 5,
         .size_in_bytes = 10,

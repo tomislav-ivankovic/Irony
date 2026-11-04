@@ -49,7 +49,7 @@ pub const ProcessId = struct {
 
     pub fn findByFileName(file_name: []const u8) !Self {
         var iterator = Self.findAll() catch |err| {
-            misc.error_context.append("Failed to find all process ID-s.", .{});
+            misc.error_context.append("Failed to find all process IDs.", .{});
             return err;
         };
         while (iterator.next()) |process_id| {

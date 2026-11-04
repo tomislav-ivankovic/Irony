@@ -74,7 +74,7 @@ pub const Process = struct {
             return error.OsError;
         }
         return std.unicode.utf16LeToUtf8(path_buffer, buffer[0..size]) catch |err| {
-            misc.error_context.new("Failed to convert UTF-16LE string to UTF8.", .{});
+            misc.error_context.new("Failed to convert UTF16-LE string to UTF8.", .{});
             return err;
         };
     }
@@ -106,7 +106,7 @@ test "open should error when invalid process id" {
     try testing.expectError(error.OsError, Process.open(process_id, access_rights));
 }
 
-test "is still running should return true when process is running" {
+test "isStillRunning should return true when process is running" {
     const process_id = os.ProcessId.getCurrent();
     const access_rights = Process.AccessRights{
         .QUERY_INFORMATION = 1,

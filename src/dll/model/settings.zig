@@ -506,7 +506,7 @@ test "Settings.load should load the same settings that Settings.save saves" {
     };
     try expected_settings.save(testing.io);
     defer std.Io.Dir.cwd().deleteFile(testing.io, Settings.file_name) catch {
-        @panic("Failed to cleanup test file.");
+        @panic("Failed to clean up test file.");
     };
     const actual_settings = try Settings.load(testing.io);
     try testing.expectEqual(expected_settings, actual_settings);
@@ -521,7 +521,7 @@ test "Settings.load should overwrite the settings file if it already exists" {
     };
     try default_settings.save(testing.io);
     defer std.Io.Dir.cwd().deleteFile(testing.io, Settings.file_name) catch {
-        @panic("Failed to cleanup test file.");
+        @panic("Failed to clean up test file.");
     };
     try expected_settings.save(testing.io);
     const actual_settings = try Settings.load(testing.io);

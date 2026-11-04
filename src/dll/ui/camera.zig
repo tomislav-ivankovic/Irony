@@ -1293,7 +1293,7 @@ test "should change follow target when a target is selected by clicking a menu b
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should change follow target when a target a keyboard shortcut is pressed" {
+test "should change follow target when a target keyboard shortcut is pressed" {
     const Test = struct {
         var camera: Camera = .{ .follow_target = .players };
 

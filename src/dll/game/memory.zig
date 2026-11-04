@@ -641,13 +641,13 @@ test "proxy should map errors to null values" {
     try testing.expectEqualSlices(?usize, &.{ 1, null, 2, null }, byte_proxy.trail.getOffsets());
 }
 
-test "pointer should return a pointer with the provided address when a address is provided" {
+test "pointer should return a pointer with the provided address when an address is provided" {
     const ptr = pointer("test", u32, 123);
     try testing.expectEqual(123, ptr.address);
 }
 
 test "pointer should return a pointer with zero address when error is provided" {
-    const ptr = pointer("test", u32, error.Testt);
+    const ptr = pointer("test", u32, error.Test);
     try testing.expectEqual(0, ptr.address);
 }
 

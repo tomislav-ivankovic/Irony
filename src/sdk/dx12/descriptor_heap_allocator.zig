@@ -125,7 +125,7 @@ test "free should error when cpu and gpu handle offsets don't match" {
     try testing.expectError(error.OffsetsMismatch, heap.free(cpu_handle, gpu_handle));
 }
 
-test "free should error when handles are smaller then heap starts" {
+test "free should error when handles are smaller than heap starts" {
     var heap = DescriptorHeapAllocator(5){
         .cpu_start = .{ .ptr = 1 },
         .gpu_start = .{ .ptr = 2 },
@@ -137,7 +137,7 @@ test "free should error when handles are smaller then heap starts" {
     try testing.expectError(error.HandleOutsideHeap, heap.free(cpu_handle, gpu_handle));
 }
 
-test "free should error when handles are larger then heap limit" {
+test "free should error when handles are larger than heap limit" {
     var heap = DescriptorHeapAllocator(5){
         .cpu_start = .{ .ptr = 1 },
         .gpu_start = .{ .ptr = 2 },

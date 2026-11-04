@@ -106,7 +106,7 @@ pub fn SharedValue(comptime Value: type) type {
                 return err;
             };
             return std.unicode.utf8ToUtf16Le(buffer, utf8_name) catch |err| {
-                misc.error_context.new("Failed to convert \"{s}\" to UTF-16LE.", .{name});
+                misc.error_context.new("Failed to convert \"{s}\" to UTF16-LE.", .{utf8_name});
                 return err;
             };
         }

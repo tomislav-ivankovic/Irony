@@ -130,7 +130,7 @@ pub const ZstdEncoder = struct {
             const result = zstd.ZSTD_compressStream2(self.ctx, &output, &input, zstd.ZSTD_e_end);
             if (resultToError(result)) |err| {
                 misc.error_context.new("{s}", .{resultToString(result)});
-                misc.error_context.append("ZSTD_compressStream2 returned a error result: {}", .{result});
+                misc.error_context.append("ZSTD_compressStream2 returned an error result: {}", .{result});
                 misc.error_context.logError(err);
                 return error.WriteFailed;
             }
@@ -159,7 +159,7 @@ pub const ZstdEncoder = struct {
             const result = zstd.ZSTD_compressStream2(self.ctx, &output, &input, zstd.ZSTD_e_continue);
             if (resultToError(result)) |err| {
                 misc.error_context.new("{s}", .{resultToString(result)});
-                misc.error_context.append("ZSTD_compressStream2 returned a error result: {}", .{result});
+                misc.error_context.append("ZSTD_compressStream2 returned an error result: {}", .{result});
                 misc.error_context.logError(err);
                 return error.WriteFailed;
             }
@@ -293,7 +293,7 @@ pub const ZstdDecoder = struct {
             const result = zstd.ZSTD_decompressStream(self.ctx, &output, &input);
             if (resultToError(result)) |err| {
                 misc.error_context.new("{s}", .{resultToString(result)});
-                misc.error_context.append("ZSTD_decompressStream returned a error result: {}", .{result});
+                misc.error_context.append("ZSTD_decompressStream returned an error result: {}", .{result});
                 misc.error_context.logError(err);
                 self.in_error_state = true;
                 return error.ReadFailed;

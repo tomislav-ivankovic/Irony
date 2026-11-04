@@ -441,7 +441,7 @@ pub const Controller = struct {
         std.log.info("Saving recording... {s}", .{file_path});
         const bounded_path = FilePath.fromSlice(file_path) catch |err| {
             sdk.misc.error_context.new("Failed to make a copy of file path: {s}", .{file_path});
-            sdk.misc.error_context.append("Failed to load recording: {s}", .{file_path});
+            sdk.misc.error_context.append("Failed to save recording: {s}", .{file_path});
             sdk.misc.error_context.logError(err);
             return;
         };
@@ -1706,7 +1706,7 @@ test "should load the same frames that were previously saved" {
     }
     try testing.expectEqual(true, controller.did_last_save_or_load_succeed);
     defer std.Io.Dir.cwd().deleteFile(testing.io, "recording.irony") catch {
-        @panic("Failed to cleanup test file.");
+        @panic("Failed to clean up test file.");
     };
 
     controller.clear();
@@ -1762,7 +1762,7 @@ test "should pause at the previously current frame after recording save complete
     }
     try testing.expectEqual(true, controller.did_last_save_or_load_succeed);
     defer std.Io.Dir.cwd().deleteFile(testing.io, "recording.irony") catch {
-        @panic("Failed to cleanup test file.");
+        @panic("Failed to clean up test file.");
     };
 
     try testing.expect(controller.mode == .pause);
@@ -1803,7 +1803,7 @@ test "should pause at the last frame of the recording after recording load compl
     }
     try testing.expectEqual(true, controller.did_last_save_or_load_succeed);
     defer std.Io.Dir.cwd().deleteFile(testing.io, "recording.irony") catch {
-        @panic("Failed to cleanup test file.");
+        @panic("Failed to clean up test file.");
     };
 
     controller.clear();
@@ -1852,7 +1852,7 @@ test "should keep track of file path and unsaved changes correctly while recordi
     }
     try testing.expectEqual(true, controller.did_last_save_or_load_succeed);
     defer std.Io.Dir.cwd().deleteFile(testing.io, "recording.irony") catch {
-        @panic("Failed to cleanup test file.");
+        @panic("Failed to clean up test file.");
     };
 
     try testing.expect(controller.getFilePath() != null);

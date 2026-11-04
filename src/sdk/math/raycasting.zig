@@ -238,7 +238,7 @@ test "raycastLineSegment should return hit with positive t when line segment is 
     try expectEqual(1, r4.hit.t);
 }
 
-test "raycastLineSegment should return hit with negative t when line segment is behind of ray" {
+test "raycastLineSegment should return hit with negative t when line segment is behind the ray" {
     const vec = struct {
         fn call(x: f32, y: f32) math.Vec2 {
             return math.Vec2.fromArray(.{ x, y });
@@ -314,7 +314,7 @@ test "raycastLineSegment should return hit with zero t when ray originates from 
     try expectEqual(0, r4.hit.t);
 }
 
-test "raycastLineSegment should return overlap when ray line passes trough line segment" {
+test "raycastLineSegment should return overlap when ray line passes through line segment" {
     const vec = struct {
         fn call(x: f32, y: f32) math.Vec2 {
             return math.Vec2.fromArray(.{ x, y });

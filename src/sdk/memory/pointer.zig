@@ -46,13 +46,13 @@ test "should have same size as a normal pointer" {
     try testing.expectEqual(@sizeOf(*u8), @sizeOf(Pointer(u8)));
 }
 
-test "fromPointer should return a instance with the same address as the raw pointer when it's provided" {
+test "fromPointer should return an instance with the same address as the raw pointer when it's provided" {
     var memory_value: i32 = 123;
     const pointer = Pointer(i32).fromPointer(&memory_value);
     try testing.expectEqual(@intFromPtr(&memory_value), pointer.address);
 }
 
-test "fromPointer should return a instance address zero when null is provided" {
+test "fromPointer should return an instance with address zero when null is provided" {
     const pointer = Pointer(i32).fromPointer(null);
     try testing.expectEqual(0, pointer.address);
 }

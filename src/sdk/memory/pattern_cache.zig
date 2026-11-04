@@ -209,7 +209,7 @@ test "save/load should save/load the cache state to/from a file" {
 
     try cache_1.save(testing.io, "cache.json", 123);
     defer std.Io.Dir.cwd().deleteFile(testing.io, "cache.json") catch {
-        @panic("Failed to cleanup test file.");
+        @panic("Failed to clean up test file.");
     };
     try cache_2.load(testing.io, "cache.json", 123);
 
@@ -237,7 +237,7 @@ test "save/load should work correctly when multiple version ids are inside the f
 
     try cache_1.save(testing.io, "cache.json", 111);
     defer std.Io.Dir.cwd().deleteFile(testing.io, "cache.json") catch {
-        @panic("Failed to cleanup test file.");
+        @panic("Failed to clean up test file.");
     };
     try cache_2.save(testing.io, "cache.json", 222);
 

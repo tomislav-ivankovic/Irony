@@ -105,7 +105,7 @@ pub const Rendering = struct {
         const aspect_ratio = block: {
             const size = context.getBackBufferSize() catch {
                 std.log.warn(
-                    "When calculating world to clip matrix, failed to get back buffer size." ++
+                    "When calculating world to clip matrix, failed to get back buffer size. " ++
                         "Defaulting to 16:9 aspect ratio.",
                     .{},
                 );
@@ -113,7 +113,7 @@ pub const Rendering = struct {
             };
             if (size.x() <= 0 or size.y() <= 0) {
                 std.log.warn(
-                    "When calculating world to clip matrix, got invalid back buffer size {}x{}." ++
+                    "When calculating world to clip matrix, got invalid back buffer size {}x{}. " ++
                         "Defaulting to 16:9 aspect ratio.",
                     .{ size.x(), size.y() },
                 );

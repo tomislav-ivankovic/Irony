@@ -1374,7 +1374,7 @@ test "should disable next frame when already on last frame" {
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should call clear when clear button is clicked or F9 button is pressed" {
+test "should call clear when clear button is clicked or F9 key is pressed" {
     const Test = struct {
         var controller = MockController{ .mode = .live };
         var controls = Controls(.{ .Controller = MockController }){};
@@ -1399,7 +1399,7 @@ test "should call clear when clear button is clicked or F9 button is pressed" {
     try context.runTest(.{}, Test.guiFunction, Test.testFunction);
 }
 
-test "should open confirm dialog when clear button is clicked or F9 button is pressed and total frames is large enough" {
+test "should open confirm dialog when clear button is clicked or F9 key is pressed and total frames is large enough" {
     const Test = struct {
         var controller = MockController{ .mode = .live, .total_frames = 1000 };
         var controls = Controls(.{ .Controller = MockController }){};

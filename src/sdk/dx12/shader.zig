@@ -34,20 +34,20 @@ pub fn Shader(Vertex: type, Index: type, Constants: type) type {
             const device = context.device;
 
             const vertex_blob = compile(config.source_code, "vs_main", "vs_5_0") catch |err| {
-                misc.error_context.append("Failed to compile vertex_shader.", .{});
+                misc.error_context.append("Failed to compile vertex shader.", .{});
                 return err;
             };
             defer _ = vertex_blob.IUnknown.Release();
 
             const pixel_blob = compile(config.source_code, "ps_main", "ps_5_0") catch |err| {
-                misc.error_context.append("Failed to compile.", .{});
+                misc.error_context.append("Failed to compile pixel shader.", .{});
                 return err;
             };
             defer _ = pixel_blob.IUnknown.Release();
 
             const geometry_blob = switch (config.use_geometry_shader) {
                 true => compile(config.source_code, "gs_main", "gs_5_0") catch |err| {
-                    misc.error_context.append("Failed to compile.", .{});
+                    misc.error_context.append("Failed to compile geometry shader.", .{});
                     return err;
                 },
                 false => null,
@@ -65,7 +65,7 @@ pub fn Shader(Vertex: type, Index: type, Constants: type) type {
             );
             if (dx12.Error.from(reflect_result)) |err| {
                 misc.error_context.new("{f}", .{err});
-                misc.error_context.append("ID3DReflect returned a failure value.", .{});
+                misc.error_context.append("D3DReflect returned a failure value.", .{});
                 return error.Dx12Error;
             }
             defer _ = reflection.IUnknown.Release();
@@ -121,11 +121,11 @@ pub fn Shader(Vertex: type, Index: type, Constants: type) type {
                     misc.error_context.append("{s}", .{compile_error});
                 }
                 misc.error_context.append("{f}", .{err});
-                misc.error_context.append("D3D12SerializeRootSignature returned a failure value.", .{});
+                misc.error_context.append("D3D12SerializeVersionedRootSignature returned a failure value.", .{});
                 return error.Dx12Error;
             }
             const root_signature_blob = root_signature_blob_maybe orelse {
-                misc.error_context.new("D3D12SerializeRootSignature returned a null pointer to the blob.", .{});
+                misc.error_context.new("D3D12SerializeVersionedRootSignature returned a null pointer to the blob.", .{});
                 return error.Dx12Error;
             };
             defer _ = root_signature_blob.IUnknown.Release();
@@ -249,7 +249,7 @@ pub fn Shader(Vertex: type, Index: type, Constants: type) type {
                 @compileError("This function is not defined for indices of type void.");
             }
             setBufferData(Index, context, &self.index_buffers, indices, .index) catch |err| {
-                misc.error_context.append("Failed to set vertex buffer data.", .{});
+                misc.error_context.append("Failed to set index buffer data.", .{});
                 return err;
             };
             self.index_count = @intCast(indices.len);
@@ -260,7 +260,7 @@ pub fn Shader(Vertex: type, Index: type, Constants: type) type {
                 @compileError("This function is not defined for constants of type void.");
             }
             setBufferData(Constants, context, &self.constant_buffers, constants[0..1], .constant) catch |err| {
-                misc.error_context.append("Failed to set vertex buffer data.", .{});
+                misc.error_context.append("Failed to set constant buffer data.", .{});
                 return err;
             };
         }
@@ -356,7 +356,7 @@ pub fn Shader(Vertex: type, Index: type, Constants: type) type {
             };
 
             const len = std.math.cast(u32, data.len) orelse {
-                misc.error_context.new("Overflow while casting vertices length.", .{});
+                misc.error_context.new("Overflow while casting data length.", .{});
                 return error.Overflow;
             };
             const bytes_needed = std.math.mul(u32, len, @sizeOf(Element)) catch |err| {
@@ -644,7 +644,7 @@ fn checkConstantsLayout(comptime Constants: type, reflection: *const w32.ID3D12S
             continue;
         }
         const gpu_variable = gpu_constants.GetVariableByName(cpu_name) orelse {
-            misc.error_context.append("Failed to find a GPU variable with matching name.", .{});
+            misc.error_context.new("Failed to find a GPU variable with matching name.", .{});
             return error.Dx12Error;
         };
         var gpu_variable_desc: w32.D3D12_SHADER_VARIABLE_DESC = undefined;
@@ -1163,7 +1163,7 @@ test "init should error when constant field is missing on GPU side" {
     );
 }
 
-test "init should error when constant field has different offset on GPU then on CPU" {
+test "init should error when constant field has different offset on GPU than on CPU" {
     if (@import("config").skip_gpu) {
         return error.SkipZigTest;
     }
@@ -1206,7 +1206,7 @@ test "init should error when constant field has different offset on GPU then on 
     );
 }
 
-test "init should error when constant field has different size on GPU then on CPU" {
+test "init should error when constant field has different size on GPU than on CPU" {
     if (@import("config").skip_gpu) {
         return error.SkipZigTest;
     }

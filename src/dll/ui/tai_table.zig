@@ -1325,7 +1325,7 @@ pub const TaiTable = struct {
             return;
         }
         self.editor.move(destination_min_index, sequence_len) catch |err| {
-            sdk.misc.error_context.append("Failed move inputs.", .{});
+            sdk.misc.error_context.append("Failed to move inputs.", .{});
             sdk.misc.error_context.logError(err);
         };
     }
@@ -1409,13 +1409,13 @@ pub const TaiTable = struct {
         const max_index = selection.getMaxIndex();
         if (up_pressed and !down_pressed and min_index > 0) {
             self.editor.move(min_index - 1, sequence_len) catch |err| {
-                sdk.misc.error_context.append("Failed move inputs.", .{});
+                sdk.misc.error_context.append("Failed to move inputs.", .{});
                 sdk.misc.error_context.logError(err);
             };
         }
         if (down_pressed and !up_pressed and max_index + 1 < sequence_len) {
             self.editor.move(min_index + 1, sequence_len) catch |err| {
-                sdk.misc.error_context.append("Failed move inputs.", .{});
+                sdk.misc.error_context.append("Failed to move inputs.", .{});
                 sdk.misc.error_context.logError(err);
             };
         }

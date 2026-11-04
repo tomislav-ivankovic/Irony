@@ -23,7 +23,7 @@ pub const Module = struct {
     pub fn getLocal(name: []const u8) !Self {
         var buffer: [os.max_file_path_length:0]u16 = @splat(0);
         const size = std.unicode.utf8ToUtf16Le(&buffer, name) catch |err| {
-            misc.error_context.new("Failed to convert \"{s}\" to UTF-16LE.", .{name});
+            misc.error_context.new("Failed to convert \"{s}\" to UTF16-LE.", .{name});
             return err;
         };
         const utf16_name = buffer[0..size :0];
@@ -70,7 +70,7 @@ pub const Module = struct {
     fn getRemoteBySearching(process: os.Process, name: []const u8) !Self {
         var buffer: [os.max_file_path_length:0]u16 = @splat(0);
         const size = std.unicode.utf8ToUtf16Le(&buffer, name) catch |err| {
-            misc.error_context.new("Failed to convert \"{s}\" to UTF-16LE.", .{name});
+            misc.error_context.new("Failed to convert \"{s}\" to UTF16-LE.", .{name});
             return err;
         };
         const utf16_name = buffer[0..size :0];
@@ -129,7 +129,7 @@ pub const Module = struct {
             return error.OsError;
         }
         return std.unicode.utf16LeToUtf8(path_buffer, buffer[0..size]) catch |err| {
-            misc.error_context.new("Failed to convert UTF-16LE string to UTF8.", .{});
+            misc.error_context.new("Failed to convert UTF16-LE string to UTF8.", .{});
             return err;
         };
     }
@@ -203,7 +203,7 @@ test "getFilePath should return correct value" {
     }
 }
 
-test "getProcedureAddress should return a address when procedure name is valid" {
+test "getProcedureAddress should return an address when procedure name is valid" {
     const module = try Module.getLocal("kernel32.dll");
     _ = try module.getProcedureAddress("GetModuleHandleW");
 }

@@ -173,7 +173,7 @@ fn deinitialize() void {
 pub fn selfShutDown() void {
     const handle = w32.CreateThread(null, 0, shutdownRoutine, null, .{}, null) orelse {
         sdk.misc.error_context.new("{f}", .{sdk.os.Error.getLast()});
-        sdk.misc.error_context.append("Failed to spawn shut down routine thread.", .{});
+        sdk.misc.error_context.append("Failed to spawn shutdown routine thread.", .{});
         sdk.misc.error_context.append("Failed to self shut down.", .{});
         sdk.misc.error_context.logError(error.OsError);
         return;
@@ -461,7 +461,7 @@ fn createShutdownRoutineSharedValue() !sdk.os.SharedValue(w32.LPTHREAD_START_ROU
         };
     }
     shared_value.write(shutdownRoutine) catch |err| {
-        sdk.misc.error_context.append("Failed to write the module handle to shared value.", .{});
+        sdk.misc.error_context.append("Failed to write the shutdown routine to shared value.", .{});
         return err;
     };
     return shared_value;

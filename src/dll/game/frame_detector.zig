@@ -59,7 +59,7 @@ test "should detect frames only when frame values are changing" {
     try testing.expectEqual(false, detect(.t8, 5, 6, 7, 8));
 }
 
-test "should should not detect frames when one or both of players are not found" {
+test "should not detect frames when one or both of players are not found" {
     const detect = struct {
         var frame_detector = FrameDetector{};
         fn call(

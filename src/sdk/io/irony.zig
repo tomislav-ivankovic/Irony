@@ -59,7 +59,7 @@ pub fn writeIronyFormat(
     };
 
     var encoder = io.ZstdEncoder.init(allocator, writer, compression_level) catch |err| {
-        misc.error_context.append("Failed to initialize XZ encoder.", .{});
+        misc.error_context.append("Failed to initialize zstd encoder.", .{});
         return err;
     };
     defer encoder.deinit();
@@ -120,13 +120,13 @@ pub fn readIronyFormat(
     }
     if (version > current_version_number) {
         std.log.warn(
-            "File's version number {} is larger then expected {}. Expecting file parsing to fail but proceeding anyway.",
+            "File's version number {} is larger than expected {}. Expecting file parsing to fail but proceeding anyway.",
             .{ version, current_version_number },
         );
     }
 
     var decoder = io.ZstdDecoder.init(allocator, reader) catch |err| {
-        misc.error_context.append("Failed to initialize XZ decoder.", .{});
+        misc.error_context.append("Failed to initialize zstd decoder.", .{});
         return err;
     };
     defer decoder.deinit();
@@ -140,7 +140,7 @@ pub fn readIronyFormat(
 
     const local_fields = getLocalFields(Frame);
     const remote_fields = readFieldList(&decoder_reader, remote_frame_size, local_fields) catch |err| {
-        misc.error_context.append("Failed to read fields list.", .{});
+        misc.error_context.append("Failed to read field list.", .{});
         return err;
     };
 
@@ -207,7 +207,7 @@ fn readFieldList(
             return err;
         };
         const remote_offset = reader.takeInt(FieldOffset, endian) catch |err| {
-            misc.error_context.new("Failed to read the field size. Field path is: {s}", .{path});
+            misc.error_context.new("Failed to read the field offset. Field path is: {s}", .{path});
             return err;
         };
         const remote_size = reader.takeInt(FieldSize, endian) catch |err| {
@@ -215,11 +215,11 @@ fn readFieldList(
             return err;
         };
         const total = std.math.add(FrameSize, remote_offset, remote_size) catch |err| {
-            misc.error_context.new("Field exceeded exceeded frame size limits: {s}", .{path});
+            misc.error_context.new("Field exceeded frame size limits: {s}", .{path});
             return err;
         };
         if (total > remote_frame_size) {
-            misc.error_context.new("Field exceeded exceeded frame size limits: {s}", .{path});
+            misc.error_context.new("Field exceeded frame size limits: {s}", .{path});
             return error.InvalidRemoteField;
         }
         for (local_fields, 0..) |*local_field, local_index| {
@@ -347,7 +347,7 @@ fn readFrames(
                     if (readValue(Type, data)) |value| {
                         setFieldValue(frame, local_field.access, &value) catch |err| {
                             misc.error_context.append(
-                                "Failed to set field with path {s} on frame {} to it's new value. " ++
+                                "Failed to set field with path {s} on frame {} to its new value. " ++
                                     "Falling back to default value.",
                                 .{ local_field.path, frame_index },
                             );
@@ -580,7 +580,7 @@ fn readValue(comptime Type: type, data: []const u8) !Type {
                     const IntType = @Int(.unsigned, read_size * std.mem.byte_size_in_bits);
                     const int_value = readValue(IntType, data) catch |err| {
                         misc.error_context.append(
-                            "Failed to read floats's int value. ({s} -> {s})",
+                            "Failed to read float's int value. ({s} -> {s})",
                             .{ @typeName(ReadType), @typeName(IntType) },
                         );
                         return err;
@@ -589,14 +589,14 @@ fn readValue(comptime Type: type, data: []const u8) !Type {
                     return @floatCast(read_float);
                 }
             }
-            misc.error_context.append("Invalid float size: {}", .{data.len});
+            misc.error_context.new("Invalid float size: {}", .{data.len});
             return error.InvalidValue;
         },
         .@"enum" => |*info| {
             const IntType = info.tag_type;
             const int_value = readValue(IntType, data) catch |err| {
                 misc.error_context.append(
-                    "Failed to read enums's tag. ({s} -> {s})",
+                    "Failed to read enum's tag. ({s} -> {s})",
                     .{ @typeName(Type), @typeName(IntType) },
                 );
                 return err;
@@ -627,7 +627,7 @@ fn readValue(comptime Type: type, data: []const u8) !Type {
             const IntType = @Int(.unsigned, @bitSizeOf(Type));
             const int_value = readValue(IntType, data) catch |err| {
                 misc.error_context.append(
-                    "Failed to read packed unions's int value. ({s} -> {s})",
+                    "Failed to read packed union's int value. ({s} -> {s})",
                     .{ @typeName(Type), @typeName(IntType) },
                 );
                 return err;
@@ -890,13 +890,13 @@ fn serializedSizeOf(comptime Type: type) comptime_int {
         .bool => 1,
         .int => |*info| std.math.divCeil(comptime_int, info.bits, std.mem.byte_size_in_bits) catch {
             @compileError(std.fmt.comptimePrint(
-                "Failed to ceil devide {} with {}.",
+                "Failed to ceil divide {} with {}.",
                 .{ info.bits, std.mem.byte_size_in_bits },
             ));
         },
         .float => |*info| std.math.divCeil(comptime_int, info.bits, std.mem.byte_size_in_bits) catch {
             @compileError(std.fmt.comptimePrint(
-                "Failed to ceil devide {} with {}.",
+                "Failed to ceil divide {} with {}.",
                 .{ info.bits, std.mem.byte_size_in_bits },
             ));
         },
@@ -1159,7 +1159,7 @@ test "readIronyFormat should load the same recording that writeIronyFormat saved
     try testing.expectEqualSlices(Frame, &saved_recording, loaded_recording);
 }
 
-test "readIronyFormat should succeed when recording has more fields then expected" {
+test "readIronyFormat should succeed when recording has more fields than expected" {
     const SavedFrame = struct { a: f32 = -1, b: f32 = -2 };
     const LoadedFrame = struct { a: f32 = -3 };
     var buffer: [1024]u8 = undefined;
@@ -1219,7 +1219,7 @@ test "readIronyFormat should use struct type default value when missing field do
     }, recording);
 }
 
-test "readIronyFormat should succeed in loading fields that are smaller then expected" {
+test "readIronyFormat should succeed in loading fields that are smaller than expected" {
     const SavedFrame = struct { a: u16 = 11, b: i6 = 12, c: f32 = 13, d: enum(u2) { a = 0, b = 1 } = .a };
     const LoadedFrame = struct { a: u32 = 21, b: i12 = 22, c: f64 = 23, d: enum(u3) { a = 0, b = 1, c = 2 } = .b };
     var buffer: [1024]u8 = undefined;
@@ -1239,7 +1239,7 @@ test "readIronyFormat should succeed in loading fields that are smaller then exp
     }, recording);
 }
 
-test "readIronyFormat should succeed in loading fields that are larger then expected when the values fit" {
+test "readIronyFormat should succeed in loading fields that are larger than expected when the values fit" {
     const SavedFrame = struct { a: u32 = 11, b: i12 = 12, c: f64 = 13, d: enum(u3) { a = 0, b = 1, c = 2 } = .a };
     const LoadedFrame = struct { a: u16 = 21, b: i6 = 22, c: f32 = 23, d: enum(u2) { a = 0, b = 1 } = .b };
     var buffer: [1024]u8 = undefined;
@@ -1259,7 +1259,7 @@ test "readIronyFormat should succeed in loading fields that are larger then expe
     }, recording);
 }
 
-test "readIronyFormat should use default value when loading fields that are larger then expected and values do not fit" {
+test "readIronyFormat should use default value when loading fields that are larger than expected and values do not fit" {
     const SavedFrame = struct { a: u32 = 11, b: i12 = 12, c: enum(u3) { a = 0, b = 1, c = 2 } = .a };
     const LoadedFrame = struct { a: u16 = 21, b: i6 = 22, c: enum(u2) { a = 0, b = 1 } = .b };
     var buffer: [1024]u8 = undefined;

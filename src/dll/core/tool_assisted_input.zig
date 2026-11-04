@@ -272,7 +272,7 @@ test "should override inputs with part of sequence when start index and length a
     try testing.expectEqual(null, input_override.player_2);
 }
 
-test "should should override inputs only for enabled players when enable player values are used" {
+test "should override inputs only for enabled players when enable player values are used" {
     var input_override = game.InputOverride{};
     var input = ToolAssistedInput.init(testing.allocator);
     defer input.deinit();

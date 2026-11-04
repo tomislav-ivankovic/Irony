@@ -156,19 +156,19 @@ test "target should get called when hook is disabled" {
             return a + b;
         }
     };
-    const Dtour = struct {
+    const Detour = struct {
         var times_called: usize = 0;
         fn call(a: i32, b: i32) i32 {
             times_called += 1;
             return a - b;
         }
     };
-    const hook = try Hook(fn (i32, i32) i32).create(Target.call, Dtour.call);
+    const hook = try Hook(fn (i32, i32) i32).create(Target.call, Detour.call);
     defer hook.destroy() catch @panic("Failed to destroy hook.");
 
     const return_value = Target.call(3, 2);
     try testing.expectEqual(1, Target.times_called);
-    try testing.expectEqual(0, Dtour.times_called);
+    try testing.expectEqual(0, Detour.times_called);
     try testing.expectEqual(5, return_value);
 }
 
@@ -183,20 +183,20 @@ test "detour should get called when hook is enabled" {
             return a + b;
         }
     };
-    const Dtour = struct {
+    const Detour = struct {
         var times_called: usize = 0;
         fn call(a: i32, b: i32) i32 {
             times_called += 1;
             return a - b;
         }
     };
-    const hook = try Hook(fn (i32, i32) i32).create(Target.call, Dtour.call);
+    const hook = try Hook(fn (i32, i32) i32).create(Target.call, Detour.call);
     defer hook.destroy() catch @panic("Failed to destroy hook.");
     try hook.enable();
 
     const return_value = Target.call(3, 2);
     try testing.expectEqual(0, Target.times_called);
-    try testing.expectEqual(1, Dtour.times_called);
+    try testing.expectEqual(1, Detour.times_called);
     try testing.expectEqual(1, return_value);
 }
 
@@ -211,19 +211,19 @@ test "original should still call target implementation even when hook is enabled
             return a + b;
         }
     };
-    const Dtour = struct {
+    const Detour = struct {
         var times_called: usize = 0;
         fn call(a: i32, b: i32) i32 {
             times_called += 1;
             return a - b;
         }
     };
-    const hook = try Hook(fn (i32, i32) i32).create(Target.call, Dtour.call);
+    const hook = try Hook(fn (i32, i32) i32).create(Target.call, Detour.call);
     defer hook.destroy() catch @panic("Failed to destroy hook.");
     try hook.enable();
 
     const return_value = hook.original(3, 2);
     try testing.expectEqual(1, Target.times_called);
-    try testing.expectEqual(0, Dtour.times_called);
+    try testing.expectEqual(0, Detour.times_called);
     try testing.expectEqual(5, return_value);
 }

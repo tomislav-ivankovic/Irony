@@ -7,7 +7,7 @@ pub const vector_tag = opaque {};
 
 pub fn Vector(comptime size: usize, comptime Element: type) type {
     if (@typeInfo(Element) != .int and @typeInfo(Element) != .float) {
-        @compileError("Expected a int or float type argument but got type: " ++ @typeName(Element));
+        @compileError("Expected an int or float type argument but got type: " ++ @typeName(Element));
     }
     return extern struct {
         array: Array,
@@ -47,7 +47,7 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
 
         pub fn fromCoords(coords: Coords) Self {
             if (size > 4) {
-                @compileError("This operation is not defined for vectors larger then 4D.");
+                @compileError("This operation is not defined for vectors larger than 4D.");
             }
             const pointer: *const Self = @ptrCast(&coords);
             return pointer.*;
@@ -55,7 +55,7 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
 
         pub fn fromColor(color: Color) Self {
             if (size > 4) {
-                @compileError("This operation is not defined for vectors larger then 4D.");
+                @compileError("This operation is not defined for vectors larger than 4D.");
             }
             const pointer: *const Self = @ptrCast(&color);
             return pointer.*;
@@ -81,7 +81,7 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
 
         pub fn toCoords(self: Self) Coords {
             if (size > 4) {
-                @compileError("This operation is not defined for vectors larger then 4D.");
+                @compileError("This operation is not defined for vectors larger than 4D.");
             }
             const pointer: *const Coords = @ptrCast(&self);
             return pointer.*;
@@ -89,14 +89,14 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
 
         pub fn asCoords(self: anytype) misc.SelfBasedPointer(@TypeOf(self), Self, Coords) {
             if (size > 4) {
-                @compileError("This operation is not defined for vectors larger then 4D.");
+                @compileError("This operation is not defined for vectors larger than 4D.");
             }
             return @ptrCast(self);
         }
 
         pub fn toColor(self: Self) Color {
             if (size > 4) {
-                @compileError("This operation is not defined for vectors larger then 4D.");
+                @compileError("This operation is not defined for vectors larger than 4D.");
             }
             const pointer: *const Color = @ptrCast(&self);
             return pointer.*;
@@ -104,14 +104,14 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
 
         pub fn asColor(self: anytype) misc.SelfBasedPointer(@TypeOf(self), Self, Color) {
             if (size > 4) {
-                @compileError("This operation is not defined for vectors larger then 4D.");
+                @compileError("This operation is not defined for vectors larger than 4D.");
             }
             return @ptrCast(self);
         }
 
         pub fn x(self: Self) Element {
             if (size < 1) {
-                @compileError(std.fmt.comptimePrint("Vector of size {} does not have a X component.", .{size}));
+                @compileError(std.fmt.comptimePrint("Vector of size {} does not have an X component.", .{size}));
             }
             return self.array[0];
         }
@@ -139,7 +139,7 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
 
         pub fn r(self: Self) Element {
             if (size < 1) {
-                @compileError(std.fmt.comptimePrint("Vector of size {} does not have a R component.", .{size}));
+                @compileError(std.fmt.comptimePrint("Vector of size {} does not have an R component.", .{size}));
             }
             return self.array[0];
         }
@@ -160,7 +160,7 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
 
         pub fn a(self: Self) Element {
             if (size < 4) {
-                @compileError(std.fmt.comptimePrint("Vector of size {} does not have a A component.", .{size}));
+                @compileError(std.fmt.comptimePrint("Vector of size {} does not have an A component.", .{size}));
             }
             return self.array[3];
         }
@@ -414,7 +414,7 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
             const other_len = other.length();
             if (self_len == 0 or other_len == 0) {
                 std.log.warn(
-                    "Attempting to find angle between vectors {f} and {f}. However, one of the vectors is zero." ++
+                    "Attempting to find angle between vectors {f} and {f}. However, one of the vectors is zero. " ++
                         "Returning fallback angle 0.",
                     .{ self, other },
                 );
@@ -489,7 +489,7 @@ pub fn Vector(comptime size: usize, comptime Element: type) type {
             var homogeneous_coordinate = homogeneous_result.array[size];
             if (homogeneous_coordinate == 0) {
                 std.log.warn(
-                    "After point transformation of {f}, the resulting vector {f} has a zero homogeneous coordinate." ++
+                    "After point transformation of {f}, the resulting vector {f} has a zero homogeneous coordinate. " ++
                         "Using fallback homogeneous coordinate value of 1. The transformation matrix was:\n{f}",
                     .{ self, homogeneous_result, matrix },
                 );

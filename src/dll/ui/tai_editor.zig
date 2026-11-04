@@ -389,7 +389,7 @@ pub const TaiEditor = struct {
             _ = self.uncommitted.pop();
         };
         self.uncommitted.append(self.allocator, change.*) catch |err| {
-            sdk.misc.error_context.new("Failed append the change to uncommitted changes.", .{});
+            sdk.misc.error_context.new("Failed to append the change to uncommitted changes.", .{});
             return err;
         };
     }
@@ -628,7 +628,7 @@ const Change = union(enum) {
             }
             tai.sequence.insert(tai.allocator, self.index, self.new_values) catch |err| {
                 sdk.misc.error_context.new(
-                    "Failed to insert a item into the tool assisted input sequence at index: {}",
+                    "Failed to insert an item into the tool assisted input sequence at index: {}",
                     .{self.index},
                 );
                 return err;
@@ -1317,7 +1317,7 @@ test "move should move selected values to specified destination index" {
     }, editor.selection);
 }
 
-test "swapSides should should swap values between player 1 and player 2 on selected indices" {
+test "swapSides should swap values between player 1 and player 2 on selected indices" {
     var editor = TaiEditor.init(testing.allocator);
     defer editor.deinit();
     var tai = core.ToolAssistedInput.init(testing.allocator);
@@ -1418,7 +1418,7 @@ test "swapSides should should swap values between player 1 and player 2 on selec
     }, editor.selection);
 }
 
-test "setValues should set every cell the selection to the specified value" {
+test "setValues should set every cell in the selection to the specified value" {
     var editor = TaiEditor.init(testing.allocator);
     defer editor.deinit();
     var tai = core.ToolAssistedInput.init(testing.allocator);
