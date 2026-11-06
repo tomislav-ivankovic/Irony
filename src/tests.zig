@@ -21,7 +21,6 @@ test {
     _ = @import("sdk/io/irony.zig");
     _ = @import("sdk/io/json.zig");
     _ = @import("sdk/io/virtual_cwd_io.zig");
-    _ = @import("sdk/io/win_io.zig");
     _ = @import("sdk/io/zstd.zig");
 
     _ = @import("sdk/log/buffer.zig");

@@ -98,6 +98,10 @@
             .url = "https://github.com/marlersoft/zigwin32/archive/ab1c05ff1da857ec500c4da42e190032a8639717.tar.gz",
             .hash = "win32-25.0.28-preview-mX5pFQ8t5QNuXMsGluHTUtIed00-Mu4MEcV4wHxTJqpg",
         },
+        .win_io = .{
+            .url = "https://github.com/tomislav-ivankovic/win-io/archive/refs/tags/0.17.0.zip",
+            .hash = "win_io-0.17.0--A59huJqBgDeAEuIl0QBsfrxvxBgBNgkBcsY53aSEZQ_",
+        },
         .minhook = .{
             .url = "https://github.com/TsudaKageyu/minhook/archive/refs/tags/v1.3.3.tar.gz",
             .hash = "N-V-__8AAGqvAwA-HO0baM9XpcCBlwOA6ysjcwqzSVNmniXP",

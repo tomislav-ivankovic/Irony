@@ -27,6 +27,7 @@ pub fn build(b: *std.Build) void {
 
     // Dependencies:
     const win32 = zigwin32Dependency(b);
+    const win_io = winIoDependency(b);
     const lib_c_time = libCTimeDependency(b, target, optimize);
     const minhook = minhookDependency(b, target, optimize);
     const imgui = imguiDependency(b, target, optimize, false);
@@ -46,6 +47,7 @@ pub fn build(b: *std.Build) void {
     });
     dll_t7.root_module.addImport("build_info", build_info_t7);
     dll_t7.root_module.addImport("win32", win32);
+    dll_t7.root_module.addImport("win_io", win_io);
     dll_t7.root_module.addImport("lib_c_time", lib_c_time);
     dll_t7.root_module.addImport("minhook", minhook);
     dll_t7.root_module.linkLibrary(imgui.library);
@@ -69,6 +71,7 @@ pub fn build(b: *std.Build) void {
     });
     dll_t8.root_module.addImport("build_info", build_info_t8);
     dll_t8.root_module.addImport("win32", win32);
+    dll_t8.root_module.addImport("win_io", win_io);
     dll_t8.root_module.addImport("lib_c_time", lib_c_time);
     dll_t8.root_module.addImport("minhook", minhook);
     dll_t8.root_module.linkLibrary(imgui.library);
@@ -130,6 +133,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addImport("build_info", build_info_t8);
     tests.root_module.addImport("lib_c_time", lib_c_time);
     tests.root_module.addImport("win32", win32);
+    tests.root_module.addImport("win_io", win_io);
     tests.root_module.addImport("minhook", minhook);
     tests.root_module.linkLibrary(imgui_te.library);
     tests.root_module.addImport("imgui", imgui_te.module);
@@ -178,6 +182,11 @@ const ModuleAndLibrary = struct {
 // ZIG dependency: zigwin32
 fn zigwin32Dependency(b: *std.Build) *std.Build.Module {
     return b.dependency("zigwin32", .{}).module("win32");
+}
+
+// ZIG dependency: win_io
+fn winIoDependency(b: *std.Build) *std.Build.Module {
+    return b.dependency("win_io", .{}).module("win_io");
 }
 
 // C dependency: lib_c_time ("time.h" from C)

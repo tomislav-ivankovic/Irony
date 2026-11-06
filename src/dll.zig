@@ -1,6 +1,7 @@
 const std = @import("std");
-const w32 = @import("win32").everything;
 const build_info = @import("build_info");
+const w32 = @import("win32").everything;
+const WinIo = @import("win_io");
 const sdk = @import("sdk/root.zig");
 const dll = @import("dll/root.zig");
 
@@ -43,7 +44,7 @@ var shutdown_routine_shared_value: ?sdk.os.SharedValue(w32.LPTHREAD_START_ROUTIN
 var main_thread: ?std.Thread = null;
 var main_thread_running = std.atomic.Value(bool).init(false);
 
-var single_threaded_io = sdk.io.WinIo.init_single_threaded;
+var single_threaded_io = WinIo.init_single_threaded;
 var pending_event_mutex = std.Io.Mutex.init;
 var producer_mutex = std.Io.Mutex.init;
 var consumer_condition = std.Io.Condition.init;
@@ -205,7 +206,7 @@ pub fn main() void {
     }
 
     std.log.debug("Initializing main IO...", .{});
-    var main_io = sdk.io.WinIo.init(allocator, .{});
+    var main_io = WinIo.init(allocator, .{});
     std.log.info("Main IO initialized.", .{});
     defer {
         std.log.debug("De-initializing main IO...", .{});

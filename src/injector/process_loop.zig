@@ -105,6 +105,7 @@ fn runProcessLogic(
 
 const testing = std.testing;
 const w32 = @import("win32").everything;
+const WinIo = @import("win_io");
 const w = std.unicode.utf8ToUtf16LeStringLiteral;
 
 test "should do nothing when no process is found" {
@@ -143,7 +144,7 @@ test "should do nothing when no process is found" {
 }
 
 test "should open process when process exists and onProcessOpen returns true" {
-    var win_io = sdk.io.WinIo.init(testing.allocator, .{});
+    var win_io = WinIo.init(testing.allocator, .{});
     defer win_io.deinit();
     const io = win_io.io();
 
@@ -199,7 +200,7 @@ test "should open process when process exists and onProcessOpen returns true" {
 }
 
 test "should open and close process when process exists and onProcessOpen returns false" {
-    var win_io = sdk.io.WinIo.init(testing.allocator, .{});
+    var win_io = WinIo.init(testing.allocator, .{});
     defer win_io.deinit();
     const io = win_io.io();
 
@@ -251,7 +252,7 @@ test "should open and close process when process exists and onProcessOpen return
 }
 
 test "should close process when process stops running" {
-    var win_io = sdk.io.WinIo.init(testing.allocator, .{});
+    var win_io = WinIo.init(testing.allocator, .{});
     defer win_io.deinit();
     const io = win_io.io();
 
