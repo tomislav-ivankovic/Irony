@@ -31,6 +31,7 @@ pub const QuadrantLayout = @import("quadrant_layout.zig").QuadrantLayout;
 pub const drawStage = @import("stage.zig").drawStage;
 pub const TaiControls = @import("tai_controls.zig").TaiControls;
 pub const TaiEditor = @import("tai_editor.zig").TaiEditor;
+pub const TaiTableConfig = @import("tai_table.zig").TaiTableConfig;
 pub const TaiTable = @import("tai_table.zig").TaiTable;
 pub const TaiWindow = @import("tai_window.zig").TaiWindow;
 pub const Shapes = @import("shapes.zig").Shapes;

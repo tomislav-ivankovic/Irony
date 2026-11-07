@@ -6,7 +6,7 @@ const ui = @import("root.zig");
 
 pub const TaiWindow = struct {
     is_open: bool,
-    table: ui.TaiTable,
+    table: ui.TaiTable(.{}),
     controls: ui.TaiControls,
     controls_height: f32 = 0,
 
