@@ -19,6 +19,11 @@ pub const TaiRecordingCoordinator = struct {
     };
 
     pub fn processFrame(self: *Self, tai: *const core.ToolAssistedInput, controller: anytype) void {
+        if (@typeInfo(@TypeOf(controller)) != .pointer) {
+            @compileError(
+                "Expecting the controller to be passed by reference but got type: " ++ @typeName(@TypeOf(controller)),
+            );
+        }
         const tai_mode: TaiMode = switch (tai.mode) {
             .idle => .idle,
             .play => .play,

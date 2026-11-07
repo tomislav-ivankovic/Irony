@@ -123,6 +123,16 @@ pub const Shapes = struct {
     }
 
     pub fn render(self: *const Self, triangles: anytype, lines: anytype, camera_position: sdk.math.Vec3) void {
+        if (@typeInfo(@TypeOf(triangles)) != .pointer) {
+            @compileError(
+                "Expecting the triangles to be passed by reference but got type: " ++ @typeName(@TypeOf(triangles)),
+            );
+        }
+        if (@typeInfo(@TypeOf(lines)) != .pointer) {
+            @compileError(
+                "Expecting the lines to be passed by reference but got type: " ++ @typeName(@TypeOf(lines)),
+            );
+        }
         for (self.list.items) |*shape| {
             switch (shape.*) {
                 .point => |*point| {
