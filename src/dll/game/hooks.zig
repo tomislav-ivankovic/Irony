@@ -286,19 +286,19 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
             }
         }
 
-        fn onT7Tick(param_1: u8, param_2: u32) callconv(.c) void {
+        fn onT7Tick(use_fixed_step: sdk.memory.Boolean(.{}), delta_time: f32) callconv(.c) void {
             _ = active_hook_calls.fetchAdd(1, .seq_cst);
             defer _ = active_hook_calls.fetchSub(1, .seq_cst);
             cancel_requirements = .{};
-            tick_hook.?.original(param_1, param_2);
+            tick_hook.?.original(use_fixed_step, delta_time);
             onTick();
         }
 
-        fn onT8Tick(param_1: u64, param_2: u8, param_3: u8, param_4: u8) callconv(.c) void {
+        fn onT8Tick(param_1: u64, use_fixed_step: sdk.memory.Boolean(.{}), delta_time: f32, param_4: u8) callconv(.c) void {
             _ = active_hook_calls.fetchAdd(1, .seq_cst);
             defer _ = active_hook_calls.fetchSub(1, .seq_cst);
             cancel_requirements = .{};
-            tick_hook.?.original(param_1, param_2, param_3, param_4);
+            tick_hook.?.original(param_1, use_fixed_step, delta_time, param_4);
             onTick();
         }
 
@@ -387,12 +387,12 @@ const testing = std.testing;
 test "should call onTick and original when tick function is called in T7" {
     const Tick = struct {
         var times_called: usize = 0;
-        var last_param_1: ?u8 = null;
-        var last_param_2: ?u32 = null;
-        fn call(param_1: u8, param_2: u32) callconv(.c) void {
+        var last_use_fixed_step: ?sdk.memory.Boolean(.{}) = null;
+        var last_delta_time: ?f32 = null;
+        fn call(use_fixed_step: sdk.memory.Boolean(.{}), delta_time: f32) callconv(.c) void {
             times_called += 1;
-            last_param_1 = param_1;
-            last_param_2 = param_2;
+            last_use_fixed_step = use_fixed_step;
+            last_delta_time = delta_time;
         }
     };
     const OnTick = struct {
@@ -410,10 +410,10 @@ test "should call onTick and original when tick function is called in T7" {
 
     try testing.expectEqual(0, Tick.times_called);
     try testing.expectEqual(0, OnTick.times_called);
-    Tick.call(123, 456);
+    Tick.call(.false, 0.25);
     try testing.expectEqual(1, Tick.times_called);
-    try testing.expectEqual(123, Tick.last_param_1);
-    try testing.expectEqual(456, Tick.last_param_2);
+    try testing.expectEqual(.false, Tick.last_use_fixed_step);
+    try testing.expectEqual(0.25, Tick.last_delta_time);
     try testing.expectEqual(1, OnTick.times_called);
 }
 
@@ -421,14 +421,14 @@ test "should call onTick and original when tick function is called in T8" {
     const Tick = struct {
         var times_called: usize = 0;
         var last_param_1: ?u64 = null;
-        var last_param_2: ?u8 = null;
-        var last_param_3: ?u8 = null;
+        var last_use_fixed_step: ?sdk.memory.Boolean(.{}) = null;
+        var last_delta_time: ?f32 = null;
         var last_param_4: ?u8 = null;
-        fn call(param_1: u64, param_2: u8, param_3: u8, param_4: u8) callconv(.c) void {
+        fn call(param_1: u64, use_fixed_step: sdk.memory.Boolean(.{}), delta_time: f32, param_4: u8) callconv(.c) void {
             times_called += 1;
             last_param_1 = param_1;
-            last_param_2 = param_2;
-            last_param_3 = param_3;
+            last_use_fixed_step = use_fixed_step;
+            last_delta_time = delta_time;
             last_param_4 = param_4;
         }
     };
@@ -447,11 +447,11 @@ test "should call onTick and original when tick function is called in T8" {
 
     try testing.expectEqual(0, Tick.times_called);
     try testing.expectEqual(0, OnTick.times_called);
-    Tick.call(2, 3, 4, 5);
+    Tick.call(2, .false, 0.25, 5);
     try testing.expectEqual(1, Tick.times_called);
     try testing.expectEqual(2, Tick.last_param_1);
-    try testing.expectEqual(3, Tick.last_param_2);
-    try testing.expectEqual(4, Tick.last_param_3);
+    try testing.expectEqual(.false, Tick.last_use_fixed_step);
+    try testing.expectEqual(0.25, Tick.last_delta_time);
     try testing.expectEqual(5, Tick.last_param_4);
     try testing.expectEqual(1, OnTick.times_called);
 }
@@ -697,7 +697,7 @@ test "should set cancel_requirements and call original when process cancel requi
 
 test "should reset cancel_requirements when tick function is called in T7" {
     const Tick = struct {
-        fn call(_: u8, _: u32) callconv(.c) void {}
+        fn call(_: sdk.memory.Boolean(.{}), _: f32) callconv(.c) void {}
     };
     const OnTick = struct {
         fn call() void {}
@@ -715,13 +715,13 @@ test "should reset cancel_requirements when tick function is called in T7" {
         .throw_escape_press_1_plus_2 = true,
         .throw_escape_hold = true,
     };
-    Tick.call(123, 456);
+    Tick.call(.true, 0);
     try testing.expectEqual(game.CancelRequirements{}, hooks.cancel_requirements);
 }
 
 test "should reset cancel_requirements when tick function is called in T8" {
     const Tick = struct {
-        fn call(_: u64, _: u8, _: u8, _: u8) callconv(.c) void {}
+        fn call(_: u64, _: sdk.memory.Boolean(.{}), _: f32, _: u8) callconv(.c) void {}
     };
     const OnTick = struct {
         fn call() void {}
@@ -739,7 +739,7 @@ test "should reset cancel_requirements when tick function is called in T8" {
         .throw_escape_press_1_plus_2 = true,
         .throw_escape_hold = true,
     };
-    Tick.call(2, 3, 4, 5);
+    Tick.call(2, .true, 0, 5);
     try testing.expectEqual(game.CancelRequirements{}, hooks.cancel_requirements);
 }
 

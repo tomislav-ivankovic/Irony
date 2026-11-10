@@ -961,8 +961,8 @@ pub const GlobalsMap = opaque {};
 
 pub fn TickFunction(comptime game_id: build_info.Game) type {
     return switch (game_id) {
-        .t7 => fn (param_1: u8, param_2: u32) callconv(.c) void,
-        .t8 => fn (param_1: u64, param_2: u8, param_3: u8, param_4: u8) callconv(.c) void,
+        .t7 => fn (use_fixed_step: Bool, delta_time: f32) callconv(.c) void,
+        .t8 => fn (param_1: u64, use_fixed_step: Bool, delta_time: f32, param_4: u8) callconv(.c) void,
     };
 }
 
