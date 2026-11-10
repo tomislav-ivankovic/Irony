@@ -520,8 +520,24 @@ pub const GlobalKey = enum(u32) {
     match = 0x472D4C0B,
     ruleset = 0xEDFEC9B0,
     replay = 0xEC52DADE,
+    battle_control = 0xA9AC0036,
     _,
 };
+
+pub fn BattleRestartCode(comptime game_id: build_info.Game) type {
+    return switch (game_id) {
+        .t7 => enum(u32) {
+            practice_restart = 0x0D,
+            none = 0x17,
+            _,
+        },
+        .t8 => enum(u32) {
+            practice_restart = 0x0D,
+            none = 0x19,
+            _,
+        },
+    };
+}
 
 pub const MatchPhase = enum(u32) {
     intro_1 = 0,

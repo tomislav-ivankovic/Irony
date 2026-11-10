@@ -13,6 +13,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
         secondary_player_info: Proxy(game.PlayerInfo(game_id)),
         match: Pointer(game.Match(game_id)),
         ruleset: Pointer(game.Ruleset(game_id)),
+        battle_restart_code: Pointer(game.BattleRestartCode(game_id)),
         cancel_requirements: Pointer(game.CancelRequirements),
         replay_mode: Proxy(game.ReplayMode),
         depth_buffer: Proxy(game.DepthBuffer(game_id)),
@@ -123,6 +124,11 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                     game.Ruleset(.t7),
                     relativeOffset(i32, add(0x2, pattern(cache, "8B 05 ?? ?? ?? ?? 83 C0 9C"))),
                 ),
+                .battle_restart_code = pointer(
+                    "battle_restart_code",
+                    game.BattleRestartCode(.t7),
+                    relativeOffset(i32, add(0x2, pattern(cache, "8B 0D ?? ?? ?? ?? 48 89 5C 24 60 4C 89 6C 24 40"))),
+                ),
                 .cancel_requirements = pointer(
                     "cancel_requirements",
                     game.CancelRequirements,
@@ -228,6 +234,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                 }),
                 .match = .fromPointer(null), // Continuously updated address.
                 .ruleset = .fromPointer(null), // Continuously updated address.
+                .battle_restart_code = .fromPointer(null), // Continuously updated address.
                 .cancel_requirements = pointer(
                     "cancel_requirements",
                     game.CancelRequirements,
@@ -311,6 +318,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
             secondary_player_info: ?*const game.PlayerInfo(game_id) = null,
             match: ?*const game.Match(game_id) = null,
             ruleset: ?*const game.Ruleset(game_id) = null,
+            battle_restart_code: ?*const game.BattleRestartCode(game_id) = null,
             cancel_requirements: ?*const game.CancelRequirements = null,
             replay_mode: ?*const game.ReplayMode = null,
             depth_buffer: ?*const game.DepthBuffer(game_id) = null,
@@ -345,6 +353,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                 .secondary_player_info = .fromPointer(params.secondary_player_info),
                 .match = .fromPointer(params.match),
                 .ruleset = .fromPointer(params.ruleset),
+                .battle_restart_code = .fromPointer(params.battle_restart_code),
                 .cancel_requirements = .fromPointer(params.cancel_requirements),
                 .replay_mode = .fromPointer(params.replay_mode),
                 .depth_buffer = .fromPointer(params.depth_buffer),
@@ -376,7 +385,15 @@ pub fn Memory(comptime game_id: build_info.Game) type {
             const map = getGlobalsMap();
             self.match.address = findGlobalAddress(map, &.match);
             self.ruleset.address = findGlobalAddress(map, &.ruleset);
-            self.replay_mode.trail.buffer[0] = findGlobalAddress(map, &.replay) +| 0x8;
+            self.replay_mode.trail.buffer[0] = offsetGlobalAddress(findGlobalAddress(map, &.replay), 0x8);
+            self.battle_restart_code.address = offsetGlobalAddress(findGlobalAddress(map, &.battle_control), 0x3C);
+        }
+
+        fn offsetGlobalAddress(address: usize, offset: usize) usize {
+            if (address == 0) {
+                return 0;
+            }
+            return address +| offset;
         }
 
         fn updateUnrealClasses(self: *Self) void {
