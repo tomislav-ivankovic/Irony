@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const build_info = @import("build_info");
 const sdk = @import("../../sdk/root.zig");
+const model = @import("../model/root.zig");
 const game = @import("root.zig");
 
 pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () void) type {
@@ -16,7 +17,7 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
         pub var input_override: game.InputOverride = .{};
         pub var cancel_requirements: game.CancelRequirements = .{};
         pub var depth_buffer_address: usize = 0;
-        pub var view_info_override: ?game.ViewInfo(game_id) = null;
+        pub var camera_override: ?model.Camera = null;
         pub var last_view_info: game.ViewInfo(game_id) = .{};
 
         const TickHook = sdk.memory.Hook(game.TickFunction(game_id));
@@ -455,19 +456,24 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
             _ = active_hook_calls.fetchAdd(1, .seq_cst);
             defer _ = active_hook_calls.fetchSub(1, .seq_cst);
             get_view_point_hook.?.original(this, out_view_info, stereo_pass);
-            applyViewInfoOverride(out_view_info);
+            applyCameraOverride(out_view_info);
         }
 
         fn onT8GetViewPoint(this: *const anyopaque, out_view_info: *game.ViewInfo(.t8)) callconv(.c) void {
             _ = active_hook_calls.fetchAdd(1, .seq_cst);
             defer _ = active_hook_calls.fetchSub(1, .seq_cst);
             get_view_point_hook.?.original(this, out_view_info);
-            applyViewInfoOverride(out_view_info);
+            applyCameraOverride(out_view_info);
         }
 
-        fn applyViewInfoOverride(out_view_info: *game.ViewInfo(game_id)) void {
-            if (view_info_override) |*override| {
-                out_view_info.* = override.*;
+        fn applyCameraOverride(out_view_info: *game.ViewInfo(game_id)) void {
+            if (camera_override) |*camera| {
+                out_view_info.position.setConverted(camera.position);
+                out_view_info.rotation.setConverted(.fromArray(.{ camera.pitch, camera.yaw, camera.roll }));
+                out_view_info.horizontal_fov.setConverted(camera.horizontal_fov);
+                if (game_id == .t8) {
+                    out_view_info.desired_horizontal_fov.setConverted(camera.horizontal_fov);
+                }
             }
             last_view_info = out_view_info.*;
         }
@@ -897,7 +903,7 @@ test "should set depth_buffer_address to correct value and call original when se
     try testing.expectEqual(123, hooks.depth_buffer_address);
 }
 
-test "should call original and apply view info override when get view point function is called in T7" {
+test "should call original and apply camera override when get view point function is called in T7" {
     const ViewInfo = game.ViewInfo(.t7);
     const GetViewPoint = struct {
         var times_called: usize = 0;
@@ -928,7 +934,7 @@ test "should call original and apply view info override when get view point func
     const this: *const anyopaque = &this_value;
     var view_info = ViewInfo{};
 
-    hooks.view_info_override = null;
+    hooks.camera_override = null;
     GetViewPoint.call(this, &view_info, 1);
     try testing.expectEqual(1, GetViewPoint.times_called);
     try testing.expectEqual(this, GetViewPoint.last_this);
@@ -944,28 +950,26 @@ test "should call original and apply view info override when get view point func
         .horizontal_fov = .fromRaw(7),
     }, hooks.last_view_info);
 
-    hooks.view_info_override = .{
-        .position = .fromRaw(.fromArray(.{ 11, 12, 13 })),
-        .rotation = .fromRaw(.fromArray(.{ 14, 15, 16 })),
-        .horizontal_fov = .fromRaw(17),
+    hooks.camera_override = .{
+        .position = .fromArray(.{ 11, 12, 13 }),
+        .pitch = 0.5 * std.math.pi,
+        .yaw = std.math.pi,
+        .roll = -0.25 * std.math.pi,
+        .horizontal_fov = 0.5 * std.math.pi,
     };
     GetViewPoint.call(this, &view_info, 2);
     try testing.expectEqual(2, GetViewPoint.times_called);
     try testing.expectEqual(this, GetViewPoint.last_this);
     try testing.expectEqual(2, GetViewPoint.last_stereo_pass);
-    try testing.expectEqual(ViewInfo{
-        .position = .fromRaw(.fromArray(.{ 11, 12, 13 })),
-        .rotation = .fromRaw(.fromArray(.{ 14, 15, 16 })),
-        .horizontal_fov = .fromRaw(17),
-    }, view_info);
-    try testing.expectEqual(ViewInfo{
-        .position = .fromRaw(.fromArray(.{ 11, 12, 13 })),
-        .rotation = .fromRaw(.fromArray(.{ 14, 15, 16 })),
-        .horizontal_fov = .fromRaw(17),
-    }, hooks.last_view_info);
+    try testing.expectEqual(sdk.math.Vec3.fromArray(.{ 11, 12, 13 }), view_info.position.raw);
+    try testing.expectApproxEqAbs(90, view_info.rotation.raw.x(), 0.0001);
+    try testing.expectApproxEqAbs(180, view_info.rotation.raw.y(), 0.0001);
+    try testing.expectApproxEqAbs(-45, view_info.rotation.raw.z(), 0.0001);
+    try testing.expectApproxEqAbs(90, view_info.horizontal_fov.raw, 0.0001);
+    try testing.expectEqual(view_info, hooks.last_view_info);
 }
 
-test "should call original and apply view info override when get view point function is called in T8" {
+test "should call original and apply camera override when get view point function is called in T8" {
     const ViewInfo = game.ViewInfo(.t8);
     const GetViewPoint = struct {
         var times_called: usize = 0;
@@ -995,7 +999,7 @@ test "should call original and apply view info override when get view point func
     const this: *const anyopaque = &this_value;
     var view_info = ViewInfo{};
 
-    hooks.view_info_override = null;
+    hooks.camera_override = null;
     GetViewPoint.call(this, &view_info);
     try testing.expectEqual(1, GetViewPoint.times_called);
     try testing.expectEqual(this, GetViewPoint.last_this);
@@ -1012,25 +1016,21 @@ test "should call original and apply view info override when get view point func
         .desired_horizontal_fov = .fromRaw(8),
     }, hooks.last_view_info);
 
-    hooks.view_info_override = .{
-        .position = .fromRaw(.fromArray(.{ 11, 12, 13 })),
-        .rotation = .fromRaw(.fromArray(.{ 14, 15, 16 })),
-        .horizontal_fov = .fromRaw(17),
-        .desired_horizontal_fov = .fromRaw(18),
+    hooks.camera_override = .{
+        .position = .fromArray(.{ 11, 12, 13 }),
+        .pitch = 0.5 * std.math.pi,
+        .yaw = std.math.pi,
+        .roll = -0.25 * std.math.pi,
+        .horizontal_fov = 0.5 * std.math.pi,
     };
     GetViewPoint.call(this, &view_info);
     try testing.expectEqual(2, GetViewPoint.times_called);
     try testing.expectEqual(this, GetViewPoint.last_this);
-    try testing.expectEqual(ViewInfo{
-        .position = .fromRaw(.fromArray(.{ 11, 12, 13 })),
-        .rotation = .fromRaw(.fromArray(.{ 14, 15, 16 })),
-        .horizontal_fov = .fromRaw(17),
-        .desired_horizontal_fov = .fromRaw(18),
-    }, view_info);
-    try testing.expectEqual(ViewInfo{
-        .position = .fromRaw(.fromArray(.{ 11, 12, 13 })),
-        .rotation = .fromRaw(.fromArray(.{ 14, 15, 16 })),
-        .horizontal_fov = .fromRaw(17),
-        .desired_horizontal_fov = .fromRaw(18),
-    }, hooks.last_view_info);
+    try testing.expectEqual(sdk.math.Vector(3, f64).fromArray(.{ 11, 12, 13 }), view_info.position.raw);
+    try testing.expectApproxEqAbs(90, view_info.rotation.raw.x(), 0.0001);
+    try testing.expectApproxEqAbs(180, view_info.rotation.raw.y(), 0.0001);
+    try testing.expectApproxEqAbs(-45, view_info.rotation.raw.z(), 0.0001);
+    try testing.expectApproxEqAbs(90, view_info.horizontal_fov.raw, 0.0001);
+    try testing.expectApproxEqAbs(90, view_info.desired_horizontal_fov.raw, 0.0001);
+    try testing.expectEqual(view_info, hooks.last_view_info);
 }
