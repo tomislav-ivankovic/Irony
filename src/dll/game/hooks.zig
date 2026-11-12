@@ -10,16 +10,20 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
         var process_input_hook: ?ProcessInputHook = null;
         var cancel_requirements_hook: ?CancelRequirementsHook = null;
         var render_targets_hook: ?RenderTargetsHook = null;
+        var get_view_point_hook: ?GetViewPointHook = null;
         var active_hook_calls = std.atomic.Value(u8).init(0);
 
         pub var input_override: game.InputOverride = .{};
         pub var cancel_requirements: game.CancelRequirements = .{};
         pub var depth_buffer_address: usize = 0;
+        pub var view_info_override: ?game.MinimalViewInfo(game_id) = null;
+        pub var last_view_info: game.MinimalViewInfo(game_id) = .{};
 
         const TickHook = sdk.memory.Hook(game.TickFunction(game_id));
         const ProcessInputHook = sdk.memory.Hook(game.ProcessInputFunction(game_id));
         const CancelRequirementsHook = sdk.memory.Hook(game.ProcessCancelRequirementFunction);
         const RenderTargetsHook = sdk.memory.Hook(game.SetRenderTargetsFunction);
+        const GetViewPointHook = sdk.memory.Hook(game.GetViewPointFunction(game_id));
 
         pub fn init(game_functions: *const game.Memory(game_id).Functions) void {
             std.log.debug("Creating process input hook...", .{});
@@ -101,6 +105,27 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
                 }
             }
 
+            std.log.debug("Creating get view point hook...", .{});
+            if (game_functions.getViewPoint) |function| {
+                const detour = switch (game_id) {
+                    .t7 => onT7GetViewPoint,
+                    .t8 => onT8GetViewPoint,
+                };
+                if (GetViewPointHook.create(function, detour)) |hook| {
+                    get_view_point_hook = hook;
+                    std.log.info("Get view point hook created.", .{});
+                } else |err| {
+                    if (!builtin.is_test) {
+                        sdk.misc.error_context.append("Failed to create get view point hook.", .{});
+                        sdk.misc.error_context.logError(err);
+                    }
+                }
+            } else if (!builtin.is_test) {
+                sdk.misc.error_context.new("Get view point function not found.", .{});
+                sdk.misc.error_context.append("Failed to create get view point hook.", .{});
+                sdk.misc.error_context.logError(error.NotFound);
+            }
+
             if (process_input_hook) |*hook| {
                 std.log.debug("Enabling process input hook...", .{});
                 if (hook.enable()) {
@@ -140,9 +165,36 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
                     sdk.misc.error_context.logError(err);
                 }
             }
+
+            if (get_view_point_hook) |*hook| {
+                std.log.debug("Enabling get view point hook...", .{});
+                if (hook.enable()) {
+                    std.log.info("Get view point hook enabled.", .{});
+                } else |err| {
+                    sdk.misc.error_context.append("Failed to enable get view point hook.", .{});
+                    sdk.misc.error_context.logError(err);
+                }
+            }
         }
 
         pub fn deinit(io: std.Io) void {
+            std.log.debug("Disabling get view point hook...", .{});
+            var is_get_view_point_hook_disabled = false;
+            if (get_view_point_hook) |*hook| {
+                if (hook.disable()) {
+                    is_get_view_point_hook_disabled = true;
+                    std.log.info("Get view point hook disabled.", .{});
+                } else |err| switch (err) {
+                    error.HookDisabled => is_get_view_point_hook_disabled = true,
+                    else => {
+                        sdk.misc.error_context.append("Failed to disable get view point hook.", .{});
+                        sdk.misc.error_context.logError(err);
+                    },
+                }
+            } else {
+                std.log.debug("Nothing to disable.", .{});
+            }
+
             var is_render_targets_hook_disabled = false;
             if (game_id == .t8) {
                 std.log.debug("Disabling render targets hook...", .{});
@@ -218,6 +270,21 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
                     sdk.misc.error_context.new("Failed to sleep for 10 ms while waiting on active game hooks.", .{});
                     sdk.misc.error_context.logError(err);
                 };
+            }
+
+            std.log.debug("Destroying get view point hook...", .{});
+            if (get_view_point_hook) |*hook| {
+                if (!is_get_view_point_hook_disabled) {
+                    std.log.warn("Skipping the destruction of get view point hook since disabling it failed.", .{});
+                } else if (hook.destroy()) {
+                    std.log.info("Get view point hook destroyed.", .{});
+                    get_view_point_hook = null;
+                } else |err| {
+                    sdk.misc.error_context.append("Failed to destroy get view point hook.", .{});
+                    sdk.misc.error_context.logError(err);
+                }
+            } else {
+                std.log.debug("Nothing to destroy.", .{});
             }
 
             if (game_id == .t8) {
@@ -378,6 +445,31 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
             }
             const trail = sdk.memory.PointerTrail.fromArray(.{ param_3 +| 0x48, 0x20, 0x0 });
             depth_buffer_address = trail.resolve() orelse 0;
+        }
+
+        fn onT7GetViewPoint(
+            this: *const anyopaque,
+            out_view_info: *game.MinimalViewInfo(.t7),
+            stereo_pass: u32,
+        ) callconv(.c) void {
+            _ = active_hook_calls.fetchAdd(1, .seq_cst);
+            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
+            get_view_point_hook.?.original(this, out_view_info, stereo_pass);
+            applyViewInfoOverride(out_view_info);
+        }
+
+        fn onT8GetViewPoint(this: *const anyopaque, out_view_info: *game.MinimalViewInfo(.t8)) callconv(.c) void {
+            _ = active_hook_calls.fetchAdd(1, .seq_cst);
+            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
+            get_view_point_hook.?.original(this, out_view_info);
+            applyViewInfoOverride(out_view_info);
+        }
+
+        fn applyViewInfoOverride(out_view_info: *game.MinimalViewInfo(game_id)) void {
+            if (view_info_override) |*override| {
+                out_view_info.* = override.*;
+            }
+            last_view_info = out_view_info.*;
         }
     };
 }
@@ -803,4 +895,142 @@ test "should set depth_buffer_address to correct value and call original when se
     try testing.expectEqual(13, SetRenderTargets.last_param_2);
     try testing.expectEqual(0, SetRenderTargets.last_param_3);
     try testing.expectEqual(123, hooks.depth_buffer_address);
+}
+
+test "should call original and apply view info override when get view point function is called in T7" {
+    const ViewInfo = game.MinimalViewInfo(.t7);
+    const GetViewPoint = struct {
+        var times_called: usize = 0;
+        var last_this: ?*const anyopaque = null;
+        var last_stereo_pass: ?u32 = null;
+        fn call(this: *const anyopaque, out_view_info: *ViewInfo, stereo_pass: u32) callconv(.c) void {
+            times_called += 1;
+            last_this = this;
+            last_stereo_pass = stereo_pass;
+            out_view_info.* = .{
+                .position = .fromRaw(.fromArray(.{ 1, 2, 3 })),
+                .rotation = .fromRaw(.fromArray(.{ 4, 5, 6 })),
+                .horizontal_fov = .fromRaw(7),
+            };
+        }
+    };
+    const OnTick = struct {
+        fn call() void {}
+    };
+    const hooks = Hooks(.t7, OnTick.call);
+
+    try sdk.memory.hooking.init();
+    defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");
+    hooks.init(&.{ .getViewPoint = GetViewPoint.call });
+    defer hooks.deinit(testing.io);
+
+    const this_value: u8 = 0;
+    const this: *const anyopaque = &this_value;
+    var view_info = ViewInfo{};
+
+    hooks.view_info_override = null;
+    GetViewPoint.call(this, &view_info, 1);
+    try testing.expectEqual(1, GetViewPoint.times_called);
+    try testing.expectEqual(this, GetViewPoint.last_this);
+    try testing.expectEqual(1, GetViewPoint.last_stereo_pass);
+    try testing.expectEqual(ViewInfo{
+        .position = .fromRaw(.fromArray(.{ 1, 2, 3 })),
+        .rotation = .fromRaw(.fromArray(.{ 4, 5, 6 })),
+        .horizontal_fov = .fromRaw(7),
+    }, view_info);
+    try testing.expectEqual(ViewInfo{
+        .position = .fromRaw(.fromArray(.{ 1, 2, 3 })),
+        .rotation = .fromRaw(.fromArray(.{ 4, 5, 6 })),
+        .horizontal_fov = .fromRaw(7),
+    }, hooks.last_view_info);
+
+    hooks.view_info_override = .{
+        .position = .fromRaw(.fromArray(.{ 11, 12, 13 })),
+        .rotation = .fromRaw(.fromArray(.{ 14, 15, 16 })),
+        .horizontal_fov = .fromRaw(17),
+    };
+    GetViewPoint.call(this, &view_info, 2);
+    try testing.expectEqual(2, GetViewPoint.times_called);
+    try testing.expectEqual(this, GetViewPoint.last_this);
+    try testing.expectEqual(2, GetViewPoint.last_stereo_pass);
+    try testing.expectEqual(ViewInfo{
+        .position = .fromRaw(.fromArray(.{ 11, 12, 13 })),
+        .rotation = .fromRaw(.fromArray(.{ 14, 15, 16 })),
+        .horizontal_fov = .fromRaw(17),
+    }, view_info);
+    try testing.expectEqual(ViewInfo{
+        .position = .fromRaw(.fromArray(.{ 11, 12, 13 })),
+        .rotation = .fromRaw(.fromArray(.{ 14, 15, 16 })),
+        .horizontal_fov = .fromRaw(17),
+    }, hooks.last_view_info);
+}
+
+test "should call original and apply view info override when get view point function is called in T8" {
+    const ViewInfo = game.MinimalViewInfo(.t8);
+    const GetViewPoint = struct {
+        var times_called: usize = 0;
+        var last_this: ?*const anyopaque = null;
+        fn call(this: *const anyopaque, out_view_info: *ViewInfo) callconv(.c) void {
+            times_called += 1;
+            last_this = this;
+            out_view_info.* = .{
+                .position = .fromRaw(.fromArray(.{ 1, 2, 3 })),
+                .rotation = .fromRaw(.fromArray(.{ 4, 5, 6 })),
+                .horizontal_fov = .fromRaw(7),
+                .desired_horizontal_fov = .fromRaw(8),
+            };
+        }
+    };
+    const OnTick = struct {
+        fn call() void {}
+    };
+    const hooks = Hooks(.t8, OnTick.call);
+
+    try sdk.memory.hooking.init();
+    defer sdk.memory.hooking.deinit() catch @panic("Failed to de-initialize hooking.");
+    hooks.init(&.{ .getViewPoint = GetViewPoint.call });
+    defer hooks.deinit(testing.io);
+
+    const this_value: u8 = 0;
+    const this: *const anyopaque = &this_value;
+    var view_info = ViewInfo{};
+
+    hooks.view_info_override = null;
+    GetViewPoint.call(this, &view_info);
+    try testing.expectEqual(1, GetViewPoint.times_called);
+    try testing.expectEqual(this, GetViewPoint.last_this);
+    try testing.expectEqual(ViewInfo{
+        .position = .fromRaw(.fromArray(.{ 1, 2, 3 })),
+        .rotation = .fromRaw(.fromArray(.{ 4, 5, 6 })),
+        .horizontal_fov = .fromRaw(7),
+        .desired_horizontal_fov = .fromRaw(8),
+    }, view_info);
+    try testing.expectEqual(ViewInfo{
+        .position = .fromRaw(.fromArray(.{ 1, 2, 3 })),
+        .rotation = .fromRaw(.fromArray(.{ 4, 5, 6 })),
+        .horizontal_fov = .fromRaw(7),
+        .desired_horizontal_fov = .fromRaw(8),
+    }, hooks.last_view_info);
+
+    hooks.view_info_override = .{
+        .position = .fromRaw(.fromArray(.{ 11, 12, 13 })),
+        .rotation = .fromRaw(.fromArray(.{ 14, 15, 16 })),
+        .horizontal_fov = .fromRaw(17),
+        .desired_horizontal_fov = .fromRaw(18),
+    };
+    GetViewPoint.call(this, &view_info);
+    try testing.expectEqual(2, GetViewPoint.times_called);
+    try testing.expectEqual(this, GetViewPoint.last_this);
+    try testing.expectEqual(ViewInfo{
+        .position = .fromRaw(.fromArray(.{ 11, 12, 13 })),
+        .rotation = .fromRaw(.fromArray(.{ 14, 15, 16 })),
+        .horizontal_fov = .fromRaw(17),
+        .desired_horizontal_fov = .fromRaw(18),
+    }, view_info);
+    try testing.expectEqual(ViewInfo{
+        .position = .fromRaw(.fromArray(.{ 11, 12, 13 })),
+        .rotation = .fromRaw(.fromArray(.{ 14, 15, 16 })),
+        .horizontal_fov = .fromRaw(17),
+        .desired_horizontal_fov = .fromRaw(18),
+    }, hooks.last_view_info);
 }
