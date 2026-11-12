@@ -1002,12 +1002,12 @@ pub fn TaiTable(comptime config: TaiTableConfig) type {
             if (cell_hovered or check_hovered) {
                 const tooltip = switch (enabled.*) {
                     false => switch (player_id) {
-                        .player_1 => "Enable player 1 input simulation. [Ctrl + 1]",
-                        .player_2 => "Enable player 2 input simulation. [Ctrl + 2]",
+                        .player_1 => "Enable player 1 input simulation. [Ctrl + Shift + 1]",
+                        .player_2 => "Enable player 2 input simulation. [Ctrl + Shift + 2]",
                     },
                     true => switch (player_id) {
-                        .player_1 => "Disable player 1 input simulation. [Ctrl + 1]",
-                        .player_2 => "Disable player 2 input simulation. [Ctrl + 2]",
+                        .player_1 => "Disable player 1 input simulation. [Ctrl + Shift + 1]",
+                        .player_2 => "Disable player 2 input simulation. [Ctrl + Shift + 2]",
                     },
                 };
                 imgui.igSetTooltip(tooltip);
@@ -1016,8 +1016,8 @@ pub fn TaiTable(comptime config: TaiTableConfig) type {
 
         fn handleEnabledShortcut(enabled: *bool, player_id: model.PlayerId) void {
             const key_chord = switch (player_id) {
-                .player_1 => imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_1,
-                .player_2 => imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_2,
+                .player_1 => imgui.ImGuiMod_Ctrl | imgui.ImGuiMod_Shift | imgui.ImGuiKey_1,
+                .player_2 => imgui.ImGuiMod_Ctrl | imgui.ImGuiMod_Shift | imgui.ImGuiKey_2,
             };
             if (!imgui.igShortcut_Nil(key_chord, window_route)) {
                 return;
@@ -3210,10 +3210,10 @@ test "should toggle player enabled flags when clicking checkbox or header or pre
 
             ctx.windowFocus("", 0);
             ctx.yield(1); // Shortcuts get routed one frame after they become enabled.
-            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_1, 1);
+            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiMod_Shift | imgui.ImGuiKey_1, 1);
             try testing.expectEqual(true, enable_player_1);
             try testing.expectEqual(false, enable_player_2);
-            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_2, 1);
+            ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiMod_Shift | imgui.ImGuiKey_2, 1);
             try testing.expectEqual(true, enable_player_1);
             try testing.expectEqual(true, enable_player_2);
         }

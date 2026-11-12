@@ -48,6 +48,7 @@ pub const MainWindow = struct {
         io: std.Io,
         file_dialog_context: *imgui.ImGuiFileDialog,
         controller: *core.Controller,
+        camera_director: *core.CameraDirector,
         settings: *model.Settings,
         latest_version: ui.LatestVersion,
         memory_usage: usize,
@@ -87,6 +88,7 @@ pub const MainWindow = struct {
             io,
             file_dialog_context,
             controller,
+            camera_director,
             &settings.general.ui,
             latest_version,
             memory_usage,
@@ -150,6 +152,7 @@ pub const MainWindow = struct {
         io: std.Io,
         file_dialog_context: *imgui.ImGuiFileDialog,
         controller: *core.Controller,
+        camera_director: *core.CameraDirector,
         settings: *const model.GeneralSettings.Ui,
         latest_version: ui.LatestVersion,
         memory_usage: usize,
@@ -161,6 +164,7 @@ pub const MainWindow = struct {
 
         self.file_menu.draw(io, file_dialog_context, controller, &ui_instance.is_open);
         self.view.camera.drawMenuBar();
+        ui.drawCameraMenuBar(camera_director, controller.getCurrentFrame());
         drawWindowMenu(ui_instance);
         drawHelpMenu(ui_instance);
 

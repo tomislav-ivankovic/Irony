@@ -53,10 +53,12 @@ pub const Ui = struct {
     pub fn draw(
         self: *Self,
         io: std.Io,
+        delta_time: f32,
         file_dialog_context: *imgui.ImGuiFileDialog,
         settings_maybe: ?*model.Settings,
         game_memory_maybe: ?*const game.Memory(build_info.game),
         controller: *core.Controller,
+        camera_director: *core.CameraDirector,
         tai: *core.ToolAssistedInput,
         tai_coordinator: *core.TaiRecordingCoordinator,
         latest_version: ui.LatestVersion,
@@ -96,6 +98,8 @@ pub const Ui = struct {
         self.handleOpenKey();
         self.main_window.handleKeybinds(controller);
         ui.TaiWindow.handleKeybinds(tai);
+        ui.handleCameraShortcuts(camera_director, controller.getCurrentFrame());
+        ui.handleFreeLookCameraInput(camera_director, delta_time);
 
         if (!self.is_open) {
             return;
@@ -108,6 +112,7 @@ pub const Ui = struct {
             io,
             file_dialog_context,
             controller,
+            camera_director,
             settings,
             latest_version,
             memory_usage,

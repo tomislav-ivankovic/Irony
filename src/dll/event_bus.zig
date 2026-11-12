@@ -231,10 +231,12 @@ pub const EventBus = struct {
         imgui.igGetIO_Nil().*.MouseDrawCursor = true;
         self.ui.draw(
             io,
+            delta_time,
             ui_context.file_dialog_context,
             settings_maybe,
             game_memory_maybe,
             &self.core.controller,
+            &self.core.camera_director,
             &self.core.tool_assisted_input,
             &self.core.tai_recording_coordinator,
             latest_version,

@@ -121,6 +121,7 @@ test {
     _ = @import("dll/rendering/triangles.zig");
 
     _ = @import("dll/ui/about_window.zig");
+    _ = @import("dll/ui/camera.zig");
     _ = @import("dll/ui/collision_spheres.zig");
     _ = @import("dll/ui/confirm_dialog.zig");
     _ = @import("dll/ui/control_hints.zig");

@@ -1,5 +1,8 @@
 pub const AboutWindowConfig = @import("about_window.zig").AboutWindowConfig;
 pub const AboutWindow = @import("about_window.zig").AboutWindow;
+pub const drawCameraMenuBar = @import("camera.zig").drawCameraMenuBar;
+pub const handleCameraShortcuts = @import("camera.zig").handleCameraShortcuts;
+pub const handleFreeLookCameraInput = @import("camera.zig").handleFreeLookCameraInput;
 pub const drawCollisionSpheres = @import("collision_spheres.zig").drawCollisionSpheres;
 pub const ConfirmDialogAction = @import("confirm_dialog.zig").ConfirmDialogAction;
 pub const drawConfirmDialog = @import("confirm_dialog.zig").drawConfirmDialog;
