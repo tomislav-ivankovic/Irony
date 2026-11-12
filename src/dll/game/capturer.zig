@@ -529,7 +529,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
         }
 
         fn captureInputFromDevice(player: *const GamePlayer) ?model.Input {
-            const input_side: game.PlayerSide = player.input_side;
+            const input_side: game.InputSide = player.input_side;
             const input: game.Input(game_id) = player.input;
             return .{
                 .forward = switch (input_side) {
@@ -560,7 +560,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
         }
 
         fn captureInputFromGameLogic(player: *const GamePlayer) ?model.Input {
-            const input_side: game.PlayerSide = player.input_side;
+            const input_side: game.InputSide = player.input_side;
             const directional_input: game.DirectionalInput.Direction = player.directional_input.down;
             const attack_input: game.AttackInput(game_id).Buttons = player.attack_input.down;
             return .{

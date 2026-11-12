@@ -33,6 +33,7 @@ pub const Memory = @import("memory.zig").Memory;
 pub const Version = @import("types.zig").Version;
 pub const PlayerId = @import("types.zig").PlayerId;
 pub const PlayerSide = @import("types.zig").PlayerSide;
+pub const InputSide = @import("types.zig").InputSide;
 pub const StateFlags = @import("types.zig").StateFlags;
 pub const CancelFlags = @import("types.zig").CancelFlags;
 pub const CancelRequirement = @import("types.zig").CancelRequirement;

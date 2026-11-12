@@ -41,6 +41,12 @@ pub const PlayerSide = enum(u32) {
     _,
 };
 
+pub const InputSide = enum(u8) {
+    left = 0,
+    right = 1,
+    _,
+};
+
 // MovesetExtractor: VUNL
 pub const StateFlags = sdk.memory.Bitfield(u32, &.{
     .{ .name = "crouching", .backing_value = 1 },
@@ -292,65 +298,102 @@ comptime {
 }
 
 pub fn HurtCylinder(comptime game_id: build_info.Game) type {
-    return extern struct {
-        center: sdk.math.Vec3 = .zero,
-        multiplier: f32 = 0,
-        half_height: f32 = 0,
-        squared_radius: f32 = 0,
-        radius: f32 = 0,
-        _padding: [
-            switch (game_id) {
-                .t7 => 1,
-                .t8 => 9,
-            }
-        ]f32 = @splat(0),
+    return switch (game_id) {
+        .t7 => extern struct {
+            center: sdk.math.Vec3 = .zero,
+            multiplier: f32 = 0,
+            half_height: f32 = 0,
+            squared_radius: f32 = 0,
+            radius: f32 = 0,
+            _padding: f32 = 0,
 
-        comptime {
-            switch (game_id) {
-                .t7 => std.debug.assert(@sizeOf(@This()) == 32),
-                .t8 => std.debug.assert(@sizeOf(@This()) == 64),
+            comptime {
+                std.debug.assert(@sizeOf(@This()) == 32);
             }
-        }
+        },
+        .t8 => extern struct {
+            center: sdk.math.Vec3 = .zero,
+            multiplier: f32 = 0,
+            half_height: f32 = 0,
+            squared_radius: f32 = 0,
+            radius: f32 = 0,
+            disabled: Bool = .false,
+            _padding: [35]u8 = @splat(0),
+
+            comptime {
+                std.debug.assert(@sizeOf(@This()) == 64);
+            }
+        },
     };
 }
 
 pub fn HurtCylinders(comptime game_id: build_info.Game) type {
-    return extern struct {
-        left_ankle: Element = .fromRaw(.{}),
-        right_ankle: Element = .fromRaw(.{}),
-        left_hand: Element = .fromRaw(.{}),
-        right_hand: Element = .fromRaw(.{}),
-        left_knee: Element = .fromRaw(.{}),
-        right_knee: Element = .fromRaw(.{}),
-        left_elbow: Element = .fromRaw(.{}),
-        right_elbow: Element = .fromRaw(.{}),
-        head: Element = .fromRaw(.{}),
-        left_shoulder: Element = .fromRaw(.{}),
-        right_shoulder: Element = .fromRaw(.{}),
-        upper_torso: Element = .fromRaw(.{}),
-        left_pelvis: Element = .fromRaw(.{}),
-        right_pelvis: Element = .fromRaw(.{}),
+    const ConvertedHurtCylinder = Converted(
+        HurtCylinder(game_id),
+        HurtCylinder(game_id),
+        game.hurtCylinderToUnrealSpace(game_id),
+        game.hurtCylinderFromUnrealSpace(game_id),
+    );
+    return switch (game_id) {
+        .t7 => extern struct {
+            left_ankle: Element = .fromRaw(.{}),
+            right_ankle: Element = .fromRaw(.{}),
+            left_hand: Element = .fromRaw(.{}),
+            right_hand: Element = .fromRaw(.{}),
+            left_knee: Element = .fromRaw(.{}),
+            right_knee: Element = .fromRaw(.{}),
+            left_elbow: Element = .fromRaw(.{}),
+            right_elbow: Element = .fromRaw(.{}),
+            head: Element = .fromRaw(.{}),
+            left_shoulder: Element = .fromRaw(.{}),
+            right_shoulder: Element = .fromRaw(.{}),
+            upper_torso: Element = .fromRaw(.{}),
+            left_pelvis: Element = .fromRaw(.{}),
+            right_pelvis: Element = .fromRaw(.{}),
 
-        const Self = @This();
-        pub const Element = Converted(
-            HurtCylinder(game_id),
-            HurtCylinder(game_id),
-            game.hurtCylinderToUnrealSpace(game_id),
-            game.hurtCylinderFromUnrealSpace(game_id),
-        );
+            const Self = @This();
+            pub const Element = ConvertedHurtCylinder;
 
-        pub const len = @typeInfo(Self).@"struct".fields.len;
+            pub const len = @typeInfo(Self).@"struct".fields.len;
 
-        pub fn asArray(self: anytype) sdk.misc.SelfBasedPointer(@TypeOf(self), Self, [len]Element) {
-            return @ptrCast(self);
-        }
-
-        comptime {
-            switch (game_id) {
-                .t7 => std.debug.assert(@sizeOf(Self) == 448),
-                .t8 => std.debug.assert(@sizeOf(Self) == 896),
+            pub fn asArray(self: anytype) sdk.misc.SelfBasedPointer(@TypeOf(self), Self, [len]Element) {
+                return @ptrCast(self);
             }
-        }
+
+            comptime {
+                std.debug.assert(@sizeOf(Self) == 448);
+            }
+        },
+        .t8 => extern struct {
+            left_ankle: Element = .fromRaw(.{}),
+            right_ankle: Element = .fromRaw(.{}),
+            left_hand: Element = .fromRaw(.{}),
+            right_hand: Element = .fromRaw(.{}),
+            left_knee: Element = .fromRaw(.{}),
+            right_knee: Element = .fromRaw(.{}),
+            left_elbow: Element = .fromRaw(.{}),
+            right_elbow: Element = .fromRaw(.{}),
+            head: Element = .fromRaw(.{}),
+            left_shoulder: Element = .fromRaw(.{}),
+            right_shoulder: Element = .fromRaw(.{}),
+            upper_torso: Element = .fromRaw(.{}),
+            unknown: Element = .fromRaw(.{}),
+            left_pelvis: Element = .fromRaw(.{}),
+            right_pelvis: Element = .fromRaw(.{}),
+
+            const Self = @This();
+            pub const Element = ConvertedHurtCylinder;
+
+            pub const len = @typeInfo(Self).@"struct".fields.len;
+
+            pub fn asArray(self: anytype) sdk.misc.SelfBasedPointer(@TypeOf(self), Self, [len]Element) {
+                return @ptrCast(self);
+            }
+
+            comptime {
+                std.debug.assert(@sizeOf(Self) == 960);
+            }
+        },
     };
 }
 
@@ -434,7 +477,7 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x0C00, "in_rage", Bool, &.false),
             field(0x0DD8, "attack_input", AttackInput(.t7), &.{}),
             field(0x0DDC, "directional_input", DirectionalInput, &.{}),
-            field(0x0DE4, "input_side", PlayerSide, &.left),
+            field(0x0DE4, "input_side", InputSide, &.left),
             field(0x0E0C, "input", Input(.t7), &.{}),
             field(0x0E50, "hit_lines", HitLines(.t7), &getDefaultHitLines(.t7)),
             field(0x0F10, "hurt_cylinders", HurtCylinders(.t7), &.{}),
@@ -453,32 +496,32 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x0434, "state_flags", StateFlags, &.{}),
             field(0x0510, "attack_type", AttackType, &.not_attack),
             field(0x0550, "animation_id", u32, &0),
-            field(0x05D0, "can_move", Bool, &.false),
-            field(0x05E0, "animation_total_frames", u32, &0),
-            field(0x061C, "hit_outcome", HitOutcome, &.none),
-            field(0x0670, "simple_state", SimpleState, &.standing),
-            field(0x0698, "correct_throw_escape_input", ThrowEscapeInput, &.none),
-            field(0x06F8, "throw_escape_flags", ThrowEscapeFlags, &.{}),
-            field(0x0C31, "power_crushing", Bool, &.false),
-            field(0x0F91, "in_rage", Bool, &.false),
-            field(0x0F98, "cancel_flags", CancelFlags, &.{}),
-            field(0x14C4, "in_special_style", Bool, &.false),
-            field(0x15D0, "frames_since_round_start", u32, &0),
-            field(0x19B0, "floor_number", u32, &0),
-            field(0x2490, "heat_gauge", HeatGauge, &.fromRaw(0)),
-            field(0x24A0, "used_heat", Bool, &.false),
-            field(0x24C1, "in_heat", Bool, &.false),
-            field(0x2508, "stage_set_number", u32, &0),
-            field(0x28B0, "attack_input", AttackInput(.t8), &.{}),
-            field(0x28B4, "directional_input", DirectionalInput, &.{}),
-            field(0x28BC, "input_side", PlayerSide, &.left),
-            field(0x28E4, "input", Input(.t8), &.{}),
-            field(0x2950, "hit_lines", HitLines(.t8), &getDefaultHitLines(.t8)),
-            field(0x2D50, "hurt_cylinders", HurtCylinders(.t8), &.{}),
-            field(0x31D0, "collision_spheres", CollisionSpheres, &.{}),
-            field(0x3968, "health", HealthValue, &.fromRaw(.{})),
-            field(0x3978, "health_recover_limit", HealthValue, &.fromRaw(.{})),
-            field(0x3988, "max_health", HealthValue, &.fromRaw(.{})),
+            field(0x05D4, "can_move", Bool, &.false),
+            field(0x05E4, "animation_total_frames", u32, &0),
+            field(0x0634, "hit_outcome", HitOutcome, &.none),
+            field(0x0688, "simple_state", SimpleState, &.standing),
+            field(0x06B0, "correct_throw_escape_input", ThrowEscapeInput, &.none),
+            field(0x0710, "throw_escape_flags", ThrowEscapeFlags, &.{}),
+            field(0x0C41, "power_crushing", Bool, &.false),
+            field(0x1011, "in_rage", Bool, &.false),
+            field(0x1018, "cancel_flags", CancelFlags, &.{}),
+            field(0x1544, "in_special_style", Bool, &.false),
+            field(0x1650, "frames_since_round_start", u32, &0),
+            field(0x1A30, "floor_number", u32, &0),
+            field(0x2510, "heat_gauge", HeatGauge, &.fromRaw(0)),
+            field(0x2520, "used_heat", Bool, &.false),
+            field(0x2541, "in_heat", Bool, &.false),
+            field(0x258C, "stage_set_number", u32, &0),
+            field(0x2930, "attack_input", AttackInput(.t8), &.{}),
+            field(0x2934, "directional_input", DirectionalInput, &.{}),
+            field(0x293C, "input_side", InputSide, &.left),
+            field(0x2964, "input", Input(.t8), &.{}),
+            field(0x29D0, "hit_lines", HitLines(.t8), &getDefaultHitLines(.t8)),
+            field(0x2DD0, "hurt_cylinders", HurtCylinders(.t8), &.{}),
+            field(0x3290, "collision_spheres", CollisionSpheres, &.{}),
+            field(0x3AD0, "health", HealthValue, &.fromRaw(.{})),
+            field(0x3AE0, "health_recover_limit", HealthValue, &.fromRaw(.{})),
+            field(0x3AF0, "max_health", HealthValue, &.fromRaw(.{})),
         }),
     };
 }
