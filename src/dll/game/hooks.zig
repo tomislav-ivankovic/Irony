@@ -16,8 +16,8 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
         pub var input_override: game.InputOverride = .{};
         pub var cancel_requirements: game.CancelRequirements = .{};
         pub var depth_buffer_address: usize = 0;
-        pub var view_info_override: ?game.MinimalViewInfo(game_id) = null;
-        pub var last_view_info: game.MinimalViewInfo(game_id) = .{};
+        pub var view_info_override: ?game.ViewInfo(game_id) = null;
+        pub var last_view_info: game.ViewInfo(game_id) = .{};
 
         const TickHook = sdk.memory.Hook(game.TickFunction(game_id));
         const ProcessInputHook = sdk.memory.Hook(game.ProcessInputFunction(game_id));
@@ -449,7 +449,7 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
 
         fn onT7GetViewPoint(
             this: *const anyopaque,
-            out_view_info: *game.MinimalViewInfo(.t7),
+            out_view_info: *game.ViewInfo(.t7),
             stereo_pass: u32,
         ) callconv(.c) void {
             _ = active_hook_calls.fetchAdd(1, .seq_cst);
@@ -458,14 +458,14 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
             applyViewInfoOverride(out_view_info);
         }
 
-        fn onT8GetViewPoint(this: *const anyopaque, out_view_info: *game.MinimalViewInfo(.t8)) callconv(.c) void {
+        fn onT8GetViewPoint(this: *const anyopaque, out_view_info: *game.ViewInfo(.t8)) callconv(.c) void {
             _ = active_hook_calls.fetchAdd(1, .seq_cst);
             defer _ = active_hook_calls.fetchSub(1, .seq_cst);
             get_view_point_hook.?.original(this, out_view_info);
             applyViewInfoOverride(out_view_info);
         }
 
-        fn applyViewInfoOverride(out_view_info: *game.MinimalViewInfo(game_id)) void {
+        fn applyViewInfoOverride(out_view_info: *game.ViewInfo(game_id)) void {
             if (view_info_override) |*override| {
                 out_view_info.* = override.*;
             }
@@ -898,7 +898,7 @@ test "should set depth_buffer_address to correct value and call original when se
 }
 
 test "should call original and apply view info override when get view point function is called in T7" {
-    const ViewInfo = game.MinimalViewInfo(.t7);
+    const ViewInfo = game.ViewInfo(.t7);
     const GetViewPoint = struct {
         var times_called: usize = 0;
         var last_this: ?*const anyopaque = null;
@@ -966,7 +966,7 @@ test "should call original and apply view info override when get view point func
 }
 
 test "should call original and apply view info override when get view point function is called in T8" {
-    const ViewInfo = game.MinimalViewInfo(.t8);
+    const ViewInfo = game.ViewInfo(.t8);
     const GetViewPoint = struct {
         var times_called: usize = 0;
         var last_this: ?*const anyopaque = null;

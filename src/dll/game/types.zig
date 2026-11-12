@@ -694,7 +694,7 @@ fn UnrealRotator(comptime game_id: build_info.Game) type {
 }
 
 // UE: FMinimalViewInfo
-pub fn MinimalViewInfo(comptime game_id: build_info.Game) type {
+pub fn ViewInfo(comptime game_id: build_info.Game) type {
     const Vec = UnrealVector(game_id);
     const Rot = UnrealRotator(game_id);
     return switch (game_id) {
@@ -1107,8 +1107,8 @@ pub const FindUnrealObjectsOfClassFunction = fn (
 // UE: ULocalPlayer::GetViewPoint
 pub fn GetViewPointFunction(comptime game_id: build_info.Game) type {
     return switch (game_id) {
-        .t7 => fn (this: *const anyopaque, out_view_info: *MinimalViewInfo(.t7), stereo_pass: u32) callconv(.c) void,
-        .t8 => fn (this: *const anyopaque, out_view_info: *MinimalViewInfo(.t8)) callconv(.c) void,
+        .t7 => fn (this: *const anyopaque, out_view_info: *ViewInfo(.t7), stereo_pass: u32) callconv(.c) void,
+        .t8 => fn (this: *const anyopaque, out_view_info: *ViewInfo(.t8)) callconv(.c) void,
     };
 }
 

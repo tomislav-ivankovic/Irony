@@ -92,7 +92,7 @@ pub const Rendering = struct {
         );
     }
 
-    fn calculateWorldToClip(context: *const dx.Context, view_info: *const game.MinimalViewInfo(game_id)) ?sdk.math.Mat4 {
+    fn calculateWorldToClip(context: *const dx.Context, view_info: *const game.ViewInfo(game_id)) ?sdk.math.Mat4 {
         const position: sdk.math.Vec3 = view_info.position.convert();
         const rotation: sdk.math.Vec3 = view_info.rotation.convert();
         const pitch = rotation.x();

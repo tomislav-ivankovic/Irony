@@ -15,7 +15,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
         ruleset: Pointer(game.Ruleset(game_id)),
         battle_restart_code: Pointer(game.BattleRestartCode(game_id)),
         cancel_requirements: Pointer(game.CancelRequirements),
-        view_info: Pointer(game.MinimalViewInfo(game_id)),
+        view_info: Pointer(game.ViewInfo(game_id)),
         replay_mode: Proxy(game.ReplayMode),
         depth_buffer: Proxy(game.DepthBuffer(game_id)),
         camera_manager: Pointer(game.CameraManager(game_id)) = .fromPointer(null),
@@ -139,7 +139,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                 ),
                 .view_info = pointer(
                     "view_info",
-                    game.MinimalViewInfo(game_id),
+                    game.ViewInfo(game_id),
                     @intFromPtr(&game_hooks.last_view_info),
                 ),
                 .replay_mode = proxy("replay_mode", game.ReplayMode, .{
@@ -255,7 +255,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                 ),
                 .view_info = pointer(
                     "view_info",
-                    game.MinimalViewInfo(game_id),
+                    game.ViewInfo(game_id),
                     @intFromPtr(&game_hooks.last_view_info),
                 ),
                 .replay_mode = proxy("replay_mode", game.ReplayMode, .{
@@ -343,7 +343,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
             ruleset: ?*const game.Ruleset(game_id) = null,
             battle_restart_code: ?*const game.BattleRestartCode(game_id) = null,
             cancel_requirements: ?*const game.CancelRequirements = null,
-            view_info: ?*const game.MinimalViewInfo(game_id) = null,
+            view_info: ?*const game.ViewInfo(game_id) = null,
             replay_mode: ?*const game.ReplayMode = null,
             depth_buffer: ?*const game.DepthBuffer(game_id) = null,
             camera_manager: ?*const game.CameraManager(game_id) = null,
