@@ -3,11 +3,11 @@ const sdk = @import("../../sdk/root.zig");
 const model = @import("../model/root.zig");
 
 pub const CameraDirector = struct {
-    mode: Mode = .game,
+    mode: Mode = .live,
 
     const Self = @This();
     pub const Mode = union(enum) {
-        game: void,
+        live: void,
         recording: void,
         free_look: FreeLook,
     };
@@ -48,10 +48,10 @@ pub const CameraDirector = struct {
         frame_maybe: ?*const model.Frame,
     ) void {
         if (!isAllowed(source_maybe)) {
-            self.mode = .game;
+            self.mode = .live;
         }
         camera_override.* = switch (self.mode) {
-            .game => null,
+            .live => null,
             .recording => if (frame_maybe) |frame| frame.camera else null,
             .free_look => |*free_look| free_look.camera,
         };
@@ -95,7 +95,7 @@ test "should set camera override to frame camera when mode is recording and sour
     try testing.expectEqual(camera, camera_override);
 }
 
-test "should switch mode to game and clear camera override when source is live game" {
+test "should switch mode to live and clear camera override when source is live game" {
     const camera = model.Camera{
         .position = .fromArray(.{ 1, 2, 3 }),
         .pitch = 4,
@@ -106,11 +106,11 @@ test "should switch mode to game and clear camera override when source is live g
     var camera_director = CameraDirector{ .mode = .recording };
     var camera_override: ?model.Camera = camera;
     camera_director.update(.live_game, &camera_override, &.{ .camera = camera });
-    try testing.expectEqual(CameraDirector.Mode.game, camera_director.mode);
+    try testing.expectEqual(CameraDirector.Mode.live, camera_director.mode);
     try testing.expectEqual(null, camera_override);
 }
 
-test "should switch mode to game and clear camera override when source is unknown" {
+test "should switch mode to live and clear camera override when source is unknown" {
     const camera = model.Camera{
         .position = .fromArray(.{ 1, 2, 3 }),
         .pitch = 4,
@@ -121,11 +121,11 @@ test "should switch mode to game and clear camera override when source is unknow
     var camera_director = CameraDirector{ .mode = .recording };
     var camera_override: ?model.Camera = camera;
     camera_director.update(null, &camera_override, &.{ .camera = camera });
-    try testing.expectEqual(CameraDirector.Mode.game, camera_director.mode);
+    try testing.expectEqual(CameraDirector.Mode.live, camera_director.mode);
     try testing.expectEqual(null, camera_override);
 }
 
-test "should clear camera override when mode is game" {
+test "should clear camera override when mode is live" {
     const camera = model.Camera{
         .position = .fromArray(.{ 1, 2, 3 }),
         .pitch = 4,
@@ -133,10 +133,10 @@ test "should clear camera override when mode is game" {
         .roll = 6,
         .horizontal_fov = 7,
     };
-    var camera_director = CameraDirector{ .mode = .game };
+    var camera_director = CameraDirector{ .mode = .live };
     var camera_override: ?model.Camera = camera;
     camera_director.update(.practice, &camera_override, &.{ .camera = camera });
-    try testing.expectEqual(CameraDirector.Mode.game, camera_director.mode);
+    try testing.expectEqual(CameraDirector.Mode.live, camera_director.mode);
     try testing.expectEqual(null, camera_override);
 }
 
@@ -210,7 +210,7 @@ test "should set camera override to free look camera when mode is free look and 
     try testing.expectEqual(camera, camera_override);
 }
 
-test "should switch mode to game and clear camera override when mode is free look and source is live game" {
+test "should switch mode to live and clear camera override when mode is free look and source is live game" {
     const camera = model.Camera{
         .position = .fromArray(.{ 1, 2, 3 }),
         .pitch = 4,
@@ -221,7 +221,7 @@ test "should switch mode to game and clear camera override when mode is free loo
     var camera_director = CameraDirector{ .mode = .{ .free_look = .{ .camera = camera } } };
     var camera_override: ?model.Camera = camera;
     camera_director.update(.live_game, &camera_override, &.{ .camera = camera });
-    try testing.expectEqual(CameraDirector.Mode.game, camera_director.mode);
+    try testing.expectEqual(CameraDirector.Mode.live, camera_director.mode);
     try testing.expectEqual(null, camera_override);
 }
 

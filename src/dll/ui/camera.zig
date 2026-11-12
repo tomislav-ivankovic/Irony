@@ -9,8 +9,8 @@ pub fn drawCameraMenuBar(camera_director: *core.CameraDirector, frame_maybe: ?*c
         return;
     }
     defer imgui.igEndMenu();
-    if (imgui.igMenuItem_Bool("Game Camera", "Ctrl + 1", camera_director.mode == .game, true)) {
-        camera_director.mode = .game;
+    if (imgui.igMenuItem_Bool("Live Camera", "Ctrl + 1", camera_director.mode == .live, true)) {
+        camera_director.mode = .live;
     }
     if (imgui.igMenuItem_Bool("Recorded Camera", "Ctrl + 2", camera_director.mode == .recording, true)) {
         camera_director.mode = .recording;
@@ -37,7 +37,7 @@ pub fn handleCameraShortcuts(camera_director: *core.CameraDirector, frame_maybe:
     }
     const route = imgui.ImGuiInputFlags_RouteGlobal;
     if (imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_1, route)) {
-        camera_director.mode = .game;
+        camera_director.mode = .live;
     }
     if (imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_2, route)) {
         camera_director.mode = .recording;
@@ -152,7 +152,7 @@ test "should change camera director mode when a camera is selected by clicking a
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
             ctx.setRef("Window");
-            try testing.expectEqual(core.CameraDirector.Mode.game, camera_director.mode);
+            try testing.expectEqual(core.CameraDirector.Mode.live, camera_director.mode);
             ctx.menuClick("Camera/Recorded Camera");
             try testing.expectEqual(core.CameraDirector.Mode.recording, camera_director.mode);
             ctx.menuClick("Camera/Free Camera");
@@ -163,8 +163,8 @@ test "should change camera director mode when a camera is selected by clicking a
                 .roll = 6,
                 .horizontal_fov = 7,
             } } }, camera_director.mode);
-            ctx.menuClick("Camera/Game Camera");
-            try testing.expectEqual(core.CameraDirector.Mode.game, camera_director.mode);
+            ctx.menuClick("Camera/Live Camera");
+            try testing.expectEqual(core.CameraDirector.Mode.live, camera_director.mode);
         }
     };
     const context = try sdk.ui.getTestingContext();
@@ -187,7 +187,7 @@ test "should change camera director mode when a camera keyboard shortcut is pres
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
-            try testing.expectEqual(core.CameraDirector.Mode.game, camera_director.mode);
+            try testing.expectEqual(core.CameraDirector.Mode.live, camera_director.mode);
             ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_2, 1);
             try testing.expectEqual(core.CameraDirector.Mode.recording, camera_director.mode);
             ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_3, 1);
@@ -199,7 +199,7 @@ test "should change camera director mode when a camera keyboard shortcut is pres
                 .horizontal_fov = 7,
             } } }, camera_director.mode);
             ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_1, 1);
-            try testing.expectEqual(core.CameraDirector.Mode.game, camera_director.mode);
+            try testing.expectEqual(core.CameraDirector.Mode.live, camera_director.mode);
         }
     };
     const context = try sdk.ui.getTestingContext();
