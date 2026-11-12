@@ -13,6 +13,7 @@ pub const Settings = struct {
     forward_directions: PlayerSettings(ForwardDirectionSettings) = .{ .mode = .same, .players = .{ .{}, .{} } },
     stage: StageSettings = .{},
     ingame_camera: IngameCameraSettings = .{},
+    free_look_camera: FreeLookCameraSettings = .{},
     measure_tool: MeasureToolSettings = .{},
     match_bar: MatchBarSettings = .{},
     details: DetailsSettings = .{},
@@ -319,6 +320,13 @@ pub const IngameCameraSettings = struct {
     color: sdk.math.Vec4 = .fromArray(.{ 0.15, 0.15, 0.15, 1.0 }),
     length: f32 = 800.0,
     thickness: f32 = 1.0,
+};
+
+pub const FreeLookCameraSettings = struct {
+    speed: f32 = 500.0,
+    speed_multiplier: f32 = 4.0,
+    look_sensitivity: f32 = 0.003,
+    vertical_fov: f32 = 40.0 * std.math.rad_per_deg,
 };
 
 pub const MeasureToolSettings = struct {

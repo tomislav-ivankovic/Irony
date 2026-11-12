@@ -53,6 +53,7 @@ pub const SkeletonSettings = @import("settings.zig").SkeletonSettings;
 pub const ForwardDirectionSettings = @import("settings.zig").ForwardDirectionSettings;
 pub const StageSettings = @import("settings.zig").StageSettings;
 pub const IngameCameraSettings = @import("settings.zig").IngameCameraSettings;
+pub const FreeLookCameraSettings = @import("settings.zig").FreeLookCameraSettings;
 pub const MeasureToolSettings = @import("settings.zig").MeasureToolSettings;
 pub const MatchBarSettings = @import("settings.zig").MatchBarSettings;
 pub const DetailsSettings = @import("settings.zig").DetailsSettings;

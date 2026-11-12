@@ -29,6 +29,10 @@ pub const CameraDirector = struct {
             self.camera.pitch = std.math.clamp(self.camera.pitch + pitch_delta, -max_pitch, max_pitch);
             self.camera.yaw = self.camera.yaw + yaw_delta;
         }
+
+        pub fn setVerticalFov(self: *FreeLook, vertical_fov: f32, aspect_ratio: f32) void {
+            self.camera.horizontal_fov = 2 * std.math.atan(std.math.tan(0.5 * vertical_fov) * aspect_ratio);
+        }
     };
 
     pub fn startFreeLook(self: *Self, frame_maybe: ?*const model.Frame) void {
@@ -284,4 +288,19 @@ test "should clamp free look camera pitch to just short of straight up or down" 
     free_look.rotate(-20, 0);
     try testing.expect(free_look.camera.pitch > -0.5 * std.math.pi);
     try testing.expect(free_look.camera.pitch < -0.49 * std.math.pi);
+}
+
+test "should set free look camera horizontal fov from vertical fov and aspect ratio" {
+    var free_look = CameraDirector.FreeLook{ .camera = .{
+        .position = .zero,
+        .pitch = 0,
+        .yaw = 0,
+        .roll = 0,
+        .horizontal_fov = 1,
+    } };
+    free_look.setVerticalFov(0.25 * std.math.pi, 1);
+    try testing.expectApproxEqAbs(0.25 * std.math.pi, free_look.camera.horizontal_fov, 0.0001);
+
+    free_look.setVerticalFov(2 * std.math.atan(@as(f32, 0.5)), 2);
+    try testing.expectApproxEqAbs(0.5 * std.math.pi, free_look.camera.horizontal_fov, 0.0001);
 }

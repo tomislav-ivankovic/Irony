@@ -59,12 +59,21 @@ fn hasFrameCamera(frame_maybe: ?*const model.Frame) bool {
     return frame.camera != null;
 }
 
-pub fn handleFreeLookCameraInput(camera_director: *core.CameraDirector, delta_time: f32) void {
+pub fn handleFreeLookCameraInput(
+    camera_director: *core.CameraDirector,
+    delta_time: f32,
+    settings: *const model.FreeLookCameraSettings,
+) void {
     const free_look = switch (camera_director.mode) {
         .free_look => |*free_look| free_look,
         else => return,
     };
     const io = imgui.igGetIO_Nil();
+    const display_size = io.*.DisplaySize;
+    if (display_size.x > 0 and display_size.y > 0) {
+        free_look.setVerticalFov(settings.vertical_fov, display_size.x / display_size.y);
+    }
+
     const is_looking = imgui.igIsMouseDown_Nil(imgui.ImGuiMouseButton_Right) and
         !io.*.MouseDownOwned[imgui.ImGuiMouseButton_Right];
     if (!is_looking) {
@@ -73,11 +82,7 @@ pub fn handleFreeLookCameraInput(camera_director: *core.CameraDirector, delta_ti
     imgui.igSetNextFrameWantCaptureMouse(true);
     routeFreeLookMovementKeys();
 
-    const movement_speed: f32 = 500.0;
-    const rotation_speed: f32 = 0.003;
-    const fast_movement_multiplier: f32 = 4.0;
-
-    free_look.rotate(-rotation_speed * io.*.MouseDelta.y, rotation_speed * io.*.MouseDelta.x);
+    free_look.rotate(-io.*.MouseDelta.y * settings.look_sensitivity, io.*.MouseDelta.x * settings.look_sensitivity);
 
     var direction = sdk.math.Vec3.zero;
     if (imgui.igIsKeyDown_Nil(imgui.ImGuiKey_W)) direction = direction.add(.plus_x);
@@ -93,8 +98,8 @@ pub fn handleFreeLookCameraInput(camera_director: *core.CameraDirector, delta_ti
     }
     const is_fast = imgui.igIsKeyDown_Nil(imgui.ImGuiKey_LeftShift) or imgui.igIsKeyDown_Nil(imgui.ImGuiKey_RightShift);
     const speed = switch (is_fast) {
-        false => movement_speed,
-        true => fast_movement_multiplier * movement_speed,
+        false => settings.speed,
+        true => settings.speed_multiplier * settings.speed,
     };
     free_look.move(direction.normalize().scale(speed * delta_time));
 }
@@ -239,6 +244,11 @@ test "should not reset free look camera when free camera keyboard shortcut is pr
 
 test "should rotate free look camera when dragging with right mouse button outside of windows" {
     const Test = struct {
+        const settings = model.FreeLookCameraSettings{
+            .speed = 500,
+            .speed_multiplier = 4,
+            .look_sensitivity = 0.005,
+        };
         var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{ .camera = .{
             .position = .zero,
             .pitch = 0,
@@ -247,7 +257,7 @@ test "should rotate free look camera when dragging with right mouse button outsi
         } } } };
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            handleFreeLookCameraInput(&camera_director, 0.1);
+            handleFreeLookCameraInput(&camera_director, 0.1, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -256,8 +266,8 @@ test "should rotate free look camera when dragging with right mouse button outsi
             ctx.mouseMoveToPos(.{ .x = 500, .y = 300 });
             ctx.mouseUp(imgui.ImGuiMouseButton_Right);
             const camera = &camera_director.mode.free_look.camera;
-            try testing.expectApproxEqAbs(0.3, camera.yaw, 0.0001);
-            try testing.expectApproxEqAbs(0.3, camera.pitch, 0.0001);
+            try testing.expectApproxEqAbs(0.5, camera.yaw, 0.0001);
+            try testing.expectApproxEqAbs(0.5, camera.pitch, 0.0001);
         }
     };
     const context = try sdk.ui.getTestingContext();
@@ -266,6 +276,11 @@ test "should rotate free look camera when dragging with right mouse button outsi
 
 test "should move free look camera forward when holding right mouse button and W outside of windows" {
     const Test = struct {
+        const settings = model.FreeLookCameraSettings{
+            .speed = 500,
+            .speed_multiplier = 4,
+            .look_sensitivity = 0.005,
+        };
         var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{ .camera = .{
             .position = .zero,
             .pitch = 0,
@@ -278,7 +293,7 @@ test "should move free look camera forward when holding right mouse button and W
             if (imgui.igIsKeyDown_Nil(imgui.ImGuiKey_W)) {
                 frames_with_key_down += 1;
             }
-            handleFreeLookCameraInput(&camera_director, 0.1);
+            handleFreeLookCameraInput(&camera_director, 0.1, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -301,6 +316,11 @@ test "should move free look camera forward when holding right mouse button and W
 
 test "should move free look camera four times faster when also holding shift" {
     const Test = struct {
+        const settings = model.FreeLookCameraSettings{
+            .speed = 500,
+            .speed_multiplier = 4,
+            .look_sensitivity = 0.005,
+        };
         var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{ .camera = .{
             .position = .zero,
             .pitch = 0,
@@ -313,7 +333,7 @@ test "should move free look camera four times faster when also holding shift" {
             if (imgui.igIsKeyDown_Nil(imgui.ImGuiKey_W) and imgui.igIsKeyDown_Nil(imgui.ImGuiKey_LeftShift)) {
                 frames_with_keys_down += 1;
             }
-            handleFreeLookCameraInput(&camera_director, 0.1);
+            handleFreeLookCameraInput(&camera_director, 0.1, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -338,6 +358,11 @@ test "should move free look camera four times faster when also holding shift" {
 
 test "should not move free look camera faster diagonally" {
     const Test = struct {
+        const settings = model.FreeLookCameraSettings{
+            .speed = 500,
+            .speed_multiplier = 4,
+            .look_sensitivity = 0.005,
+        };
         var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{ .camera = .{
             .position = .zero,
             .pitch = 0,
@@ -350,7 +375,7 @@ test "should not move free look camera faster diagonally" {
             if (imgui.igIsKeyDown_Nil(imgui.ImGuiKey_W) and imgui.igIsKeyDown_Nil(imgui.ImGuiKey_D)) {
                 frames_with_keys_down += 1;
             }
-            handleFreeLookCameraInput(&camera_director, 0.1);
+            handleFreeLookCameraInput(&camera_director, 0.1, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -378,6 +403,11 @@ test "should not move free look camera faster diagonally" {
 
 test "should not move free look camera when W is held without right mouse button" {
     const Test = struct {
+        const settings = model.FreeLookCameraSettings{
+            .speed = 500,
+            .speed_multiplier = 4,
+            .look_sensitivity = 0.005,
+        };
         var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{ .camera = .{
             .position = .zero,
             .pitch = 0,
@@ -386,7 +416,7 @@ test "should not move free look camera when W is held without right mouse button
         } } } };
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            handleFreeLookCameraInput(&camera_director, 0.1);
+            handleFreeLookCameraInput(&camera_director, 0.1, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -402,6 +432,11 @@ test "should not move free look camera when W is held without right mouse button
 
 test "should route movement keys only while holding right mouse button outside of windows" {
     const Test = struct {
+        const settings = model.FreeLookCameraSettings{
+            .speed = 500,
+            .speed_multiplier = 4,
+            .look_sensitivity = 0.005,
+        };
         var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{ .camera = .{
             .position = .zero,
             .pitch = 0,
@@ -410,7 +445,7 @@ test "should route movement keys only while holding right mouse button outside o
         } } } };
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            handleFreeLookCameraInput(&camera_director, 0.1);
+            handleFreeLookCameraInput(&camera_director, 0.1, &settings);
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
@@ -437,6 +472,11 @@ test "should route movement keys only while holding right mouse button outside o
 
 test "should take control + S away from other global shortcuts while holding right mouse button outside of windows" {
     const Test = struct {
+        const settings = model.FreeLookCameraSettings{
+            .speed = 500,
+            .speed_multiplier = 4,
+            .look_sensitivity = 0.005,
+        };
         var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{ .camera = .{
             .position = .zero,
             .pitch = 0,
@@ -446,7 +486,7 @@ test "should take control + S away from other global shortcuts while holding rig
         var times_other_shortcut_triggered: usize = 0;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
-            handleFreeLookCameraInput(&camera_director, 0.1);
+            handleFreeLookCameraInput(&camera_director, 0.1, &settings);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             if (imgui.igShortcut_Nil(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_S, imgui.ImGuiInputFlags_RouteGlobal)) {

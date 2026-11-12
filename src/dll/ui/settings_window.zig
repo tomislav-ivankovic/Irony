@@ -169,6 +169,14 @@ pub const SettingsWindow = struct {
                 }.call,
             },
             .{
+                .name = "Free Look Camera",
+                .content = struct {
+                    fn call(c: *const Context) void {
+                        drawFreeLookCameraSettings(&c.settings.free_look_camera, &default_settings.free_look_camera);
+                    }
+                }.call,
+            },
+            .{
                 .name = "Measure Tool",
                 .content = struct {
                     fn call(c: *const Context) void {
@@ -861,6 +869,34 @@ fn drawIngameCameraSettings(value: *model.IngameCameraSettings, default: *const 
     drawThickness("Thickness", &value.thickness, &default.thickness);
 }
 
+fn drawFreeLookCameraSettings(
+    value: *model.FreeLookCameraSettings,
+    default: *const model.FreeLookCameraSettings,
+) void {
+    drawFloat("Speed", &value.speed, &default.speed, 10, 0, 100000, "%.0f cm/s", 0);
+    drawScale("Speed Multiplier", &value.speed_multiplier, &default.speed_multiplier);
+    drawDisplayScaledFloat(
+        "Look Sensitivity",
+        &value.look_sensitivity,
+        &default.look_sensitivity,
+        std.math.deg_per_rad,
+        0.001,
+        0.001,
+        10,
+        "%.3f°/px",
+    );
+    drawDisplayScaledFloat(
+        "Vertical FOV",
+        &value.vertical_fov,
+        &default.vertical_fov,
+        std.math.deg_per_rad,
+        0.1,
+        1,
+        179,
+        "%.1f°",
+    );
+}
+
 fn drawMeasureToolSettings(value: *model.MeasureToolSettings, default: *const model.MeasureToolSettings) void {
     const drawColorAndThickness = struct {
         fn call(
@@ -1049,6 +1085,26 @@ fn drawFloat(
     imgui.igPopID();
     imgui.igSameLine(0, -1);
     _ = imgui.igDragFloat(label, value, step, min, max, format, flags);
+}
+
+fn drawDisplayScaledFloat(
+    label: [:0]const u8,
+    value: *f32,
+    default: *const f32,
+    display_scale: f32,
+    step: f32,
+    min: f32,
+    max: f32,
+    format: [:0]const u8,
+) void {
+    imgui.igPushID_Str(label);
+    drawDefaultButton(value, default);
+    imgui.igPopID();
+    imgui.igSameLine(0, -1);
+    var displayed_value = value.* * display_scale;
+    if (imgui.igDragFloat(label, &displayed_value, step, min, max, format, 0)) {
+        value.* = displayed_value / display_scale;
+    }
 }
 
 fn drawEnum(
@@ -2017,6 +2073,52 @@ test "ingame camera settings should function correctly" {
             try testing.expectEqual(123, current.thickness);
             ctx.itemClick("Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
             try testing.expectEqual(default.thickness, current.thickness);
+        }
+    };
+    Test.window = .init(testing.allocator);
+    defer Test.window.deinit();
+    Test.window.is_open = true;
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "free look camera settings should function correctly" {
+    const Test = struct {
+        const default_settings = model.Settings{};
+        var settings = default_settings;
+        var window: SettingsWindow = undefined;
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            window.draw(testing.io, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            const current = &settings.free_look_camera;
+            const default = &default_settings.free_look_camera;
+
+            ctx.setRef(SettingsWindow.name);
+            ctx.itemClick("**/Free Look Camera", imgui.ImGuiMouseButton_Left, 0);
+            ctx.setRef(ctx.windowInfo("layout/content", 0).Window);
+
+            ctx.itemInputValueFloat("Speed", 123);
+            try testing.expectEqual(123, current.speed);
+            ctx.itemClick("Speed/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.speed, current.speed);
+
+            ctx.itemInputValueFloat("Speed Multiplier", 12);
+            try testing.expectEqual(12, current.speed_multiplier);
+            ctx.itemClick("Speed Multiplier/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.speed_multiplier, current.speed_multiplier);
+
+            ctx.itemInputValueFloat("Look Sensitivity", 0.2);
+            try testing.expectApproxEqAbs(0.0034907, current.look_sensitivity, 0.0000001);
+            ctx.itemClick("Look Sensitivity/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.look_sensitivity, current.look_sensitivity);
+
+            ctx.itemInputValueFloat("Vertical FOV", 90);
+            try testing.expectApproxEqAbs(0.5 * std.math.pi, current.vertical_fov, 0.0001);
+            ctx.itemClick("Vertical FOV/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.vertical_fov, current.vertical_fov);
         }
     };
     Test.window = .init(testing.allocator);
