@@ -15,6 +15,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
         ruleset: Pointer(game.Ruleset(game_id)),
         battle_restart_code: Pointer(game.BattleRestartCode(game_id)),
         cancel_requirements: Pointer(game.CancelRequirements),
+        view_info: Pointer(game.MinimalViewInfo(game_id)),
         replay_mode: Proxy(game.ReplayMode),
         depth_buffer: Proxy(game.DepthBuffer(game_id)),
         camera_manager: Pointer(game.CameraManager(game_id)) = .fromPointer(null),
@@ -136,6 +137,11 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                     game.CancelRequirements,
                     @intFromPtr(&game_hooks.cancel_requirements),
                 ),
+                .view_info = pointer(
+                    "view_info",
+                    game.MinimalViewInfo(game_id),
+                    @intFromPtr(&game_hooks.last_view_info),
+                ),
                 .replay_mode = proxy("replay_mode", game.ReplayMode, .{
                     add(0x1, relativeOffset(i32, add(0x3, pattern(
                         cache,
@@ -247,6 +253,11 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                     game.CancelRequirements,
                     @intFromPtr(&game_hooks.cancel_requirements),
                 ),
+                .view_info = pointer(
+                    "view_info",
+                    game.MinimalViewInfo(game_id),
+                    @intFromPtr(&game_hooks.last_view_info),
+                ),
                 .replay_mode = proxy("replay_mode", game.ReplayMode, .{
                     0x0, // Continuously updated address.
                     0x98,
@@ -332,6 +343,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
             ruleset: ?*const game.Ruleset(game_id) = null,
             battle_restart_code: ?*const game.BattleRestartCode(game_id) = null,
             cancel_requirements: ?*const game.CancelRequirements = null,
+            view_info: ?*const game.MinimalViewInfo(game_id) = null,
             replay_mode: ?*const game.ReplayMode = null,
             depth_buffer: ?*const game.DepthBuffer(game_id) = null,
             camera_manager: ?*const game.CameraManager(game_id) = null,
@@ -367,6 +379,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                 .ruleset = .fromPointer(params.ruleset),
                 .battle_restart_code = .fromPointer(params.battle_restart_code),
                 .cancel_requirements = .fromPointer(params.cancel_requirements),
+                .view_info = .fromPointer(params.view_info),
                 .replay_mode = .fromPointer(params.replay_mode),
                 .depth_buffer = .fromPointer(params.depth_buffer),
                 .camera_manager = .fromPointer(params.camera_manager),

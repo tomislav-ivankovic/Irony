@@ -73,11 +73,11 @@ pub const Rendering = struct {
             }
         };
 
-        const camera = game_memory.camera_manager.toConstPointer() orelse return;
-        const world_to_clip = calculateWorldToClip(context, camera) orelse return;
+        const view_info = game_memory.view_info.toConstPointer() orelse return;
+        const world_to_clip = calculateWorldToClip(context, view_info) orelse return;
         const clip_to_world = world_to_clip.inverse() orelse return;
 
-        const camera_position = camera.position.convert();
+        const camera_position = view_info.position.convert();
         self.shapes.render(&self.triangles, &self.lines, camera_position);
         self.triangles.render(context, buffer_context, world_to_clip);
         self.lines.render(
@@ -92,9 +92,9 @@ pub const Rendering = struct {
         );
     }
 
-    fn calculateWorldToClip(context: *const dx.Context, camera: *const game.CameraManager(game_id)) ?sdk.math.Mat4 {
-        const position: sdk.math.Vec3 = camera.position.convert();
-        const rotation: sdk.math.Vec3 = camera.rotation.convert();
+    fn calculateWorldToClip(context: *const dx.Context, view_info: *const game.MinimalViewInfo(game_id)) ?sdk.math.Mat4 {
+        const position: sdk.math.Vec3 = view_info.position.convert();
+        const rotation: sdk.math.Vec3 = view_info.rotation.convert();
         const pitch = rotation.x();
         const yaw = rotation.y();
         const roll = rotation.z();
@@ -121,7 +121,7 @@ pub const Rendering = struct {
             }
             break :block @as(f32, @floatFromInt(size.x())) / @as(f32, @floatFromInt(size.y()));
         };
-        const horizontal_fov: f32 = camera.horizontal_fov.convert();
+        const horizontal_fov: f32 = view_info.horizontal_fov.convert();
         const vertical_fov = 2 * std.math.atan2(std.math.tan(0.5 * horizontal_fov), aspect_ratio);
         if (vertical_fov < 1 * std.math.rad_per_deg) {
             return null; // Camera not fully initialized.
