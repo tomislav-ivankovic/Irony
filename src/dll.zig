@@ -384,7 +384,7 @@ pub fn main() void {
                     if (event_bus) |*bus| {
                         const game_memory = memory_search_task.peek();
                         const memory_usage = main_allocator.total_requested_bytes;
-                        bus.draw(io, host_context, game_memory, memory_usage);
+                        bus.draw(io, host_context, game_memory, &game_hooks.camera_override, memory_usage);
                     }
                 },
                 .shutting_down => {

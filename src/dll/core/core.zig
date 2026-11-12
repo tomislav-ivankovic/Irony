@@ -21,6 +21,7 @@ pub const Core = struct {
     tool_assisted_input: core.ToolAssistedInput,
     controller: core.Controller,
     tai_recording_coordinator: core.TaiRecordingCoordinator,
+    camera_director: core.CameraDirector,
 
     const Self = @This();
 
@@ -36,6 +37,7 @@ pub const Core = struct {
             .tool_assisted_input = core.ToolAssistedInput.init(allocator),
             .controller = core.Controller.init(allocator),
             .tai_recording_coordinator = .{},
+            .camera_director = .{},
         };
     }
 
@@ -70,10 +72,20 @@ pub const Core = struct {
     pub fn update(
         self: *Self,
         delta_time: f32,
+        game_memory_maybe: ?*const game.Memory(build_info.game),
+        camera_override: *?model.Camera,
         context: anytype,
         processFrame: *const fn (context: @TypeOf(context), frame: *const model.Frame) void,
     ) void {
         self.automation.update(&self.controller);
         self.controller.update(delta_time, context, processFrame);
+        const source = if (game_memory_maybe) |game_memory| block: {
+            break :block game.Capturer(build_info.game).captureSource(
+                game_memory.match.toConstPointer(),
+                game_memory.replay_mode.toConstPointer(),
+                &game_memory.functions,
+            );
+        } else null;
+        self.camera_director.update(source, camera_override, self.controller.getCurrentFrame());
     }
 };

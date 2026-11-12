@@ -209,10 +209,11 @@ pub const EventBus = struct {
         io: std.Io,
         host_dx_context: *const dx.HostContext,
         game_memory_maybe: ?*game.Memory(build_info.game),
+        camera_override: *?model.Camera,
         memory_usage: usize,
     ) void {
         const delta_time = self.timer.measureDeltaTime(io);
-        self.core.update(delta_time, self, processFrame);
+        self.core.update(delta_time, game_memory_maybe, camera_override, self, processFrame);
         self.ui.update(io, delta_time, &self.core.controller);
 
         const managed_dx_context = if (self.managed_dx_context) |*context| context else return;

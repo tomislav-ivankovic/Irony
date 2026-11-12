@@ -83,6 +83,7 @@ test {
     _ = @import("dll/event_bus.zig");
 
     _ = @import("dll/core/automation.zig");
+    _ = @import("dll/core/camera_director.zig");
     _ = @import("dll/core/controller.zig");
     _ = @import("dll/core/core.zig");
     _ = @import("dll/core/hit_detector.zig");

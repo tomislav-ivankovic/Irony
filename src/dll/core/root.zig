@@ -1,5 +1,6 @@
 pub const AutomationConfig = @import("automation.zig").AutomationConfig;
 pub const Automation = @import("automation.zig").Automation;
+pub const CameraDirector = @import("camera_director.zig").CameraDirector;
 pub const Controller = @import("controller.zig").Controller;
 pub const Core = @import("core.zig").Core;
 pub const HitDetector = @import("hit_detector.zig").HitDetector;
