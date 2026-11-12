@@ -36,6 +36,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                 unrealFree: ?*const game.UnrealFreeFunction = null,
                 findUnrealClass: ?*const game.FindUnrealClassFunction = null,
                 findUnrealObjectsOfClass: ?*const game.FindUnrealObjectsOfClassFunction = null,
+                getViewPoint: ?*const game.GetViewPointFunction(.t7) = null,
             },
             .t8 => struct {
                 tick: ?*const game.TickFunction(.t8) = null,
@@ -48,6 +49,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                 getGlobalsMap: ?*const game.GetGlobalsMapFunction = null,
                 findGlobalAddress: ?*const game.FindGlobalAddressFunction = null,
                 isReplay: ?*const game.IsReplayFunction = null,
+                getViewPoint: ?*const game.GetViewPointFunction(.t8) = null,
             },
         };
         pub const UnrealClasses = struct {
@@ -188,6 +190,11 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                             "48 89 5C 24 18 48 89 74 24 20 55 57 41 54 41 56 41 57 48 8D 6C 24 D1 48 81 EC A0 00 00 00",
                         ),
                     ),
+                    .getViewPoint = functionPointer(
+                        "getViewPoint",
+                        game.GetViewPointFunction(.t7),
+                        pattern(cache, "48 89 5C 24 08 48 89 6C 24 20 56 57 41 56 48 83 EC 30 45 8B F0"),
+                    ),
                 },
             };
         }
@@ -305,6 +312,11 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                         "isReplay",
                         game.IsReplayFunction,
                         pattern(cache, "48 89 5C 24 08 57 48 83 EC 20 C6 01 00"),
+                    ),
+                    .getViewPoint = functionPointer(
+                        "getViewPoint",
+                        game.GetViewPointFunction(.t8),
+                        pattern(cache, "48 8B C4 48 89 58 10 48 89 68 18 56 57 41 57 48 81 EC B0 00 00 00 0F 29 70 D8"),
                     ),
                 },
             };

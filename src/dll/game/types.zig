@@ -653,25 +653,33 @@ pub fn DepthBuffer(comptime game_id: build_info.Game) type {
     };
 }
 
-// UE: APlayerCameraManager
-pub fn CameraManager(comptime game_id: build_info.Game) type {
-    const Float = switch (game_id) {
+fn UnrealFloat(comptime game_id: build_info.Game) type {
+    return switch (game_id) {
         .t7 => f32,
         .t8 => f64,
     };
-    const Fov = sdk.memory.ConvertedValue(
-        f32,
-        f32,
-        game.degreesToRadians(f32),
-        game.radiansToDegrees(f32),
-    );
-    const Vec = sdk.memory.ConvertedValue(
+}
+
+const UnrealFov = sdk.memory.ConvertedValue(
+    f32,
+    f32,
+    game.degreesToRadians(f32),
+    game.radiansToDegrees(f32),
+);
+
+fn UnrealVector(comptime game_id: build_info.Game) type {
+    const Float = UnrealFloat(game_id);
+    return sdk.memory.ConvertedValue(
         sdk.math.Vector(3, Float),
         sdk.math.Vec3,
         game.convertEachVectorElement(3, game.floatCast(Float, f32)),
         game.convertEachVectorElement(3, game.floatCast(f32, Float)),
     );
-    const Rot = sdk.memory.ConvertedValue(
+}
+
+fn UnrealRotator(comptime game_id: build_info.Game) type {
+    const Float = UnrealFloat(game_id);
+    return sdk.memory.ConvertedValue(
         sdk.math.Vector(3, Float),
         sdk.math.Vec3,
         game.convertEachVectorElement(3, game.composeConversions(.{
@@ -683,6 +691,32 @@ pub fn CameraManager(comptime game_id: build_info.Game) type {
             game.radiansToDegrees(Float),
         })),
     );
+}
+
+// UE: FMinimalViewInfo
+pub fn MinimalViewInfo(comptime game_id: build_info.Game) type {
+    const Vec = UnrealVector(game_id);
+    const Rot = UnrealRotator(game_id);
+    return switch (game_id) {
+        .t7 => sdk.memory.StructWithOffsets(null, &.{
+            field(0x00, "position", Vec, &.fromRaw(.zero)), // UE: Location
+            field(0x0C, "rotation", Rot, &.fromRaw(.zero)), // UE: Rotation
+            field(0x18, "horizontal_fov", UnrealFov, &.fromRaw(0)), // UE: FOV
+        }),
+        .t8 => sdk.memory.StructWithOffsets(null, &.{
+            field(0x00, "position", Vec, &.fromRaw(.zero)), // UE: Location
+            field(0x18, "rotation", Rot, &.fromRaw(.zero)), // UE: Rotation
+            field(0x30, "horizontal_fov", UnrealFov, &.fromRaw(0)), // UE: FOV
+            field(0x34, "desired_horizontal_fov", UnrealFov, &.fromRaw(0)), // UE: DesiredFOV
+        }),
+    };
+}
+
+// UE: APlayerCameraManager
+pub fn CameraManager(comptime game_id: build_info.Game) type {
+    const Fov = UnrealFov;
+    const Vec = UnrealVector(game_id);
+    const Rot = UnrealRotator(game_id);
     return switch (game_id) {
         .t7 => sdk.memory.StructWithOffsets(null, &.{
             field(0x39C, "horizontal_fov", Fov, &.fromRaw(0)), // UE: LockedFOV
@@ -1069,6 +1103,14 @@ pub const FindUnrealObjectsOfClassFunction = fn (
     exclude_flags: UnrealObjectFlags,
     exclusion_internal_flags: UnrealInternalObjectFlags,
 ) callconv(.c) void;
+
+// UE: ULocalPlayer::GetViewPoint
+pub fn GetViewPointFunction(comptime game_id: build_info.Game) type {
+    return switch (game_id) {
+        .t7 => fn (this: *const anyopaque, out_view_info: *MinimalViewInfo(.t7), stereo_pass: u32) callconv(.c) void,
+        .t8 => fn (this: *const anyopaque, out_view_info: *MinimalViewInfo(.t8)) callconv(.c) void,
+    };
+}
 
 // UE5: FD3D12DescriptorCache::SetRenderTargets
 pub const SetRenderTargetsFunction = fn (this: usize, param_1: usize, param_2: u32, param_3: usize) callconv(.c) void;
