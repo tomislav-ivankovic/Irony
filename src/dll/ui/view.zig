@@ -12,7 +12,7 @@ pub const ViewDirection = enum {
 };
 
 pub const View = struct {
-    camera: ui.Camera = .{},
+    camera: ui.ViewCamera = .{},
     hurt_cylinders: ui.HurtCylinders = .{},
     hit_lines: ui.HitLines = .{},
     measure_tool: ui.MeasureTool = .{},

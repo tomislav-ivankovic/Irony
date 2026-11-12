@@ -4,7 +4,7 @@ const sdk = @import("../../sdk/root.zig");
 const model = @import("../model/root.zig");
 const ui = @import("../ui/root.zig");
 
-pub const Camera = struct {
+pub const ViewCamera = struct {
     pending_windows: std.EnumArray(ui.ViewDirection, Window) = .initFill(.{}),
     windows: std.EnumArray(ui.ViewDirection, Window) = .initFill(.{}),
     follow_target: FollowTarget = .ingame_camera,
@@ -158,7 +158,7 @@ pub const Camera = struct {
             }
         }
 
-        if (!imgui.igBeginMenu("Camera", true)) {
+        if (!imgui.igBeginMenu("View", true)) {
             return;
         }
         defer imgui.igEndMenu();
@@ -369,32 +369,32 @@ const testing = std.testing;
 
 fn testPoint(x: f32, y: f32, z: f32) sdk.math.Vec3 {
     return .fromArray(.{
-        100 + (x * Camera.player_padding),
-        200 + (y * Camera.player_padding),
-        300 + (z * Camera.player_padding),
+        100 + (x * ViewCamera.player_padding),
+        200 + (y * ViewCamera.player_padding),
+        300 + (z * ViewCamera.player_padding),
     });
 }
 
 fn testSphere(x: f32, y: f32, z: f32, radius: f32) model.CollisionSphere {
     return .{
         .center = testPoint(x, y, z),
-        .radius = radius * Camera.player_padding,
+        .radius = radius * ViewCamera.player_padding,
     };
 }
 
 fn testCylinder(x: f32, y: f32, z: f32, radius: f32, half_height: f32) model.HurtCylinder {
     return .{ .cylinder = .{
         .center = testPoint(x, y, z),
-        .radius = radius * Camera.player_padding,
-        .half_height = half_height * Camera.player_padding,
+        .radius = radius * ViewCamera.player_padding,
+        .half_height = half_height * ViewCamera.player_padding,
     } };
 }
 
 fn stagePoint(x: f32, y: f32, z: f32) sdk.math.Vec3 {
     return .fromArray(.{
-        100 + (x * Camera.stage_padding),
-        200 + (y * Camera.stage_padding),
-        300 + (z * Camera.stage_padding),
+        100 + (x * ViewCamera.stage_padding),
+        200 + (y * ViewCamera.stage_padding),
+        300 + (z * ViewCamera.stage_padding),
     });
 }
 
@@ -465,7 +465,7 @@ test "should project correctly when follow target is players" {
                 }),
             },
         } };
-        var camera: Camera = .{ .follow_target = .players };
+        var camera: ViewCamera = .{ .follow_target = .players };
         var matrices: std.EnumArray(ui.ViewDirection, sdk.math.Mat4) = .initFill(.identity);
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
@@ -612,7 +612,7 @@ test "should project correctly when follow target is ingame camera" {
                 },
             },
         };
-        var camera: Camera = .{ .follow_target = .ingame_camera };
+        var camera: ViewCamera = .{ .follow_target = .ingame_camera };
         var matrices: std.EnumArray(ui.ViewDirection, sdk.math.Mat4) = .initFill(.identity);
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
@@ -693,7 +693,7 @@ test "should project correctly when follow target is ingame camera" {
 test "should project correctly when follow target is stage" {
     const Test = struct {
         const frame = model.Frame{
-            .floor_z = stagePoint(0, 0, 4 - (@as(f32, Camera.stage_vertical_offset) / Camera.stage_padding)).z(),
+            .floor_z = stagePoint(0, 0, 4 - (@as(f32, ViewCamera.stage_vertical_offset) / ViewCamera.stage_padding)).z(),
             .walls = .{
                 .buffer = .{
                     testWall(7, 1),
@@ -703,7 +703,7 @@ test "should project correctly when follow target is stage" {
                 .len = 3,
             },
         };
-        var camera: Camera = .{ .follow_target = .stage };
+        var camera: ViewCamera = .{ .follow_target = .stage };
         var matrices: std.EnumArray(ui.ViewDirection, sdk.math.Mat4) = .initFill(.identity);
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
@@ -841,7 +841,7 @@ test "should zoom in/out on the point that the mouse pointer is pointing when mo
                 }),
             },
         } };
-        var camera: Camera = .{ .follow_target = .players };
+        var camera: ViewCamera = .{ .follow_target = .players };
         var matrices: std.EnumArray(ui.ViewDirection, sdk.math.Mat4) = .initFill(.identity);
         var inverse_matrices: std.EnumArray(ui.ViewDirection, sdk.math.Mat4) = .initFill(.identity);
 
@@ -913,9 +913,9 @@ test "should zoom in/out on the point that the mouse pointer is pointing when mo
                 try testing.expectApproxEqAbs(world_point_1.x(), world_point_2.x(), 0.0001);
                 try testing.expectApproxEqAbs(world_point_1.y(), world_point_2.y(), 0.0001);
                 try testing.expectApproxEqAbs(world_point_1.z(), world_point_2.z(), 0.0001);
-                try testing.expectApproxEqAbs(Camera.zoom_speed * scale_1.x(), scale_2.x(), 0.0001);
-                try testing.expectApproxEqAbs(Camera.zoom_speed * scale_1.y(), scale_2.y(), 0.0001);
-                try testing.expectApproxEqAbs(Camera.zoom_speed * scale_1.z(), scale_2.z(), 0.0001);
+                try testing.expectApproxEqAbs(ViewCamera.zoom_speed * scale_1.x(), scale_2.x(), 0.0001);
+                try testing.expectApproxEqAbs(ViewCamera.zoom_speed * scale_1.y(), scale_2.y(), 0.0001);
+                try testing.expectApproxEqAbs(ViewCamera.zoom_speed * scale_1.z(), scale_2.z(), 0.0001);
                 ctx.mouseWheelY(-1);
                 const world_point_3 = case.screen_point.pointTransform(inverse_matrices.get(case.direction));
                 const scale_3 = sdk.math.Vec3.ones.directionTransform(matrices.get(case.direction));
@@ -992,7 +992,7 @@ test "should translate the view when the view is right mouse button dragged with
                 }),
             },
         } };
-        var camera: Camera = .{ .follow_target = .players };
+        var camera: ViewCamera = .{ .follow_target = .players };
         var inverse_matrices: std.EnumArray(ui.ViewDirection, sdk.math.Mat4) = .initFill(.identity);
         var cursor = imgui.ImGuiMouseCursor_None;
 
@@ -1146,7 +1146,7 @@ test "should rotate the view when the view is right mouse button dragged with a 
                 }),
             },
         } };
-        var camera: Camera = .{ .follow_target = .players };
+        var camera: ViewCamera = .{ .follow_target = .players };
         var matrices: std.EnumArray(ui.ViewDirection, sdk.math.Mat4) = .initFill(.identity);
         var inverse_matrices: std.EnumArray(ui.ViewDirection, sdk.math.Mat4) = .initFill(.identity);
         var cursor = imgui.ImGuiMouseCursor_None;
@@ -1268,7 +1268,7 @@ test "should rotate the view when the view is right mouse button dragged with a 
 
 test "should change follow target when a target is selected by clicking a menu bar button" {
     const Test = struct {
-        var camera: Camera = .{ .follow_target = .players };
+        var camera: ViewCamera = .{ .follow_target = .players };
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
@@ -1281,11 +1281,11 @@ test "should change follow target when a target is selected by clicking a menu b
         fn testFunction(ctx: sdk.ui.TestContext) !void {
             ctx.setRef("Window");
             try testing.expectEqual(.players, camera.follow_target);
-            ctx.menuClick("Camera/Follow Ingame Camera");
+            ctx.menuClick("View/Follow Ingame Camera");
             try testing.expectEqual(.ingame_camera, camera.follow_target);
-            ctx.menuClick("Camera/Follow Players");
+            ctx.menuClick("View/Follow Players");
             try testing.expectEqual(.players, camera.follow_target);
-            ctx.menuClick("Camera/Follow Stage Bounds");
+            ctx.menuClick("View/Follow Stage Bounds");
             try testing.expectEqual(.stage, camera.follow_target);
         }
     };
@@ -1295,7 +1295,7 @@ test "should change follow target when a target is selected by clicking a menu b
 
 test "should change follow target when a target keyboard shortcut is pressed" {
     const Test = struct {
-        var camera: Camera = .{ .follow_target = .players };
+        var camera: ViewCamera = .{ .follow_target = .players };
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
             _ = imgui.igBegin("Window", null, imgui.ImGuiWindowFlags_MenuBar);
@@ -1321,7 +1321,7 @@ test "should change follow target when a target keyboard shortcut is pressed" {
 
 test "should set transform to default value when menu bar reset view offset button is clicked" {
     const Test = struct {
-        var camera: Camera = .{ .transform = .{
+        var camera: ViewCamera = .{ .transform = .{
             .translation = .fromArray(.{ 1, 2, 3 }),
             .scale = 4,
             .rotation = 5,
@@ -1337,9 +1337,9 @@ test "should set transform to default value when menu bar reset view offset butt
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
             ctx.setRef("Window");
-            try testing.expect(!std.meta.eql(Camera.Transform{}, camera.transform));
-            ctx.menuClick("Camera/Reset View Offset");
-            try testing.expectEqual(Camera.Transform{}, camera.transform);
+            try testing.expect(!std.meta.eql(ViewCamera.Transform{}, camera.transform));
+            ctx.menuClick("View/Reset View Offset");
+            try testing.expectEqual(ViewCamera.Transform{}, camera.transform);
         }
     };
     const context = try sdk.ui.getTestingContext();

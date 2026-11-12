@@ -120,7 +120,6 @@ test {
     _ = @import("dll/rendering/triangles.zig");
 
     _ = @import("dll/ui/about_window.zig");
-    _ = @import("dll/ui/camera.zig");
     _ = @import("dll/ui/collision_spheres.zig");
     _ = @import("dll/ui/confirm_dialog.zig");
     _ = @import("dll/ui/control_hints.zig");
@@ -154,6 +153,7 @@ test {
     _ = @import("dll/ui/ui.zig");
     _ = @import("dll/ui/version_info.zig");
     _ = @import("dll/ui/view.zig");
+    _ = @import("dll/ui/view_camera.zig");
 
     _ = struct {
         test "should have no memory leaks after de-initializing UI testing context" {

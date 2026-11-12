@@ -1,6 +1,5 @@
 pub const AboutWindowConfig = @import("about_window.zig").AboutWindowConfig;
 pub const AboutWindow = @import("about_window.zig").AboutWindow;
-pub const Camera = @import("camera.zig").Camera;
 pub const drawCollisionSpheres = @import("collision_spheres.zig").drawCollisionSpheres;
 pub const ConfirmDialogAction = @import("confirm_dialog.zig").ConfirmDialogAction;
 pub const drawConfirmDialog = @import("confirm_dialog.zig").drawConfirmDialog;
@@ -48,3 +47,4 @@ pub const LatestVersion = @import("version_info.zig").LatestVersion;
 pub const drawVersionInfo = @import("version_info.zig").drawVersionInfo;
 pub const ViewDirection = @import("view.zig").ViewDirection;
 pub const View = @import("view.zig").View;
+pub const ViewCamera = @import("view_camera.zig").ViewCamera;
