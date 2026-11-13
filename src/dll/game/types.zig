@@ -564,6 +564,7 @@ pub const GlobalKey = enum(u32) {
     ruleset = 0xEDFEC9B0,
     replay = 0xEC52DADE,
     battle_control = 0xA9AC0036,
+    camera_root = 0x6672E1F3,
     _,
 };
 
@@ -646,6 +647,42 @@ pub const ReplayMode = enum(u8) {
     _,
 };
 
+pub fn CameraManager(comptime game_id: build_info.Game) type {
+    const Mode = Pointer(CameraMode);
+    return switch (game_id) {
+        .t7 => sdk.memory.StructWithOffsets(null, &.{
+            field(0x134, "active_mode_index", u32, &0),
+            field(0x150, "modes", [18]Mode, &@splat(.fromPointer(null))),
+        }),
+        .t8 => sdk.memory.StructWithOffsets(null, &.{
+            field(0x144, "active_mode_index", u32, &0),
+            field(0x160, "modes", [22]Mode, &@splat(.fromPointer(null))),
+        }),
+    };
+}
+
+pub const CameraMode = sdk.memory.StructWithOffsets(null, &.{
+    field(0x20, "view", CameraView, &.{}),
+});
+
+pub const CameraView = block: {
+    const Point = Converted(sdk.math.Vec3, sdk.math.Vec3, game.pointToUnrealSpace, game.pointFromUnrealSpace);
+    const Fov = Converted(f32, f32, game.degreesToRadians(f32), game.radiansToDegrees(f32));
+    const Roll = Converted(f32, f32, game.negate(f32), game.negate(f32));
+    break :block sdk.memory.StructWithOffsets(null, &.{
+        field(0x00, "position", Point, &.fromRaw(.zero)),
+        field(0x10, "look_at", Point, &.fromRaw(.zero)),
+        field(0x30, "horizontal_fov", Fov, &.fromRaw(0)),
+        field(0x34, "roll", Roll, &.fromRaw(0)),
+    });
+};
+
+// T8 only
+pub const CinematicController = sdk.memory.StructWithOffsets(null, &.{
+    field(0x80, "selected_cinematic_id", u32, &0),
+    field(0x90, "is_blending_back", Bool, &.false),
+});
+
 pub fn DepthBuffer(comptime game_id: build_info.Game) type {
     return switch (game_id) {
         .t7 => w32.ID3D11Texture2D,
@@ -653,33 +690,25 @@ pub fn DepthBuffer(comptime game_id: build_info.Game) type {
     };
 }
 
-fn UnrealFloat(comptime game_id: build_info.Game) type {
-    return switch (game_id) {
+// UE: FMinimalViewInfo
+pub fn ViewInfo(comptime game_id: build_info.Game) type {
+    const Float = switch (game_id) {
         .t7 => f32,
         .t8 => f64,
     };
-}
-
-const UnrealFov = sdk.memory.ConvertedValue(
-    f32,
-    f32,
-    game.degreesToRadians(f32),
-    game.radiansToDegrees(f32),
-);
-
-fn UnrealVector(comptime game_id: build_info.Game) type {
-    const Float = UnrealFloat(game_id);
-    return sdk.memory.ConvertedValue(
+    const Fov = sdk.memory.ConvertedValue(
+        f32,
+        f32,
+        game.degreesToRadians(f32),
+        game.radiansToDegrees(f32),
+    );
+    const Vec = sdk.memory.ConvertedValue(
         sdk.math.Vector(3, Float),
         sdk.math.Vec3,
         game.convertEachVectorElement(3, game.floatCast(Float, f32)),
         game.convertEachVectorElement(3, game.floatCast(f32, Float)),
     );
-}
-
-fn UnrealRotator(comptime game_id: build_info.Game) type {
-    const Float = UnrealFloat(game_id);
-    return sdk.memory.ConvertedValue(
+    const Rot = sdk.memory.ConvertedValue(
         sdk.math.Vector(3, Float),
         sdk.math.Vec3,
         game.convertEachVectorElement(3, game.composeConversions(.{
@@ -691,42 +720,17 @@ fn UnrealRotator(comptime game_id: build_info.Game) type {
             game.radiansToDegrees(Float),
         })),
     );
-}
-
-// UE: FMinimalViewInfo
-pub fn ViewInfo(comptime game_id: build_info.Game) type {
-    const Vec = UnrealVector(game_id);
-    const Rot = UnrealRotator(game_id);
     return switch (game_id) {
         .t7 => sdk.memory.StructWithOffsets(null, &.{
             field(0x00, "position", Vec, &.fromRaw(.zero)), // UE: Location
             field(0x0C, "rotation", Rot, &.fromRaw(.zero)), // UE: Rotation
-            field(0x18, "horizontal_fov", UnrealFov, &.fromRaw(0)), // UE: FOV
+            field(0x18, "horizontal_fov", Fov, &.fromRaw(0)), // UE: FOV
         }),
         .t8 => sdk.memory.StructWithOffsets(null, &.{
             field(0x00, "position", Vec, &.fromRaw(.zero)), // UE: Location
             field(0x18, "rotation", Rot, &.fromRaw(.zero)), // UE: Rotation
-            field(0x30, "horizontal_fov", UnrealFov, &.fromRaw(0)), // UE: FOV
-            field(0x34, "desired_horizontal_fov", UnrealFov, &.fromRaw(0)), // UE: DesiredFOV
-        }),
-    };
-}
-
-// UE: APlayerCameraManager
-pub fn CameraManager(comptime game_id: build_info.Game) type {
-    const Fov = UnrealFov;
-    const Vec = UnrealVector(game_id);
-    const Rot = UnrealRotator(game_id);
-    return switch (game_id) {
-        .t7 => sdk.memory.StructWithOffsets(null, &.{
-            field(0x39C, "horizontal_fov", Fov, &.fromRaw(0)), // UE: LockedFOV
-            field(0x3F8, "position", Vec, &.fromRaw(.zero)), // UE: CameraCache.POV.Location
-            field(0x404, "rotation", Rot, &.fromRaw(.zero)), // UE: CameraCache.POV.Rotation
-        }),
-        .t8 => sdk.memory.StructWithOffsets(null, &.{
-            field(0x02B4, "horizontal_fov", Fov, &.fromRaw(0)), // UE: LockedFOV
-            field(0x22D0, "position", Vec, &.fromRaw(.zero)), // UE: CameraCachePrivate.POV.Location
-            field(0x22E8, "rotation", Rot, &.fromRaw(.zero)), // UE: CameraCachePrivate.POV.Rotation
+            field(0x30, "horizontal_fov", Fov, &.fromRaw(0)), // UE: FOV
+            field(0x34, "desired_horizontal_fov", Fov, &.fromRaw(0)), // UE: DesiredFOV
         }),
     };
 }

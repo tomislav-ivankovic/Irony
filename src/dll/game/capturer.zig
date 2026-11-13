@@ -52,7 +52,9 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                 capturePlayer(&self.player_2_state, player_2, player_2_info, match_player_2, cancel_requirements),
             };
             const camera_manager = game_memory.camera_manager.toConstPointer();
-            const camera = captureCamera(camera_manager);
+            const cinematic_controller = game_memory.cinematic_controller.toConstPointer();
+            const original_view_info = game_memory.original_view_info.toConstPointer();
+            const camera = captureCamera(camera_manager, cinematic_controller, original_view_info);
             const floor_number = captureFloorNumber(player_1, player_2);
             const set_number = captureStageSetNumber(player_1, player_2);
             const walls = captureWalls(
@@ -214,17 +216,49 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
             }
         }
 
-        fn captureCamera(camera_manager: ?*const game.CameraManager(game_id)) ?model.Camera {
-            const camera = if (camera_manager) |c| c else return null;
-            const horizontal_fov = camera.horizontal_fov.convert();
-            const position = camera.position.convert();
-            const rotation = camera.rotation.convert();
+        fn captureCamera(
+            camera_manager: ?*const game.CameraManager(game_id),
+            cinematic_controller: ?*const game.CinematicController,
+            original_view_info: ?*const game.ViewInfo(game_id),
+        ) ?model.Camera {
+            const is_cinematic_active = block: {
+                const controller = cinematic_controller orelse break :block false;
+                break :block controller.selected_cinematic_id != 0 or controller.is_blending_back != .false;
+            };
+            return switch (is_cinematic_active) {
+                false => captureCameraManagerCamera(camera_manager),
+                true => captureViewInfoCamera(original_view_info),
+            };
+        }
+
+        fn captureViewInfoCamera(view_info_maybe: ?*const game.ViewInfo(game_id)) ?model.Camera {
+            const view_info = view_info_maybe orelse return null;
+            const rotation = view_info.rotation.convert();
             return .{
-                .position = position,
+                .position = view_info.position.convert(),
                 .pitch = rotation.x(),
                 .yaw = rotation.y(),
                 .roll = rotation.z(),
-                .horizontal_fov = horizontal_fov,
+                .horizontal_fov = view_info.horizontal_fov.convert(),
+            };
+        }
+
+        fn captureCameraManagerCamera(camera_manager_maybe: ?*const game.CameraManager(game_id)) ?model.Camera {
+            const camera_manager = camera_manager_maybe orelse return null;
+            const modes = &camera_manager.modes;
+            if (camera_manager.active_mode_index >= modes.len) {
+                return null;
+            }
+            const mode = modes[camera_manager.active_mode_index].toConstPointer() orelse return null;
+            const position = mode.view.position.convert();
+            const look_at = mode.view.look_at.convert();
+            const direction = look_at.subtract(position);
+            return .{
+                .position = position,
+                .pitch = std.math.atan2(direction.z(), direction.swizzle("xy").length()),
+                .yaw = std.math.atan2(direction.y(), direction.x()),
+                .roll = mode.view.roll.convert(),
+                .horizontal_fov = mode.view.horizontal_fov.convert(),
             };
         }
 
@@ -1614,35 +1648,103 @@ test "should capture floor Z correctly" {
     );
 }
 
-test "should capture camera correctly" {
+test "should capture camera from the active camera mode" {
     const gm = game.Memory(.t8).testingInit;
     var capturer = Capturer(.t8){};
-    try testing.expectEqual(
-        null,
-        capturer.captureFrame(&gm(.{
-            .camera_manager = null,
-        })).camera,
-    );
-    try testing.expectEqual(
-        model.Camera{
-            .position = .fromArray(.{ 1, 2, 3 }),
-            .pitch = 0.25 * std.math.pi,
-            .yaw = 0.5 * std.math.pi,
-            .roll = 0.75 * std.math.pi,
-            .horizontal_fov = 1.0 / 3.0 * std.math.pi,
-        },
-        capturer.captureFrame(&gm(.{
-            .camera_manager = &.{
-                .horizontal_fov = .fromConverted(1.0 / 3.0 * std.math.pi),
-                .position = .fromConverted(.fromArray(.{ 1, 2, 3 })),
-                .rotation = .fromConverted(.fromArray(.{
-                    0.25 * std.math.pi,
-                    0.5 * std.math.pi,
-                    0.75 * std.math.pi,
-                })),
-            },
-        })).camera,
-    );
+    const inactive_mode = game.CameraMode{ .view = .{
+        .position = .fromConverted(.fromArray(.{ 10, 20, 30 })),
+        .look_at = .fromConverted(.fromArray(.{ 40, 50, 60 })),
+        .horizontal_fov = .fromConverted(0.5 * std.math.pi),
+        .roll = .fromConverted(1),
+    } };
+    const active_mode = game.CameraMode{ .view = .{
+        .position = .fromConverted(.fromArray(.{ 1, 2, 3 })),
+        .look_at = .fromConverted(.fromArray(.{ 1, 3, 4 })),
+        .horizontal_fov = .fromConverted(1.0 / 3.0 * std.math.pi),
+        .roll = .fromConverted(0.5),
+    } };
+    var modes: [22]sdk.memory.Pointer(game.CameraMode) = @splat(.fromPointer(null));
+    modes[0] = .fromPointer(&inactive_mode);
+    modes[2] = .fromPointer(&active_mode);
+    const frame = capturer.captureFrame(&gm(.{
+        .camera_manager = &.{ .active_mode_index = 2, .modes = modes },
+    }));
+    try testing.expect(frame.camera != null);
+    try testing.expectEqual(1, frame.camera.?.position.x());
+    try testing.expectEqual(2, frame.camera.?.position.y());
+    try testing.expectEqual(3, frame.camera.?.position.z());
+    try testing.expectEqual(0.25 * std.math.pi, frame.camera.?.pitch);
+    try testing.expectEqual(0.5 * std.math.pi, frame.camera.?.yaw);
+    try testing.expectEqual(0.5, frame.camera.?.roll);
+    try testing.expectEqual(1.0 / 3.0 * std.math.pi, frame.camera.?.horizontal_fov);
+}
+
+test "should capture no camera when camera manager or active camera mode is missing" {
+    const gm = game.Memory(.t8).testingInit;
+    var capturer = Capturer(.t8){};
+    const mode = game.CameraMode{};
+    var modes: [22]sdk.memory.Pointer(game.CameraMode) = @splat(.fromPointer(null));
+    modes[0] = .fromPointer(&mode);
+    try testing.expectEqual(null, capturer.captureFrame(&gm(.{
+        .camera_manager = null,
+    })).camera);
+    try testing.expectEqual(null, capturer.captureFrame(&gm(.{
+        .camera_manager = &.{ .active_mode_index = 1, .modes = modes },
+    })).camera);
+    try testing.expectEqual(null, capturer.captureFrame(&gm(.{
+        .camera_manager = &.{ .active_mode_index = 22, .modes = modes },
+    })).camera);
+}
+
+test "should capture camera from original view info while a cinematic is active" {
+    const gm = game.Memory(.t8).testingInit;
+    var capturer = Capturer(.t8){};
+    const mode = game.CameraMode{ .view = .{
+        .position = .fromConverted(.fromArray(.{ 1, 2, 3 })),
+        .look_at = .fromConverted(.fromArray(.{ 1, 3, 4 })),
+        .horizontal_fov = .fromConverted(1.0 / 3.0 * std.math.pi),
+        .roll = .fromConverted(0.5),
+    } };
+    var modes: [22]sdk.memory.Pointer(game.CameraMode) = @splat(.fromPointer(null));
+    modes[0] = .fromPointer(&mode);
+    const camera_manager = game.CameraManager(.t8){ .active_mode_index = 0, .modes = modes };
+    const original_view_info = game.ViewInfo(.t8){
+        .position = .fromConverted(.fromArray(.{ 10, 20, 30 })),
+        .rotation = .fromConverted(.fromArray(.{ 0.1, 0.2, 0.3 })),
+        .horizontal_fov = .fromConverted(0.5 * std.math.pi),
+    };
+    const view_info_camera = model.Camera{
+        .position = .fromArray(.{ 10, 20, 30 }),
+        .pitch = 0.1,
+        .yaw = 0.2,
+        .roll = 0.3,
+        .horizontal_fov = 0.5 * std.math.pi,
+    };
+
+    const frame_1 = capturer.captureFrame(&gm(.{
+        .cinematic_controller = &.{ .selected_cinematic_id = 0x29, .is_blending_back = .false },
+        .camera_manager = &camera_manager,
+        .original_view_info = &original_view_info,
+    }));
+    try testing.expectEqual(view_info_camera, frame_1.camera);
+
+    const frame_2 = capturer.captureFrame(&gm(.{
+        .cinematic_controller = &.{ .selected_cinematic_id = 0, .is_blending_back = .true },
+        .camera_manager = &camera_manager,
+        .original_view_info = &original_view_info,
+    }));
+    try testing.expectEqual(view_info_camera, frame_2.camera);
+
+    const frame_3 = capturer.captureFrame(&gm(.{
+        .cinematic_controller = &.{ .selected_cinematic_id = 0, .is_blending_back = .false },
+        .camera_manager = &camera_manager,
+        .original_view_info = &original_view_info,
+    }));
+    try testing.expect(frame_3.camera != null);
+    try testing.expectEqual(1, frame_3.camera.?.position.x());
+    try testing.expectEqual(2, frame_3.camera.?.position.y());
+    try testing.expectEqual(3, frame_3.camera.?.position.z());
+    try testing.expectEqual(0.5, frame_3.camera.?.roll);
 }
 
 test "should capture left player id correctly" {

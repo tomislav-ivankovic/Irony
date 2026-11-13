@@ -18,7 +18,8 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
         pub var cancel_requirements: game.CancelRequirements = .{};
         pub var depth_buffer_address: usize = 0;
         pub var camera_override: ?model.Camera = null;
-        pub var last_view_info: game.ViewInfo(game_id) = .{};
+        pub var last_original_view_info: game.ViewInfo(game_id) = .{};
+        pub var last_overridden_view_info: game.ViewInfo(game_id) = .{};
 
         const TickHook = sdk.memory.Hook(game.TickFunction(game_id));
         const ProcessInputHook = sdk.memory.Hook(game.ProcessInputFunction(game_id));
@@ -467,6 +468,7 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
         }
 
         fn applyCameraOverride(out_view_info: *game.ViewInfo(game_id)) void {
+            last_original_view_info = out_view_info.*;
             if (camera_override) |*camera| {
                 out_view_info.position.setConverted(camera.position);
                 out_view_info.rotation.setConverted(.fromArray(.{ camera.pitch, camera.yaw, camera.roll }));
@@ -475,7 +477,7 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
                     out_view_info.desired_horizontal_fov.setConverted(camera.horizontal_fov);
                 }
             }
-            last_view_info = out_view_info.*;
+            last_overridden_view_info = out_view_info.*;
         }
     };
 }
@@ -948,7 +950,12 @@ test "should call original and apply camera override when get view point functio
         .position = .fromRaw(.fromArray(.{ 1, 2, 3 })),
         .rotation = .fromRaw(.fromArray(.{ 4, 5, 6 })),
         .horizontal_fov = .fromRaw(7),
-    }, hooks.last_view_info);
+    }, hooks.last_original_view_info);
+    try testing.expectEqual(ViewInfo{
+        .position = .fromRaw(.fromArray(.{ 1, 2, 3 })),
+        .rotation = .fromRaw(.fromArray(.{ 4, 5, 6 })),
+        .horizontal_fov = .fromRaw(7),
+    }, hooks.last_overridden_view_info);
 
     hooks.camera_override = .{
         .position = .fromArray(.{ 11, 12, 13 }),
@@ -966,7 +973,12 @@ test "should call original and apply camera override when get view point functio
     try testing.expectApproxEqAbs(180, view_info.rotation.raw.y(), 0.0001);
     try testing.expectApproxEqAbs(-45, view_info.rotation.raw.z(), 0.0001);
     try testing.expectApproxEqAbs(90, view_info.horizontal_fov.raw, 0.0001);
-    try testing.expectEqual(view_info, hooks.last_view_info);
+    try testing.expectEqual(ViewInfo{
+        .position = .fromRaw(.fromArray(.{ 1, 2, 3 })),
+        .rotation = .fromRaw(.fromArray(.{ 4, 5, 6 })),
+        .horizontal_fov = .fromRaw(7),
+    }, hooks.last_original_view_info);
+    try testing.expectEqual(view_info, hooks.last_overridden_view_info);
 }
 
 test "should call original and apply camera override when get view point function is called in T8" {
@@ -1014,7 +1026,13 @@ test "should call original and apply camera override when get view point functio
         .rotation = .fromRaw(.fromArray(.{ 4, 5, 6 })),
         .horizontal_fov = .fromRaw(7),
         .desired_horizontal_fov = .fromRaw(8),
-    }, hooks.last_view_info);
+    }, hooks.last_original_view_info);
+    try testing.expectEqual(ViewInfo{
+        .position = .fromRaw(.fromArray(.{ 1, 2, 3 })),
+        .rotation = .fromRaw(.fromArray(.{ 4, 5, 6 })),
+        .horizontal_fov = .fromRaw(7),
+        .desired_horizontal_fov = .fromRaw(8),
+    }, hooks.last_overridden_view_info);
 
     hooks.camera_override = .{
         .position = .fromArray(.{ 11, 12, 13 }),
@@ -1032,5 +1050,11 @@ test "should call original and apply camera override when get view point functio
     try testing.expectApproxEqAbs(-45, view_info.rotation.raw.z(), 0.0001);
     try testing.expectApproxEqAbs(90, view_info.horizontal_fov.raw, 0.0001);
     try testing.expectApproxEqAbs(90, view_info.desired_horizontal_fov.raw, 0.0001);
-    try testing.expectEqual(view_info, hooks.last_view_info);
+    try testing.expectEqual(ViewInfo{
+        .position = .fromRaw(.fromArray(.{ 1, 2, 3 })),
+        .rotation = .fromRaw(.fromArray(.{ 4, 5, 6 })),
+        .horizontal_fov = .fromRaw(7),
+        .desired_horizontal_fov = .fromRaw(8),
+    }, hooks.last_original_view_info);
+    try testing.expectEqual(view_info, hooks.last_overridden_view_info);
 }

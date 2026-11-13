@@ -73,7 +73,7 @@ pub const Rendering = struct {
             }
         };
 
-        const view_info = game_memory.view_info.toConstPointer() orelse return;
+        const view_info = game_memory.overridden_view_info.toConstPointer() orelse return;
         const world_to_clip = calculateWorldToClip(context, view_info) orelse return;
         const clip_to_world = world_to_clip.inverse() orelse return;
 

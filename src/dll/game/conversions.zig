@@ -50,6 +50,14 @@ pub fn radiansToDegrees(comptime Type: type) *const fn (value: Type) Type {
     }.floatCast;
 }
 
+pub fn negate(comptime Type: type) *const fn (value: Type) Type {
+    return struct {
+        fn negate(value: Type) Type {
+            return -value;
+        }
+    }.negate;
+}
+
 pub fn scaleToUnrealSpace(value: f32) f32 {
     return value * to_unreal_scale;
 }
@@ -483,6 +491,11 @@ test "bitShiftLeft and bitShiftRight should cancel out" {
 test "degreesToRadians and radiansToDegrees should cancel out" {
     try testing.expectApproxEqAbs(123, degreesToRadians(f32)(radiansToDegrees(f32)(123)), 0.000001);
     try testing.expectApproxEqAbs(456, radiansToDegrees(f64)(degreesToRadians(f64)(456)), 0.000001);
+}
+
+test "negate should return the value with the opposite sign" {
+    try testing.expectEqual(-0.5, negate(f32)(0.5));
+    try testing.expectEqual(123, negate(f64)(-123));
 }
 
 test "scaleToUnrealSpace and scaleFromUnrealSpace should cancel out" {

@@ -15,10 +15,12 @@ pub fn Memory(comptime game_id: build_info.Game) type {
         ruleset: Pointer(game.Ruleset(game_id)),
         battle_restart_code: Pointer(game.BattleRestartCode(game_id)),
         cancel_requirements: Pointer(game.CancelRequirements),
-        view_info: Pointer(game.ViewInfo(game_id)),
         replay_mode: Proxy(game.ReplayMode),
+        camera_manager: Proxy(game.CameraManager(game_id)),
+        cinematic_controller: Proxy(game.CinematicController),
         depth_buffer: Proxy(game.DepthBuffer(game_id)),
-        camera_manager: Pointer(game.CameraManager(game_id)) = .fromPointer(null),
+        original_view_info: Pointer(game.ViewInfo(game_id)),
+        overridden_view_info: Pointer(game.ViewInfo(game_id)),
         walls: Array(max_walls, Pointer(game.Wall(game_id)), .fromPointer(null), false) = .empty,
         floors: Array(max_floors, Pointer(game.Floor(game_id)), .fromPointer(null), false) = .empty,
         player_starts: Array(max_player_starts, Pointer(game.PlayerStart(game_id)), .fromPointer(null), false) = .empty,
@@ -54,7 +56,6 @@ pub fn Memory(comptime game_id: build_info.Game) type {
             },
         };
         pub const UnrealClasses = struct {
-            camera_manager: ?*const game.UnrealClass = null,
             wall: ?*const game.UnrealClass = null,
             photo_mode_wall: ?*const game.UnrealClass = null,
             floor: ?*const game.UnrealClass = null,
@@ -137,11 +138,6 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                     game.CancelRequirements,
                     @intFromPtr(&game_hooks.cancel_requirements),
                 ),
-                .view_info = pointer(
-                    "view_info",
-                    game.ViewInfo(game_id),
-                    @intFromPtr(&game_hooks.last_view_info),
-                ),
                 .replay_mode = proxy("replay_mode", game.ReplayMode, .{
                     add(0x1, relativeOffset(i32, add(0x3, pattern(
                         cache,
@@ -150,6 +146,11 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                     0x38,
                     0x58,
                 }),
+                .camera_manager = proxy("camera_manager", game.CameraManager(.t7), .{
+                    add(0x238, relativeOffset(i32, add(0x7, pattern(cache, "46 FF FF FF 48 8D 0D")))),
+                    0x0,
+                }),
+                .cinematic_controller = .fromPointer(null), // Doesn't exist in T7.
                 .depth_buffer = proxy("depth_buffer", game.DepthBuffer(.t7), .{
                     relativeOffset(i32, add(0x3, pattern(
                         cache,
@@ -159,6 +160,16 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                     0x98,
                     0x0,
                 }),
+                .original_view_info = pointer(
+                    "original_view_info",
+                    game.ViewInfo(game_id),
+                    @intFromPtr(&game_hooks.last_original_view_info),
+                ),
+                .overridden_view_info = pointer(
+                    "overridden_view_info",
+                    game.ViewInfo(game_id),
+                    @intFromPtr(&game_hooks.last_overridden_view_info),
+                ),
                 .functions = .{
                     .tick = functionPointer(
                         "tick",
@@ -253,20 +264,37 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                     game.CancelRequirements,
                     @intFromPtr(&game_hooks.cancel_requirements),
                 ),
-                .view_info = pointer(
-                    "view_info",
-                    game.ViewInfo(game_id),
-                    @intFromPtr(&game_hooks.last_view_info),
-                ),
                 .replay_mode = proxy("replay_mode", game.ReplayMode, .{
                     0x0, // Continuously updated address.
                     0x98,
                     0x70,
                 }),
+                .camera_manager = proxy("camera_manager", game.CameraManager(.t8), .{
+                    0x0, // Continuously updated address.
+                    0x0,
+                }),
+                .cinematic_controller = proxy("cinematic_controller", game.CinematicController, .{
+                    relativeOffset(i32, add(0x1A, pattern(
+                        cache,
+                        "48 8B C4 48 89 58 08 48 89 68 10 48 89 70 18 57 48 81 EC ?? 01 00 00 48 8B 1D",
+                    ))),
+                    0x20,
+                    0x0,
+                }),
                 .depth_buffer = proxy("depth_buffer", game.DepthBuffer(.t8), .{
                     @intFromPtr(&game_hooks.depth_buffer_address),
                     0x0,
                 }),
+                .original_view_info = pointer(
+                    "original_view_info",
+                    game.ViewInfo(game_id),
+                    @intFromPtr(&game_hooks.last_original_view_info),
+                ),
+                .overridden_view_info = pointer(
+                    "overridden_view_info",
+                    game.ViewInfo(game_id),
+                    @intFromPtr(&game_hooks.last_overridden_view_info),
+                ),
                 .functions = .{
                     .tick = functionPointer(
                         "tick",
@@ -343,10 +371,12 @@ pub fn Memory(comptime game_id: build_info.Game) type {
             ruleset: ?*const game.Ruleset(game_id) = null,
             battle_restart_code: ?*const game.BattleRestartCode(game_id) = null,
             cancel_requirements: ?*const game.CancelRequirements = null,
-            view_info: ?*const game.ViewInfo(game_id) = null,
             replay_mode: ?*const game.ReplayMode = null,
-            depth_buffer: ?*const game.DepthBuffer(game_id) = null,
             camera_manager: ?*const game.CameraManager(game_id) = null,
+            cinematic_controller: ?*const game.CinematicController = null,
+            depth_buffer: ?*const game.DepthBuffer(game_id) = null,
+            original_view_info: ?*const game.ViewInfo(game_id) = null,
+            overridden_view_info: ?*const game.ViewInfo(game_id) = null,
             walls: []const game.Wall(game_id) = &.{},
             floors: []const game.Floor(game_id) = &.{},
             player_starts: []const game.PlayerStart(game_id) = &.{},
@@ -379,10 +409,12 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                 .ruleset = .fromPointer(params.ruleset),
                 .battle_restart_code = .fromPointer(params.battle_restart_code),
                 .cancel_requirements = .fromPointer(params.cancel_requirements),
-                .view_info = .fromPointer(params.view_info),
                 .replay_mode = .fromPointer(params.replay_mode),
-                .depth_buffer = .fromPointer(params.depth_buffer),
                 .camera_manager = .fromPointer(params.camera_manager),
+                .cinematic_controller = .fromPointer(params.cinematic_controller),
+                .depth_buffer = .fromPointer(params.depth_buffer),
+                .original_view_info = .fromPointer(params.original_view_info),
+                .overridden_view_info = .fromPointer(params.overridden_view_info),
                 .walls = makePointerArray(game.Wall(game_id), max_walls, params.walls),
                 .floors = makePointerArray(game.Floor(game_id), max_floors, params.floors),
                 .player_starts = makePointerArray(game.PlayerStart(game_id), max_player_starts, params.player_starts),
@@ -394,7 +426,6 @@ pub fn Memory(comptime game_id: build_info.Game) type {
         pub fn updateAddresses(self: *Self) void {
             self.updateGlobalAddresses();
             self.updateUnrealClasses();
-            self.updateUnrealObjectAddress((&self.camera_manager), self.unreal_classes.camera_manager);
             self.updateUnrealObjectAddresses(&self.walls, self.unreal_classes.wall);
             self.updateUnrealObjectAddresses(&self.floors, self.unreal_classes.floor);
             self.updateUnrealObjectAddresses(&self.player_starts, self.unreal_classes.player_start);
@@ -412,6 +443,7 @@ pub fn Memory(comptime game_id: build_info.Game) type {
             self.ruleset.address = findGlobalAddress(map, &.ruleset);
             self.replay_mode.trail.buffer[0] = offsetGlobalAddress(findGlobalAddress(map, &.replay), 0x8);
             self.battle_restart_code.address = offsetGlobalAddress(findGlobalAddress(map, &.battle_control), 0x3C);
+            self.camera_manager.trail.buffer[0] = offsetGlobalAddress(findGlobalAddress(map, &.camera_root), 0x288);
         }
 
         fn offsetGlobalAddress(address: usize, offset: usize) usize {
@@ -425,9 +457,6 @@ pub fn Memory(comptime game_id: build_info.Game) type {
             const findClass = self.functions.findUnrealClass orelse return;
             const w = std.unicode.utf8ToUtf16LeStringLiteral;
             const classes = &self.unreal_classes;
-            if (classes.camera_manager == null) {
-                classes.camera_manager = findClass(null, w("/Script/Engine.PlayerCameraManager"), true);
-            }
             if (classes.wall == null) {
                 classes.wall = switch (game_id) {
                     .t7 => findClass(null, w("/Script/TekkenGame.TekkenWallActor"), true),
@@ -451,32 +480,6 @@ pub fn Memory(comptime game_id: build_info.Game) type {
                     .t7 => findClass(null, w("/Script/TekkenGame.TekkenFloorActor"), true),
                     .t8 => findClass(null, w("/Script/Polaris.PolarisStageFloorActor"), true),
                 };
-            }
-        }
-
-        fn updateUnrealObjectAddress(
-            self: *const Self,
-            address: anytype,
-            class_maybe: ?*const game.UnrealClass,
-        ) void {
-            if (@typeInfo(@TypeOf(address)) != .pointer) {
-                @compileError(
-                    "Expecting the address to be passed by reference but got type: " ++ @typeName(@TypeOf(address)),
-                );
-            }
-            const findUnrealObjectsOfClass = self.functions.findUnrealObjectsOfClass orelse return;
-            const unrealFree = self.functions.unrealFree orelse return;
-            const class = class_maybe orelse return;
-
-            var list = game.UnrealArrayList(*game.UnrealObject).empty;
-            findUnrealObjectsOfClass(class, &list, true, .default_exclude, .{});
-            defer list.free(unrealFree);
-
-            const slice = list.asSlice();
-            if (slice.len > 0) {
-                address.address = @intFromPtr(slice[0]);
-            } else {
-                address.address = 0;
             }
         }
 
