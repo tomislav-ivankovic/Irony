@@ -64,14 +64,14 @@ pub fn handleFreeLookCameraInput(
     delta_time: f32,
     settings: *const model.FreeLookCameraSettings,
 ) void {
-    const free_look = switch (camera_director.mode) {
-        .free_look => |*free_look| free_look,
+    const camera = switch (camera_director.mode) {
+        .free_look => |*camera| camera,
         else => return,
     };
     const io = imgui.igGetIO_Nil();
     const display_size = io.*.DisplaySize;
     if (display_size.x > 0 and display_size.y > 0) {
-        free_look.setVerticalFov(settings.vertical_fov, display_size.x / display_size.y);
+        camera.setVerticalFov(settings.vertical_fov, display_size.x / display_size.y);
     }
 
     const is_looking = imgui.igIsMouseDown_Nil(imgui.ImGuiMouseButton_Right) and
@@ -82,7 +82,7 @@ pub fn handleFreeLookCameraInput(
     imgui.igSetNextFrameWantCaptureMouse(true);
     routeFreeLookMovementKeys();
 
-    free_look.rotate(-io.*.MouseDelta.y * settings.look_sensitivity, io.*.MouseDelta.x * settings.look_sensitivity);
+    camera.rotatePitchYaw(-io.*.MouseDelta.y * settings.look_sensitivity, io.*.MouseDelta.x * settings.look_sensitivity);
 
     var direction = sdk.math.Vec3.zero;
     if (imgui.igIsKeyDown_Nil(imgui.ImGuiKey_W)) direction = direction.add(.plus_x);
@@ -101,7 +101,7 @@ pub fn handleFreeLookCameraInput(
         false => settings.speed,
         true => settings.speed_multiplier * settings.speed,
     };
-    free_look.move(direction.normalize().scale(speed * delta_time));
+    camera.translateLocal(direction.normalize().scale(speed * delta_time));
 }
 
 fn routeFreeLookMovementKeys() void {
@@ -156,13 +156,13 @@ test "should change camera director mode when a camera is selected by clicking a
             ctx.menuClick("Camera/Recorded Camera");
             try testing.expectEqual(core.CameraDirector.Mode.recording, camera_director.mode);
             ctx.menuClick("Camera/Free Camera");
-            try testing.expectEqual(core.CameraDirector.Mode{ .free_look = .{ .camera = .{
+            try testing.expectEqual(core.CameraDirector.Mode{ .free_look = .{
                 .position = .fromArray(.{ 1, 2, 3 }),
                 .pitch = 4,
                 .yaw = 5,
                 .roll = 6,
                 .horizontal_fov = 7,
-            } } }, camera_director.mode);
+            } }, camera_director.mode);
             ctx.menuClick("Camera/Live Camera");
             try testing.expectEqual(core.CameraDirector.Mode.live, camera_director.mode);
         }
@@ -191,13 +191,13 @@ test "should change camera director mode when a camera keyboard shortcut is pres
             ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_2, 1);
             try testing.expectEqual(core.CameraDirector.Mode.recording, camera_director.mode);
             ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_3, 1);
-            try testing.expectEqual(core.CameraDirector.Mode{ .free_look = .{ .camera = .{
+            try testing.expectEqual(core.CameraDirector.Mode{ .free_look = .{
                 .position = .fromArray(.{ 1, 2, 3 }),
                 .pitch = 4,
                 .yaw = 5,
                 .roll = 6,
                 .horizontal_fov = 7,
-            } } }, camera_director.mode);
+            } }, camera_director.mode);
             ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_1, 1);
             try testing.expectEqual(core.CameraDirector.Mode.live, camera_director.mode);
         }
@@ -215,13 +215,13 @@ test "should not reset free look camera when free camera keyboard shortcut is pr
             .roll = 6,
             .horizontal_fov = 7,
         } };
-        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{ .camera = .{
+        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{
             .position = .fromArray(.{ 8, 9, 10 }),
             .pitch = 11,
             .yaw = 12,
             .roll = 13,
             .horizontal_fov = 14,
-        } } } };
+        } } };
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
             handleCameraShortcuts(&camera_director, &frame);
@@ -229,13 +229,13 @@ test "should not reset free look camera when free camera keyboard shortcut is pr
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
             ctx.keyPress(imgui.ImGuiMod_Ctrl | imgui.ImGuiKey_3, 1);
-            try testing.expectEqual(core.CameraDirector.Mode{ .free_look = .{ .camera = .{
+            try testing.expectEqual(core.CameraDirector.Mode{ .free_look = .{
                 .position = .fromArray(.{ 8, 9, 10 }),
                 .pitch = 11,
                 .yaw = 12,
                 .roll = 13,
                 .horizontal_fov = 14,
-            } } }, camera_director.mode);
+            } }, camera_director.mode);
         }
     };
     const context = try sdk.ui.getTestingContext();
@@ -249,12 +249,12 @@ test "should rotate free look camera when dragging with right mouse button outsi
             .speed_multiplier = 4,
             .look_sensitivity = 0.005,
         };
-        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{ .camera = .{
+        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{
             .position = .zero,
             .pitch = 0,
             .yaw = 0,
             .roll = 0,
-        } } } };
+        } } };
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
             handleFreeLookCameraInput(&camera_director, 0.1, &settings);
@@ -265,7 +265,7 @@ test "should rotate free look camera when dragging with right mouse button outsi
             ctx.mouseDown(imgui.ImGuiMouseButton_Right);
             ctx.mouseMoveToPos(.{ .x = 500, .y = 300 });
             ctx.mouseUp(imgui.ImGuiMouseButton_Right);
-            const camera = &camera_director.mode.free_look.camera;
+            const camera = &camera_director.mode.free_look;
             try testing.expectApproxEqAbs(0.5, camera.yaw, 0.0001);
             try testing.expectApproxEqAbs(0.5, camera.pitch, 0.0001);
         }
@@ -281,12 +281,12 @@ test "should move free look camera forward when holding right mouse button and W
             .speed_multiplier = 4,
             .look_sensitivity = 0.005,
         };
-        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{ .camera = .{
+        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{
             .position = .zero,
             .pitch = 0,
             .yaw = 0,
             .roll = 0,
-        } } } };
+        } } };
         var frames_with_key_down: f32 = 0;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
@@ -303,7 +303,7 @@ test "should move free look camera forward when holding right mouse button and W
             ctx.yield(10);
             ctx.keyUp(imgui.ImGuiKey_W);
             ctx.mouseUp(imgui.ImGuiMouseButton_Right);
-            const camera = &camera_director.mode.free_look.camera;
+            const camera = &camera_director.mode.free_look;
             try testing.expect(frames_with_key_down > 0);
             try testing.expectApproxEqAbs(50 * frames_with_key_down, camera.position.x(), 0.01);
             try testing.expectApproxEqAbs(0, camera.position.y(), 0.0001);
@@ -321,12 +321,12 @@ test "should move free look camera four times faster when also holding shift" {
             .speed_multiplier = 4,
             .look_sensitivity = 0.005,
         };
-        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{ .camera = .{
+        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{
             .position = .zero,
             .pitch = 0,
             .yaw = 0,
             .roll = 0,
-        } } } };
+        } } };
         var frames_with_keys_down: f32 = 0;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
@@ -345,7 +345,7 @@ test "should move free look camera four times faster when also holding shift" {
             ctx.keyUp(imgui.ImGuiKey_W);
             ctx.keyUp(imgui.ImGuiKey_LeftShift);
             ctx.mouseUp(imgui.ImGuiMouseButton_Right);
-            const camera = &camera_director.mode.free_look.camera;
+            const camera = &camera_director.mode.free_look;
             try testing.expect(frames_with_keys_down > 0);
             try testing.expectApproxEqAbs(200 * frames_with_keys_down, camera.position.x(), 0.01);
             try testing.expectApproxEqAbs(0, camera.position.y(), 0.0001);
@@ -363,12 +363,12 @@ test "should not move free look camera faster diagonally" {
             .speed_multiplier = 4,
             .look_sensitivity = 0.005,
         };
-        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{ .camera = .{
+        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{
             .position = .zero,
             .pitch = 0,
             .yaw = 0,
             .roll = 0,
-        } } } };
+        } } };
         var frames_with_keys_down: f32 = 0;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
@@ -383,10 +383,10 @@ test "should not move free look camera faster diagonally" {
             ctx.mouseDown(imgui.ImGuiMouseButton_Right);
             ctx.keyDown(imgui.ImGuiKey_W);
             ctx.keyDown(imgui.ImGuiKey_D);
-            const start_position = camera_director.mode.free_look.camera.position;
+            const start_position = camera_director.mode.free_look.position;
             frames_with_keys_down = 0;
             ctx.yield(10);
-            const end_position = camera_director.mode.free_look.camera.position;
+            const end_position = camera_director.mode.free_look.position;
             ctx.keyUp(imgui.ImGuiKey_D);
             ctx.keyUp(imgui.ImGuiKey_W);
             ctx.mouseUp(imgui.ImGuiMouseButton_Right);
@@ -408,12 +408,12 @@ test "should not move free look camera when W is held without right mouse button
             .speed_multiplier = 4,
             .look_sensitivity = 0.005,
         };
-        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{ .camera = .{
+        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{
             .position = .zero,
             .pitch = 0,
             .yaw = 0,
             .roll = 0,
-        } } } };
+        } } };
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
             handleFreeLookCameraInput(&camera_director, 0.1, &settings);
@@ -423,7 +423,7 @@ test "should not move free look camera when W is held without right mouse button
             ctx.keyDown(imgui.ImGuiKey_W);
             ctx.yield(10);
             ctx.keyUp(imgui.ImGuiKey_W);
-            try testing.expectEqual(sdk.math.Vec3.zero, camera_director.mode.free_look.camera.position);
+            try testing.expectEqual(sdk.math.Vec3.zero, camera_director.mode.free_look.position);
         }
     };
     const context = try sdk.ui.getTestingContext();
@@ -437,12 +437,12 @@ test "should route movement keys only while holding right mouse button outside o
             .speed_multiplier = 4,
             .look_sensitivity = 0.005,
         };
-        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{ .camera = .{
+        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{
             .position = .zero,
             .pitch = 0,
             .yaw = 0,
             .roll = 0,
-        } } } };
+        } } };
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
             handleFreeLookCameraInput(&camera_director, 0.1, &settings);
@@ -477,12 +477,12 @@ test "should take control + S away from other global shortcuts while holding rig
             .speed_multiplier = 4,
             .look_sensitivity = 0.005,
         };
-        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{ .camera = .{
+        var camera_director: core.CameraDirector = .{ .mode = .{ .free_look = .{
             .position = .zero,
             .pitch = 0,
             .yaw = 0,
             .roll = 0,
-        } } } };
+        } } };
         var times_other_shortcut_triggered: usize = 0;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {

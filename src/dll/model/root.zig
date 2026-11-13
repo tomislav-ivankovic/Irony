@@ -1,3 +1,4 @@
+pub const Camera = @import("camera.zig").Camera;
 pub const CollisionSphereId = @import("collision_sphere.zig").CollisionSphereId;
 pub const CollisionSphere = @import("collision_sphere.zig").CollisionSphere;
 pub const CollisionSpheres = @import("collision_sphere.zig").CollisionSpheres;
@@ -32,7 +33,6 @@ pub const Rage = @import("misc.zig").Rage;
 pub const Heat = @import("misc.zig").Heat;
 pub const HeatTag = @import("misc.zig").HeatTag;
 pub const ActivatedHeat = @import("misc.zig").ActivatedHeat;
-pub const Camera = @import("misc.zig").Camera;
 pub const Source = @import("misc.zig").Source;
 pub const MatchPhase = @import("misc.zig").MatchPhase;
 pub const PlayerId = @import("player.zig").PlayerId;
