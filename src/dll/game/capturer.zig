@@ -77,7 +77,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                     .t8 => .t8,
                 },
                 .game_version = captureGameVersion(game_version),
-                .source = captureSource(match, replay_mode, &game_memory.functions),
+                .source = captureSource(player_1, player_2, match, replay_mode, &game_memory.functions),
                 .match_phase = captureMatchPhase(match),
                 .rounds_needed_to_win = if (ruleset) |r| r.rounds_needed_to_win else null,
                 .frames_since_round_start = captureFramesSinceRoundStart(player_1, player_2),
@@ -107,10 +107,15 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
         }
 
         pub fn captureSource(
+            player_1: ?*const GamePlayer,
+            player_2: ?*const GamePlayer,
             match_maybe: ?*const game.Match(game_id),
             replay_mode_maybe: ?*const game.ReplayMode,
             functions: *const game.Memory(game_id).Functions,
         ) ?model.Source {
+            if (player_1 == null and player_2 == null) {
+                return null; // Not in a match.
+            }
             if (match_maybe) |match| {
                 switch (match.phase) {
                     .practice_mode, .move_showcase => return .practice,
@@ -1327,6 +1332,8 @@ test "should capture source correctly in T7" {
     try testing.expectEqual(
         null,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = null,
             .replay_mode = null,
         })).source,
@@ -1334,6 +1341,8 @@ test "should capture source correctly in T7" {
     try testing.expectEqual(
         .practice,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = &.{ .phase = .practice_mode },
             .replay_mode = null,
         })).source,
@@ -1341,6 +1350,8 @@ test "should capture source correctly in T7" {
     try testing.expectEqual(
         .practice,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = &.{ .phase = .move_showcase },
             .replay_mode = null,
         })).source,
@@ -1348,6 +1359,8 @@ test "should capture source correctly in T7" {
     try testing.expectEqual(
         .practice,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = &.{ .phase = .practice_mode },
             .replay_mode = &.loading,
         })).source,
@@ -1355,6 +1368,8 @@ test "should capture source correctly in T7" {
     try testing.expectEqual(
         .replay_loading,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = null,
             .replay_mode = &.loading,
         })).source,
@@ -1362,6 +1377,8 @@ test "should capture source correctly in T7" {
     try testing.expectEqual(
         .replay_loading,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = &.{ .phase = .mid_round },
             .replay_mode = &.loading,
         })).source,
@@ -1369,6 +1386,8 @@ test "should capture source correctly in T7" {
     try testing.expectEqual(
         .replay_playback,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = null,
             .replay_mode = &.playback,
         })).source,
@@ -1376,6 +1395,8 @@ test "should capture source correctly in T7" {
     try testing.expectEqual(
         .replay_playback,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = &.{ .phase = .mid_round },
             .replay_mode = &.playback,
         })).source,
@@ -1383,7 +1404,36 @@ test "should capture source correctly in T7" {
     try testing.expectEqual(
         .live_game,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = &.{ .phase = .mid_round },
+            .replay_mode = null,
+        })).source,
+    );
+    try testing.expectEqual(
+        null,
+        capturer.captureFrame(&gm(.{
+            .player_1 = null,
+            .player_2 = null,
+            .match = &.{ .phase = .practice_mode },
+            .replay_mode = &.playback,
+        })).source,
+    );
+    try testing.expectEqual(
+        .practice,
+        capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = null,
+            .match = &.{ .phase = .practice_mode },
+            .replay_mode = null,
+        })).source,
+    );
+    try testing.expectEqual(
+        .practice,
+        capturer.captureFrame(&gm(.{
+            .player_1 = null,
+            .player_2 = &.{},
+            .match = &.{ .phase = .practice_mode },
             .replay_mode = null,
         })).source,
     );
@@ -1409,6 +1459,8 @@ test "should capture source correctly in T8" {
     try testing.expectEqual(
         null,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = null,
             .functions = .{ .isReplay = null },
         })).source,
@@ -1416,6 +1468,8 @@ test "should capture source correctly in T8" {
     try testing.expectEqual(
         null,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = null,
             .functions = .{ .isReplay = Functions.notReplay },
         })).source,
@@ -1423,6 +1477,8 @@ test "should capture source correctly in T8" {
     try testing.expectEqual(
         null,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = &.{ .phase = .mid_round },
             .functions = .{ .isReplay = null },
         })).source,
@@ -1430,6 +1486,8 @@ test "should capture source correctly in T8" {
     try testing.expectEqual(
         .practice,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = &.{ .phase = .practice_mode },
             .functions = .{ .isReplay = null },
         })).source,
@@ -1437,6 +1495,8 @@ test "should capture source correctly in T8" {
     try testing.expectEqual(
         .practice,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = &.{ .phase = .practice_mode },
             .functions = .{ .isReplay = Functions.replayLoading },
         })).source,
@@ -1444,6 +1504,8 @@ test "should capture source correctly in T8" {
     try testing.expectEqual(
         .practice,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = &.{ .phase = .move_showcase },
             .functions = .{ .isReplay = null },
         })).source,
@@ -1451,6 +1513,8 @@ test "should capture source correctly in T8" {
     try testing.expectEqual(
         .practice,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = &.{ .phase = .move_showcase },
             .functions = .{ .isReplay = Functions.replayPlayback },
         })).source,
@@ -1458,6 +1522,8 @@ test "should capture source correctly in T8" {
     try testing.expectEqual(
         .live_game,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = &.{ .phase = .mid_round },
             .functions = .{ .isReplay = Functions.notReplay },
         })).source,
@@ -1465,6 +1531,8 @@ test "should capture source correctly in T8" {
     try testing.expectEqual(
         .replay_loading,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
             .match = &.{ .phase = .mid_round },
             .functions = .{ .isReplay = Functions.replayLoading },
         })).source,
@@ -1472,6 +1540,17 @@ test "should capture source correctly in T8" {
     try testing.expectEqual(
         .replay_playback,
         capturer.captureFrame(&gm(.{
+            .player_1 = &.{},
+            .player_2 = &.{},
+            .match = &.{ .phase = .mid_round },
+            .functions = .{ .isReplay = Functions.replayPlayback },
+        })).source,
+    );
+    try testing.expectEqual(
+        null,
+        capturer.captureFrame(&gm(.{
+            .player_1 = null,
+            .player_2 = null,
             .match = &.{ .phase = .mid_round },
             .functions = .{ .isReplay = Functions.replayPlayback },
         })).source,

@@ -133,6 +133,8 @@ pub const Rendering = struct {
 
     fn isAllowedToRender(game_memory: *const game.Memory(game_id)) bool {
         const source = game.Capturer(game_id).captureSource(
+            game_memory.player_1.toConstPointer(),
+            game_memory.player_2.toConstPointer(),
             game_memory.match.toConstPointer(),
             game_memory.replay_mode.toConstPointer(),
             &game_memory.functions,

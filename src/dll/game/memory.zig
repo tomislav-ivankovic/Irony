@@ -90,11 +90,11 @@ pub fn Memory(comptime game_id: build_info.Game) type {
             return .{
                 .game_version = .fromPointer("5.10" ++ .{0}),
                 .player_1 = proxy("player_1", game.Player(.t7), .{
-                    relativeOffset(i32, add(0x3, pattern(cache, "48 8B 15 ?? ?? ?? ?? 44 8B C3"))),
+                    relativeOffset(i32, add(0x3, pattern(cache, "48 8B 35 ?? ?? ?? ?? 8B D9 48 8B"))),
                     0x0,
                 }),
                 .player_2 = proxy("player_2", game.Player(.t7), .{
-                    relativeOffset(i32, add(0xD, pattern(cache, "48 8B 15 ?? ?? ?? ?? 44 8B C3"))),
+                    relativeOffset(i32, add(0xC, pattern(cache, "48 8B 35 ?? ?? ?? ?? 8B D9 48 8B"))),
                     0x0,
                 }),
                 .main_player_info = proxy("main_player_info", game.PlayerInfo(.t7), .{

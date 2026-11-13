@@ -81,6 +81,8 @@ pub const Core = struct {
         self.controller.update(delta_time, context, processFrame);
         const source = if (game_memory_maybe) |game_memory| block: {
             break :block game.Capturer(build_info.game).captureSource(
+                game_memory.player_1.toConstPointer(),
+                game_memory.player_2.toConstPointer(),
                 game_memory.match.toConstPointer(),
                 game_memory.replay_mode.toConstPointer(),
                 &game_memory.functions,
