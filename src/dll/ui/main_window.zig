@@ -164,7 +164,7 @@ pub const MainWindow = struct {
 
         self.file_menu.draw(io, file_dialog_context, controller, &ui_instance.is_open);
         self.view.camera.drawMenuBar();
-        ui.drawCameraMenuBar(camera_director, controller.getCurrentFrame());
+        ui.drawCameraMenuBar(camera_director);
         drawWindowMenu(ui_instance);
         drawHelpMenu(ui_instance);
 

@@ -98,7 +98,7 @@ pub const Ui = struct {
         self.handleOpenKey();
         self.main_window.handleKeybinds(controller);
         ui.TaiWindow.handleKeybinds(tai);
-        ui.handleCameraShortcuts(camera_director, controller.getCurrentFrame());
+        ui.handleCameraShortcuts(camera_director);
         ui.handleFreeLookCameraInput(camera_director, delta_time, &settings.free_look_camera);
 
         if (!self.is_open) {
