@@ -71,12 +71,12 @@ pub fn handleFreeLookCameraInput(
     camera.rotatePitchYaw(-io.*.MouseDelta.y * settings.look_sensitivity, io.*.MouseDelta.x * settings.look_sensitivity);
 
     var direction = sdk.math.Vec3.zero;
-    if (imgui.igIsKeyDown_Nil(imgui.ImGuiKey_W)) direction = direction.add(.plus_x);
-    if (imgui.igIsKeyDown_Nil(imgui.ImGuiKey_S)) direction = direction.add(.minus_x);
-    if (imgui.igIsKeyDown_Nil(imgui.ImGuiKey_D)) direction = direction.add(.plus_y);
-    if (imgui.igIsKeyDown_Nil(imgui.ImGuiKey_A)) direction = direction.add(.minus_y);
-    if (imgui.igIsKeyDown_Nil(imgui.ImGuiKey_Space)) direction = direction.add(.plus_z);
-    if (imgui.igIsKeyDown_Nil(imgui.ImGuiKey_LeftCtrl) or imgui.igIsKeyDown_Nil(imgui.ImGuiKey_RightCtrl)) {
+    if (isMovementKeyDown(imgui.ImGuiKey_W)) direction = direction.add(.plus_x);
+    if (isMovementKeyDown(imgui.ImGuiKey_S)) direction = direction.add(.minus_x);
+    if (isMovementKeyDown(imgui.ImGuiKey_D)) direction = direction.add(.plus_y);
+    if (isMovementKeyDown(imgui.ImGuiKey_A)) direction = direction.add(.minus_y);
+    if (isMovementKeyDown(imgui.ImGuiKey_Space)) direction = direction.add(.plus_z);
+    if (isMovementKeyDown(imgui.ImGuiKey_LeftCtrl) or isMovementKeyDown(imgui.ImGuiKey_RightCtrl)) {
         direction = direction.add(.minus_z);
     }
     if (direction.isZero(0)) {
@@ -88,6 +88,12 @@ pub fn handleFreeLookCameraInput(
         true => settings.speed_multiplier * settings.speed,
     };
     camera.translateLocal(direction.normalize().scale(speed * delta_time));
+}
+
+fn isMovementKeyDown(key: imgui.ImGuiKey) bool {
+    const key_data = imgui.igGetKeyData_Key(key);
+    const mouse_down_duration = imgui.igGetIO_Nil().*.MouseDownDuration[imgui.ImGuiMouseButton_Right];
+    return key_data.*.Down and key_data.*.DownDuration <= mouse_down_duration;
 }
 
 fn routeFreeLookMovementKeys() void {
@@ -366,6 +372,43 @@ test "should not move free look camera when W is held without right mouse button
         fn testFunction(ctx: sdk.ui.TestContext) !void {
             ctx.keyDown(imgui.ImGuiKey_W);
             ctx.yield(10);
+            ctx.keyUp(imgui.ImGuiKey_W);
+            try testing.expectEqual(sdk.math.Vec3.zero, camera_director.free_look_camera.?.position);
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should not move free look camera when W was pressed before right mouse button" {
+    const Test = struct {
+        const settings = model.FreeLookCameraSettings{
+            .speed = 500,
+            .speed_multiplier = 4,
+            .look_sensitivity = 0.005,
+        };
+        var camera_director: core.CameraDirector = .{
+            .mode = .free_look,
+            .free_look_camera = .{
+                .position = .zero,
+                .pitch = 0,
+                .yaw = 0,
+                .roll = 0,
+            },
+            .is_allowed = true,
+        };
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            handleFreeLookCameraInput(&camera_director, 0.1, &settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.mouseMoveToPos(.{ .x = 400, .y = 400 });
+            ctx.keyDown(imgui.ImGuiKey_W);
+            ctx.yield(2);
+            ctx.mouseDown(imgui.ImGuiMouseButton_Right);
+            ctx.yield(10);
+            ctx.mouseUp(imgui.ImGuiMouseButton_Right);
             ctx.keyUp(imgui.ImGuiKey_W);
             try testing.expectEqual(sdk.math.Vec3.zero, camera_director.free_look_camera.?.position);
         }
