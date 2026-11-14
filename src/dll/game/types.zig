@@ -622,7 +622,7 @@ pub fn MatchPlayer(comptime game_id: build_info.Game) type {
             field(0x6C, "combo_hits", u32, &0),
             field(0x7C, "combo_damage", u32, &0),
         }),
-        .t8 => sdk.memory.StructWithOffsets(0x160, &.{
+        .t8 => sdk.memory.StructWithOffsets(0x180, &.{
             field(0x00, "rounds_won", u32, &0),
             field(0x90, "combo_hits", u32, &0),
             field(0xA0, "combo_damage", u32, &0),
