@@ -54,7 +54,8 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
             const camera_manager = game_memory.camera_manager.toConstPointer();
             const cinematic_controller = game_memory.cinematic_controller.toConstPointer();
             const original_view_info = game_memory.original_view_info.toConstPointer();
-            const camera = captureCamera(camera_manager, cinematic_controller, original_view_info);
+            const source = captureSource(player_1, player_2, match, replay_mode, &game_memory.functions);
+            const camera = captureCamera(source, camera_manager, cinematic_controller, original_view_info);
             const floor_number = captureFloorNumber(player_1, player_2);
             const set_number = captureStageSetNumber(player_1, player_2);
             const walls = captureWalls(
@@ -77,7 +78,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                     .t8 => .t8,
                 },
                 .game_version = captureGameVersion(game_version),
-                .source = captureSource(player_1, player_2, match, replay_mode, &game_memory.functions),
+                .source = source,
                 .match_phase = captureMatchPhase(match),
                 .rounds_needed_to_win = if (ruleset) |r| r.rounds_needed_to_win else null,
                 .frames_since_round_start = captureFramesSinceRoundStart(player_1, player_2),
@@ -222,10 +223,14 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
         }
 
         fn captureCamera(
+            source: ?model.Source,
             camera_manager: ?*const game.CameraManager(game_id),
             cinematic_controller: ?*const game.CinematicController,
             original_view_info: ?*const game.ViewInfo(game_id),
         ) ?model.Camera {
+            if (source == .replay_loading) {
+                return captureCameraManagerCamera(camera_manager);
+            }
             const is_cinematic_active = block: {
                 const controller = cinematic_controller orelse break :block false;
                 break :block controller.selected_cinematic_id != 0 or controller.is_blending_back != .false;
@@ -1824,6 +1829,44 @@ test "should capture camera from original view info while a cinematic is active"
     try testing.expectEqual(2, frame_3.camera.?.position.y());
     try testing.expectEqual(3, frame_3.camera.?.position.z());
     try testing.expectEqual(0.5, frame_3.camera.?.roll);
+}
+
+test "should capture camera from the camera manager while replay is loading even if a cinematic is active" {
+    const Functions = struct {
+        fn replayLoading(is_replay: *bool, is_pre_calculated: *bool) callconv(.c) void {
+            is_replay.* = true;
+            is_pre_calculated.* = false;
+        }
+    };
+    const gm = game.Memory(.t8).testingInit;
+    var capturer = Capturer(.t8){};
+    const mode = game.CameraMode{ .view = .{
+        .position = .fromConverted(.fromArray(.{ 1, 2, 3 })),
+        .look_at = .fromConverted(.fromArray(.{ 1, 3, 4 })),
+        .horizontal_fov = .fromConverted(1.0 / 3.0 * std.math.pi),
+        .roll = .fromConverted(0.5),
+    } };
+    var modes: [22]sdk.memory.Pointer(game.CameraMode) = @splat(.fromPointer(null));
+    modes[0] = .fromPointer(&mode);
+    const frame = capturer.captureFrame(&gm(.{
+        .player_1 = &.{},
+        .player_2 = &.{},
+        .match = &.{ .phase = .mid_round },
+        .functions = .{ .isReplay = Functions.replayLoading },
+        .cinematic_controller = &.{ .selected_cinematic_id = 0x29, .is_blending_back = .true },
+        .camera_manager = &.{ .active_mode_index = 0, .modes = modes },
+        .original_view_info = &.{
+            .position = .fromConverted(.fromArray(.{ 10, 20, 30 })),
+            .rotation = .fromConverted(.fromArray(.{ 0.1, 0.2, 0.3 })),
+            .horizontal_fov = .fromConverted(0.5 * std.math.pi),
+        },
+    }));
+    try testing.expectEqual(.replay_loading, frame.source);
+    try testing.expect(frame.camera != null);
+    try testing.expectEqual(1, frame.camera.?.position.x());
+    try testing.expectEqual(2, frame.camera.?.position.y());
+    try testing.expectEqual(3, frame.camera.?.position.z());
+    try testing.expectEqual(0.5, frame.camera.?.roll);
 }
 
 test "should capture left player id correctly" {
