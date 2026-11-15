@@ -272,7 +272,7 @@ pub fn main() void {
     std.log.debug("Initializing DirectX hooks...", .{});
     const number_of_retries = 10;
     for (0..number_of_retries) |retry_number| {
-        dx_hooks.init() catch |err_1| {
+        dx_hooks.init(io) catch |err_1| {
             if (retry_number < number_of_retries - 1) {
                 io.sleep(.fromMilliseconds(100), .awake) catch |err_2| {
                     sdk.misc.error_context.new("Failed to sleep for 100 ms.", .{});

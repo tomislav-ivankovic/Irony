@@ -16,10 +16,7 @@ pub const RawInputHookCallbackFn = fn (
 
 pub fn RawInputHook(callback: *const RawInputHookCallbackFn) type {
     return struct {
-        var hook: ?Hook = null;
-        var active_hook_calls = std.atomic.Value(u8).init(0);
-
-        const Hook = memory.Hook(@TypeOf(w32.GetRawInputData));
+        const hook = memory.Hook(@TypeOf(w32.GetRawInputData), onGetRawInputData);
 
         pub fn init(getRawInputData: ?*const @TypeOf(w32.GetRawInputData)) !void {
             const target: *const @TypeOf(w32.GetRawInputData) = if (getRawInputData) |target| target else block: {
@@ -33,51 +30,17 @@ pub fn RawInputHook(callback: *const RawInputHookCallbackFn) type {
                 };
                 break :block @ptrFromInt(address);
             };
-            hook = Hook.create(target, onGetRawInputData) catch |err| {
-                misc.error_context.append("Failed to create GetRawInputData hook.", .{});
-                return err;
-            };
-            errdefer {
-                const saved = misc.error_context.save();
-                defer misc.error_context.restore(&saved);
-                if (hook.?.destroy()) {
-                    hook = null;
-                } else |err| {
-                    misc.error_context.append("Failed to destroy GetRawInputData hook.", .{});
-                    misc.error_context.logError(err);
-                }
-            }
-            hook.?.enable() catch |err| {
-                misc.error_context.append("Failed to enable GetRawInputData hook.", .{});
+            hook.init(target) catch |err| {
+                misc.error_context.append("Failed to initialize GetRawInputData hook.", .{});
                 return err;
             };
         }
 
         pub fn deinit(io: std.Io) void {
-            if (hook) |*h| {
-                h.disable() catch |err| switch (err) {
-                    error.HookDisabled => {},
-                    else => {
-                        misc.error_context.append("Failed to disable GetRawInputData hook.", .{});
-                        misc.error_context.logError(err);
-                        return;
-                    },
-                };
-            }
-            while (active_hook_calls.load(.seq_cst) > 0) {
-                io.sleep(.fromMilliseconds(10), .awake) catch |err| {
-                    misc.error_context.new("Failed to sleep for 10 ms while waiting on raw input hook.", .{});
-                    misc.error_context.logError(err);
-                };
-            }
-            if (hook) |*h| {
-                if (h.destroy()) {
-                    hook = null;
-                } else |err| {
-                    misc.error_context.append("Failed to destroy GetRawInputData hook.", .{});
-                    misc.error_context.logError(err);
-                }
-            }
+            hook.deinit(io) catch |err| {
+                misc.error_context.append("Failed to de-initialize GetRawInputData hook.", .{});
+                misc.error_context.logError(err);
+            };
         }
 
         fn onGetRawInputData(
@@ -87,9 +50,7 @@ pub fn RawInputHook(callback: *const RawInputHookCallbackFn) type {
             pcb_size: ?*u32,
             cb_size_header: u32,
         ) callconv(.winapi) u32 {
-            _ = active_hook_calls.fetchAdd(1, .seq_cst);
-            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
-            const return_value = hook.?.original(h_raw_input, ui_command, p_data, pcb_size, cb_size_header);
+            const return_value = hook.original.?(h_raw_input, ui_command, p_data, pcb_size, cb_size_header);
             return callback(h_raw_input, ui_command, p_data, pcb_size, cb_size_header, return_value);
         }
     };
@@ -125,7 +86,7 @@ test "should find GetRawInputData function address when not provided" {
     try hook.init(null);
     defer hook.deinit(testing.io);
 
-    try testing.expectEqual(GetRawInputData, hook.hook.?.target);
+    try testing.expectEqual(GetRawInputData, hook.hook.target);
 }
 
 test "should call callback and original when target is called" {

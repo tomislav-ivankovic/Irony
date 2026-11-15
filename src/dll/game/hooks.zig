@@ -7,13 +7,6 @@ const game = @import("root.zig");
 
 pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () void) type {
     return struct {
-        var tick_hook: ?TickHook = null;
-        var process_input_hook: ?ProcessInputHook = null;
-        var cancel_requirements_hook: ?CancelRequirementsHook = null;
-        var render_targets_hook: ?RenderTargetsHook = null;
-        var get_view_point_hook: ?GetViewPointHook = null;
-        var active_hook_calls = std.atomic.Value(u8).init(0);
-
         pub var input_override: game.InputOverride = .{};
         pub var cancel_requirements: game.CancelRequirements = .{};
         pub var depth_buffer_address: usize = 0;
@@ -21,353 +14,171 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
         pub var last_original_view_info: game.ViewInfo(game_id) = .{};
         pub var last_overridden_view_info: game.ViewInfo(game_id) = .{};
 
-        const TickHook = sdk.memory.Hook(game.TickFunction(game_id));
-        const ProcessInputHook = sdk.memory.Hook(game.ProcessInputFunction(game_id));
-        const CancelRequirementsHook = sdk.memory.Hook(game.ProcessCancelRequirementFunction);
-        const RenderTargetsHook = sdk.memory.Hook(game.SetRenderTargetsFunction);
-        const GetViewPointHook = sdk.memory.Hook(game.GetViewPointFunction(game_id));
+        const tick_hook = sdk.memory.Hook(game.TickFunction(game_id), switch (game_id) {
+            .t7 => onT7Tick,
+            .t8 => onT8Tick,
+        });
+        const process_input_hook = sdk.memory.Hook(game.ProcessInputFunction(game_id), switch (game_id) {
+            .t7 => onT7ProcessInput,
+            .t8 => onT8ProcessInput,
+        });
+        const cancel_requirements_hook = sdk.memory.Hook(
+            game.ProcessCancelRequirementFunction,
+            onProcessCancelRequirement,
+        );
+        const render_targets_hook = sdk.memory.Hook(game.SetRenderTargetsFunction, onSetRenderTargets);
+        const get_view_point_hook = sdk.memory.Hook(game.GetViewPointFunction(game_id), switch (game_id) {
+            .t7 => onT7GetViewPoint,
+            .t8 => onT8GetViewPoint,
+        });
 
         pub fn init(game_functions: *const game.Memory(game_id).Functions) void {
-            std.log.debug("Creating process input hook...", .{});
+            std.log.debug("Initializing process input hook...", .{});
             if (game_functions.processInput) |function| {
-                const detour = switch (game_id) {
-                    .t7 => onT7ProcessInput,
-                    .t8 => onT8ProcessInput,
-                };
-                if (ProcessInputHook.create(function, detour)) |hook| {
-                    process_input_hook = hook;
-                    std.log.info("Process input hook created.", .{});
+                if (process_input_hook.init(function)) {
+                    std.log.info("Process input hook initialized.", .{});
                 } else |err| {
                     if (!builtin.is_test) {
-                        sdk.misc.error_context.append("Failed to create process input hook.", .{});
+                        sdk.misc.error_context.append("Failed to initialize process input hook.", .{});
                         sdk.misc.error_context.logError(err);
                     }
                 }
             } else if (!builtin.is_test) {
                 sdk.misc.error_context.new("Process input function not found.", .{});
-                sdk.misc.error_context.append("Failed to create process input hook.", .{});
+                sdk.misc.error_context.append("Failed to initialize process input hook.", .{});
                 sdk.misc.error_context.logError(error.NotFound);
             }
 
-            std.log.debug("Creating tick hook...", .{});
+            std.log.debug("Initializing tick hook...", .{});
             if (game_functions.tick) |function| {
-                const detour = switch (game_id) {
-                    .t7 => onT7Tick,
-                    .t8 => onT8Tick,
-                };
-                if (TickHook.create(function, detour)) |hook| {
-                    tick_hook = hook;
-                    std.log.info("Tick hook created.", .{});
+                if (tick_hook.init(function)) {
+                    std.log.info("Tick hook initialized.", .{});
                 } else |err| {
                     if (!builtin.is_test) {
-                        sdk.misc.error_context.append("Failed to create tick hook.", .{});
+                        sdk.misc.error_context.append("Failed to initialize tick hook.", .{});
                         sdk.misc.error_context.logError(err);
                     }
                 }
             } else if (!builtin.is_test) {
                 sdk.misc.error_context.new("Tick function not found.", .{});
-                sdk.misc.error_context.append("Failed to create tick hook.", .{});
+                sdk.misc.error_context.append("Failed to initialize tick hook.", .{});
                 sdk.misc.error_context.logError(error.NotFound);
             }
 
-            std.log.debug("Creating cancel requirements hook...", .{});
+            std.log.debug("Initializing cancel requirements hook...", .{});
             if (game_functions.processCancelRequirement) |function| {
-                if (CancelRequirementsHook.create(function, onProcessCancelRequirement)) |hook| {
-                    cancel_requirements_hook = hook;
-                    std.log.info("Cancel requirements hook created.", .{});
+                if (cancel_requirements_hook.init(function)) {
+                    std.log.info("Cancel requirements hook initialized.", .{});
                 } else |err| {
                     if (!builtin.is_test) {
-                        sdk.misc.error_context.append("Failed to create cancel requirements hook.", .{});
+                        sdk.misc.error_context.append("Failed to initialize cancel requirements hook.", .{});
                         sdk.misc.error_context.logError(err);
                     }
                 }
             } else if (!builtin.is_test) {
                 sdk.misc.error_context.new("Process cancel requirement function not found.", .{});
-                sdk.misc.error_context.append("Failed to create cancel requirements hook.", .{});
+                sdk.misc.error_context.append("Failed to initialize cancel requirements hook.", .{});
                 sdk.misc.error_context.logError(error.NotFound);
             }
 
             if (game_id == .t8) {
-                std.log.debug("Creating render targets hook...", .{});
+                std.log.debug("Initializing render targets hook...", .{});
                 if (game_functions.setRenderTargets) |function| {
-                    const detour = onSetRenderTargets;
-                    if (RenderTargetsHook.create(function, detour)) |hook| {
-                        render_targets_hook = hook;
-                        std.log.info("Render targets hook created.", .{});
+                    if (render_targets_hook.init(function)) {
+                        std.log.info("Render targets hook initialized.", .{});
                     } else |err| {
                         if (!builtin.is_test) {
-                            sdk.misc.error_context.append("Failed to create render targets hook.", .{});
+                            sdk.misc.error_context.append("Failed to initialize render targets hook.", .{});
                             sdk.misc.error_context.logError(err);
                         }
                     }
                 } else if (!builtin.is_test) {
                     sdk.misc.error_context.new("SetRenderTargets function not found.", .{});
-                    sdk.misc.error_context.append("Failed to create render targets hook.", .{});
+                    sdk.misc.error_context.append("Failed to initialize render targets hook.", .{});
                     sdk.misc.error_context.logError(error.NotFound);
                 }
             }
 
-            std.log.debug("Creating get view point hook...", .{});
+            std.log.debug("Initializing get view point hook...", .{});
             if (game_functions.getViewPoint) |function| {
-                const detour = switch (game_id) {
-                    .t7 => onT7GetViewPoint,
-                    .t8 => onT8GetViewPoint,
-                };
-                if (GetViewPointHook.create(function, detour)) |hook| {
-                    get_view_point_hook = hook;
-                    std.log.info("Get view point hook created.", .{});
+                if (get_view_point_hook.init(function)) {
+                    std.log.info("Get view point hook initialized.", .{});
                 } else |err| {
                     if (!builtin.is_test) {
-                        sdk.misc.error_context.append("Failed to create get view point hook.", .{});
+                        sdk.misc.error_context.append("Failed to initialize get view point hook.", .{});
                         sdk.misc.error_context.logError(err);
                     }
                 }
             } else if (!builtin.is_test) {
                 sdk.misc.error_context.new("Get view point function not found.", .{});
-                sdk.misc.error_context.append("Failed to create get view point hook.", .{});
+                sdk.misc.error_context.append("Failed to initialize get view point hook.", .{});
                 sdk.misc.error_context.logError(error.NotFound);
-            }
-
-            if (process_input_hook) |*hook| {
-                std.log.debug("Enabling process input hook...", .{});
-                if (hook.enable()) {
-                    std.log.info("Process input hook enabled.", .{});
-                } else |err| {
-                    sdk.misc.error_context.append("Failed to enable process input hook.", .{});
-                    sdk.misc.error_context.logError(err);
-                }
-            }
-
-            if (tick_hook) |*hook| {
-                std.log.debug("Enabling tick hook...", .{});
-                if (hook.enable()) {
-                    std.log.info("Tick hook enabled.", .{});
-                } else |err| {
-                    sdk.misc.error_context.append("Failed to enable tick hook.", .{});
-                    sdk.misc.error_context.logError(err);
-                }
-            }
-
-            if (cancel_requirements_hook) |*hook| {
-                std.log.debug("Enabling cancel requirements hook...", .{});
-                if (hook.enable()) {
-                    std.log.info("Cancel requirements hook enabled.", .{});
-                } else |err| {
-                    sdk.misc.error_context.append("Failed to enable cancel requirements hook.", .{});
-                    sdk.misc.error_context.logError(err);
-                }
-            }
-
-            if (render_targets_hook) |*hook| {
-                std.log.debug("Enabling render targets hook...", .{});
-                if (hook.enable()) {
-                    std.log.info("Render targets hook enabled.", .{});
-                } else |err| {
-                    sdk.misc.error_context.append("Failed to enable render targets hook.", .{});
-                    sdk.misc.error_context.logError(err);
-                }
-            }
-
-            if (get_view_point_hook) |*hook| {
-                std.log.debug("Enabling get view point hook...", .{});
-                if (hook.enable()) {
-                    std.log.info("Get view point hook enabled.", .{});
-                } else |err| {
-                    sdk.misc.error_context.append("Failed to enable get view point hook.", .{});
-                    sdk.misc.error_context.logError(err);
-                }
             }
         }
 
         pub fn deinit(io: std.Io) void {
-            std.log.debug("Disabling get view point hook...", .{});
-            var is_get_view_point_hook_disabled = false;
-            if (get_view_point_hook) |*hook| {
-                if (hook.disable()) {
-                    is_get_view_point_hook_disabled = true;
-                    std.log.info("Get view point hook disabled.", .{});
-                } else |err| switch (err) {
-                    error.HookDisabled => is_get_view_point_hook_disabled = true,
-                    else => {
-                        sdk.misc.error_context.append("Failed to disable get view point hook.", .{});
-                        sdk.misc.error_context.logError(err);
-                    },
-                }
-            } else {
-                std.log.debug("Nothing to disable.", .{});
-            }
-
-            var is_render_targets_hook_disabled = false;
-            if (game_id == .t8) {
-                std.log.debug("Disabling render targets hook...", .{});
-                if (render_targets_hook) |*hook| {
-                    if (hook.disable()) {
-                        is_render_targets_hook_disabled = true;
-                        std.log.info("Render targets hook disabled.", .{});
-                    } else |err| switch (err) {
-                        error.HookDisabled => is_render_targets_hook_disabled = true,
-                        else => {
-                            sdk.misc.error_context.append("Failed to disable render targets hook.", .{});
-                            sdk.misc.error_context.logError(err);
-                        },
-                    }
-                } else {
-                    std.log.debug("Nothing to disable.", .{});
-                }
-            }
-
-            std.log.debug("Disabling cancel requirements hook...", .{});
-            var is_cancel_requirements_hook_disabled = false;
-            if (cancel_requirements_hook) |*hook| {
-                if (hook.disable()) {
-                    is_cancel_requirements_hook_disabled = true;
-                    std.log.info("Cancel requirements hook disabled.", .{});
-                } else |err| switch (err) {
-                    error.HookDisabled => is_cancel_requirements_hook_disabled = true,
-                    else => {
-                        sdk.misc.error_context.append("Failed to disable cancel requirements hook.", .{});
-                        sdk.misc.error_context.logError(err);
-                    },
-                }
-            } else {
-                std.log.debug("Nothing to disable.", .{});
-            }
-
-            std.log.debug("Disabling tick hook...", .{});
-            var is_tick_hook_disabled = false;
-            if (tick_hook) |*hook| {
-                if (hook.disable()) {
-                    is_tick_hook_disabled = true;
-                    std.log.info("Tick hook disabled.", .{});
-                } else |err| switch (err) {
-                    error.HookDisabled => is_tick_hook_disabled = true,
-                    else => {
-                        sdk.misc.error_context.append("Failed to disable tick hook.", .{});
-                        sdk.misc.error_context.logError(err);
-                    },
-                }
-            } else {
-                std.log.debug("Nothing to disable.", .{});
-            }
-
-            std.log.debug("Disabling process input hook...", .{});
-            var is_process_input_hook_disabled = false;
-            if (process_input_hook) |*hook| {
-                if (hook.disable()) {
-                    is_process_input_hook_disabled = true;
-                    std.log.info("Process input hook disabled.", .{});
-                } else |err| switch (err) {
-                    error.HookDisabled => is_process_input_hook_disabled = true,
-                    else => {
-                        sdk.misc.error_context.append("Failed to disable process input hook.", .{});
-                        sdk.misc.error_context.logError(err);
-                    },
-                }
-            } else {
-                std.log.debug("Nothing to disable.", .{});
-            }
-
-            while (active_hook_calls.load(.seq_cst) > 0) {
-                io.sleep(.fromMilliseconds(10), .awake) catch |err| {
-                    sdk.misc.error_context.new("Failed to sleep for 10 ms while waiting on active game hooks.", .{});
-                    sdk.misc.error_context.logError(err);
-                };
-            }
-
-            std.log.debug("Destroying get view point hook...", .{});
-            if (get_view_point_hook) |*hook| {
-                if (!is_get_view_point_hook_disabled) {
-                    std.log.warn("Skipping the destruction of get view point hook since disabling it failed.", .{});
-                } else if (hook.destroy()) {
-                    std.log.info("Get view point hook destroyed.", .{});
-                    get_view_point_hook = null;
-                } else |err| {
-                    sdk.misc.error_context.append("Failed to destroy get view point hook.", .{});
-                    sdk.misc.error_context.logError(err);
-                }
-            } else {
-                std.log.debug("Nothing to destroy.", .{});
+            std.log.debug("De-initializing get view point hook...", .{});
+            if (!get_view_point_hook.isInitialized()) {
+                std.log.debug("Nothing to de-initialize.", .{});
+            } else if (get_view_point_hook.deinit(io)) {
+                std.log.info("Get view point hook de-initialized.", .{});
+            } else |err| {
+                sdk.misc.error_context.append("Failed to de-initialize get view point hook.", .{});
+                sdk.misc.error_context.logError(err);
             }
 
             if (game_id == .t8) {
-                std.log.debug("Destroying render targets hook...", .{});
-                if (render_targets_hook) |*hook| {
-                    if (!is_render_targets_hook_disabled) {
-                        std.log.warn("Skipping the destruction of render targets hook since disabling it failed.", .{});
-                    } else if (hook.destroy()) {
-                        std.log.info("Render targets hook destroyed.", .{});
-                        render_targets_hook = null;
-                    } else |err| {
-                        sdk.misc.error_context.append("Failed to destroy render targets hook.", .{});
-                        sdk.misc.error_context.logError(err);
-                    }
-                } else {
-                    std.log.debug("Nothing to destroy.", .{});
+                std.log.debug("De-initializing render targets hook...", .{});
+                if (!render_targets_hook.isInitialized()) {
+                    std.log.debug("Nothing to de-initialize.", .{});
+                } else if (render_targets_hook.deinit(io)) {
+                    std.log.info("Render targets hook de-initialized.", .{});
+                } else |err| {
+                    sdk.misc.error_context.append("Failed to de-initialize render targets hook.", .{});
+                    sdk.misc.error_context.logError(err);
                 }
             }
 
-            std.log.debug("Destroying cancel requirements hook...", .{});
-            if (cancel_requirements_hook) |*hook| {
-                if (!is_cancel_requirements_hook_disabled) {
-                    std.log.warn(
-                        "Skipping the destruction of cancel requirements hook since disabling it failed.",
-                        .{},
-                    );
-                } else if (hook.destroy()) {
-                    std.log.info("Cancel requirements hook destroyed.", .{});
-                    cancel_requirements_hook = null;
-                } else |err| {
-                    sdk.misc.error_context.append("Failed to destroy cancel requirements hook.", .{});
-                    sdk.misc.error_context.logError(err);
-                }
-            } else {
-                std.log.debug("Nothing to destroy.", .{});
+            std.log.debug("De-initializing cancel requirements hook...", .{});
+            if (!cancel_requirements_hook.isInitialized()) {
+                std.log.debug("Nothing to de-initialize.", .{});
+            } else if (cancel_requirements_hook.deinit(io)) {
+                std.log.info("Cancel requirements hook de-initialized.", .{});
+            } else |err| {
+                sdk.misc.error_context.append("Failed to de-initialize cancel requirements hook.", .{});
+                sdk.misc.error_context.logError(err);
             }
 
-            std.log.debug("Destroying tick hook...", .{});
-            if (tick_hook) |*hook| {
-                if (!is_tick_hook_disabled) {
-                    std.log.warn("Skipping the destruction of tick hook since disabling it failed.", .{});
-                } else if (hook.destroy()) {
-                    std.log.info("Tick hook destroyed.", .{});
-                    tick_hook = null;
-                } else |err| {
-                    sdk.misc.error_context.append("Failed to destroy tick hook.", .{});
-                    sdk.misc.error_context.logError(err);
-                }
-            } else {
-                std.log.debug("Nothing to destroy.", .{});
+            std.log.debug("De-initializing tick hook...", .{});
+            if (!tick_hook.isInitialized()) {
+                std.log.debug("Nothing to de-initialize.", .{});
+            } else if (tick_hook.deinit(io)) {
+                std.log.info("Tick hook de-initialized.", .{});
+            } else |err| {
+                sdk.misc.error_context.append("Failed to de-initialize tick hook.", .{});
+                sdk.misc.error_context.logError(err);
             }
 
-            std.log.debug("Destroying process input hook...", .{});
-            if (process_input_hook) |*hook| {
-                if (!is_process_input_hook_disabled) {
-                    std.log.warn("Skipping the destruction of process input hook since disabling it failed.", .{});
-                } else if (hook.destroy()) {
-                    std.log.info("Process input hook destroyed.", .{});
-                    process_input_hook = null;
-                } else |err| {
-                    sdk.misc.error_context.append("Failed to destroy process input hook.", .{});
-                    sdk.misc.error_context.logError(err);
-                }
-            } else {
-                std.log.debug("Nothing to destroy.", .{});
+            std.log.debug("De-initializing process input hook...", .{});
+            if (!process_input_hook.isInitialized()) {
+                std.log.debug("Nothing to de-initialize.", .{});
+            } else if (process_input_hook.deinit(io)) {
+                std.log.info("Process input hook de-initialized.", .{});
+            } else |err| {
+                sdk.misc.error_context.append("Failed to de-initialize process input hook.", .{});
+                sdk.misc.error_context.logError(err);
             }
         }
 
         fn onT7Tick(use_fixed_step: sdk.memory.Boolean(.{}), delta_time: f32) callconv(.c) void {
-            _ = active_hook_calls.fetchAdd(1, .seq_cst);
-            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
             cancel_requirements = .{};
-            tick_hook.?.original(use_fixed_step, delta_time);
+            tick_hook.original.?(use_fixed_step, delta_time);
             onTick();
         }
 
         fn onT8Tick(param_1: u64, use_fixed_step: sdk.memory.Boolean(.{}), delta_time: f32, param_4: u8) callconv(.c) void {
-            _ = active_hook_calls.fetchAdd(1, .seq_cst);
-            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
             cancel_requirements = .{};
-            tick_hook.?.original(param_1, use_fixed_step, delta_time, param_4);
+            tick_hook.original.?(param_1, use_fixed_step, delta_time, param_4);
             onTick();
         }
 
@@ -377,12 +188,10 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
             down_input: game.Input(.t7),
             press_input: game.Input(.t7),
         ) callconv(.c) void {
-            _ = active_hook_calls.fetchAdd(1, .seq_cst);
-            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
             var new_down_input = down_input;
             var new_press_input = press_input;
             applyInputOverride(player, player_side, &new_down_input, &new_press_input);
-            process_input_hook.?.original(player, player_side, new_down_input, new_press_input);
+            process_input_hook.original.?(player, player_side, new_down_input, new_press_input);
         }
 
         fn onT8ProcessInput(
@@ -394,12 +203,10 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
             param_6: sdk.memory.Pointer(sdk.math.Vec2),
             param_7: u8,
         ) callconv(.c) void {
-            _ = active_hook_calls.fetchAdd(1, .seq_cst);
-            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
             var new_down_input = down_input;
             var new_press_input = press_input;
             applyInputOverride(player, player_side, &new_down_input, &new_press_input);
-            process_input_hook.?.original(
+            process_input_hook.original.?(
                 player,
                 player_side,
                 new_down_input,
@@ -425,8 +232,6 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
             param_2: i64,
             param_3: i64,
         ) callconv(.c) u64 {
-            _ = active_hook_calls.fetchAdd(1, .seq_cst);
-            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
             const requirement = param_1.*;
             switch (requirement) {
                 .throw_escape_press_1 => cancel_requirements.throw_escape_press_1 = true,
@@ -435,13 +240,11 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
                 .throw_escape_hold => cancel_requirements.throw_escape_hold = true,
                 else => {},
             }
-            return cancel_requirements_hook.?.original(param_1, param_2, param_3);
+            return cancel_requirements_hook.original.?(param_1, param_2, param_3);
         }
 
         fn onSetRenderTargets(this: usize, param_1: usize, param_2: u32, param_3: usize) callconv(.c) void {
-            _ = active_hook_calls.fetchAdd(1, .seq_cst);
-            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
-            render_targets_hook.?.original(this, param_1, param_2, param_3);
+            render_targets_hook.original.?(this, param_1, param_2, param_3);
             if (param_3 == 0) {
                 return;
             }
@@ -454,16 +257,12 @@ pub fn Hooks(comptime game_id: build_info.Game, comptime onTick: *const fn () vo
             out_view_info: *game.ViewInfo(.t7),
             stereo_pass: u32,
         ) callconv(.c) void {
-            _ = active_hook_calls.fetchAdd(1, .seq_cst);
-            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
-            get_view_point_hook.?.original(this, out_view_info, stereo_pass);
+            get_view_point_hook.original.?(this, out_view_info, stereo_pass);
             applyCameraOverride(out_view_info);
         }
 
         fn onT8GetViewPoint(this: *const anyopaque, out_view_info: *game.ViewInfo(.t8)) callconv(.c) void {
-            _ = active_hook_calls.fetchAdd(1, .seq_cst);
-            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
-            get_view_point_hook.?.original(this, out_view_info);
+            get_view_point_hook.original.?(this, out_view_info);
             applyCameraOverride(out_view_info);
         }
 

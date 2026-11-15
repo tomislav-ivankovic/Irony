@@ -9,11 +9,10 @@ pub const OnHookEvent = fn (context: dx11.HostContext) void;
 
 pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, afterResize: *const OnHookEvent) type {
     return struct {
-        var resize_buffers_hook: ?memory.Hook(dx11.Functions.ResizeBuffers) = null;
-        var present_hook: ?memory.Hook(dx11.Functions.Present) = null;
-        var active_hook_calls = std.atomic.Value(u8).init(0);
+        const resize_buffers_hook = memory.Hook(dx11.Functions.ResizeBuffers, onResizeBuffers);
+        const present_hook = memory.Hook(dx11.Functions.Present, onPresentInternal);
 
-        pub fn init() !void {
+        pub fn init(io: std.Io) !void {
             std.log.debug("Finding DX11 functions...", .{});
             const dx11_functions = dx11.Functions.find() catch |err| {
                 misc.error_context.append("Failed to find DX11 functions.", .{});
@@ -21,129 +20,48 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             };
             std.log.info("DX11 functions found.", .{});
 
-            std.log.debug("Creating the resize buffers hook...", .{});
-            resize_buffers_hook = memory.Hook(dx11.Functions.ResizeBuffers).create(
-                dx11_functions.resizeBuffers,
-                onResizeBuffers,
-            ) catch |err| {
-                misc.error_context.append("Failed to create resize buffers hook.", .{});
+            std.log.debug("Initializing the resize buffers hook...", .{});
+            resize_buffers_hook.init(dx11_functions.resizeBuffers) catch |err| {
+                misc.error_context.append("Failed to initialize resize buffers hook.", .{});
                 return err;
             };
-            std.log.info("Resize buffers hook created.", .{});
+            std.log.info("Resize buffers hook initialized.", .{});
             errdefer {
                 const saved = misc.error_context.save();
                 defer misc.error_context.restore(&saved);
-                resize_buffers_hook.?.destroy() catch |err| {
-                    misc.error_context.append("Failed to destroy resize buffers hook.", .{});
+                resize_buffers_hook.deinit(io) catch |err| {
+                    misc.error_context.append("Failed to de-initialize resize buffers hook.", .{});
                     misc.error_context.logError(err);
                 };
-                resize_buffers_hook = null;
             }
 
-            std.log.debug("Creating the present hook...", .{});
-            present_hook = memory.Hook(dx11.Functions.Present).create(
-                dx11_functions.present,
-                onPresentInternal,
-            ) catch |err| {
-                misc.error_context.append("Failed to create present hook.", .{});
+            std.log.debug("Initializing the present hook...", .{});
+            present_hook.init(dx11_functions.present) catch |err| {
+                misc.error_context.append("Failed to initialize present hook.", .{});
                 return err;
             };
-            std.log.info("Present hook created.", .{});
-            errdefer {
-                const saved = misc.error_context.save();
-                defer misc.error_context.restore(&saved);
-                present_hook.?.destroy() catch |err| {
-                    misc.error_context.append("Failed to destroy present hook.", .{});
-                    misc.error_context.logError(err);
-                };
-                present_hook = null;
-            }
-
-            std.log.debug("Enabling resize buffers hook...", .{});
-            resize_buffers_hook.?.enable() catch |err| {
-                misc.error_context.append("Failed to enable resize buffers hook.", .{});
-                return err;
-            };
-            std.log.info("Resize buffers hook enabled.", .{});
-
-            std.log.debug("Enabling present hook...", .{});
-            present_hook.?.enable() catch |err| {
-                misc.error_context.append("Failed to enable present hook.", .{});
-                return err;
-            };
-            std.log.info("Present hook enabled.", .{});
+            std.log.info("Present hook initialized.", .{});
         }
 
         pub fn deinit(io: std.Io) void {
-            std.log.debug("Disabling the present hook...", .{});
-            var is_present_hook_disabled = false;
-            if (present_hook) |hook| {
-                if (hook.disable()) {
-                    is_present_hook_disabled = true;
-                    std.log.info("Present hook disabled.", .{});
-                } else |err| switch (err) {
-                    error.HookDisabled => is_present_hook_disabled = true,
-                    else => {
-                        misc.error_context.append("Failed to disable present hook.", .{});
-                        misc.error_context.logError(err);
-                    },
-                }
-            } else {
-                std.log.debug("Nothing to disable.", .{});
+            std.log.debug("De-initializing the present hook...", .{});
+            if (!present_hook.isInitialized()) {
+                std.log.debug("Nothing to de-initialize.", .{});
+            } else if (present_hook.deinit(io)) {
+                std.log.info("Present hook de-initialized.", .{});
+            } else |err| {
+                misc.error_context.append("Failed to de-initialize present hook.", .{});
+                misc.error_context.logError(err);
             }
 
-            std.log.debug("Disabling the resize buffers hook...", .{});
-            var is_resize_buffers_hook_disabled = false;
-            if (resize_buffers_hook) |hook| {
-                if (hook.disable()) {
-                    is_resize_buffers_hook_disabled = true;
-                    std.log.info("Resize buffers hook disabled.", .{});
-                } else |err| switch (err) {
-                    error.HookDisabled => is_resize_buffers_hook_disabled = true,
-                    else => {
-                        misc.error_context.append("Failed to disable resize buffers hook.", .{});
-                        misc.error_context.logError(err);
-                    },
-                }
-            } else {
-                std.log.debug("Nothing to disable.", .{});
-            }
-
-            while (active_hook_calls.load(.seq_cst) > 0) {
-                io.sleep(.fromMilliseconds(10), .awake) catch |err| {
-                    misc.error_context.new("Failed to sleep for 10 ms while waiting on active DX11 hooks.", .{});
-                    misc.error_context.logError(err);
-                };
-            }
-
-            std.log.debug("Destroying the present hook...", .{});
-            if (present_hook) |hook| {
-                if (!is_present_hook_disabled) {
-                    std.log.warn("Skipping the destruction of present hook since disabling it failed.", .{});
-                } else if (hook.destroy()) {
-                    present_hook = null;
-                    std.log.info("Present hook destroyed.", .{});
-                } else |err| {
-                    misc.error_context.append("Failed to destroy present hook.", .{});
-                    misc.error_context.logError(err);
-                }
-            } else {
-                std.log.debug("Nothing to destroy.", .{});
-            }
-
-            std.log.debug("Destroying the resize buffers hook...", .{});
-            if (resize_buffers_hook) |hook| {
-                if (!is_resize_buffers_hook_disabled) {
-                    std.log.warn("Skipping the destruction of resize buffers hook since disabling it failed.", .{});
-                } else if (hook.destroy()) {
-                    resize_buffers_hook = null;
-                    std.log.info("Resize buffers hook destroyed.", .{});
-                } else |err| {
-                    misc.error_context.append("Failed to destroy resize buffers hook.", .{});
-                    misc.error_context.logError(err);
-                }
-            } else {
-                std.log.debug("Nothing to destroy.", .{});
+            std.log.debug("De-initializing the resize buffers hook...", .{});
+            if (!resize_buffers_hook.isInitialized()) {
+                std.log.debug("Nothing to de-initialize.", .{});
+            } else if (resize_buffers_hook.deinit(io)) {
+                std.log.info("Resize buffers hook de-initialized.", .{});
+            } else |err| {
+                misc.error_context.append("Failed to de-initialize resize buffers hook.", .{});
+                misc.error_context.logError(err);
             }
         }
 
@@ -152,24 +70,21 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             sync_interval: u32,
             flags: u32,
         ) callconv(.winapi) w32.HRESULT {
-            _ = active_hook_calls.fetchAdd(1, .seq_cst);
-            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
-
             const window = dx11.getWindowFromSwapChain(swap_chain) catch |err| {
                 misc.error_context.append("Failed to get the window from DX11 swap chain.", .{});
                 misc.error_context.logError(err);
-                return present_hook.?.original(swap_chain, sync_interval, flags);
+                return present_hook.original.?(swap_chain, sync_interval, flags);
             };
             const device = dx11.getDeviceFromSwapChain(swap_chain) catch |err| {
                 misc.error_context.append("Failed to get DX11 device from swap chain.", .{});
                 misc.error_context.logError(err);
-                return present_hook.?.original(swap_chain, sync_interval, flags);
+                return present_hook.original.?(swap_chain, sync_interval, flags);
             };
             defer _ = device.IUnknown.Release();
             const device_context = dx11.getDeviceContextFromDevice(device) catch |err| {
                 misc.error_context.append("Failed to get DX11 device context from device.", .{});
                 misc.error_context.logError(err);
-                return present_hook.?.original(swap_chain, sync_interval, flags);
+                return present_hook.original.?(swap_chain, sync_interval, flags);
             };
             defer _ = device_context.IUnknown.Release();
 
@@ -181,7 +96,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             };
             onPresent(context);
 
-            return present_hook.?.original(swap_chain, sync_interval, flags);
+            return present_hook.original.?(swap_chain, sync_interval, flags);
         }
 
         fn onResizeBuffers(
@@ -192,13 +107,10 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             new_format: w32.DXGI_FORMAT,
             swap_chain_flags: u32,
         ) callconv(.winapi) w32.HRESULT {
-            _ = active_hook_calls.fetchAdd(1, .seq_cst);
-            defer _ = active_hook_calls.fetchSub(1, .seq_cst);
-
             const window = dx11.getWindowFromSwapChain(swap_chain) catch |err| {
                 misc.error_context.append("Failed to get the window from DX11 swap chain.", .{});
                 misc.error_context.logError(err);
-                return resize_buffers_hook.?.original(
+                return resize_buffers_hook.original.?(
                     swap_chain,
                     buffer_count,
                     width,
@@ -210,7 +122,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             const device = dx11.getDeviceFromSwapChain(swap_chain) catch |err| {
                 misc.error_context.append("Failed to get DX11 device from swap chain.", .{});
                 misc.error_context.logError(err);
-                return resize_buffers_hook.?.original(
+                return resize_buffers_hook.original.?(
                     swap_chain,
                     buffer_count,
                     width,
@@ -223,7 +135,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
             const device_context = dx11.getDeviceContextFromDevice(device) catch |err| {
                 misc.error_context.append("Failed to get DX11 device context from device.", .{});
                 misc.error_context.logError(err);
-                return resize_buffers_hook.?.original(
+                return resize_buffers_hook.original.?(
                     swap_chain,
                     buffer_count,
                     width,
@@ -241,7 +153,7 @@ pub fn Hooks(onPresent: *const OnHookEvent, beforeResize: *const OnHookEvent, af
                 .swap_chain = swap_chain,
             };
             beforeResize(context);
-            const return_value = resize_buffers_hook.?.original(
+            const return_value = resize_buffers_hook.original.?(
                 swap_chain,
                 buffer_count,
                 width,
@@ -294,7 +206,7 @@ test "should call correct callbacks at correct times" {
     };
 
     const hooks = Hooks(OnPresent.call, BeforeResize.call, AfterResize.call);
-    try hooks.init();
+    try hooks.init(testing.io);
     defer hooks.deinit(testing.io);
 
     try testing.expectEqual(0, OnPresent.times_called);
@@ -316,7 +228,7 @@ test "should call correct callbacks at correct times" {
         200,
         200,
         w32.DXGI_FORMAT_R8G8B8A8_UNORM,
-        @intFromEnum(w32.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH),
+        @backingInt(w32.DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH),
     );
     try testing.expectEqual(w32.S_OK, resize_result_1);
 
@@ -340,5 +252,5 @@ test "init should error when hooking is not initialized" {
     }.call;
 
     const hooks = Hooks(onEvent, onEvent, onEvent);
-    try testing.expectError(error.HookingNotInitialized, hooks.init());
+    try testing.expectError(error.HookingNotInitialized, hooks.init(testing.io));
 }
