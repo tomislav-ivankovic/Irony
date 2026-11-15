@@ -24,7 +24,7 @@ pub fn isMemoryWriteable(address: usize, size_in_bytes: usize) bool {
 fn isMemoryAccessibleAndInOneOfModes(
     address: usize,
     size_in_bytes: usize,
-    comptime modes: []const w32.PAGE_PROTECTION_FLAGS,
+    modes: []const w32.PAGE_PROTECTION_FLAGS,
 ) bool {
     if (size_in_bytes == 0) {
         return true;
@@ -54,7 +54,7 @@ fn isMemoryAccessibleAndInOneOfModes(
             .PAGE_WRITECOPY = protect.PAGE_WRITECOPY,
             .PAGE_TARGETS_NO_UPDATE = protect.PAGE_TARGETS_NO_UPDATE,
         };
-        inline for (modes) |expected_mode| {
+        for (modes) |expected_mode| {
             if (actual_mode == expected_mode) {
                 break;
             }

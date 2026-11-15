@@ -695,7 +695,7 @@ test "should save recording to the correct path" {
         }
     }.call;
     io.vtable = &vtable;
-    inline for (model.RecordingFormat.all) |format| {
+    for (model.RecordingFormat.all) |format| {
         const settings = model.AutomationSettings{
             .enabled = true,
             .live_games = .record_and_save,
@@ -731,11 +731,12 @@ test "should save recording to the correct path" {
         try testing.expectEqual(1, controller.save_call_count);
         try testing.expectEqual(controller.last_save_io, io);
         try testing.expect(controller.last_save_path != null);
-        try testing.expectEqualStrings(
-            Automation(.{}).directory_name ++
-                "\\__Player1__ vs __Player2__  1-2  2020-01-02T03-04-05" ++
-                comptime format.getFileExtension(),
-            controller.last_save_path.?.asSlice(),
+        const expected_path = try std.fmt.allocPrint(
+            testing.allocator,
+            "{s}\\__Player1__ vs __Player2__  1-2  2020-01-02T03-04-05{s}",
+            .{ Automation(.{}).directory_name, format.getFileExtension() },
         );
+        defer testing.allocator.free(expected_path);
+        try testing.expectEqualStrings(expected_path, controller.last_save_path.?.asSlice());
     }
 }

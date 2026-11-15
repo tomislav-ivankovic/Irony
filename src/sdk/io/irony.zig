@@ -922,7 +922,7 @@ fn serializedSizeOf(comptime Type: type) comptime_int {
                 @compileError("Union " ++ @typeName(Type) ++ " is not serializable. (Not tagged and not packed.)");
             };
             var max: usize = 0;
-            inline for (info.field_types) |Field| {
+            for (info.field_types) |Field| {
                 max = @max(max, serializedSizeOf(Field));
             }
             return serializedSizeOf(Tag) + max;
@@ -957,7 +957,7 @@ fn getLocalFieldsRecursive(state: *GetLocalFieldsState, Type: type) void {
             }
         },
         .array => |*info| {
-            inline for (0..info.len) |index| {
+            for (0..info.len) |index| {
                 state.push(.{ .array_index = index });
                 getLocalFieldsRecursive(state, info.child);
                 state.pop();
