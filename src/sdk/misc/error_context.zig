@@ -9,8 +9,8 @@ pub const ErrorContextConfig = struct {
 };
 
 pub const ErrorContextMessage = union(enum) {
-    static: []const u8,
-    dynamic: []u8,
+    compile_time: []const u8,
+    runtime: []u8,
 };
 
 pub const ErrorContextItem = struct {
@@ -20,8 +20,8 @@ pub const ErrorContextItem = struct {
 
     pub fn getBufferRegion(self: *const Self) ?[]const u8 {
         return switch (self.message) {
-            .static => null,
-            .dynamic => |msg| msg,
+            .compile_time => null,
+            .runtime => |msg| msg,
         };
     }
 };
@@ -40,20 +40,20 @@ pub fn ErrorContext(comptime config: ErrorContextConfig) type {
 
         pub inline fn append(self: *Self, comptime fmt: []const u8, args: anytype) void {
             if (@typeInfo(@TypeOf(.{args})).@"struct".field_attrs[0].@"comptime") {
-                self.staticAppend(fmt, args);
+                self.comptimeAppend(fmt, args);
             } else {
-                self.dynamicAppend(fmt, args);
+                self.runtimeAppend(fmt, args);
             }
         }
 
-        fn staticAppend(
+        fn comptimeAppend(
             self: *Self,
             comptime fmt: []const u8,
             comptime args: anytype,
         ) void {
             const message = std.fmt.comptimePrint(fmt, args);
             const item = ErrorContextItem{
-                .message = .{ .static = message },
+                .message = .{ .compile_time = message },
             };
             const removed_item = self.items.addToBack(item);
             if (removed_item != null and !builtin.is_test) {
@@ -61,7 +61,19 @@ pub fn ErrorContext(comptime config: ErrorContextConfig) type {
             }
         }
 
-        fn dynamicAppend(self: *Self, comptime fmt: []const u8, args: anytype) void {
+        const Print = *const fn (buffer: []u8, args: *const anyopaque) std.fmt.BufPrintError![]u8;
+
+        fn runtimeAppend(self: *Self, comptime fmt: []const u8, args: anytype) void {
+            const print = struct {
+                fn call(buffer: []u8, args_pointer: *const anyopaque) std.fmt.BufPrintError![]u8 {
+                    const typed_args_pointer: *const @TypeOf(args) = @ptrCast(@alignCast(args_pointer));
+                    return std.fmt.bufPrint(buffer, fmt, typed_args_pointer.*);
+                }
+            }.call;
+            self.runtimeAppendOpaque(print, &args);
+        }
+
+        fn runtimeAppendOpaque(self: *Self, print: Print, args: *const anyopaque) void {
             var last_buffer_region: ?[]const u8 = null;
             var index = self.items.len;
             while (index > 0 and last_buffer_region == null) {
@@ -71,29 +83,24 @@ pub fn ErrorContext(comptime config: ErrorContextConfig) type {
             }
             if (last_buffer_region) |region| {
                 const start_index = (&region[0] - &self.buffer[0]) + region.len;
-                if (self.addDynamicItem(self.buffer[start_index..], fmt, args) catch null) |_| {
+                if (self.addRuntimeItem(self.buffer[start_index..], print, args) catch null) |_| {
                     return;
                 }
             }
-            self.addDynamicItem(&self.buffer, fmt, args) catch {
+            self.addRuntimeItem(&self.buffer, print, args) catch {
                 if (!builtin.is_test) {
                     std.log.err("Failed to add item to error context. Error message is larger than the buffer.", .{});
                 }
             };
         }
 
-        fn addDynamicItem(
-            self: *Self,
-            write_region: []u8,
-            comptime fmt: []const u8,
-            args: anytype,
-        ) !void {
-            const message = std.fmt.bufPrint(write_region, fmt, args) catch |err| {
+        fn addRuntimeItem(self: *Self, write_region: []u8, print: Print, args: *const anyopaque) !void {
+            const message = print(write_region, args) catch |err| {
                 self.clearBufferRegion(write_region);
                 return err;
             };
             const item = ErrorContextItem{
-                .message = .{ .dynamic = message },
+                .message = .{ .runtime = message },
             };
             self.clearBufferRegion(message);
             const removed_item = self.items.addToBack(item);
@@ -136,8 +143,8 @@ pub fn ErrorContext(comptime config: ErrorContextConfig) type {
         pub fn logError(self: *const Self, err: anyerror) void {
             if (self.items.getLast() catch null) |last_item| {
                 const message = switch (last_item.message) {
-                    .static => |msg| msg,
-                    .dynamic => |msg| msg,
+                    .compile_time => |msg| msg,
+                    .runtime => |msg| msg,
                 };
                 std.log.err("{s} [{}]\nCausation chain:\n{f}", .{ message, err, self });
             } else {
@@ -148,8 +155,8 @@ pub fn ErrorContext(comptime config: ErrorContextConfig) type {
         pub fn logWarning(self: *const Self, err: anyerror) void {
             if (self.items.getLast() catch null) |last_item| {
                 const message = switch (last_item.message) {
-                    .static => |msg| msg,
-                    .dynamic => |msg| msg,
+                    .compile_time => |msg| msg,
+                    .runtime => |msg| msg,
                 };
                 std.log.warn("{s} [{}]\nCausation chain:\n{f}", .{ message, err, self });
             } else {
@@ -165,8 +172,8 @@ pub fn ErrorContext(comptime config: ErrorContextConfig) type {
             for (1..(self.items.len + 1)) |ordinal_number| {
                 const item = self.items.get(self.items.len - ordinal_number) catch unreachable;
                 const message = switch (item.message) {
-                    .static => |msg| msg,
-                    .dynamic => |msg| msg,
+                    .compile_time => |msg| msg,
+                    .runtime => |msg| msg,
                 };
                 try writer.print("{}) {s}\n", .{ ordinal_number, message });
             }
@@ -209,7 +216,7 @@ test "restore should bring back the state captured by save" {
 
     number = 1;
     context.new("Error: {}", .{number});
-    context.append("Static error.", .{});
+    context.append("Comptime error.", .{});
     number = 2;
     context.append("Error: {}", .{number});
     const saved = context.save();
@@ -224,7 +231,7 @@ test "restore should bring back the state captured by save" {
 
     const message = try std.fmt.allocPrint(testing.allocator, "{f}", .{context});
     defer testing.allocator.free(message);
-    try testing.expectEqualStrings("1) Error: 2\n2) Static error.\n3) Error: 1\n", message);
+    try testing.expectEqualStrings("1) Error: 2\n2) Comptime error.\n3) Error: 1\n", message);
 }
 
 test "should discard earliest items when exceeding max items" {
