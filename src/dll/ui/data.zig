@@ -170,11 +170,12 @@ fn drawEnumLiteral(ctx: *const Context, pointer: anytype) void {
 }
 
 fn drawEnum(ctx: *const Context, pointer: anytype) void {
-    const info = @typeInfo(@TypeOf(pointer.*)).@"enum";
+    const Type = @TypeOf(pointer.*);
+    const info = @typeInfo(Type).@"enum";
     const value = @backingInt(pointer.*);
     var text: [:0]const u8 = undefined;
-    inline for (info.field_names, info.field_values) |field_name, field_value| {
-        if (field_value == value) {
+    for (info.field_names, std.enums.values(Type)) |field_name, field_value| {
+        if (field_value == pointer.*) {
             text = field_name;
             break;
         }

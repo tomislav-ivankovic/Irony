@@ -581,8 +581,7 @@ fn drawHitLinesSettings(value: *model.HitLinesSettings, default: *const model.Hi
             defer imgui.igPopID();
             imgui.igIndent(0);
             defer imgui.igUnindent(0);
-            inline for (@typeInfo(model.AttackType).@"enum".field_values) |field_value| {
-                const attack_type: model.AttackType = @fromBackingInt(field_value);
+            for (std.enums.values(model.AttackType)) |attack_type| {
                 const color_label = switch (attack_type) {
                     .not_attack => "Not Attack",
                     .high => "High",
@@ -736,8 +735,7 @@ fn drawSkeletonSettings(value: *model.SkeletonSettings, default: *const model.Sk
             defer imgui.igPopID();
             imgui.igIndent(0);
             defer imgui.igUnindent(0);
-            inline for (@typeInfo(model.Blocking).@"enum".field_values) |field_value| {
-                const blocking: model.Blocking = @fromBackingInt(field_value);
+            for (std.enums.values(model.Blocking)) |blocking| {
                 const color_label = switch (blocking) {
                     .not_blocking => "Not Blocking",
                     .neutral_blocking_mids => "Neutral Blocking Mids",
@@ -813,8 +811,7 @@ fn drawStageSettings(value: *model.StageSettings, default: *const model.StageSet
             defer imgui.igPopID();
             imgui.igIndent(0);
             defer imgui.igUnindent(0);
-            inline for (@typeInfo(model.WallGimmick).@"enum".field_values) |field_values| {
-                const gimmick: model.WallGimmick = @fromBackingInt(field_values);
+            for (std.enums.values(model.WallGimmick)) |gimmick| {
                 const gimmick_label = switch (gimmick) {
                     .none => "None / Used Up",
                     .wall_break => "Wall Break",
@@ -837,8 +834,7 @@ fn drawStageSettings(value: *model.StageSettings, default: *const model.StageSet
             defer imgui.igPopID();
             imgui.igIndent(0);
             defer imgui.igUnindent(0);
-            inline for (@typeInfo(model.FloorGimmickType).@"enum".field_values) |field_value| {
-                const gimmick: model.FloorGimmickType = @fromBackingInt(field_value);
+            for (std.enums.values(model.FloorGimmickType)) |gimmick| {
                 const gimmick_label = switch (gimmick) {
                     .floor_break => "Floor Break",
                     .floor_blast => "Floor Blast",
@@ -1114,10 +1110,9 @@ fn drawEnum(
     value: *Type,
     default: *const Type,
 ) void {
-    const info = switch (@typeInfo(Type)) {
-        .@"enum" => |info| info,
-        else => @compileError("Expected Type to be an enum type but got: " ++ @typeName(Type)),
-    };
+    if (@typeInfo(Type) != .@"enum") {
+        @compileError("Expected Type to be an enum type but got: " ++ @typeName(Type));
+    }
     imgui.igPushID_Str(label);
     drawDefaultButton(value, default);
     imgui.igPopID();
@@ -1125,8 +1120,7 @@ fn drawEnum(
     const array = std.EnumArray(Type, [:0]const u8).init(names.*);
     if (imgui.igBeginCombo(label, array.get(value.*), 0)) {
         defer imgui.igEndCombo();
-        inline for (info.field_values) |field_value| {
-            const current_value: Type = @fromBackingInt(field_value);
+        for (std.enums.values(Type)) |current_value| {
             if (imgui.igSelectable_Bool(array.get(current_value), value.* == current_value, 0, .{})) {
                 value.* = current_value;
             }

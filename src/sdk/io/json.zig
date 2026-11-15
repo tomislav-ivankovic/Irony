@@ -374,9 +374,9 @@ fn readEnum(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.Al
             return error.UnexpectedToken;
         },
     };
-    inline for (info.field_names, info.field_values) |field_name, field_value| {
+    for (info.field_names, std.enums.values(Type)) |field_name, field_value| {
         if (std.mem.eql(u8, field_name, string)) {
-            return @fromBackingInt(field_value);
+            return field_value;
         }
     }
     misc.error_context.new("Invalid enum value: {s}", .{string});
@@ -960,7 +960,7 @@ fn writeEnumArray(writer: *std.Io.Writer, value_pointer: anytype, whitespace: *c
         misc.error_context.append("Failed to write first entry whitespace.", .{});
         return err;
     };
-    inline for (key_info.field_names, key_info.field_values, 0..) |field_name, field_value, index| {
+    for (key_info.field_names, std.enums.values(Key), 0..) |field_name, key, index| {
         errdefer misc.error_context.append("Failed to write enum array entry: {s}", .{field_name});
         std.json.Stringify.encodeJsonString(field_name, .{}, writer) catch |err| {
             misc.error_context.new("Failed to write entry key.", .{});
@@ -974,7 +974,6 @@ fn writeEnumArray(writer: *std.Io.Writer, value_pointer: anytype, whitespace: *c
             misc.error_context.append("Failed to write entry value whitespace.", .{});
             return err;
         };
-        const key: Key = @fromBackingInt(field_value);
         const field_pointer = value_pointer.getPtrConst(key);
         writeValue(writer, field_pointer, &indented_whitespace) catch |err| {
             misc.error_context.append("Failed to write entry value.", .{});
@@ -1034,14 +1033,13 @@ fn readEnumArray(comptime Type: type, reader: *std.json.Reader, allocator: std.m
             },
         };
         var key_found = false;
-        inline for (key_info.field_names, key_info.field_values, 0..) |field_name, field_value, index| {
+        for (key_info.field_names, std.enums.values(Key), 0..) |field_name, key, index| {
             if (std.mem.eql(u8, field_name, key_name)) {
                 errdefer misc.error_context.append("Failed to read enum array entry: {s}", .{field_name});
                 if (!is_token_freed) { // Key name is not needed while parsing the value.
                     freeIfAllocated(allocator, token);
                     is_token_freed = true;
                 }
-                const key: Key = @fromBackingInt(field_value);
                 const default_field = if (default) |d| d.getPtrConst(key) else null;
                 const value = readValue(Value, reader, allocator, default_field) catch |err| {
                     misc.error_context.append("Failed to read entry value.", .{});
