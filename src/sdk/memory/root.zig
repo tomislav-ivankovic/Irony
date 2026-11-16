@@ -8,6 +8,7 @@ pub const hooking = @import("hooking.zig").hooking;
 pub const Hook = @import("hooking.zig").Hook;
 pub const dereferenceMisaligned = @import("misc.zig").dereferenceMisaligned;
 pub const resolveRelativeOffset = @import("misc.zig").resolveRelativeOffset;
+pub const MemoryUsageAllocator = @import("memory_usage_allocator.zig").MemoryUsageAllocator;
 pub const Pattern = @import("pattern.zig").Pattern;
 pub const PatternCache = @import("pattern_cache.zig").PatternCache;
 pub const pointer_tag = @import("pointer.zig").pointer_tag;

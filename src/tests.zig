@@ -40,6 +40,7 @@ test {
     _ = @import("sdk/memory/converted_value.zig");
     _ = @import("sdk/memory/hooking.zig");
     _ = @import("sdk/memory/misc.zig");
+    _ = @import("sdk/memory/memory_usage_allocator.zig");
     _ = @import("sdk/memory/pattern.zig");
     _ = @import("sdk/memory/pattern_cache.zig");
     _ = @import("sdk/memory/pointer.zig");

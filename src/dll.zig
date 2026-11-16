@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const build_info = @import("build_info");
 const w32 = @import("win32").everything;
 const WinIo = @import("win_io");
@@ -23,7 +24,6 @@ const dx = switch (build_info.rendering_api) {
     .dx12 => sdk.dx12,
 };
 
-const MainAllocator = std.heap.DebugAllocator(.{ .enable_memory_limit = true });
 const MemorySearchTask = sdk.misc.Task(dll.game.Memory(build_info.game));
 const Event = union(enum) {
     present: dx.HostContext,
@@ -33,6 +33,12 @@ const Event = union(enum) {
     shut_down: void,
 };
 const ListeningToEvents = enum(u8) { none, all, only_present };
+
+const MainAllocatorKind = enum { safe, fast };
+const main_allocator_kind: MainAllocatorKind = switch (builtin.mode) {
+    .debug, .safe => .safe,
+    .fast, .small => .fast,
+};
 
 const dx_hooks = dx.Hooks(onPresent, beforeResize, afterResize);
 const game_hooks = dll.game.Hooks(build_info.game, onTick);
@@ -195,14 +201,29 @@ pub fn main() void {
     defer std.log.info("Main thread stopped.", .{});
 
     std.log.debug("Initializing main allocator...", .{});
-    var main_allocator = MainAllocator.init;
+    var safe_allocator = switch (main_allocator_kind) {
+        .safe => std.heap.SafeAllocator.init(std.heap.page_allocator, .{}),
+        .fast => {},
+    };
+    var main_allocator = sdk.memory.MemoryUsageAllocator{
+        .base_allocator = switch (main_allocator_kind) {
+            .safe => safe_allocator.allocator(),
+            .fast => std.heap.c_allocator,
+        },
+    };
     const allocator = main_allocator.allocator();
     std.log.info("Main allocator initialized.", .{});
     defer {
         std.log.debug("De-initializing main allocator...", .{});
-        switch (main_allocator.deinit()) {
-            .ok => std.log.info("Main allocator de-initialized.", .{}),
-            .leak => std.log.err("Main allocator detected memory leaks.", .{}),
+        const leaked_bytes = main_allocator.getUsedBytes();
+        switch (main_allocator_kind) {
+            .safe => _ = safe_allocator.deinit(),
+            .fast => {},
+        }
+        if (leaked_bytes == 0) {
+            std.log.info("Main allocator de-initialized.", .{});
+        } else {
+            std.log.err("Main allocator detected memory leaks of {} bytes.", .{leaked_bytes});
         }
     }
 
@@ -384,7 +405,7 @@ pub fn main() void {
                 .up => {
                     if (event_bus) |*bus| {
                         const game_memory = memory_search_task.peek();
-                        const memory_usage = main_allocator.total_requested_bytes;
+                        const memory_usage = main_allocator.getUsedBytes();
                         bus.draw(io, host_context, game_memory, &game_hooks.camera_override, memory_usage);
                     }
                 },

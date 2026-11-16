@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const build_info = @import("build_info");
 const WinIo = @import("win_io");
 const sdk = @import("sdk/root.zig");
@@ -45,11 +46,27 @@ pub const Mode = enum {
 };
 var mode = Mode.normal;
 
+const MainAllocatorKind = enum { safe, fast };
+const main_allocator_kind: MainAllocatorKind = switch (builtin.mode) {
+    .debug, .safe => .safe,
+    .fast, .small => .fast,
+};
+
 pub fn main(init: std.process.Init.Minimal) !void {
-    var main_allocator = std.heap.DebugAllocator(.{}).init;
-    defer _ = main_allocator.deinit();
-    
-    var win_io = WinIo.init(main_allocator.allocator(), .{});
+    var safe_allocator = switch (main_allocator_kind) {
+        .safe => std.heap.SafeAllocator.init(std.heap.page_allocator, .{}),
+        .fast => {},
+    };
+    defer switch (main_allocator_kind) {
+        .safe => _ = safe_allocator.deinit(),
+        .fast => {},
+    };
+    const allocator = switch (main_allocator_kind) {
+        .safe => safe_allocator.allocator(),
+        .fast => std.heap.c_allocator,
+    };
+
+    var win_io = WinIo.init(allocator, .{});
     defer win_io.deinit();
     console_logger.setIo(win_io.io());
 
