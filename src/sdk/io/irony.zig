@@ -61,16 +61,21 @@ const LocalLayout = struct {
     };
 
     pub const ValueOps = struct {
+        write: *const fn (value_pointer: *const anyopaque, data: []u8) void,
         read: *const fn (data: []const u8, value_pointer: *anyopaque) anyerror!void,
 
         pub fn fromType(Type: type) *const ValueOps {
             const Impl = struct {
+                fn write(value_pointer: *const anyopaque, data: []u8) void {
+                    const typed_value_pointer: *const Type = @ptrCast(@alignCast(value_pointer));
+                    writeValue(Type, typed_value_pointer.*, data);
+                }
                 fn read(data: []const u8, value_pointer: *anyopaque) anyerror!void {
                     const typed_value_pointer: *Type = @ptrCast(@alignCast(value_pointer));
                     typed_value_pointer.* = try readValue(Type, data);
                 }
             };
-            return &.{ .read = Impl.read };
+            return &.{ .write = Impl.write, .read = Impl.read };
         }
     };
 
@@ -115,6 +120,7 @@ const LocalLayout = struct {
     pub const UnionOps = struct {
         getActiveFieldIndex: *const fn (union_pointer: *const anyopaque) usize,
         getFieldPointer: *const fn (union_pointer: *anyopaque, field_index: usize) *anyopaque,
+        writeActiveTag: *const fn (union_pointer: *const anyopaque, data: []u8) void,
         readActiveTag: *const fn (union_pointer: *anyopaque, data: []const u8) anyerror!void,
 
         pub fn fromType(Union: type) *const UnionOps {
@@ -143,6 +149,10 @@ const LocalLayout = struct {
                     }
                     unreachable;
                 }
+                fn writeActiveTag(union_pointer: *const anyopaque, data: []u8) void {
+                    const typed_union_pointer: *const Union = @ptrCast(@alignCast(union_pointer));
+                    writeValue(Tag, std.meta.activeTag(typed_union_pointer.*), data);
+                }
                 fn readActiveTag(union_pointer: *anyopaque, data: []const u8) anyerror!void {
                     const typed_union_pointer: *Union = @ptrCast(@alignCast(union_pointer));
                     const next_tag = try readValue(Tag, data);
@@ -161,6 +171,7 @@ const LocalLayout = struct {
             return &.{
                 .getActiveFieldIndex = Impl.getActiveFieldIndex,
                 .getFieldPointer = Impl.getFieldPointer,
+                .writeActiveTag = Impl.writeActiveTag,
                 .readActiveTag = Impl.readActiveTag,
             };
         }
@@ -222,7 +233,8 @@ pub fn writeIronyFormat(
         return err;
     };
 
-    writeFrames(Frame, allocator, &encoder_writer, frames) catch |err| {
+    const write_plan = comptime getWritePlan(&local_layout);
+    writeFrames(Frame, allocator, &encoder_writer, write_plan, frames) catch |err| {
         misc.error_context.append("Failed to write frames.", .{});
         return err;
     };
@@ -382,6 +394,7 @@ fn writeFrames(
     Frame: type,
     allocator: std.mem.Allocator,
     writer: *std.Io.Writer,
+    write_plan: []const WriteStep,
     frames: []const Frame,
 ) !void {
     if (frames.len > max_number_of_frames) {
@@ -402,13 +415,10 @@ fn writeFrames(
         return err;
     };
     defer allocator.free(array_of_structs);
-    var array_of_structs_writer = std.Io.Writer.fixed(array_of_structs);
+    @memset(array_of_structs, 0);
 
     for (frames, 0..) |*frame, index| {
-        writeValue(&array_of_structs_writer, frame) catch |err| {
-            misc.error_context.append("Failed to write frame {} into array of structs buffer.", .{index});
-            return err;
-        };
+        writeSteps(array_of_structs[(index * frame_size)..][0..frame_size], write_plan, frame);
     }
 
     for (0..frame_size) |offset| {
@@ -491,144 +501,26 @@ fn readFrames(
     return frames;
 }
 
-fn writeValue(writer: *std.Io.Writer, value_pointer: anytype) !void {
-    const Type = switch (@typeInfo(@TypeOf(value_pointer))) {
-        .pointer => |info| info.child,
-        else => @compileError("Expected value_pointer to be a pointer but got: " ++ @typeName(@TypeOf(value_pointer))),
-    };
+/// Encodes the value into `data`, which must be exactly `serializedSizeOf(Type)` bytes long.
+fn writeValue(Type: type, value: Type, data: []u8) void {
     switch (@typeInfo(Type)) {
-        .void => {},
-        .bool => {
-            const value = value_pointer.*;
-            const byte: u8 = switch (value) {
-                false => 0,
-                true => 1,
-            };
-            writer.writeByte(byte) catch |err| {
-                misc.error_context.new("Failed to write bool's byte: {}", .{byte});
-                return err;
-            };
-        },
+        .bool => data[0] = @intFromBool(value),
         .int => |*info| {
-            const value = value_pointer.*;
-            const WriteType = @Int(info.signedness, serializedSizeOf(Type) * std.mem.byte_size_in_bits);
-            const write_value: WriteType = @intCast(value);
-            writer.writeInt(WriteType, write_value, endian) catch |err| {
-                misc.error_context.new(
-                    "Failed to write int: {} ({s} -> {s})",
-                    .{ value, @typeName(Type), @typeName(WriteType) },
-                );
-                return err;
-            };
+            const size = serializedSizeOf(Type);
+            const WriteType = @Int(info.signedness, size * std.mem.byte_size_in_bits);
+            std.mem.writeInt(WriteType, data[0..size], value, endian);
         },
-        .float => |*info| {
-            const value = value_pointer.*;
-            const IntType = @Int(.unsigned, info.bits);
-            const int_value: IntType = @bitCast(value);
-            writeValue(writer, &int_value) catch |err| {
-                misc.error_context.append(
-                    "Failed to write float: {} ({s} -> {s})",
-                    .{ value, @typeName(Type), @typeName(IntType) },
-                );
-                return err;
-            };
+        .float => |*info| writeValue(@Int(.unsigned, info.bits), @bitCast(value), data),
+        .@"enum" => |*info| writeValue(info.tag_type, @backingInt(value), data),
+        .@"struct" => |*info| {
+            const IntType = info.backing_integer orelse @compileError("Unsupported type: " ++ @typeName(Type));
+            writeValue(IntType, @backingInt(value), data);
         },
-        .@"enum" => |*info| {
-            const value = value_pointer.*;
-            const IntType = info.tag_type;
-            const int_value: IntType = @backingInt(value);
-            writeValue(writer, &int_value) catch |err| {
-                misc.error_context.append(
-                    "Failed to write enum: {s} ({s} -> {s})",
-                    .{ @tagName(value), @typeName(Type), @typeName(IntType) },
-                );
-                return err;
-            };
-        },
-        .optional => |*info| {
-            if (value_pointer.*) |*child_pointer| {
-                writer.writeByte(1) catch |err| {
-                    misc.error_context.new("Failed to write optional's tag: 1", .{});
-                    return err;
-                };
-                writeValue(writer, child_pointer) catch |err| {
-                    misc.error_context.append("Failed to write optional's payload.", .{});
-                    return err;
-                };
-            } else {
-                writer.writeByte(0) catch |err| {
-                    misc.error_context.new("Failed to write optional's tag: 0", .{});
-                    return err;
-                };
-                for (0..serializedSizeOf(info.child)) |_| {
-                    writer.writeByte(0) catch |err| {
-                        misc.error_context.new("Failed to write optional's null padding.", .{});
-                        return err;
-                    };
-                }
+        .@"union" => |*info| {
+            if (info.layout != .@"packed") {
+                @compileError("Unsupported type: " ++ @typeName(Type));
             }
-        },
-        .array => {
-            for (value_pointer, 0..) |*element_pointer, index| {
-                writeValue(writer, element_pointer) catch |err| {
-                    misc.error_context.append("Failed to write array element at index: {}", .{index});
-                    return err;
-                };
-            }
-        },
-        .@"struct" => |*info| if (info.backing_integer) |IntType| {
-            const int_value: IntType = @backingInt(value_pointer.*);
-            writeValue(writer, &int_value) catch |err| {
-                misc.error_context.append(
-                    "Failed to write packed struct's backing int: {} ({s})",
-                    .{ int_value, @typeName(IntType) },
-                );
-                return err;
-            };
-        } else {
-            inline for (info.field_names) |field_name| {
-                const field_pointer = &@field(value_pointer, field_name);
-                writeValue(writer, field_pointer) catch |err| {
-                    misc.error_context.append("Failed to write struct field: {s}", .{field_name});
-                    return err;
-                };
-            }
-        },
-        .@"union" => |*info| if (info.layout == .@"packed") {
-            const int_value = @backingInt(value_pointer.*);
-            const IntType = @TypeOf(int_value);
-            writeValue(writer, &int_value) catch |err| {
-                misc.error_context.append(
-                    "Failed to write packed union's backing int: {} ({s})",
-                    .{ int_value, @typeName(IntType) },
-                );
-                return err;
-            };
-        } else {
-            const Tag = info.tag_type orelse {
-                @compileError("Union " ++ @typeName(Type) ++ " is not serializable. (Not tagged and not packed.)");
-            };
-            const tag = std.meta.activeTag(value_pointer.*);
-            writeValue(writer, &tag) catch |err| {
-                misc.error_context.append("Failed to write union's tag: {s}", .{@tagName(value_pointer.*)});
-                return err;
-            };
-            switch (value_pointer.*) {
-                inline else => |*payload_pointer| {
-                    const Payload = @TypeOf(payload_pointer.*);
-                    writeValue(writer, payload_pointer) catch |err| {
-                        misc.error_context.append("Failed to write union's payload: {s}", .{@tagName(value_pointer.*)});
-                        return err;
-                    };
-                    const padding_size = serializedSizeOf(Type) - serializedSizeOf(Tag) - serializedSizeOf(Payload);
-                    for (0..padding_size) |_| {
-                        writer.writeByte(0) catch |err| {
-                            misc.error_context.new("Failed to write union's padding.", .{});
-                            return err;
-                        };
-                    }
-                },
-            }
+            writeValue(@Int(.unsigned, @bitSizeOf(Type)), @backingInt(value), data);
         },
         else => @compileError("Unsupported type: " ++ @typeName(Type)),
     }
@@ -746,6 +638,129 @@ fn readValue(Type: type, data: []const u8) !Type {
         },
         else => @compileError("Unsupported type: " ++ @typeName(Type)),
     }
+}
+
+const WriteStep = union(enum) {
+    value: Value,
+    optional: Optional,
+    @"union": Union,
+
+    pub const Value = struct {
+        memory_offset: usize,
+        data_offset: usize,
+        data_size: usize,
+        ops: *const LocalLayout.ValueOps,
+    };
+    pub const Optional = struct {
+        memory_offset: usize,
+        tag_data_offset: usize,
+        payload: []const WriteStep,
+        ops: *const LocalLayout.OptionalOps,
+    };
+    pub const Union = struct {
+        memory_offset: usize,
+        tag_data_offset: usize,
+        tag_data_size: usize,
+        variants: []const []const WriteStep,
+        ops: *const LocalLayout.UnionOps,
+    };
+};
+
+fn getWritePlan(local_layout: *const LocalLayout) []const WriteStep {
+    @setEvalBranchQuota(100000);
+    comptime {
+        return flattenNode(local_layout.fields, &local_layout.root);
+    }
+}
+
+fn flattenNode(fields: []const LocalLayout.Field, node: *const LocalLayout.Node) []const WriteStep {
+    var steps: [fields.len]WriteStep = undefined;
+    var len: usize = 0;
+    fillWriteSteps(fields, node, 0, &steps, &len);
+    const final_steps = steps[0..len].*;
+    return &final_steps;
+}
+
+fn fillWriteSteps(
+    fields: []const LocalLayout.Field,
+    node: *const LocalLayout.Node,
+    memory_offset: usize,
+    steps: []WriteStep,
+    len: *usize,
+) void {
+    switch (node.kind) {
+        .empty => {},
+        .value => |*value| {
+            const field = &fields[value.field_index];
+            steps[len.*] = .{ .value = .{
+                .memory_offset = memory_offset,
+                .data_offset = field.offset,
+                .data_size = field.size,
+                .ops = value.ops,
+            } };
+            len.* += 1;
+        },
+        .@"struct" => |*@"struct"| {
+            for (@"struct".fields) |*field| {
+                fillWriteSteps(fields, &field.node, memory_offset + field.offset, steps, len);
+            }
+        },
+        .array => |*array| {
+            for (array.elements, 0..) |*element, index| {
+                fillWriteSteps(fields, element, memory_offset + (index * element.size), steps, len);
+            }
+        },
+        .optional => |*optional| {
+            steps[len.*] = .{ .optional = .{
+                .memory_offset = memory_offset,
+                .tag_data_offset = fields[optional.tag_field_index].offset,
+                .payload = flattenNode(fields, optional.payload),
+                .ops = optional.ops,
+            } };
+            len.* += 1;
+        },
+        .@"union" => |*@"union"| {
+            var variants: [@"union".variants.len][]const WriteStep = undefined;
+            for (@"union".variants, &variants) |*variant_node, *variant| {
+                variant.* = flattenNode(fields, variant_node);
+            }
+            const final_variants = variants;
+            const tag_field = &fields[@"union".tag_field_index];
+            steps[len.*] = .{ .@"union" = .{
+                .memory_offset = memory_offset,
+                .tag_data_offset = tag_field.offset,
+                .tag_data_size = tag_field.size,
+                .variants = &final_variants,
+                .ops = @"union".ops,
+            } };
+            len.* += 1;
+        },
+    }
+}
+
+fn writeSteps(frame_data: []u8, steps: []const WriteStep, base_pointer: *const anyopaque) void {
+    for (steps) |*step| switch (step.*) {
+        .value => |*value| {
+            const value_pointer = offsetConstPointer(base_pointer, value.memory_offset);
+            value.ops.write(value_pointer, frame_data[value.data_offset..][0..value.data_size]);
+        },
+        .optional => |*optional| {
+            const optional_pointer = offsetConstPointer(base_pointer, optional.memory_offset);
+            if (!optional.ops.isSome(optional_pointer)) {
+                continue;
+            }
+            frame_data[optional.tag_data_offset] = 1;
+            writeSteps(frame_data, optional.payload, optional.ops.getPayload(@constCast(optional_pointer)));
+        },
+        .@"union" => |*@"union"| {
+            const union_pointer = offsetConstPointer(base_pointer, @"union".memory_offset);
+            const tag_data = frame_data[@"union".tag_data_offset..][0..@"union".tag_data_size];
+            @"union".ops.writeActiveTag(union_pointer, tag_data);
+            const index = @"union".ops.getActiveFieldIndex(union_pointer);
+            const variant_pointer = @"union".ops.getFieldPointer(@constCast(union_pointer), index);
+            writeSteps(frame_data, @"union".variants[index], variant_pointer);
+        },
+    };
 }
 
 const ReadContext = struct {
