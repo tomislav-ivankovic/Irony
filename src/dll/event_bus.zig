@@ -94,10 +94,10 @@ pub const EventBus = struct {
 
         std.log.debug("Spawning latest version fetching task...", .{});
         const latest_version_task = LatestVersionTask.spawn(allocator, struct {
-            fn call(alloc: std.mem.Allocator, io_copy: std.Io) ?sdk.misc.Version {
+            fn call(alloc: std.mem.Allocator) ?sdk.misc.Version {
                 std.log.info("Latest version fetching task spawned.", .{});
                 std.log.debug("Fetching latest version...", .{});
-                if (sdk.misc.Version.fetchLatest(alloc, io_copy)) |latest_version| {
+                if (sdk.misc.Version.fetchLatest(alloc)) |latest_version| {
                     std.log.info("Latest version fetched: {f}", .{latest_version});
                     return latest_version;
                 } else |err| {
@@ -106,7 +106,7 @@ pub const EventBus = struct {
                     return null;
                 }
             }
-        }.call, .{ allocator, io }) catch |err| block: {
+        }.call, .{allocator}) catch |err| block: {
             sdk.misc.error_context.append("Failed to spawn latest version fetching task.", .{});
             sdk.misc.error_context.logError(err);
             break :block LatestVersionTask.createCompleted(null);

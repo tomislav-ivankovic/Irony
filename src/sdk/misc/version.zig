@@ -1,6 +1,7 @@
 const std = @import("std");
 const build_info = @import("build_info");
 const misc = @import("../misc/root.zig");
+const os = @import("../os/root.zig");
 
 pub const Version = struct {
     major: Element,
@@ -13,57 +14,11 @@ pub const Version = struct {
 
     pub const current = Self.comptimeParse(build_info.version);
 
-    pub fn fetchLatest(allocator: std.mem.Allocator, io: std.Io) !Self {
-        var client = std.http.Client{ .allocator = allocator, .io = io };
-        defer client.deinit();
-
-        const uri_string = build_info.home_page ++ "/releases/latest";
-        const uri = comptime std.Uri.parse(uri_string) catch {
-            @compileError("Invalid URI: " ++ uri_string);
-        };
-        var request = client.request(.GET, uri, .{
-            .keep_alive = false,
-            .extra_headers = &.{
-                .{ .name = "Accept", .value = "application/json" },
-                .{ .name = "X-GitHub-Api-Version", .value = "2022-11-28" },
-            },
-        }) catch |err| {
-            misc.error_context.new("Failed to open connection to: {s}", .{uri_string});
-            return err;
-        };
-        defer request.deinit();
-
-        request.sendBodiless() catch |err| {
-            misc.error_context.new("Failed to send GET request to: {s}", .{uri_string});
-            return err;
-        };
-
-        var redirect_buffer: [1024]u8 = undefined;
-        var response = request.receiveHead(&redirect_buffer) catch |err| {
-            misc.error_context.new("Failed to receive response from: {s}", .{uri_string});
-            return err;
-        };
-        const status = response.head.status;
-        if (status != .ok) {
-            if (status.phrase()) |phrase| {
-                misc.error_context.new("Server responded with status: {s}", .{phrase});
-            } else {
-                misc.error_context.new("Server responded with status code: {}", .{@backingInt(status)});
-            }
-            return error.BadResponseStatus;
-        }
-
-        var transfer_buffer: [1024]u8 = undefined;
-        var decompress: std.http.Decompress = undefined;
-        var decompress_buffer: [
-            @max(std.compress.zstd.default_window_len, std.compress.flate.max_window_len)
-        ]u8 = undefined;
-        const body = response.readerDecompressing(
-            &transfer_buffer,
-            &decompress,
-            &decompress_buffer,
-        ).allocRemaining(allocator, .limited(1_000_000)) catch |err| {
-            misc.error_context.new("Failed to read the response body.", .{});
+    pub fn fetchLatest(allocator: std.mem.Allocator) !Self {
+        const url = build_info.home_page ++ "/releases/latest";
+        const headers = "Accept: application/json\r\nX-GitHub-Api-Version: 2022-11-28\r\n";
+        const body = os.httpsGet(allocator, url, headers, 1_000_000) catch |err| {
+            misc.error_context.append("Failed to send GET request to: {s}", .{url});
             return err;
         };
         defer allocator.free(body);

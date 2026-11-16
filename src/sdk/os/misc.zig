@@ -118,6 +118,122 @@ pub fn getExecutableTimestamp() !u32 {
     return nt_headers.FileHeader.TimeDateStamp;
 }
 
+pub fn httpsGet(
+    allocator: std.mem.Allocator,
+    comptime url: []const u8,
+    comptime headers: []const u8,
+    max_body_size: usize,
+) ![]u8 {
+    const host, const path = comptime block: {
+        const prefix = "https://";
+        if (!std.mem.startsWith(u8, url, prefix)) {
+            @compileError("Expecting an HTTPS URL but got: " ++ url);
+        }
+        const rest = url[prefix.len..];
+        const path_start = std.mem.indexOfScalar(u8, rest, '/') orelse rest.len;
+        break :block .{ rest[0..path_start], rest[path_start..] };
+    };
+    const headers_utf16 = std.unicode.utf8ToUtf16LeStringLiteral(headers);
+
+    const session = w32.WinHttpOpen(
+        std.unicode.utf8ToUtf16LeStringLiteral("Irony"),
+        w32.WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+        null,
+        null,
+        0,
+    ) orelse {
+        misc.error_context.new("{f}", .{os.Error.getLast()});
+        misc.error_context.append("WinHttpOpen returned null.", .{});
+        return error.OsError;
+    };
+    defer _ = w32.WinHttpCloseHandle(session);
+
+    const connection = w32.WinHttpConnect(
+        session,
+        std.unicode.utf8ToUtf16LeStringLiteral(host),
+        w32.INTERNET_DEFAULT_HTTPS_PORT,
+        0,
+    ) orelse {
+        misc.error_context.new("{f}", .{os.Error.getLast()});
+        misc.error_context.append("WinHttpConnect returned null.", .{});
+        return error.OsError;
+    };
+    defer _ = w32.WinHttpCloseHandle(connection);
+
+    const request = w32.WinHttpOpenRequest(
+        connection,
+        std.unicode.utf8ToUtf16LeStringLiteral("GET"),
+        std.unicode.utf8ToUtf16LeStringLiteral(path),
+        null,
+        null,
+        null,
+        w32.WINHTTP_FLAG_SECURE,
+    ) orelse {
+        misc.error_context.new("{f}", .{os.Error.getLast()});
+        misc.error_context.append("WinHttpOpenRequest returned null.", .{});
+        return error.OsError;
+    };
+    defer _ = w32.WinHttpCloseHandle(request);
+
+    if (w32.WinHttpSendRequest(request, headers_utf16, headers_utf16.len, null, 0, 0, 0) == 0) {
+        misc.error_context.new("{f}", .{os.Error.getLast()});
+        misc.error_context.append("WinHttpSendRequest returned 0.", .{});
+        return error.OsError;
+    }
+    if (w32.WinHttpReceiveResponse(request, null) == 0) {
+        misc.error_context.new("{f}", .{os.Error.getLast()});
+        misc.error_context.append("WinHttpReceiveResponse returned 0.", .{});
+        return error.OsError;
+    }
+
+    var status_code: u32 = 0;
+    var status_code_size: u32 = @sizeOf(u32);
+    if (w32.WinHttpQueryHeaders(
+        request,
+        w32.WINHTTP_QUERY_STATUS_CODE | w32.WINHTTP_QUERY_FLAG_NUMBER,
+        null,
+        &status_code,
+        &status_code_size,
+        null,
+    ) == 0) {
+        misc.error_context.new("{f}", .{os.Error.getLast()});
+        misc.error_context.append("WinHttpQueryHeaders returned 0.", .{});
+        return error.OsError;
+    }
+    if (status_code != 200) {
+        misc.error_context.new("Server responded with status code: {}", .{status_code});
+        return error.BadResponseStatus;
+    }
+
+    var body: std.ArrayList(u8) = .empty;
+    errdefer body.deinit(allocator);
+    while (true) {
+        body.ensureUnusedCapacity(allocator, 4096) catch |err| {
+            misc.error_context.new("Failed to allocate memory for the response body.", .{});
+            return err;
+        };
+        const unused = body.unusedCapacitySlice();
+        var bytes_read: u32 = 0;
+        if (w32.WinHttpReadData(request, unused.ptr, @intCast(unused.len), &bytes_read) == 0) {
+            misc.error_context.new("{f}", .{os.Error.getLast()});
+            misc.error_context.append("WinHttpReadData returned 0.", .{});
+            return error.OsError;
+        }
+        if (bytes_read == 0) {
+            break;
+        }
+        body.items.len += bytes_read;
+        if (body.items.len > max_body_size) {
+            misc.error_context.new("Response body exceeded the maximum size of {} bytes.", .{max_body_size});
+            return error.StreamTooLong;
+        }
+    }
+    return body.toOwnedSlice(allocator) catch |err| {
+        misc.error_context.new("Failed to allocate memory for the response body.", .{});
+        return err;
+    };
+}
+
 const testing = std.testing;
 
 test "pathToFileName should return correct value" {
