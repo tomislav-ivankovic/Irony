@@ -152,6 +152,15 @@ pub fn build(b: *std.Build) void {
         "skip_display",
         b.option(bool, "skip_display", "Whether to skip tests that require a display to succeed.") orelse false,
     );
+    tests_config.addOption(
+        bool,
+        "isolate_ui_tests",
+        b.option(
+            bool,
+            "isolate_ui_tests",
+            "Whether every UI test gets its own test engine and ImGui context instead of sharing them between tests.",
+        ) orelse false,
+    );
     tests.root_module.addOptions("config", tests_config);
 
     // This *creates* a Test step in the build graph, to be executed when another step is evaluated that depends on it.

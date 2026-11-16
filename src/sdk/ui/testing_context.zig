@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const imgui = @import("imgui");
 const misc = @import("../misc/root.zig");
 const ui = @import("root.zig");
+const isolate_ui_tests = @import("config").isolate_ui_tests;
 
 threadlocal var allocator_instance = std.heap.DebugAllocator(.{}){};
 threadlocal var instance: ?TestingContext = null;
@@ -46,8 +47,7 @@ pub fn deinitTestingContextAndDetectLeaks() void {
 pub const TestingContext = struct {
     allocator: std.mem.Allocator,
     old_allocator: ?std.mem.Allocator,
-    engine: *imgui.ImGuiTestEngine,
-    imgui_context: *imgui.ImGuiContext,
+    shared_ui: if (isolate_ui_tests) void else Ui,
 
     const Self = @This();
     pub const Function = fn (ctx: ui.TestContext) anyerror!void;
@@ -60,42 +60,17 @@ pub const TestingContext = struct {
         const old_allocator = ui.getAllocator();
         ui.setAllocator(allocator);
         errdefer ui.setAllocator(old_allocator);
-
-        const engine = imgui.teCreateContext() orelse {
-            misc.error_context.new("teCreateContext returned null.", .{});
-            return error.ImguiError;
-        };
-        errdefer imgui.teDestroyContext(engine);
-
-        const imgui_context = imgui.igCreateContext(null) orelse {
-            misc.error_context.new("igCreateContext returned null.", .{});
-            return error.ImguiError;
-        };
-        errdefer imgui.igDestroyContext(imgui_context);
-
-        const test_io = imgui.teGetIO(engine);
-        test_io.*.ConfigVerboseLevel = imgui.ImGuiTestVerboseLevel_Info;
-        test_io.*.ConfigVerboseLevelOnError = imgui.ImGuiTestVerboseLevel_Debug;
-
-        const imgui_io = imgui.igGetIO_Nil();
-        imgui_io.*.IniFilename = null;
-        imgui_io.*.BackendFlags |= imgui.ImGuiBackendFlags_RendererHasTextures;
-
-        imgui.teStart(engine, imgui_context);
-        errdefer imgui.teStop(engine);
-
         return .{
             .allocator = allocator,
             .old_allocator = old_allocator,
-            .engine = engine,
-            .imgui_context = imgui_context,
+            .shared_ui = if (isolate_ui_tests) {} else try Ui.init(),
         };
     }
 
     pub fn deinit(self: *Self) void {
-        imgui.teStop(self.engine);
-        imgui.igDestroyContext(self.imgui_context);
-        imgui.teDestroyContext(self.engine);
+        if (!isolate_ui_tests) {
+            self.shared_ui.deinit();
+        }
         ui.setAllocator(self.old_allocator);
     }
 
@@ -105,8 +80,14 @@ pub const TestingContext = struct {
         comptime guiFunction: *const Function,
         comptime testFunction: *const Function,
     ) !void {
-        const the_test = imgui.teRegisterTest(self.engine, "", "", null, 0);
-        defer imgui.teUnregisterTest(self.engine, the_test);
+        var isolated_ui = if (isolate_ui_tests) try Ui.init() else {};
+        defer if (isolate_ui_tests) isolated_ui.deinit();
+        const current_ui = if (isolate_ui_tests) &isolated_ui else &self.shared_ui;
+        const engine = current_ui.engine;
+        imgui.igSetCurrentContext(current_ui.imgui_context);
+
+        const the_test = imgui.teRegisterTest(engine, "", "", null, 0);
+        defer imgui.teUnregisterTest(engine, the_test);
 
         const GuiFunction = struct {
             var returned_error: ?anyerror = null;
@@ -148,8 +129,8 @@ pub const TestingContext = struct {
 
         imgui.teClearUiState();
         imgui.igSetClipboardText("");
-        imgui.teQueueTest(self.engine, the_test, config.run_flags);
-        while (!imgui.teIsTestQueueEmpty(self.engine)) {
+        imgui.teQueueTest(engine, the_test, config.run_flags);
+        while (!imgui.teIsTestQueueEmpty(engine)) {
             misc.error_context.clear();
 
             const imgui_io = imgui.igGetIO_Nil();
@@ -158,7 +139,7 @@ pub const TestingContext = struct {
 
             imgui.igNewFrame();
             imgui.igRender();
-            imgui.tePostSwap(self.engine);
+            imgui.tePostSwap(engine);
         }
 
         if (GuiFunction.returned_error) |err| {
@@ -185,6 +166,42 @@ pub const TestingContext = struct {
             },
         }
     }
+
+    const Ui = struct {
+        engine: *imgui.ImGuiTestEngine,
+        imgui_context: *imgui.ImGuiContext,
+
+        fn init() !Ui {
+            const engine = imgui.teCreateContext() orelse {
+                misc.error_context.new("teCreateContext returned null.", .{});
+                return error.ImguiError;
+            };
+            errdefer imgui.teDestroyContext(engine);
+
+            const imgui_context = imgui.igCreateContext(null) orelse {
+                misc.error_context.new("igCreateContext returned null.", .{});
+                return error.ImguiError;
+            };
+            errdefer imgui.igDestroyContext(imgui_context);
+
+            const test_io = imgui.teGetIO(engine);
+            test_io.*.ConfigVerboseLevel = imgui.ImGuiTestVerboseLevel_Info;
+            test_io.*.ConfigVerboseLevelOnError = imgui.ImGuiTestVerboseLevel_Debug;
+
+            const imgui_io = imgui.igGetIO_Nil();
+            imgui_io.*.IniFilename = null;
+            imgui_io.*.BackendFlags |= imgui.ImGuiBackendFlags_RendererHasTextures;
+
+            imgui.teStart(engine, imgui_context);
+            return .{ .engine = engine, .imgui_context = imgui_context };
+        }
+
+        fn deinit(self: *Ui) void {
+            imgui.teStop(self.engine);
+            imgui.igDestroyContext(self.imgui_context);
+            imgui.teDestroyContext(self.engine);
+        }
+    };
 
     fn printTestFailedLog(comptime config: Config, the_test: *imgui.ImGuiTest) void {
         if (config.disable_printing) {

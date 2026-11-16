@@ -1,5 +1,4 @@
 const std = @import("std");
-const imgui = @import("imgui");
 const sdk = @import("../../sdk/root.zig");
 const model = @import("../model/root.zig");
 const ui = @import("../ui/root.zig");
@@ -8,6 +7,7 @@ pub fn drawIngameCamera(
     shapes: *const ui.Shapes,
     settings: *const model.IngameCameraSettings,
     frame: *const model.Frame,
+    display_size: sdk.math.Vec2,
 ) void {
     if (!settings.enabled) {
         return;
@@ -16,8 +16,7 @@ pub fn drawIngameCamera(
         return;
     }
     const camera = if (frame.camera) |*c| c else return;
-    const display_size = imgui.igGetIO_Nil().*.DisplaySize;
-    const inverse_aspect_ratio = display_size.y / display_size.x;
+    const inverse_aspect_ratio = display_size.y() / display_size.x();
     const half_horizontal_fov: f32 = 0.5 * camera.horizontal_fov;
     const half_vertical_fov: f32 = std.math.atan(inverse_aspect_ratio * std.math.tan(half_horizontal_fov));
     const edges = [4]sdk.math.Vec3{
@@ -53,7 +52,7 @@ test "should draw lines correctly" {
         .roll = 0,
         .horizontal_fov = std.math.degreesToRadians(65.0),
     } };
-    drawIngameCamera(&shapes, &settings, &frame);
+    drawIngameCamera(&shapes, &settings, &frame, .fromArray(.{ 1280, 720 }));
 
     try testing.expectEqual(4, ui.testing_shapes.getAll().len);
     const lines = [4]?*const ui.TestingShapes.Line{
@@ -98,7 +97,7 @@ test "should draw nothing when disabled in settings" {
         .roll = 0,
         .horizontal_fov = std.math.degreesToRadians(65.0),
     } };
-    drawIngameCamera(&shapes, &settings, &frame);
+    drawIngameCamera(&shapes, &settings, &frame, .fromArray(.{ 1280, 720 }));
 
     try testing.expectEqual(0, ui.testing_shapes.getAll().len);
 }
@@ -120,7 +119,7 @@ test "should draw nothing when shapes are 2D and direction is front" {
         .roll = 0,
         .horizontal_fov = std.math.degreesToRadians(65.0),
     } };
-    drawIngameCamera(&shapes, &settings, &frame);
+    drawIngameCamera(&shapes, &settings, &frame, .fromArray(.{ 1280, 720 }));
 
     try testing.expectEqual(0, ui.testing_shapes.getAll().len);
 }

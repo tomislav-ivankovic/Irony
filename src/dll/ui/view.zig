@@ -53,7 +53,8 @@ pub const View = struct {
         };
         const shapes = ui.Shapes{ ._2d = shapes_2d };
 
-        ui.drawIngameCamera(&shapes, &settings.ingame_camera, frame);
+        const display_size = sdk.math.Vec2.fromImVec(imgui.igGetIO_Nil().*.DisplaySize);
+        ui.drawIngameCamera(&shapes, &settings.ingame_camera, frame, display_size);
         ui.drawCollisionSpheres(&shapes, &settings.collision_spheres, frame);
         self.hurt_cylinders.draw(&shapes, &settings.hurt_cylinders, frame);
         ui.drawStage(&shapes_2d, &settings.stage, frame);
@@ -75,7 +76,8 @@ pub const View = struct {
             .thickness_scale = settings.general.rendering_3d.thickness_scale,
             .fill_alpha = settings.general.rendering_3d.fill_alpha,
         } };
-        ui.drawIngameCamera(&shapes, &settings.ingame_camera, frame);
+        const display_size = sdk.math.Vec2.fromImVec(imgui.igGetIO_Nil().*.DisplaySize);
+        ui.drawIngameCamera(&shapes, &settings.ingame_camera, frame, display_size);
         ui.drawCollisionSpheres(&shapes, &settings.collision_spheres, frame);
         self.hurt_cylinders.draw(&shapes, &settings.hurt_cylinders, frame);
         ui.drawForwardDirections(&shapes, &settings.forward_directions, frame);

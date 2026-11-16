@@ -205,6 +205,7 @@ test "should render correct content under correct id" {
         var layout = QuadrantLayout{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             layout.draw({}, &.{
@@ -255,6 +256,7 @@ test "should pass the context to content functions" {
         var bottom_right_context: ?i32 = null;
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             const context: i32 = 123;

@@ -1263,6 +1263,7 @@ test "should draw correct table headers based on settings" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1319,6 +1320,7 @@ test "should draw data in correct columns based on settings" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1388,6 +1390,7 @@ test "should put text into clipboard when clicking text" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1442,6 +1445,7 @@ test "should slowly fade out from last present value to null or empty value" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1487,6 +1491,7 @@ test "should not draw row when row is disabled in settings" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1521,6 +1526,7 @@ test "should draw irony version correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1555,6 +1561,7 @@ test "should draw game correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1589,6 +1596,7 @@ test "should draw game version correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1618,6 +1626,7 @@ test "should draw source correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1662,6 +1671,7 @@ test "should draw match phase correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1721,6 +1731,7 @@ test "should draw frames since round start correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1755,6 +1766,7 @@ test "should draw frames left in round correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1789,6 +1801,7 @@ test "should draw player name correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1816,6 +1829,7 @@ test "should draw rounds won correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1851,6 +1865,7 @@ test "should draw rounds needed to win correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1885,6 +1900,7 @@ test "should draw health correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1920,6 +1936,7 @@ test "should draw recoverable health correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1955,6 +1972,7 @@ test "should draw health recover limit correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -1990,6 +2008,7 @@ test "should draw max health correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2025,6 +2044,7 @@ test "should draw rage correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2060,6 +2080,7 @@ test "should draw heat correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2095,6 +2116,7 @@ test "should draw character ID correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2130,6 +2152,7 @@ test "should draw animation ID correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2165,6 +2188,7 @@ test "should draw animation frame correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2200,6 +2224,7 @@ test "should draw animation total frames correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2235,6 +2260,7 @@ test "should draw move phase correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2278,6 +2304,7 @@ test "should draw move frame correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2313,6 +2340,7 @@ test "should draw startup frames correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2348,6 +2376,7 @@ test "should draw active frames correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2383,6 +2412,7 @@ test "should draw recovery frames correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2442,6 +2472,7 @@ test "should draw total frames correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2489,6 +2520,7 @@ test "should draw frame advantage correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2534,6 +2566,7 @@ test "should draw attack type correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2601,6 +2634,7 @@ test "should draw attack range correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2636,6 +2670,7 @@ test "should draw attack height correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2677,6 +2712,7 @@ test "should draw recovery range correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2712,6 +2748,7 @@ test "should draw hit outcome correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2803,6 +2840,7 @@ test "should draw combo hits correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2838,6 +2876,7 @@ test "should draw combo damage correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2873,6 +2912,7 @@ test "should draw posture correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2916,6 +2956,7 @@ test "should draw blocking correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -2959,6 +3000,7 @@ test "should draw crushing correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3010,6 +3052,7 @@ test "should draw can interact correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3045,6 +3088,7 @@ test "should draw throw escape phase correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3080,6 +3124,7 @@ test "should draw throw escape input mode correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3115,6 +3160,7 @@ test "should draw correct throw escape correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3173,6 +3219,7 @@ test "should draw attempted throw escape correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3231,6 +3278,7 @@ test "should draw throw escape attempt timing correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3278,6 +3326,7 @@ test "should draw can move correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3313,6 +3362,7 @@ test "should draw input correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3405,6 +3455,7 @@ test "should draw effective input correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3497,6 +3548,7 @@ test "should draw in special style correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3532,6 +3584,7 @@ test "should draw distance to opponent correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3584,6 +3637,7 @@ test "should draw angle to opponent correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3628,6 +3682,7 @@ test "should draw distance to wall correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3677,6 +3732,7 @@ test "should draw angle to wall correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3725,6 +3781,7 @@ test "should draw hit lines height correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
@@ -3773,6 +3830,7 @@ test "should draw hurt cylinders height correctly" {
         var details = Details{};
 
         fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
             _ = imgui.igBegin("Window", null, 0);
             defer imgui.igEnd();
             details.draw(&settings);
