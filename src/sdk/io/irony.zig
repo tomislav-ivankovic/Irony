@@ -10,19 +10,160 @@ const FieldPathLength = u8;
 const FieldOffset = u16;
 const FieldSize = u16;
 const NumberOfFrames = u32;
-const LocalField = struct {
-    path: []const u8,
-    access: []const AccessElement,
-    offset: FieldOffset,
-    size: FieldSize,
-};
-const AccessElement = union(enum) {
-    struct_field: []const u8,
-    array_index: usize,
-    optional_tag: void,
-    optional_payload: void,
-    union_tag: void,
-    union_field: []const u8,
+const LocalLayout = struct {
+    fields: []const Field,
+    root: Node,
+
+    pub const Field = struct {
+        path: []const u8,
+        offset: FieldOffset,
+        size: FieldSize,
+    };
+
+    pub const Node = struct {
+        size: usize,
+        kind: Kind,
+
+        pub const Kind = union(enum) {
+            empty: void,
+            value: Value,
+            @"struct": Struct,
+            array: Array,
+            optional: Optional,
+            @"union": Union,
+        };
+        pub const Value = struct {
+            field_index: usize,
+            ops: *const ValueOps,
+        };
+        pub const Struct = struct {
+            fields: []const StructField,
+        };
+        pub const StructField = struct {
+            offset: usize,
+            default_value: ?*const anyopaque,
+            node: Node,
+        };
+        pub const Array = struct {
+            elements: []const Node,
+        };
+        pub const Optional = struct {
+            tag_field_index: usize,
+            payload: *const Node,
+            ops: *const OptionalOps,
+        };
+        pub const Union = struct {
+            tag_field_index: usize,
+            variants: []const Node,
+            ops: *const UnionOps,
+        };
+    };
+
+    pub const ValueOps = struct {
+        read: *const fn (data: []const u8, value_pointer: *anyopaque) anyerror!void,
+
+        pub fn fromType(Type: type) *const ValueOps {
+            const Impl = struct {
+                fn read(data: []const u8, value_pointer: *anyopaque) anyerror!void {
+                    const typed_value_pointer: *Type = @ptrCast(@alignCast(value_pointer));
+                    typed_value_pointer.* = try readValue(Type, data);
+                }
+            };
+            return &.{ .read = Impl.read };
+        }
+    };
+
+    pub const OptionalOps = struct {
+        isSome: *const fn (optional_pointer: *const anyopaque) bool,
+        getPayload: *const fn (optional_pointer: *anyopaque) *anyopaque,
+        setNull: *const fn (optional_pointer: *anyopaque) void,
+        setSome: *const fn (optional_pointer: *anyopaque) void,
+
+        pub fn fromType(Optional: type) *const OptionalOps {
+            const Payload = @typeInfo(Optional).optional.child;
+            const Impl = struct {
+                fn isSome(optional_pointer: *const anyopaque) bool {
+                    const typed_optional_pointer: *const Optional = @ptrCast(@alignCast(optional_pointer));
+                    return typed_optional_pointer.* != null;
+                }
+                fn getPayload(optional_pointer: *anyopaque) *anyopaque {
+                    if (@sizeOf(Payload) == 0) {
+                        return optional_pointer;
+                    }
+                    const typed_optional_pointer: *Optional = @ptrCast(@alignCast(optional_pointer));
+                    return &typed_optional_pointer.*.?;
+                }
+                fn setNull(optional_pointer: *anyopaque) void {
+                    const typed_optional_pointer: *Optional = @ptrCast(@alignCast(optional_pointer));
+                    typed_optional_pointer.* = null;
+                }
+                fn setSome(optional_pointer: *anyopaque) void {
+                    const typed_optional_pointer: *Optional = @ptrCast(@alignCast(optional_pointer));
+                    typed_optional_pointer.* = @as(Payload, undefined);
+                }
+            };
+            return &.{
+                .isSome = Impl.isSome,
+                .getPayload = Impl.getPayload,
+                .setNull = Impl.setNull,
+                .setSome = Impl.setSome,
+            };
+        }
+    };
+
+    pub const UnionOps = struct {
+        getActiveFieldIndex: *const fn (union_pointer: *const anyopaque) usize,
+        getFieldPointer: *const fn (union_pointer: *anyopaque, field_index: usize) *anyopaque,
+        readActiveTag: *const fn (union_pointer: *anyopaque, data: []const u8) anyerror!void,
+
+        pub fn fromType(Union: type) *const UnionOps {
+            const info = &@typeInfo(Union).@"union";
+            const Tag = info.tag_type.?;
+            const Impl = struct {
+                fn getActiveFieldIndex(union_pointer: *const anyopaque) usize {
+                    const typed_union_pointer: *const Union = @ptrCast(@alignCast(union_pointer));
+                    const active_tag = std.meta.activeTag(typed_union_pointer.*);
+                    inline for (info.field_names, 0..) |field_name, field_index| {
+                        if (@field(Tag, field_name) == active_tag) {
+                            return field_index;
+                        }
+                    }
+                    unreachable;
+                }
+                fn getFieldPointer(union_pointer: *anyopaque, field_index: usize) *anyopaque {
+                    const typed_union_pointer: *Union = @ptrCast(@alignCast(union_pointer));
+                    inline for (info.field_names, info.field_types, 0..) |field_name, Payload, index| {
+                        if (index == field_index) {
+                            if (@sizeOf(Payload) == 0) {
+                                return union_pointer;
+                            }
+                            return &@field(typed_union_pointer, field_name);
+                        }
+                    }
+                    unreachable;
+                }
+                fn readActiveTag(union_pointer: *anyopaque, data: []const u8) anyerror!void {
+                    const typed_union_pointer: *Union = @ptrCast(@alignCast(union_pointer));
+                    const next_tag = try readValue(Tag, data);
+                    if (std.meta.activeTag(typed_union_pointer.*) == next_tag) {
+                        return;
+                    }
+                    inline for (info.field_names) |field_name| {
+                        if (@field(Tag, field_name) == next_tag) {
+                            typed_union_pointer.* = @unionInit(Union, field_name, undefined);
+                            return;
+                        }
+                    }
+                    unreachable;
+                }
+            };
+            return &.{
+                .getActiveFieldIndex = Impl.getActiveFieldIndex,
+                .getFieldPointer = Impl.getFieldPointer,
+                .readActiveTag = Impl.readActiveTag,
+            };
+        }
+    };
 };
 const RemoteField = struct {
     offset: FieldOffset,
@@ -43,7 +184,7 @@ const payload_path_component = "payload";
 const compression_level = 17;
 
 pub fn writeIronyFormat(
-    comptime Frame: type,
+    Frame: type,
     allocator: std.mem.Allocator,
     frames: []const Frame,
     writer: *std.Io.Writer,
@@ -74,8 +215,8 @@ pub fn writeIronyFormat(
         return err;
     };
 
-    const fields = getLocalFields(Frame);
-    writeFieldList(&encoder_writer, fields) catch |err| {
+    const local_layout = comptime getLocalLayout(Frame);
+    writeFieldList(&encoder_writer, &local_layout) catch |err| {
         misc.error_context.append("Failed to write field list.", .{});
         return err;
     };
@@ -92,7 +233,7 @@ pub fn writeIronyFormat(
 }
 
 pub fn readIronyFormat(
-    comptime Frame: type,
+    Frame: type,
     allocator: std.mem.Allocator,
     reader: *std.Io.Reader,
     default_frame: *const Frame,
@@ -138,8 +279,8 @@ pub fn readIronyFormat(
         return err;
     };
 
-    const local_fields = getLocalFields(Frame);
-    const remote_fields = readFieldList(&decoder_reader, remote_frame_size, local_fields) catch |err| {
+    const local_layout = comptime getLocalLayout(Frame);
+    const remote_fields = readFieldList(&decoder_reader, remote_frame_size, &local_layout) catch |err| {
         misc.error_context.append("Failed to read field list.", .{});
         return err;
     };
@@ -149,7 +290,7 @@ pub fn readIronyFormat(
         allocator,
         &decoder_reader,
         remote_frame_size,
-        local_fields,
+        &local_layout,
         &remote_fields,
         default_frame,
     ) catch |err| {
@@ -158,7 +299,8 @@ pub fn readIronyFormat(
     };
 }
 
-fn writeFieldList(writer: *std.Io.Writer, comptime fields: []const LocalField) !void {
+fn writeFieldList(writer: *std.Io.Writer, local_layout: *const LocalLayout) !void {
+    const fields = local_layout.fields;
     writer.writeInt(NumberOfFields, @intCast(fields.len), endian) catch |err| {
         misc.error_context.new("Failed to write number of fields: {}", .{fields.len});
         return err;
@@ -187,9 +329,9 @@ fn writeFieldList(writer: *std.Io.Writer, comptime fields: []const LocalField) !
 fn readFieldList(
     reader: *std.Io.Reader,
     remote_frame_size: FrameSize,
-    comptime local_fields: []const LocalField,
-) ![local_fields.len]?RemoteField {
-    var result: [local_fields.len]?RemoteField = @splat(null);
+    comptime local_layout: *const LocalLayout,
+) ![local_layout.fields.len]?RemoteField {
+    var remote_fields: [local_layout.fields.len]?RemoteField = @splat(null);
     const remote_fields_len = reader.takeInt(NumberOfFields, endian) catch |err| {
         misc.error_context.new("Failed to read number of fields.", .{});
         return err;
@@ -222,9 +364,9 @@ fn readFieldList(
             misc.error_context.new("Field exceeded frame size limits: {s}", .{path});
             return error.InvalidRemoteField;
         }
-        for (local_fields, 0..) |*local_field, local_index| {
+        for (local_layout.fields, 0..) |*local_field, local_index| {
             if (std.mem.eql(u8, local_field.path, path)) {
-                result[local_index] = .{
+                remote_fields[local_index] = .{
                     .offset = remote_offset,
                     .size = remote_size,
                 };
@@ -232,11 +374,11 @@ fn readFieldList(
             }
         }
     }
-    return result;
+    return remote_fields;
 }
 
 fn writeFrames(
-    comptime Frame: type,
+    Frame: type,
     allocator: std.mem.Allocator,
     writer: *std.Io.Writer,
     frames: []const Frame,
@@ -284,12 +426,12 @@ fn writeFrames(
 }
 
 fn readFrames(
-    comptime Frame: type,
+    Frame: type,
     allocator: std.mem.Allocator,
     reader: *std.Io.Reader,
     remote_frame_size: FrameSize,
-    comptime local_fields: []const LocalField,
-    remote_fields: *const [local_fields.len]?RemoteField,
+    local_layout: *const LocalLayout,
+    remote_fields: []const ?RemoteField,
     default_frame: *const Frame,
 ) ![]Frame {
     const number_of_frames = reader.takeInt(NumberOfFrames, endian) catch |err| {
@@ -310,16 +452,18 @@ fn readFrames(
     };
     defer allocator.free(array_of_structs);
 
+    const column = allocator.alloc(u8, number_of_frames) catch |err| {
+        misc.error_context.new("Failed to allocate column buffer.", .{});
+        return err;
+    };
+    defer allocator.free(column);
     for (0..remote_frame_size) |offset| {
-        for (0..number_of_frames) |frame_index| {
+        reader.readSliceAll(column) catch |err| {
+            misc.error_context.new("Failed to read bytes of frame offset {}.", .{offset});
+            return err;
+        };
+        for (column, 0..) |byte, frame_index| {
             const byte_index = (frame_index * remote_frame_size) + offset;
-            const byte = reader.takeByte() catch |err| {
-                misc.error_context.new(
-                    "Failed to read byte from frame offset {} and frame index {}.",
-                    .{ offset, frame_index },
-                );
-                return err;
-            };
             array_of_structs[byte_index] = byte;
         }
     }
@@ -335,48 +479,13 @@ fn readFrames(
 
     for (frames, 0..) |*frame, frame_index| {
         frame.* = default_frame.*;
-        var fields_to_default: [local_fields.len]bool = @splat(false);
-
-        inline for (local_fields, remote_fields, &fields_to_default) |*local_field, *remote_field_maybe, *to_default| {
-            if (remote_field_maybe.*) |*remote_field| {
-                if (isFieldAccessible(frame, local_field.access)) {
-                    const Type = getFieldType(Frame, local_field.access);
-                    const data_start = (frame_index * remote_frame_size) + remote_field.offset;
-                    const data_end = data_start + remote_field.size;
-                    const data = array_of_structs[data_start..data_end];
-                    if (readValue(Type, data)) |value| {
-                        setFieldValue(frame, local_field.access, &value) catch |err| {
-                            misc.error_context.append(
-                                "Failed to set field with path {s} on frame {} to its new value. " ++
-                                    "Falling back to default value.",
-                                .{ local_field.path, frame_index },
-                            );
-                            if (!builtin.is_test) {
-                                misc.error_context.logWarning(err);
-                            }
-                            to_default.* = true;
-                        };
-                    } else |err| {
-                        misc.error_context.append(
-                            "Failed to read field with path {s} on frame {}. Falling back to default value.",
-                            .{ local_field.path, frame_index },
-                        );
-                        if (!builtin.is_test) {
-                            misc.error_context.logWarning(err);
-                        }
-                        to_default.* = true;
-                    }
-                }
-            } else {
-                to_default.* = true;
-            }
-        }
-
-        inline for (local_fields, fields_to_default) |*local_field, to_default| {
-            if (to_default) {
-                setFieldToDefault(frame, local_field.access, default_frame);
-            }
-        }
+        const context = ReadContext{
+            .local_fields = local_layout.fields,
+            .remote_fields = remote_fields,
+            .frame_data = array_of_structs[(frame_index * remote_frame_size)..][0..remote_frame_size],
+            .frame_index = frame_index,
+        };
+        _ = readNode(&context, &local_layout.root, frame, default_frame);
     }
     return frames;
 }
@@ -524,7 +633,7 @@ fn writeValue(writer: *std.Io.Writer, value_pointer: anytype) !void {
     }
 }
 
-fn readValue(comptime Type: type, data: []const u8) !Type {
+fn readValue(Type: type, data: []const u8) !Type {
     switch (@typeInfo(Type)) {
         .void => return {},
         .bool => {
@@ -638,253 +747,144 @@ fn readValue(comptime Type: type, data: []const u8) !Type {
     }
 }
 
-fn getFieldType(comptime Type: type, comptime access: []const AccessElement) type {
-    var Result = Type;
-    for (access) |element| {
-        Result = switch (element) {
-            .struct_field => |name| @FieldType(Result, name),
-            .array_index => @typeInfo(Result).array.child,
-            .optional_tag => bool,
-            .optional_payload => @typeInfo(Result).optional.child,
-            .union_tag => @typeInfo(Result).@"union".tag_type.?,
-            .union_field => |name| @FieldType(Result, name),
-        };
-    }
-    return Result;
-}
+const ReadContext = struct {
+    local_fields: []const LocalLayout.Field,
+    remote_fields: []const ?RemoteField,
+    frame_data: []const u8,
+    frame_index: usize,
 
-fn isFieldAccessible(lhs_pointer: anytype, comptime access: []const AccessElement) bool {
-    if (@typeInfo(@TypeOf(lhs_pointer)) != .pointer) {
-        @compileError("Expected lhs_pointer to be a pointer but got: " ++ @typeName(@TypeOf(lhs_pointer)));
-    }
-    if (access.len == 0) {
-        return true;
-    }
-    const next_lhs_pointer = switch (access[0]) {
-        .struct_field => |name| &@field(lhs_pointer, name),
-        .array_index => |index| &lhs_pointer[index],
-        .optional_tag => return true,
-        .optional_payload => block: {
-            if (lhs_pointer.*) |*payload_pointer| {
-                break :block payload_pointer;
-            } else {
-                return false;
-            }
-        },
-        .union_tag => return true,
-        .union_field => |name| block: {
-            const expected_tag = @field(std.meta.Tag(@TypeOf(lhs_pointer.*)), name);
-            const actual_tag = std.meta.activeTag(lhs_pointer.*);
-            if (actual_tag == expected_tag) {
-                break :block &@field(lhs_pointer, name);
-            } else {
-                return false;
-            }
-        },
-    };
-    const next_access = access[1..];
-    return isFieldAccessible(next_lhs_pointer, next_access);
-}
+    const Self = @This();
 
-fn setFieldValue(lhs_pointer: anytype, comptime access: []const AccessElement, value_pointer: anytype) !void {
-    if (@typeInfo(@TypeOf(lhs_pointer)) != .pointer) {
-        @compileError("Expected lhs_pointer to be a pointer but got: " ++ @typeName(@TypeOf(lhs_pointer)));
+    fn getFieldData(self: *const Self, field_index: usize) ?[]const u8 {
+        const remote_field = self.remote_fields[field_index] orelse return null;
+        return self.frame_data[remote_field.offset..][0..remote_field.size];
     }
-    if (@typeInfo(@TypeOf(value_pointer)) != .pointer) {
-        @compileError("Expected value_pointer to be a pointer but got: " ++ @typeName(@TypeOf(value_pointer)));
-    }
-    if (access.len == 0) {
-        lhs_pointer.* = value_pointer.*;
-        return;
-    }
-    const next_lhs_pointer = switch (access[0]) {
-        .struct_field => |name| &@field(lhs_pointer, name),
-        .array_index => |index| &lhs_pointer[index],
-        .optional_tag => {
-            const Payload = @typeInfo(@TypeOf(lhs_pointer.*)).optional.child;
-            if (value_pointer.*) {
-                if (lhs_pointer.* != null) {
-                    return;
-                }
-                lhs_pointer.* = @as(Payload, undefined);
-            } else {
-                lhs_pointer.* = null;
-            }
-            return;
-        },
-        .optional_payload => block: {
-            if (lhs_pointer.*) |*payload_pointer| {
-                break :block payload_pointer;
-            } else {
-                misc.error_context.new("Optional value is null.", .{});
-                misc.error_context.append("Failed to access the optional's payload.", .{});
-                return error.Inaccessible;
-            }
-        },
-        .union_tag => {
-            const Union = @TypeOf(lhs_pointer.*);
-            const Tag = @typeInfo(Union).@"union".tag_type.?;
-            const current_tag = std.meta.activeTag(lhs_pointer.*);
-            const next_tag = value_pointer.*;
-            if (current_tag == next_tag) {
-                return;
-            }
-            inline for (@typeInfo(Union).@"union".field_names) |field_name| {
-                if (@field(Tag, field_name) == next_tag) {
-                    lhs_pointer.* = @unionInit(Union, field_name, undefined);
-                    return;
-                }
-            }
-            unreachable;
-        },
-        .union_field => |name| block: {
-            const expected_tag = @field(std.meta.Tag(@TypeOf(lhs_pointer.*)), name);
-            const actual_tag = std.meta.activeTag(lhs_pointer.*);
-            if (actual_tag == expected_tag) {
-                break :block &@field(lhs_pointer, name);
-            } else {
-                misc.error_context.new(
-                    "Expected tagged union to have tag {s}, but actual tag is {s}.",
-                    .{ @tagName(expected_tag), @tagName(actual_tag) },
-                );
-                misc.error_context.append("Failed to access tagged union field: {s}", .{name});
-                return error.Inaccessible;
-            }
-        },
-    };
-    const next_access = access[1..];
-    return setFieldValue(next_lhs_pointer, next_access, value_pointer) catch |err| {
-        switch (access[0]) {
-            .struct_field => |name| misc.error_context.append("Access failure inside struct field: {s}", .{name}),
-            .array_index => |index| misc.error_context.append("Access failure inside array index: {}", .{index}),
-            .optional_tag => unreachable,
-            .optional_payload => misc.error_context.append("Access failure inside optional payload.", .{}),
-            .union_tag => unreachable,
-            .union_field => |name| misc.error_context.append("Access failure inside tagged union field: {s}", .{name}),
-        }
-        return err;
-    };
-}
 
-fn setFieldToDefault(lhs_pointer: anytype, comptime access: []const AccessElement, default_pointer: anytype) void {
-    if (@typeInfo(@TypeOf(lhs_pointer)) != .pointer) {
-        @compileError("Expected lhs_pointer to be a pointer but got: " ++ @typeName(@TypeOf(lhs_pointer)));
-    }
-    if (@typeInfo(@TypeOf(default_pointer)) != .pointer) {
-        @compileError("Expected default_pointer to be a pointer but got: " ++ @typeName(@TypeOf(default_pointer)));
-    }
-    const Lhs = @typeInfo(@TypeOf(lhs_pointer)).pointer.child;
-    const Default = @typeInfo(@TypeOf(default_pointer)).pointer.child;
-    if (Lhs != Default) {
-        @compileError(
-            "Expected lhs_pointer and default_pointer point to same type but" ++
-                " lhs_pointer is " ++ @typeName(@TypeOf(lhs_pointer)) ++
-                " and default_pointer is " ++ @typeName(@TypeOf(default_pointer)),
+    fn handleReadError(self: *const Self, err: anyerror, field_index: usize) void {
+        misc.error_context.append(
+            "Failed to read field with path {s} on frame {}. Falling back to default value.",
+            .{ self.local_fields[field_index].path, self.frame_index },
         );
-    }
-    _ = setFieldToDefaultRecursive(Lhs, lhs_pointer, access, default_pointer);
-}
-
-fn setFieldToDefaultRecursive(
-    comptime Type: type,
-    lhs_pointer: *Type,
-    comptime access: []const AccessElement,
-    default_pointer_maybe: ?*const Type,
-) bool {
-    if (access.len == 0) {
-        if (default_pointer_maybe) |default_pointer| {
-            lhs_pointer.* = default_pointer.*;
-            return true;
-        } else {
-            return false;
+        if (!builtin.is_test) {
+            misc.error_context.logWarning(err);
         }
     }
-    const next_lhs_pointer, const next_default_pointer_maybe = switch (access[0]) {
-        .struct_field => |name| .{
-            &@field(lhs_pointer, name),
-            if (default_pointer_maybe) |default_pointer| &@field(default_pointer, name) else block: {
-                const info = &@typeInfo(Type).@"struct";
-                comptime for (info.field_names, info.field_types, info.field_attrs) |field_name, Field, attr| {
-                    if (std.mem.eql(u8, field_name, name)) {
-                        break :block @as(?*const Field, @ptrCast(@alignCast(attr.default_value_ptr)));
-                    }
-                } else break :block null;
-            },
+};
+
+const ReadNodeResult = enum {
+    completed,
+    needs_parent_default,
+};
+
+fn readNode(
+    context: *const ReadContext,
+    node: *const LocalLayout.Node,
+    lhs_pointer: *anyopaque,
+    default_pointer_maybe: ?*const anyopaque,
+) ReadNodeResult {
+    const success = switch (node.kind) {
+        .empty => true,
+        .value => |*value| block: {
+            const data = context.getFieldData(value.field_index) orelse break :block false;
+            value.ops.read(data, lhs_pointer) catch |err| {
+                context.handleReadError(err, value.field_index);
+                break :block false;
+            };
+            break :block true;
         },
-        .array_index => |index| .{
-            &lhs_pointer[index],
-            if (default_pointer_maybe) |default_pointer| &default_pointer[index] else null,
-        },
-        .optional_tag => {
-            if (default_pointer_maybe) |default_pointer| {
-                lhs_pointer.* = default_pointer.*;
-                return true;
-            } else {
-                return false;
-            }
-        },
-        .optional_payload => block: {
-            if (lhs_pointer.*) |*lhs_payload_pointer| {
-                if (default_pointer_maybe) |default_pointer| {
-                    if (default_pointer.*) |*default_payload_pointer| {
-                        break :block .{ lhs_payload_pointer, default_payload_pointer };
-                    }
-                }
-                break :block .{ lhs_payload_pointer, null };
-            } else {
-                if (default_pointer_maybe) |default_pointer| {
-                    lhs_pointer.* = default_pointer.*;
-                    return true;
-                } else {
-                    return false;
+        .@"struct" => |*@"struct"| block: {
+            var success = true;
+            for (@"struct".fields) |*field| {
+                const field_default_pointer = if (default_pointer_maybe) |default_pointer| block_default: {
+                    break :block_default offsetConstPointer(default_pointer, field.offset);
+                } else field.default_value;
+                const field_pointer = offsetPointer(lhs_pointer, field.offset);
+                if (readNode(context, &field.node, field_pointer, field_default_pointer) == .needs_parent_default) {
+                    success = false;
                 }
             }
+            break :block success;
         },
-        .union_tag => {
-            if (default_pointer_maybe) |default_pointer| {
-                lhs_pointer.* = default_pointer.*;
-                return true;
-            } else {
-                return false;
-            }
-        },
-        .union_field => |name| block: {
-            const expected_tag = @field(std.meta.Tag(@TypeOf(lhs_pointer.*)), name);
-            const lhs_tag = std.meta.activeTag(lhs_pointer.*);
-            if (lhs_tag != expected_tag) {
-                if (default_pointer_maybe) |default_pointer| {
-                    lhs_pointer.* = default_pointer.*;
-                    return true;
-                } else {
-                    return false;
+        .array => |*array| block: {
+            var success = true;
+            for (array.elements, 0..) |*element, index| {
+                const offset = index * element.size;
+                const element_default_pointer = if (default_pointer_maybe) |default_pointer| block_default: {
+                    break :block_default offsetConstPointer(default_pointer, offset);
+                } else null;
+                const element_pointer = offsetPointer(lhs_pointer, offset);
+                if (readNode(context, element, element_pointer, element_default_pointer) == .needs_parent_default) {
+                    success = false;
                 }
             }
-            if (default_pointer_maybe) |default_pointer| {
-                const default_tag = std.meta.activeTag(default_pointer.*);
-                if (default_tag == expected_tag) {
-                    break :block .{ &@field(lhs_pointer, name), &@field(default_pointer, name) };
-                }
+            break :block success;
+        },
+        .optional => |*optional| block: {
+            const ops = optional.ops;
+            const data = context.getFieldData(optional.tag_field_index) orelse break :block false;
+            const is_some = readValue(bool, data) catch |err| {
+                context.handleReadError(err, optional.tag_field_index);
+                break :block false;
+            };
+            if (!is_some) {
+                ops.setNull(lhs_pointer);
+                break :block true;
             }
-            break :block .{ &@field(lhs_pointer, name), null };
+            if (!ops.isSome(lhs_pointer)) {
+                ops.setSome(lhs_pointer);
+            }
+            const payload_default_pointer = if (default_pointer_maybe) |default_pointer| block_default: {
+                if (!ops.isSome(default_pointer)) {
+                    break :block_default null;
+                }
+                break :block_default ops.getPayload(@constCast(default_pointer));
+            } else null;
+            const payload_pointer = ops.getPayload(lhs_pointer);
+            break :block readNode(context, optional.payload, payload_pointer, payload_default_pointer) == .completed;
+        },
+        .@"union" => |*@"union"| block: {
+            const ops = @"union".ops;
+            const data = context.getFieldData(@"union".tag_field_index) orelse break :block false;
+            ops.readActiveTag(lhs_pointer, data) catch |err| {
+                context.handleReadError(err, @"union".tag_field_index);
+                break :block false;
+            };
+            const index = ops.getActiveFieldIndex(lhs_pointer);
+            const variant_default_pointer = if (default_pointer_maybe) |default_pointer| block_default: {
+                if (ops.getActiveFieldIndex(default_pointer) != index) {
+                    break :block_default null;
+                }
+                break :block_default ops.getFieldPointer(@constCast(default_pointer), index);
+            } else null;
+            const variant_pointer = ops.getFieldPointer(lhs_pointer, index);
+            break :block readNode(context, &@"union".variants[index], variant_pointer, variant_default_pointer) == .completed;
         },
     };
-    const next_access = access[1..];
-    const success = setFieldToDefaultRecursive(
-        @TypeOf(next_lhs_pointer.*),
-        next_lhs_pointer,
-        next_access,
-        next_default_pointer_maybe,
-    );
-    if (!success) {
-        if (default_pointer_maybe) |default_pointer| {
-            lhs_pointer.* = default_pointer.*;
-            return true;
-        }
+    if (success) {
+        return .completed;
     }
-    return success;
+    const default_pointer = default_pointer_maybe orelse return .needs_parent_default;
+    copyBytes(lhs_pointer, default_pointer, node.size);
+    return .completed;
 }
 
-fn serializedSizeOf(comptime Type: type) comptime_int {
+fn copyBytes(destination: *anyopaque, source: *const anyopaque, size: usize) void {
+    const destination_bytes: [*]u8 = @ptrCast(destination);
+    const source_bytes: [*]const u8 = @ptrCast(source);
+    @memcpy(destination_bytes[0..size], source_bytes[0..size]);
+}
+
+fn offsetPointer(pointer: *anyopaque, offset: usize) *anyopaque {
+    const bytes: [*]u8 = @ptrCast(pointer);
+    return @ptrCast(bytes + offset);
+}
+
+fn offsetConstPointer(pointer: *const anyopaque, offset: usize) *const anyopaque {
+    const bytes: [*]const u8 = @ptrCast(pointer);
+    return @ptrCast(bytes + offset);
+}
+
+fn serializedSizeOf(Type: type) comptime_int {
     return switch (@typeInfo(Type)) {
         .void => 0,
         .bool => 1,
@@ -931,124 +931,161 @@ fn serializedSizeOf(comptime Type: type) comptime_int {
     };
 }
 
-inline fn getLocalFields(comptime Frame: type) []const LocalField {
+fn getLocalLayout(Frame: type) LocalLayout {
     @setEvalBranchQuota(40000);
     comptime {
-        var state = GetLocalFieldsState{};
-        getLocalFieldsRecursive(&state, Frame);
+        var state = GetLocalLayoutState{};
+        const root = getLocalLayoutRecursive(&state, Frame);
         const final_fields = state.fields_buffer[0..state.fields_len].*;
-        return &final_fields;
+        return .{ .fields = &final_fields, .root = root };
     }
 }
 
-fn getLocalFieldsRecursive(state: *GetLocalFieldsState, Type: type) void {
+fn getLocalLayoutRecursive(state: *GetLocalLayoutState, Type: type) LocalLayout.Node {
     switch (@typeInfo(Type)) {
-        .void => {},
-        .bool, .int, .float, .@"enum" => {
-            state.addField(Type);
+        .void => return .{ .size = 0, .kind = .empty },
+        .bool, .int, .float, .@"enum" => return .{
+            .size = @sizeOf(Type),
+            .kind = .{ .value = .{
+                .field_index = state.addField(Type),
+                .ops = LocalLayout.ValueOps.fromType(Type),
+            } },
         },
         .@"struct" => |*info| if (info.layout == .@"packed") {
-            state.addField(Type);
+            return .{
+                .size = @sizeOf(Type),
+                .kind = .{ .value = .{
+                    .field_index = state.addField(Type),
+                    .ops = LocalLayout.ValueOps.fromType(Type),
+                } },
+            };
         } else {
-            for (info.field_names, info.field_types) |field_name, Field| {
-                state.push(.{ .struct_field = field_name });
-                getLocalFieldsRecursive(state, Field);
+            var fields: [info.field_names.len]LocalLayout.Node.StructField = undefined;
+            for (info.field_names, info.field_types, info.field_attrs, &fields) |field_name, Field, attr, *field| {
+                state.pushName(field_name);
+                field.* = .{
+                    .offset = @offsetOf(Type, field_name),
+                    .default_value = attr.default_value_ptr,
+                    .node = getLocalLayoutRecursive(state, Field),
+                };
                 state.pop();
             }
+            const final_fields = fields;
+            return .{ .size = @sizeOf(Type), .kind = .{ .@"struct" = .{ .fields = &final_fields } } };
         },
         .array => |*info| {
-            for (0..info.len) |index| {
-                state.push(.{ .array_index = index });
-                getLocalFieldsRecursive(state, info.child);
+            var elements: [info.len]LocalLayout.Node = undefined;
+            for (&elements, 0..) |*element, index| {
+                state.pushIndex(index);
+                element.* = getLocalLayoutRecursive(state, info.child);
                 state.pop();
             }
+            const final_elements = elements;
+            return .{ .size = @sizeOf(Type), .kind = .{ .array = .{ .elements = &final_elements } } };
         },
         .optional => |*info| {
-            state.push(.optional_tag);
-            state.addField(bool);
+            state.pushName(tag_path_component);
+            const tag_field_index = state.addField(bool);
             state.pop();
-            state.push(.optional_payload);
-            getLocalFieldsRecursive(state, info.child);
+            state.pushName(payload_path_component);
+            const payload = getLocalLayoutRecursive(state, info.child);
             state.pop();
+            return .{ .size = @sizeOf(Type), .kind = .{ .optional = .{
+                .tag_field_index = tag_field_index,
+                .payload = &payload,
+                .ops = LocalLayout.OptionalOps.fromType(Type),
+            } } };
         },
         .@"union" => |*info| if (info.layout == .@"packed") {
-            state.addField(Type);
+            return .{
+                .size = @sizeOf(Type),
+                .kind = .{ .value = .{
+                    .field_index = state.addField(Type),
+                    .ops = LocalLayout.ValueOps.fromType(Type),
+                } },
+            };
         } else {
             const Tag = info.tag_type orelse @compileError(
                 "Union " ++ @typeName(Type) ++ " is not serializable. (Not tagged and not packed.)",
             );
-            state.push(.union_tag);
-            state.addField(Tag);
+            state.pushName(tag_path_component);
+            const tag_field_index = state.addField(Tag);
             state.pop();
             const payload_start_offset = state.offset;
             var max_payload_end_offset = state.offset;
-            for (info.field_names, info.field_types) |field_name, Field| {
+            var variants: [info.field_names.len]LocalLayout.Node = undefined;
+            for (info.field_names, info.field_types, &variants) |field_name, Field, *variant| {
                 state.offset = payload_start_offset;
-                state.push(.{ .union_field = field_name });
-                getLocalFieldsRecursive(state, Field);
+                state.pushName(field_name);
+                variant.* = getLocalLayoutRecursive(state, Field);
                 state.pop();
                 max_payload_end_offset = @max(max_payload_end_offset, state.offset);
             }
             state.offset = max_payload_end_offset;
+            const final_variants = variants;
+            return .{ .size = @sizeOf(Type), .kind = .{ .@"union" = .{
+                .tag_field_index = tag_field_index,
+                .variants = &final_variants,
+                .ops = LocalLayout.UnionOps.fromType(Type),
+            } } };
         },
         else => @compileError("Unsupported type: " ++ @typeName(Type)),
     }
 }
 
-const GetLocalFieldsState = struct {
-    fields_buffer: [max_number_of_fields]LocalField = undefined,
+const GetLocalLayoutState = struct {
+    fields_buffer: [max_number_of_fields]LocalLayout.Field = undefined,
     fields_len: usize = 0,
-    access_buffer: [max_field_path_len]AccessElement = undefined,
-    access_len: usize = 0,
+    path_buffer: [max_field_path_len]u8 = undefined,
+    path_len: usize = 0,
+    path_len_stack: [max_field_path_len]usize = undefined,
+    path_depth: usize = 0,
     offset: usize = 0,
 
     const Self = @This();
 
-    pub fn push(self: *Self, access_element: AccessElement) void {
-        if (self.access_len >= self.access_buffer.len) {
-            @compileError("Maximum access length exceeded.");
-        }
-        self.access_buffer[self.access_len] = access_element;
-        self.access_len += 1;
+    pub fn pushName(self: *Self, name: []const u8) void {
+        self.savePathLen();
+        appendPathName(&self.path_buffer, &self.path_len, name);
+    }
+
+    pub fn pushIndex(self: *Self, index: usize) void {
+        self.savePathLen();
+        appendPathIndex(&self.path_buffer, &self.path_len, index);
     }
 
     pub fn pop(self: *Self) void {
-        if (self.access_len == 0) {
-            @compileError("Unable to pop empty access element buffer.");
+        if (self.path_depth == 0) {
+            @compileError("Unable to pop empty path.");
         }
-        self.access_len -= 1;
+        self.path_depth -= 1;
+        self.path_len = self.path_len_stack[self.path_depth];
     }
 
-    pub fn addField(self: *Self, Type: type) void {
+    fn savePathLen(self: *Self) void {
+        if (self.path_depth >= self.path_len_stack.len) {
+            @compileError("Maximum path depth exceeded.");
+        }
+        self.path_len_stack[self.path_depth] = self.path_len;
+        self.path_depth += 1;
+    }
+
+    pub fn addField(self: *Self, Type: type) usize {
         if (self.fields_len >= self.fields_buffer.len) {
             @compileError("Maximum number of fields exceeded.");
         }
-        var path_buffer: [max_field_path_len]u8 = undefined;
-        var path_len: usize = 0;
-
-        for (self.access_buffer[0..self.access_len]) |access| {
-            switch (access) {
-                .struct_field => |name| appendPathName(&path_buffer, &path_len, name),
-                .array_index => |index| appendPathIndex(&path_buffer, &path_len, index),
-                .optional_tag => appendPathName(&path_buffer, &path_len, tag_path_component),
-                .optional_payload => appendPathName(&path_buffer, &path_len, payload_path_component),
-                .union_tag => appendPathName(&path_buffer, &path_len, tag_path_component),
-                .union_field => |name| appendPathName(&path_buffer, &path_len, name),
-            }
-        }
-
-        const final_path = path_buffer[0..path_len].*;
-        const final_access = self.access_buffer[0..self.access_len].*;
+        const final_path = self.path_buffer[0..self.path_len].*;
         const size = serializedSizeOf(Type);
-        self.fields_buffer[self.fields_len] = .{
+        const index = self.fields_len;
+        self.fields_buffer[index] = .{
             .path = &final_path,
-            .access = &final_access,
             .offset = self.offset,
             .size = size,
         };
         self.fields_len += 1;
 
         self.offset += size;
+        return index;
     }
 
     fn appendPathName(buffer: []u8, len: *usize, name: []const u8) void {
