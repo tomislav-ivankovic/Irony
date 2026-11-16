@@ -30,7 +30,10 @@ pub const Error = struct {
             try writer.writeAll(" (");
         }
 
-        try writer.print("error code 0x{X} {s}", .{ @backingInt(self.error_code), @tagName(self.error_code) });
+        try writer.print("error code 0x{X}", .{@backingInt(self.error_code)});
+        if (std.enums.tagName(w32.WIN32_ERROR, self.error_code)) |name| {
+            try writer.print(" {s}", .{name});
+        }
 
         if (message_length > 0) {
             try writer.writeAll(")");
@@ -66,4 +69,11 @@ test "should format correctly when error has no message" {
     const message = try std.fmt.allocPrint(testing.allocator, "{f}", .{err});
     defer testing.allocator.free(message);
     try testing.expectEqualStrings("error code 0xFFFFFFFF WAIT_FAILED", message);
+}
+
+test "should format correctly when error code has no name" {
+    const err = Error{ .error_code = @fromBackingInt(12002) };
+    const message = try std.fmt.allocPrint(testing.allocator, "{f}", .{err});
+    defer testing.allocator.free(message);
+    try testing.expectEqualStrings("error code 0x2EE2", message);
 }
