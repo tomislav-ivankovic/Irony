@@ -1,6 +1,7 @@
 const std = @import("std");
 const math = @import("../math/root.zig");
 const misc = @import("../misc/root.zig");
+const log = @import("root.zig");
 
 pub const BufferLoggerConfig = struct {
     level: std.log.Level = .debug,
@@ -53,75 +54,68 @@ pub fn BufferLogger(comptime config: BufferLoggerConfig) type {
             comptime format: []const u8,
             args: anytype,
         ) void {
-            if (@intFromEnum(level) > @intFromEnum(config.level)) {
+            logMessage(&.fromParams(level, scope, format, &args));
+        }
+
+        pub fn logMessage(message: *const log.Message) void {
+            if (@backingInt(message.level) > @backingInt(config.level)) {
                 return;
             }
             const io = io_maybe orelse return;
             mutex.lock(io) catch return;
             defer mutex.unlock(io);
             const last_entry = entries.getLast() catch {
-                log(io, &buffer, level, scope, format, args) catch return;
+                addEntry(io, &buffer, message) catch return;
                 return;
             };
             const last_buffer_region = last_entry.buffer_region;
             const start_index = (&last_buffer_region[0] - &buffer[0]) + last_buffer_region.len;
-            log(io, buffer[start_index..], level, scope, format, args) catch {
-                log(io, &buffer, level, scope, format, args) catch return;
+            addEntry(io, buffer[start_index..], message) catch {
+                addEntry(io, &buffer, message) catch return;
             };
         }
 
-        fn log(
-            io: std.Io,
-            write_region: []u8,
-            comptime level: std.log.Level,
-            comptime scope: @EnumLiteral(),
-            comptime format: []const u8,
-            args: anytype,
-        ) !void {
+        fn addEntry(io: std.Io, write_region: []u8, message: *const log.Message) !void {
+            const entry = writeEntry(io, write_region, message) catch |err| {
+                clearBufferRegion(write_region);
+                return err;
+            };
+            clearBufferRegion(entry.buffer_region);
+            _ = entries.addToBack(entry);
+        }
+
+        fn writeEntry(io: std.Io, write_region: []u8, message: *const log.Message) !LogEntry {
             var writer = std.Io.Writer.fixed(write_region);
 
             const nano_time = std.Io.Clock.real.now(io).nanoseconds;
             if (misc.Timestamp.fromNano(nano_time, config.time_zone) catch null) |timestamp_struct| {
-                writer.print("{f} ", .{timestamp_struct}) catch |err| {
-                    clearBufferRegion(write_region);
-                    return err;
-                };
+                try writer.print("{f} ", .{timestamp_struct});
             }
             const timestamp_str = write_region[0..(writer.end - 1)];
 
-            writer.writeAll("[" ++ comptime level.asText() ++ "] ") catch |err| {
-                clearBufferRegion(write_region);
-                return err;
-            };
+            try writer.print("[{s}] ", .{message.getLevelText()});
 
-            const scope_str = if (scope != std.log.default_log_scope) block: {
+            const scope_str = if (message.scope) |scope| block: {
                 const start_pos = writer.end + 1;
-                writer.writeAll("(" ++ @tagName(scope) ++ ") ") catch |err| {
-                    clearBufferRegion(write_region);
-                    return err;
-                };
+                try writer.print("({s}) ", .{scope});
                 const end_pos = writer.end - 2;
                 break :block write_region[start_pos..end_pos];
             } else null;
 
             const message_start_pos = writer.end;
-            writer.print(format ++ .{0}, args) catch |err| {
-                clearBufferRegion(write_region);
-                return err;
-            };
+            try message.format(&writer);
+            try writer.writeByte(0);
             const end_pos = writer.end;
 
-            const entry = LogEntry{
+            return .{
                 .timestamp = nano_time,
                 .timestamp_str = timestamp_str,
-                .level = level,
+                .level = message.level,
                 .scope = scope_str,
                 .message = write_region[message_start_pos..(end_pos - 1) :0],
                 .full_message = write_region[0..(end_pos - 1) :0],
                 .buffer_region = write_region[0..end_pos],
             };
-            clearBufferRegion(entry.buffer_region);
-            _ = entries.addToBack(entry);
         }
 
         fn clearBufferRegion(region: []const u8) void {

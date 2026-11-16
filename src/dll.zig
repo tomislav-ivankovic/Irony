@@ -13,9 +13,9 @@ pub const file_logger = sdk.log.FileLogger(.{});
 pub const std_options = std.Options{
     .log_level = .info,
     .logFn = sdk.log.CompositeLogger(&.{
-        buffer_logger.logFn,
-        file_logger.logFn,
-        sdk.ui.toasts.logFn,
+        buffer_logger.logMessage,
+        file_logger.logMessage,
+        sdk.ui.toasts.logMessage,
     }).logFn,
 };
 pub const std_options_debug_io = WinIo.global_single_threaded.io();

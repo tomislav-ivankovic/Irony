@@ -1,6 +1,7 @@
 const std = @import("std");
 const misc = @import("../misc/root.zig");
 const os = @import("../os/root.zig");
+const log = @import("root.zig");
 
 pub const FileLoggerConfig = struct {
     level: std.log.Level = .debug,
@@ -58,7 +59,7 @@ pub fn FileLogger(comptime config: FileLoggerConfig) type {
                 state.file.close(state.io);
                 state_maybe = null;
             }
-            // Logging must happen outside of the lock since logFn locks the same mutex.
+            // Logging must happen outside of the lock since logMessage locks the same mutex.
             if (end_error) |err| {
                 misc.error_context.new("Failed to end file writer.", .{});
                 misc.error_context.append("Failed to stop file logger.", .{});
@@ -72,35 +73,42 @@ pub fn FileLogger(comptime config: FileLoggerConfig) type {
             comptime format: []const u8,
             args: anytype,
         ) void {
-            if (@backingInt(level) > @backingInt(config.level)) {
+            logMessage(&.fromParams(level, scope, format, &args));
+        }
+
+        pub fn logMessage(message: *const log.Message) void {
+            if (@backingInt(message.level) > @backingInt(config.level)) {
                 return;
             }
             const state = if (state_maybe) |*s| s else return;
             const nano_time = std.Io.Clock.real.now(state.io).nanoseconds;
             const timestamp = misc.Timestamp.fromNano(nano_time, config.time_zone) catch null;
-            const scope_prefix = if (scope != std.log.default_log_scope) "(" ++ @tagName(scope) ++ ") " else "";
-            const level_prefix = "[" ++ comptime level.asText() ++ "] ";
             const writer = &state.file_writer.interface;
             mutex.lock(state.io) catch return;
             defer mutex.unlock(state.io);
             if (state_maybe == null) {
                 return; // Logger was stopped while waiting for the lock.
             }
-            if (timestamp) |t| {
-                writer.print("{f} " ++ level_prefix ++ scope_prefix ++ format ++ "\n", .{t} ++ args) catch |err| {
-                    std.debug.print("Failed to write log message with file logger. Cause: {}\n", .{err});
-                    return;
-                };
-            } else {
-                writer.print(level_prefix ++ scope_prefix ++ format ++ "\n", args) catch |err| {
-                    std.debug.print("Failed to write log message with file logger. Cause: {}\n", .{err});
-                    return;
-                };
-            }
+            writeLine(writer, timestamp, message) catch |err| {
+                std.debug.print("Failed to write log message with file logger. Cause: {}\n", .{err});
+                return;
+            };
             writer.flush() catch |err| {
                 std.debug.print("Failed to flush log buffer with file logger. Cause: {}\n", .{err});
                 return;
             };
+        }
+
+        fn writeLine(writer: *std.Io.Writer, timestamp: ?misc.Timestamp, message: *const log.Message) !void {
+            if (timestamp) |t| {
+                try writer.print("{f} ", .{t});
+            }
+            try writer.print("[{s}] ", .{message.getLevelText()});
+            if (message.scope) |scope| {
+                try writer.print("({s}) ", .{scope});
+            }
+            try message.format(writer);
+            try writer.writeByte('\n');
         }
     };
 }

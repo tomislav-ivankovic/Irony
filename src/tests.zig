@@ -27,6 +27,7 @@ test {
     _ = @import("sdk/log/composite.zig");
     _ = @import("sdk/log/console.zig");
     _ = @import("sdk/log/file.zig");
+    _ = @import("sdk/log/message.zig");
 
     _ = @import("sdk/math/easing.zig");
     _ = @import("sdk/math/intersection.zig");

@@ -1,5 +1,6 @@
 const std = @import("std");
 const misc = @import("../misc/root.zig");
+const log = @import("root.zig");
 
 pub const ConsoleLoggerConfig = struct {
     level: std.log.Level = .debug,
@@ -22,23 +23,33 @@ pub fn ConsoleLogger(comptime config: ConsoleLoggerConfig) type {
             comptime format: []const u8,
             args: anytype,
         ) void {
-            if (@intFromEnum(level) > @intFromEnum(config.level)) {
+            logMessage(&.fromParams(level, scope, format, &args));
+        }
+
+        pub fn logMessage(message: *const log.Message) void {
+            if (@backingInt(message.level) > @backingInt(config.level)) {
                 return;
             }
             const io = io_maybe orelse return;
             const nano_time = std.Io.Clock.real.now(io).nanoseconds;
             const timestamp = misc.Timestamp.fromNano(nano_time, config.time_zone) catch null;
-            const scope_prefix = if (scope != std.log.default_log_scope) "(" ++ @tagName(scope) ++ ") " else "";
-            const level_prefix = "[" ++ comptime level.asText() ++ "] ";
             const stderr = io.lockStderr(&buffer, null) catch return;
             defer io.unlockStderr();
             const writer = &stderr.file_writer.interface;
-            if (timestamp) |t| {
-                writer.print("{f} " ++ level_prefix ++ scope_prefix ++ format ++ "\n", .{t} ++ args) catch return;
-            } else {
-                writer.print(level_prefix ++ scope_prefix ++ format ++ "\n", args) catch return;
-            }
+            writeLine(writer, timestamp, message) catch return;
             writer.flush() catch return;
+        }
+
+        fn writeLine(writer: *std.Io.Writer, timestamp: ?misc.Timestamp, message: *const log.Message) !void {
+            if (timestamp) |t| {
+                try writer.print("{f} ", .{t});
+            }
+            try writer.print("[{s}] ", .{message.getLevelText()});
+            if (message.scope) |scope| {
+                try writer.print("({s}) ", .{scope});
+            }
+            try message.format(writer);
+            try writer.writeByte('\n');
         }
     };
 }

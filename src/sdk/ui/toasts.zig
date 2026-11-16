@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const imgui = @import("imgui");
+const log = @import("../log/root.zig");
 const math = @import("../math/root.zig");
 const misc = @import("../misc/root.zig");
 const ui = @import("root.zig");
@@ -61,18 +62,30 @@ pub fn Toasts(comptime config: ToastsConfig) type {
             io_maybe = io;
         }
 
+        const Print = *const fn (writer: *std.Io.Writer, args: *const anyopaque) std.Io.Writer.Error!void;
+
         pub fn send(toast_type: ToastType, duration: ?f32, comptime fmt: []const u8, args: anytype) void {
+            const print = struct {
+                fn call(writer: *std.Io.Writer, args_pointer: *const anyopaque) std.Io.Writer.Error!void {
+                    const typed_args_pointer: *const @TypeOf(args) = @ptrCast(@alignCast(args_pointer));
+                    return writer.print(fmt, typed_args_pointer.*);
+                }
+            }.call;
+            sendOpaque(toast_type, duration, print, &args);
+        }
+
+        fn sendOpaque(toast_type: ToastType, duration: ?f32, print: Print, args: *const anyopaque) void {
             const io = io_maybe orelse return;
             mutex.lock(io) catch return;
             defer mutex.unlock(io);
             const last_toast = toasts.getLast() catch {
-                addToast(&buffer, toast_type, duration, fmt, args) catch return;
+                addToast(&buffer, toast_type, duration, print, args) catch return;
                 return;
             };
             const last_buffer_region = last_toast.getBufferRegion();
             const start_index = (&last_buffer_region[0] - &buffer[0]) + last_buffer_region.len;
-            addToast(buffer[start_index..], toast_type, duration, fmt, args) catch {
-                addToast(&buffer, toast_type, duration, fmt, args) catch return;
+            addToast(buffer[start_index..], toast_type, duration, print, args) catch {
+                addToast(&buffer, toast_type, duration, print, args) catch return;
             };
         }
 
@@ -80,10 +93,10 @@ pub fn Toasts(comptime config: ToastsConfig) type {
             write_region: []u8,
             toast_type: ToastType,
             duration: ?f32,
-            comptime fmt: []const u8,
-            args: anytype,
+            print: Print,
+            args: *const anyopaque,
         ) !void {
-            const message = std.fmt.bufPrintSentinel(write_region, fmt, args, 0) catch |err| {
+            const message = printMessage(write_region, print, args) catch |err| {
                 clearBufferRegion(write_region);
                 return err;
             };
@@ -95,6 +108,13 @@ pub fn Toasts(comptime config: ToastsConfig) type {
             };
             clearBufferRegion(toast.getBufferRegion());
             _ = toasts.addToBack(toast);
+        }
+
+        fn printMessage(write_region: []u8, print: Print, args: *const anyopaque) ![:0]const u8 {
+            var writer = std.Io.Writer.fixed(write_region);
+            try print(&writer, args);
+            try writer.writeByte(0);
+            return write_region[0..(writer.end - 1) :0];
         }
 
         fn clearBufferRegion(region: []const u8) void {
@@ -192,13 +212,16 @@ pub fn Toasts(comptime config: ToastsConfig) type {
             comptime format: []const u8,
             args: anytype,
         ) void {
-            _ = scope;
-            const toast_type: ToastType = switch (level) {
+            logMessage(&.fromParams(level, scope, format, &args));
+        }
+
+        pub fn logMessage(message: *const log.Message) void {
+            const toast_type: ToastType = switch (message.level) {
                 .err => .err,
                 .warn => .warn,
                 else => return,
             };
-            send(toast_type, null, format, args);
+            sendOpaque(toast_type, null, message.print, message.args);
         }
     };
 }
