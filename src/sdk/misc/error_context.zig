@@ -46,19 +46,13 @@ pub fn ErrorContext(comptime config: ErrorContextConfig) type {
             }
         }
 
-        fn comptimeAppend(
+        inline fn comptimeAppend(
             self: *Self,
             comptime fmt: []const u8,
             comptime args: anytype,
         ) void {
-            const message = std.fmt.comptimePrint(fmt, args);
-            const item = ErrorContextItem{
-                .message = .{ .compile_time = message },
-            };
-            const removed_item = self.items.addToBack(item);
-            if (removed_item != null and !builtin.is_test) {
-                std.log.warn("Discarded the earliest item from the error context because max items was exceeded.", .{});
-            }
+            const message = comptime std.fmt.comptimePrint(fmt, args);
+            self.addItem(.{ .message = .{ .compile_time = message } });
         }
 
         const Print = *const fn (buffer: []u8, args: *const anyopaque) std.fmt.BufPrintError![]u8;
@@ -99,10 +93,11 @@ pub fn ErrorContext(comptime config: ErrorContextConfig) type {
                 self.clearBufferRegion(write_region);
                 return err;
             };
-            const item = ErrorContextItem{
-                .message = .{ .runtime = message },
-            };
             self.clearBufferRegion(message);
+            self.addItem(.{ .message = .{ .runtime = message } });
+        }
+
+        fn addItem(self: *Self, item: ErrorContextItem) void {
             const removed_item = self.items.addToBack(item);
             if (removed_item != null and !builtin.is_test) {
                 std.log.warn("Discarded the earliest item from the error context because max items was exceeded.", .{});
