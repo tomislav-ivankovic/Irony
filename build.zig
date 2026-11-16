@@ -130,6 +130,11 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .link_libc = true,
         }),
+        .filters = b.option(
+            []const []const u8,
+            "test_filter",
+            "Only build and run tests whose names contain this text. Can be specified multiple times.",
+        ) orelse &.{},
     });
     tests.root_module.addImport("build_info", build_info_t8);
     tests.root_module.addImport("lib_c_time", lib_c_time);
