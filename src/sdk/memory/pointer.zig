@@ -9,6 +9,7 @@ pub fn Pointer(comptime Type: type) type {
 
         const Self = @This();
         pub const tag = pointer_tag;
+        pub const Child = Type;
 
         pub fn fromPointer(pointer: ?*const Type) Self {
             if (pointer) |p| {
