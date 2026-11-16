@@ -501,7 +501,7 @@ fn readArray(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.A
         misc.error_context.new("Failed to read array end token.", .{});
         return err;
     };
-    if (default == null and (index + 1) < array.len) {
+    if (default == null and index < array.len) {
         misc.error_context.new("JSON array ended early with length: {}", .{index});
         return error.EarlyEnd;
     }
@@ -594,7 +594,7 @@ fn readTuple(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.A
         misc.error_context.new("Failed to read tuple end token.", .{});
         return err;
     };
-    if (default == null and (index + 1) < info.field_names.len) {
+    if (default == null and index < info.field_names.len) {
         misc.error_context.new("JSON array ended early with length: {}", .{index});
         return error.EarlyEnd;
     }
@@ -1093,16 +1093,16 @@ fn readVector(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.
 }
 
 inline fn isMatrix(comptime Type: type) bool {
-    comptime return hasTag(Type, math.vector_tag);
+    comptime return hasTag(Type, math.matrix_tag);
 }
 
-fn writeMatrix(writer: *std.Io.Writer, value_pointer: anytype, whitespace: JsonWhitespace) !void {
-    const inner_whitespace: JsonWhitespace = switch (whitespace) {
+fn writeMatrix(writer: *std.Io.Writer, value_pointer: anytype, whitespace: *const JsonWhitespace) !void {
+    const inner_whitespace: JsonWhitespace = switch (whitespace.*) {
         .none => .none,
         .space => .space,
         .new_line => .space,
     };
-    return writeValue(writer, value_pointer.asFlat(), inner_whitespace) catch |err| {
+    writeValue(writer, value_pointer.asFlat(), &inner_whitespace) catch |err| {
         misc.error_context.append("Failed to write matrix's array.", .{});
         return err;
     };
@@ -1110,10 +1110,11 @@ fn writeMatrix(writer: *std.Io.Writer, value_pointer: anytype, whitespace: JsonW
 
 fn readMatrix(comptime Type: type, reader: *std.json.Reader, allocator: std.mem.Allocator, default: anytype) !Type {
     const default_flat = if (default) |d| d.asFlat() else null;
-    return readValue(Type.Flat, reader, allocator, default_flat) catch |err| {
+    const flat = readValue(Type.Flat, reader, allocator, default_flat) catch |err| {
         misc.error_context.append("Failed to read matrix's array.", .{});
         return err;
     };
+    return .fromFlat(flat);
 }
 
 fn freeIfAllocated(allocator: std.mem.Allocator, token: std.json.Token) void {
@@ -1460,4 +1461,84 @@ test "readJsonValue should resolve mixed field order in JSON objects" {
         .c = .init(.{ .c1 = 5, .c2 = 6 }),
         .d = .init(.{ .d1 = 7, .d2 = 8 }),
     }, value);
+}
+
+test "readJsonValue should fail when struct field is missing and default does not exist" {
+    var reader = std.Io.Reader.fixed("{ \"a\": 1 }");
+    try testing.expectError(error.FieldNotFound, readJsonValue(struct { a: f32, b: f32 }, &reader, null));
+}
+
+test "readJsonValue should fail when nested struct field is missing and default does not exist" {
+    var reader = std.Io.Reader.fixed("{ \"a\": { \"a1\": 1 } }");
+    const Value = struct { a: struct { a1: f32, a2: f32 } };
+    try testing.expectError(error.FieldNotFound, readJsonValue(Value, &reader, null));
+}
+
+test "readJsonValue should use struct field default value when field is missing and default does not exist" {
+    var reader = std.Io.Reader.fixed("{ \"a\": 1 }");
+    const Value = struct { a: f32, b: f32 = -1 };
+    try testing.expectEqual(Value{ .a = 1, .b = -1 }, try readJsonValue(Value, &reader, null));
+}
+
+test "readJsonValue should fail when JSON array is shorter than expected and default does not exist" {
+    var reader = std.Io.Reader.fixed("[1, 2]");
+    try testing.expectError(error.EarlyEnd, readJsonValue([3]f32, &reader, null));
+}
+
+test "readJsonValue should fail when JSON tuple is shorter than expected and default does not exist" {
+    var reader = std.Io.Reader.fixed("[1, 2]");
+    try testing.expectError(error.EarlyEnd, readJsonValue(struct { f32, f32, f32 }, &reader, null));
+}
+
+test "readJsonValue should fail when nested JSON array is shorter than expected and default does not exist" {
+    var reader = std.Io.Reader.fixed("{ \"a\": [1, 2] }");
+    try testing.expectError(error.EarlyEnd, readJsonValue(struct { a: [3]f32 }, &reader, null));
+}
+
+test "readJsonValue should fail when nested JSON tuple is shorter than expected and default does not exist" {
+    var reader = std.Io.Reader.fixed("{ \"a\": [1, 2] }");
+    try testing.expectError(error.EarlyEnd, readJsonValue(struct { a: struct { f32, f32, f32 } }, &reader, null));
+}
+
+test "readJsonValue should fail when optional payload's field is missing and default does not exist" {
+    var reader = std.Io.Reader.fixed("{ \"a\": 1 }");
+    try testing.expectError(error.FieldNotFound, readJsonValue(?struct { a: f32, b: f32 }, &reader, null));
+}
+
+test "readJsonValue should fail when enum array entry is missing and default does not exist" {
+    var reader = std.Io.Reader.fixed("{ \"a\": 1 }");
+    try testing.expectError(error.EntryNotFound, readJsonValue(std.EnumArray(enum { a, b }, f32), &reader, null));
+}
+
+test "writeJsonValue should write vector as an array" {
+    const vector = math.Vec2.fromArray(.{ 1, 2 });
+    var buffer: [64]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buffer);
+    try writeJsonValue(math.Vec2, &vector, &writer, &.none);
+    try testing.expectEqualStrings("[1,2]", buffer[0..writer.end]);
+}
+
+test "writeJsonValue should write matrix as a flat array" {
+    const matrix = math.Mat2.fromArray(.{ .{ 1, 2 }, .{ 3, 4 } });
+    var buffer: [64]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buffer);
+    try writeJsonValue(math.Mat2, &matrix, &writer, &.none);
+    try testing.expectEqualStrings("[1,2,3,4]", buffer[0..writer.end]);
+}
+
+test "writeJsonValue should write vector and matrix on a single line when whitespace is new line" {
+    const Value = struct { vector: math.Vec2, matrix: math.Mat2 };
+    const value = Value{
+        .vector = .fromArray(.{ 1, 2 }),
+        .matrix = .fromArray(.{ .{ 3, 4 }, .{ 5, 6 } }),
+    };
+    var buffer: [256]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buffer);
+    try writeJsonValue(Value, &value, &writer, &.{ .new_line = .{} });
+    try testing.expectEqualStrings(
+        \\{
+        \\  "vector": [ 1, 2 ],
+        \\  "matrix": [ 3, 4, 5, 6 ]
+        \\}
+    , buffer[0..writer.end]);
 }
