@@ -99,9 +99,16 @@ pub fn BoundedArray(
             true => misc.SelfBasedSentinelSlice(@TypeOf(self), Self, Element, empty_element),
         } {
             return switch (sentinel) {
-                false => self.buffer[0..@min(self.len, capacity)],
-                else => self.buffer[0..@min(self.len, capacity) :empty_element],
+                false => self.buffer[0..self.len],
+                else => self.buffer[0..self.len :empty_element],
             };
+        }
+
+        pub fn sanitize(self: *Self) void {
+            if (self.len > capacity) {
+                self.len = capacity;
+            }
+            @memset(self.buffer[self.len..], empty_element);
         }
     };
 }
@@ -203,15 +210,18 @@ test "asSlice should return slice that points to the non empty elements inside t
     try testing.expectEqual(array_2.buffer[0..2 :123], array_2.asSlice());
 }
 
-test "asSlice should return a slice to entire buffer when the bounded array length exceeds its capacity" {
-    const array_1 = BoundedArray(4, u8, 123, false){
-        .buffer = .{ 1, 2, 3, 4 },
-        .len = 7,
-    };
-    try testing.expectEqual(array_1.buffer[0..4], array_1.asSlice());
-    const array_2 = BoundedArray(4, u8, 123, true){
-        .buffer = .{ 1, 2, 3, 4, 123 },
-        .len = 7,
-    };
-    try testing.expectEqual(array_2.buffer[0..4 :123], array_2.asSlice());
+test "sanitize should clamp length to capacity" {
+    var array = BoundedArray(4, u8, 0, false).fromArray("abcd".*);
+    array.len = 7;
+    array.sanitize();
+    try testing.expectEqual(4, array.len);
+    try testing.expectEqualStrings("abcd", array.asSlice());
+}
+
+test "sanitize should fill the buffer after length with empty elements including the sentinel" {
+    const Array = BoundedArray(4, u8, 0, true);
+    var array = Array{ .buffer = "abXYZ".*, .len = 2 };
+    array.sanitize();
+    try testing.expectEqual(Array{ .buffer = .{ 'a', 'b', 0, 0, 0 }, .len = 2 }, array);
+    try testing.expectEqualStrings("ab", array.asSlice());
 }

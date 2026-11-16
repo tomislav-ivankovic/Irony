@@ -22,6 +22,7 @@ const LocalLayout = struct {
 
     pub const Node = struct {
         size: usize,
+        sanitize: ?*const fn (value_pointer: *anyopaque) void,
         kind: Kind,
 
         pub const Kind = union(enum) {
@@ -860,11 +861,13 @@ fn readNode(
             break :block readNode(context, &@"union".variants[index], variant_pointer, variant_default_pointer) == .completed;
         },
     };
-    if (success) {
-        return .completed;
+    if (!success) {
+        const default_pointer = default_pointer_maybe orelse return .needs_parent_default;
+        copyBytes(lhs_pointer, default_pointer, node.size);
     }
-    const default_pointer = default_pointer_maybe orelse return .needs_parent_default;
-    copyBytes(lhs_pointer, default_pointer, node.size);
+    if (node.sanitize) |sanitize| {
+        sanitize(lhs_pointer);
+    }
     return .completed;
 }
 
@@ -943,9 +946,10 @@ fn getLocalLayout(Frame: type) LocalLayout {
 
 fn getLocalLayoutRecursive(state: *GetLocalLayoutState, Type: type) LocalLayout.Node {
     switch (@typeInfo(Type)) {
-        .void => return .{ .size = 0, .kind = .empty },
+        .void => return .{ .size = 0, .sanitize = null, .kind = .empty },
         .bool, .int, .float, .@"enum" => return .{
             .size = @sizeOf(Type),
+            .sanitize = misc.getTypeErasedSanitize(Type),
             .kind = .{ .value = .{
                 .field_index = state.addField(Type),
                 .ops = LocalLayout.ValueOps.fromType(Type),
@@ -954,6 +958,7 @@ fn getLocalLayoutRecursive(state: *GetLocalLayoutState, Type: type) LocalLayout.
         .@"struct" => |*info| if (info.layout == .@"packed") {
             return .{
                 .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
                 .kind = .{ .value = .{
                     .field_index = state.addField(Type),
                     .ops = LocalLayout.ValueOps.fromType(Type),
@@ -971,7 +976,11 @@ fn getLocalLayoutRecursive(state: *GetLocalLayoutState, Type: type) LocalLayout.
                 state.pop();
             }
             const final_fields = fields;
-            return .{ .size = @sizeOf(Type), .kind = .{ .@"struct" = .{ .fields = &final_fields } } };
+            return .{
+                .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
+                .kind = .{ .@"struct" = .{ .fields = &final_fields } },
+            };
         },
         .array => |*info| {
             var elements: [info.len]LocalLayout.Node = undefined;
@@ -981,7 +990,11 @@ fn getLocalLayoutRecursive(state: *GetLocalLayoutState, Type: type) LocalLayout.
                 state.pop();
             }
             const final_elements = elements;
-            return .{ .size = @sizeOf(Type), .kind = .{ .array = .{ .elements = &final_elements } } };
+            return .{
+                .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
+                .kind = .{ .array = .{ .elements = &final_elements } },
+            };
         },
         .optional => |*info| {
             state.pushName(tag_path_component);
@@ -990,15 +1003,20 @@ fn getLocalLayoutRecursive(state: *GetLocalLayoutState, Type: type) LocalLayout.
             state.pushName(payload_path_component);
             const payload = getLocalLayoutRecursive(state, info.child);
             state.pop();
-            return .{ .size = @sizeOf(Type), .kind = .{ .optional = .{
-                .tag_field_index = tag_field_index,
-                .payload = &payload,
-                .ops = LocalLayout.OptionalOps.fromType(Type),
-            } } };
+            return .{
+                .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
+                .kind = .{ .optional = .{
+                    .tag_field_index = tag_field_index,
+                    .payload = &payload,
+                    .ops = LocalLayout.OptionalOps.fromType(Type),
+                } },
+            };
         },
         .@"union" => |*info| if (info.layout == .@"packed") {
             return .{
                 .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
                 .kind = .{ .value = .{
                     .field_index = state.addField(Type),
                     .ops = LocalLayout.ValueOps.fromType(Type),
@@ -1023,11 +1041,15 @@ fn getLocalLayoutRecursive(state: *GetLocalLayoutState, Type: type) LocalLayout.
             }
             state.offset = max_payload_end_offset;
             const final_variants = variants;
-            return .{ .size = @sizeOf(Type), .kind = .{ .@"union" = .{
-                .tag_field_index = tag_field_index,
-                .variants = &final_variants,
-                .ops = LocalLayout.UnionOps.fromType(Type),
-            } } };
+            return .{
+                .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
+                .kind = .{ .@"union" = .{
+                    .tag_field_index = tag_field_index,
+                    .variants = &final_variants,
+                    .ops = LocalLayout.UnionOps.fromType(Type),
+                } },
+            };
         },
         else => @compileError("Unsupported type: " ++ @typeName(Type)),
     }
@@ -1488,4 +1510,86 @@ test "readIronyFormat should load the same recording that writeIronyFormat saved
             @as(UnionOfStructs.Int, @bitCast(loaded_recording[index].union_of_structs)),
         );
     }
+}
+
+test "readIronyFormat should sanitize values of types that have a sanitize function" {
+    const Sanitized = struct {
+        value: u8 = 0,
+        pub fn sanitize(self: *@This()) void {
+            self.value = @min(self.value, 10);
+        }
+    };
+    const Frame = struct {
+        a: Sanitized = .{},
+        b: [2]Sanitized = .{ .{}, .{} },
+        c: ?Sanitized = null,
+        d: union(enum) { x: Sanitized, y: u8 } = .{ .y = 0 },
+        sanitized_a: u8 = 0,
+        pub fn sanitize(self: *@This()) void {
+            self.sanitized_a = self.a.value;
+        }
+    };
+    var buffer: [1024]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buffer);
+    try writeIronyFormat(Frame, testing.allocator, &.{
+        .{
+            .a = .{ .value = 20 },
+            .b = .{ .{ .value = 30 }, .{ .value = 5 } },
+            .c = .{ .value = 40 },
+            .d = .{ .x = .{ .value = 50 } },
+        },
+    }, &writer);
+    var reader = std.Io.Reader.fixed(buffer[0..writer.end]);
+    const recording = try readIronyFormat(Frame, testing.allocator, &reader, &.{});
+    defer testing.allocator.free(recording);
+    try testing.expectEqualSlices(Frame, &.{
+        .{
+            .a = .{ .value = 10 },
+            .b = .{ .{ .value = 10 }, .{ .value = 5 } },
+            .c = .{ .value = 10 },
+            .d = .{ .x = .{ .value = 10 } },
+            .sanitized_a = 10,
+        },
+    }, recording);
+}
+
+test "readIronyFormat should sanitize default values that are used as fallback" {
+    const Sanitized = struct {
+        value: u8 = 0,
+        pub fn sanitize(self: *@This()) void {
+            self.value = @min(self.value, 10);
+        }
+    };
+    const SavedFrame = struct { a: u8 = 0 };
+    const LoadedFrame = struct { a: u8 = 0, b: Sanitized = .{} };
+    var buffer: [1024]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buffer);
+    try writeIronyFormat(SavedFrame, testing.allocator, &.{.{ .a = 1 }}, &writer);
+    var reader = std.Io.Reader.fixed(buffer[0..writer.end]);
+    const recording = try readIronyFormat(LoadedFrame, testing.allocator, &reader, &.{ .b = .{ .value = 50 } });
+    defer testing.allocator.free(recording);
+    try testing.expectEqualSlices(LoadedFrame, &.{.{ .a = 1, .b = .{ .value = 10 } }}, recording);
+}
+
+test "readIronyFormat should load valid bounded strings when recording contains invalid length and sentinel" {
+    const SavedString = struct { buffer: [5]u8, len: u8 };
+    const SavedFrame = struct {
+        a: SavedString = .{ .buffer = @splat(0), .len = 0 },
+        b: SavedString = .{ .buffer = @splat(0), .len = 0 },
+    };
+    const LoadedFrame = struct {
+        a: misc.BoundedArray(4, u8, 0, true) = .empty,
+        b: misc.BoundedArray(4, u8, 0, true) = .empty,
+    };
+    var buffer: [1024]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buffer);
+    try writeIronyFormat(SavedFrame, testing.allocator, &.{.{
+        .a = .{ .buffer = "abXYZ".*, .len = 7 },
+        .b = .{ .buffer = "abXYZ".*, .len = 2 },
+    }}, &writer);
+    var reader = std.Io.Reader.fixed(buffer[0..writer.end]);
+    const recording = try readIronyFormat(LoadedFrame, testing.allocator, &reader, &.{});
+    defer testing.allocator.free(recording);
+    try testing.expectEqualStrings("abXY", recording[0].a.asSlice());
+    try testing.expectEqualStrings("ab", recording[0].b.asSlice());
 }

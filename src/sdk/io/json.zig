@@ -175,6 +175,7 @@ const max_object_fields = 256;
 
 const Node = struct {
     size: usize,
+    sanitize: ?*const fn (value_pointer: *anyopaque) void,
     kind: Kind,
 
     pub const Kind = union(enum) {
@@ -398,7 +399,7 @@ const BoundedArrayOps = struct {
         const Impl = struct {
             fn getLen(array_pointer: *const anyopaque) usize {
                 const typed_array_pointer: *const Array = @ptrCast(@alignCast(array_pointer));
-                return typed_array_pointer.asSlice().len;
+                return typed_array_pointer.len;
             }
             fn setLen(array_pointer: *anyopaque, len: usize) void {
                 const typed_array_pointer: *Array = @ptrCast(@alignCast(array_pointer));
@@ -495,13 +496,17 @@ fn NodeOf(Type: type) type {
 
 fn buildNode(Type: type) Node {
     if (isBoundedArray(Type)) {
-        return .{ .size = @sizeOf(Type), .kind = .{ .bounded_array = .{
-            .max_len = Type.max_len,
-            .buffer_offset = @offsetOf(Type, "buffer"),
-            .is_string = Type.Child == u8,
-            .element = getNode(Type.Child),
-            .ops = BoundedArrayOps.fromType(Type),
-        } } };
+        return .{
+            .size = @sizeOf(Type),
+            .sanitize = misc.getTypeErasedSanitize(Type),
+            .kind = .{ .bounded_array = .{
+                .max_len = Type.max_len,
+                .buffer_offset = @offsetOf(Type, "buffer"),
+                .is_string = Type.Child == u8,
+                .element = getNode(Type.Child),
+                .ops = BoundedArrayOps.fromType(Type),
+            } },
+        };
     }
     if (isEnumArray(Type)) {
         const key_names = @typeInfo(Type.Key).@"enum".field_names;
@@ -517,28 +522,44 @@ fn buildNode(Type: type) Node {
             };
         }
         const final_entries = entries;
-        return .{ .size = @sizeOf(Type), .kind = .{ .enum_array = .{
-            .entries = &final_entries,
-            .value = getNode(Type.Value),
-        } } };
+        return .{
+            .size = @sizeOf(Type),
+            .sanitize = misc.getTypeErasedSanitize(Type),
+            .kind = .{ .enum_array = .{
+                .entries = &final_entries,
+                .value = getNode(Type.Value),
+            } },
+        };
     }
     if (isVector(Type)) {
-        return .{ .size = @sizeOf(Type), .kind = .{ .single_line = .{
-            .name = "vector",
-            .offset = @offsetOf(Type, "array"),
-            .node = getNode(Type.Array),
-        } } };
+        return .{
+            .size = @sizeOf(Type),
+            .sanitize = misc.getTypeErasedSanitize(Type),
+            .kind = .{ .single_line = .{
+                .name = "vector",
+                .offset = @offsetOf(Type, "array"),
+                .node = getNode(Type.Array),
+            } },
+        };
     }
     if (isMatrix(Type)) {
-        return .{ .size = @sizeOf(Type), .kind = .{ .single_line = .{
-            .name = "matrix",
-            .offset = @offsetOf(Type, "array"),
-            .node = getNode(Type.Flat),
-        } } };
+        return .{
+            .size = @sizeOf(Type),
+            .sanitize = misc.getTypeErasedSanitize(Type),
+            .kind = .{ .single_line = .{
+                .name = "matrix",
+                .offset = @offsetOf(Type, "array"),
+                .node = getNode(Type.Flat),
+            } },
+        };
     }
     switch (@typeInfo(Type)) {
-        .void => return .{ .size = 0, .kind = .void },
-        .bool, .int, .float => return .{ .size = @sizeOf(Type), .kind = .{ .value = ValueOps.fromType(Type) } },
+        .void => return .{ .size = 0, .sanitize = null, .kind = .void },
+        .bool, .int, .float => return .{
+            .size = @sizeOf(Type),
+            .sanitize = misc.getTypeErasedSanitize(Type),
+            .kind = .{ .value = ValueOps.fromType(Type) },
+        },
         .@"enum" => |*info| {
             switch (info.mode) {
                 .exhaustive => {},
@@ -546,22 +567,34 @@ fn buildNode(Type: type) Node {
                     "Enum " ++ @typeName(Type) ++ " is nonexhaustive and therefore not supported.",
                 ),
             }
-            return .{ .size = @sizeOf(Type), .kind = .{ .@"enum" = .{
-                .names = info.field_names,
-                .ops = EnumOps.fromType(Type),
-            } } };
+            return .{
+                .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
+                .kind = .{ .@"enum" = .{
+                    .names = info.field_names,
+                    .ops = EnumOps.fromType(Type),
+                } },
+            };
         },
-        .optional => |*info| return .{ .size = @sizeOf(Type), .kind = .{ .optional = .{
-            .payload = getNode(info.child),
-            .ops = OptionalOps.fromType(Type),
-        } } },
-        .array => |*info| return .{ .size = @sizeOf(Type), .kind = .{ .array = .{
-            .len = info.len,
-            .element = getNode(info.child),
-        } } },
+        .optional => |*info| return .{
+            .size = @sizeOf(Type),
+            .sanitize = misc.getTypeErasedSanitize(Type),
+            .kind = .{ .optional = .{
+                .payload = getNode(info.child),
+                .ops = OptionalOps.fromType(Type),
+            } },
+        },
+        .array => |*info| return .{
+            .size = @sizeOf(Type),
+            .sanitize = misc.getTypeErasedSanitize(Type),
+            .kind = .{ .array = .{
+                .len = info.len,
+                .element = getNode(info.child),
+            } },
+        },
         .@"struct" => |*info| {
             if (info.layout == .@"packed") {
-                return .{ .size = @sizeOf(Type), .kind = .{ .@"packed" = PackedOps.fromType(Type) } };
+                return .{ .size = @sizeOf(Type), .sanitize = misc.getTypeErasedSanitize(Type), .kind = .{ .@"packed" = PackedOps.fromType(Type) } };
             }
             if (info.is_tuple) {
                 var fields: [info.field_names.len]Node.TupleField = undefined;
@@ -569,7 +602,11 @@ fn buildNode(Type: type) Node {
                     field.* = .{ .offset = @offsetOf(Type, field_name), .node = getNode(Field) };
                 }
                 const final_fields = fields;
-                return .{ .size = @sizeOf(Type), .kind = .{ .tuple = .{ .fields = &final_fields } } };
+                return .{
+                    .size = @sizeOf(Type),
+                    .sanitize = misc.getTypeErasedSanitize(Type),
+                    .kind = .{ .tuple = .{ .fields = &final_fields } },
+                };
             }
             if (info.field_names.len > max_object_fields) {
                 @compileError("Struct " ++ @typeName(Type) ++ " has too many fields.");
@@ -584,7 +621,11 @@ fn buildNode(Type: type) Node {
                 };
             }
             const final_fields = fields;
-            return .{ .size = @sizeOf(Type), .kind = .{ .@"struct" = .{ .fields = &final_fields } } };
+            return .{
+                .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
+                .kind = .{ .@"struct" = .{ .fields = &final_fields } },
+            };
         },
         .@"union" => |*info| {
             const Tag = info.tag_type orelse {
@@ -595,12 +636,16 @@ fn buildNode(Type: type) Node {
                 variant.* = getNode(Payload);
             }
             const final_variants = variants;
-            return .{ .size = @sizeOf(Type), .kind = .{ .@"union" = .{
-                .tag_type_name = @typeName(Tag),
-                .names = info.field_names,
-                .variants = &final_variants,
-                .ops = UnionOps.fromType(Type),
-            } } };
+            return .{
+                .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
+                .kind = .{ .@"union" = .{
+                    .tag_type_name = @typeName(Tag),
+                    .names = info.field_names,
+                    .variants = &final_variants,
+                    .ops = UnionOps.fromType(Type),
+                } },
+            };
         },
         else => @compileError("Unsupported type: " ++ @typeName(Type)),
     }
@@ -916,6 +961,9 @@ fn readNode(
         try recoverFromReadError(context, err, start_height, default_pointer != null);
         copyBytes(value_pointer, default_pointer.?, node.size);
     };
+    if (node.sanitize) |sanitize| {
+        sanitize(value_pointer);
+    }
 }
 
 fn recoverFromReadError(context: *const ReadContext, err: anyerror, start_height: usize, has_default: bool) !void {
@@ -1154,7 +1202,11 @@ fn readNodeValue(
                         if (!builtin.is_test) {
                             misc.error_context.logWarning(err);
                         }
-                        copyBytes(offsetPointer(value_pointer, field.offset), pointer, field.node.size);
+                        const field_pointer = offsetPointer(value_pointer, field.offset);
+                        copyBytes(field_pointer, pointer, field.node.size);
+                        if (field.node.sanitize) |sanitize| {
+                            sanitize(field_pointer);
+                        }
                     } else {
                         return err;
                     }
@@ -1918,20 +1970,54 @@ test "writeJsonValue should write vector and matrix on a single line when whites
     , buffer[0..writer.end]);
 }
 
-test "writeJsonValue should not write bounded array elements past the capacity when length is too large" {
-    var bounded_array = misc.BoundedArray(2, f32, 0, false).fromArray(.{ 1, 2 });
-    bounded_array.len = 3;
-    var buffer: [64]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&buffer);
-    try writeJsonValue(@TypeOf(bounded_array), &bounded_array, &writer, &.none);
-    try testing.expectEqualStrings("[1,2]", buffer[0..writer.end]);
+test "readJsonValue should sanitize values of types that have a sanitize function" {
+    const Sanitized = struct {
+        value: u8,
+        pub fn sanitize(self: *@This()) void {
+            self.value = @min(self.value, 10);
+        }
+    };
+    const Value = struct {
+        a: Sanitized,
+        b: [2]Sanitized,
+        c: ?Sanitized,
+        d: union(enum) { x: Sanitized, y: u8 },
+        sanitized_a: u8 = 0,
+        pub fn sanitize(self: *@This()) void {
+            self.sanitized_a = self.a.value;
+        }
+    };
+    var reader = std.Io.Reader.fixed(
+        \\{
+        \\  "a": { "value": 20 },
+        \\  "b": [{ "value": 30 }, { "value": 5 }],
+        \\  "c": { "value": 40 },
+        \\  "d": { "x": { "value": 50 } }
+        \\}
+    );
+    try testing.expectEqual(Value{
+        .a = .{ .value = 10 },
+        .b = .{ .{ .value = 10 }, .{ .value = 5 } },
+        .c = .{ .value = 10 },
+        .d = .{ .x = .{ .value = 10 } },
+        .sanitized_a = 10,
+    }, try readJsonValue(Value, &reader, null));
 }
 
-test "writeJsonValue should not write bounded string characters past the capacity when length is too large" {
-    var bounded_string = misc.BoundedArray(2, u8, 0, false).fromArray("ab".*);
-    bounded_string.len = 3;
-    var buffer: [64]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&buffer);
-    try writeJsonValue(@TypeOf(bounded_string), &bounded_string, &writer, &.none);
-    try testing.expectEqualStrings("\"ab\"", buffer[0..writer.end]);
+test "readJsonValue should sanitize default values that are used as fallback" {
+    const Sanitized = struct {
+        value: u8,
+        pub fn sanitize(self: *@This()) void {
+            self.value = @min(self.value, 10);
+        }
+    };
+    const Value = struct {
+        a: Sanitized = .{ .value = 50 },
+        b: Sanitized = .{ .value = 60 },
+    };
+    var reader = std.Io.Reader.fixed("{ \"a\": { \"value\": \"invalid\" } }");
+    try testing.expectEqual(
+        Value{ .a = .{ .value = 10 }, .b = .{ .value = 10 } },
+        try readJsonValue(Value, &reader, null),
+    );
 }

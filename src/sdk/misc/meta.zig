@@ -118,6 +118,28 @@ pub fn enumArrayToEnumFieldStruct(
     return field_struct;
 }
 
+pub fn getTypeErasedSanitize(comptime Type: type) ?*const fn (value_pointer: *anyopaque) void {
+    switch (@typeInfo(Type)) {
+        .@"struct", .@"union", .@"enum", .@"opaque" => {},
+        else => return null,
+    }
+    if (!@hasDecl(Type, "sanitize")) {
+        return null;
+    }
+    if (@TypeOf(Type.sanitize) != fn (*Type) void) {
+        @compileError(
+            "Expected " ++ @typeName(Type) ++ ".sanitize to be of type " ++ @typeName(fn (*Type) void) ++
+                " but got: " ++ @typeName(@TypeOf(Type.sanitize)),
+        );
+    }
+    const Impl = struct {
+        fn sanitize(value_pointer: *anyopaque) void {
+            Type.sanitize(@ptrCast(@alignCast(value_pointer)));
+        }
+    };
+    return Impl.sanitize;
+}
+
 const testing = std.testing;
 
 test "SelfBasedPointer should return a pointer type with same mutability as SelfPointer" {
@@ -214,4 +236,22 @@ test "enumArrayToEnumFieldStruct should return correct value" {
     const array = std.EnumArray(Enum, u8).init(expected);
     const actual = enumArrayToEnumFieldStruct(Enum, u8, &array);
     try testing.expectEqual(expected, actual);
+}
+
+test "getTypeErasedSanitize should return null when type does not have a sanitize function" {
+    try testing.expectEqual(null, getTypeErasedSanitize(u8));
+    try testing.expectEqual(null, getTypeErasedSanitize(struct { a: u8 }));
+}
+
+test "getTypeErasedSanitize should return a function that calls the sanitize function of the type" {
+    const Value = struct {
+        a: u8,
+        pub fn sanitize(self: *@This()) void {
+            self.a = @min(self.a, 10);
+        }
+    };
+    const sanitize = getTypeErasedSanitize(Value) orelse return error.SanitizeNotFound;
+    var value = Value{ .a = 20 };
+    sanitize(&value);
+    try testing.expectEqual(Value{ .a = 10 }, value);
 }

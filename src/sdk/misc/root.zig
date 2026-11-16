@@ -13,6 +13,7 @@ pub const Partial = @import("meta.zig").Partial;
 pub const FieldMap = @import("meta.zig").FieldMap;
 pub const areAllFieldsNull = @import("meta.zig").areAllFieldsNull;
 pub const enumArrayToEnumFieldStruct = @import("meta.zig").enumArrayToEnumFieldStruct;
+pub const getTypeErasedSanitize = @import("meta.zig").getTypeErasedSanitize;
 pub const Task = @import("task.zig").Task;
 pub const Timer = @import("timer.zig").Timer;
 pub const Timestamp = @import("timestamp.zig").Timestamp;
