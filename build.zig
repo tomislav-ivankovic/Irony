@@ -94,6 +94,7 @@ pub fn build(b: *std.Build) void {
     injector.root_module.addImport("build_info", build_info_t8);
     injector.root_module.addImport("lib_c_time", lib_c_time);
     injector.root_module.addImport("win32", win32);
+    injector.root_module.addImport("win_io", win_io);
     b.installArtifact(injector);
 
     // This *creates* a Run step in the build graph, to be executed when another step is evaluated that depends on it.

@@ -17,6 +17,7 @@ pub const std_options = std.Options{
         sdk.ui.toasts.logFn,
     }).logFn,
 };
+pub const std_options_debug_io = WinIo.global_single_threaded.io();
 const dx = switch (build_info.rendering_api) {
     .dx11 => sdk.dx11,
     .dx12 => sdk.dx12,

@@ -1,5 +1,6 @@
 const std = @import("std");
 const build_info = @import("build_info");
+const WinIo = @import("win_io");
 const sdk = @import("sdk/root.zig");
 const injector = @import("injector/root.zig");
 
@@ -11,6 +12,7 @@ pub const std_options = std.Options{
     .log_level = .info,
     .logFn = composite_logger.logFn,
 };
+pub const std_options_debug_io = WinIo.global_single_threaded.io();
 
 const access_rights = sdk.os.Process.AccessRights{
     .CREATE_THREAD = 1,
@@ -43,13 +45,18 @@ pub const Mode = enum {
 };
 var mode = Mode.normal;
 
-pub fn main(init: std.process.Init) !void {
-    console_logger.setIo(init.io);
+pub fn main(init: std.process.Init.Minimal) !void {
+    var main_allocator = std.heap.DebugAllocator(.{}).init;
+    defer _ = main_allocator.deinit();
+    
+    var win_io = WinIo.init(main_allocator.allocator(), .{});
+    defer win_io.deinit();
+    console_logger.setIo(win_io.io());
 
     std.log.info("Application started up.", .{});
 
     std.log.debug("Finding base directory...", .{});
-    const virtual_cwd_io = if (sdk.io.VirtualCwdIo.initFromMainModule(init.io)) |vio| block: {
+    const virtual_cwd_io = if (sdk.io.VirtualCwdIo.initFromMainModule(win_io.io())) |vio| block: {
         std.log.info("Base directory set to: {s}", .{vio.path.asSlice()});
         break :block vio;
     } else |err| block: {
@@ -61,7 +68,7 @@ pub fn main(init: std.process.Init) !void {
         vio.deinit();
     };
 
-    const io = if (virtual_cwd_io) |*vio| vio.io() else init.io;
+    const io = if (virtual_cwd_io) |*vio| vio.io() else win_io.io();
 
     std.log.debug("Starting file logging...", .{});
     if (file_logger.start(io, log_file_name)) {
@@ -74,7 +81,7 @@ pub fn main(init: std.process.Init) !void {
     std.log.info("{s} Injector version {s}", .{ build_info.display_name, build_info.version });
 
     std.log.debug("Checking for only inject mode...", .{});
-    mode = getMode(&init.minimal.args) catch |err| {
+    mode = getMode(&init.args) catch |err| {
         sdk.misc.error_context.append("Failed to get the injector mode.", .{});
         sdk.misc.error_context.logError(err);
         return;
