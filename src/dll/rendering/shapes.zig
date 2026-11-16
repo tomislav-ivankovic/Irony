@@ -666,7 +666,7 @@ test "should render cylinder correctly" {
         ), 0.0001);
         try testing.expectEqual(sdk.math.Vec4.fromArray(.{ 0.1, 0.2, 0.3, 0.4 }), vertex.color);
     }
-    for (triangles.vertices.items[(triangles.vertices.items.len - 2)..triangles.vertices.items.len]) |*vertex| {
+    for (triangles.vertices.items[(triangles.vertices.items.len - 2)..]) |*vertex| {
         try testing.expectApproxEqAbs(0, @min(
             vertex.position.distanceTo(.fromArray(.{ 1, 2, 4 })),
             vertex.position.distanceTo(.fromArray(.{ 1, 2, 2 })),
@@ -688,7 +688,7 @@ test "should render cylinder correctly" {
         try testing.expectEqual(10, line.thickness);
         try testing.expectEqual(1, line.depth_factor);
     }
-    for (lines.list.items[2..lines.list.items.len]) |*line| {
+    for (lines.list.items[2..]) |*line| {
         try testing.expectApproxEqAbs(2, @min(
             line.geometry.point_1.distanceTo(.fromArray(.{ 1, 2, 4 })),
             line.geometry.point_1.distanceTo(.fromArray(.{ 1, 2, 2 })),

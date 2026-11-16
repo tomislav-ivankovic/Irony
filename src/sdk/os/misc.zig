@@ -15,7 +15,7 @@ pub fn pathToFileName(path: []const u8) []const u8 {
         }
     }
     if (last_separator_index) |index| {
-        return path[(index + 1)..path.len];
+        return path[(index + 1)..];
     } else {
         return path;
     }

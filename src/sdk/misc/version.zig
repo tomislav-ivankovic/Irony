@@ -102,7 +102,7 @@ pub const Version = struct {
         };
 
         const snapshot = if (current_index < string.len) block: {
-            const snapshot_string = string[current_index..string.len];
+            const snapshot_string = string[current_index..];
             if (!std.mem.eql(u8, snapshot_string, "-SNAPSHOT")) {
                 const fmt = "Expecting \"-SNAPSHOT\" but got \"{s}\" in version string: {s}";
                 const args = .{ snapshot_string, string };

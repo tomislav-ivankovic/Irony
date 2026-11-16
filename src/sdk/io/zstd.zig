@@ -269,7 +269,7 @@ pub const ZstdDecoder = struct {
         const leftovers_write_size = @min(self.output_leftovers_len, total_out_limit - total_out);
         if (leftovers_write_size > 0) {
             const start = self.output_leftovers_start;
-            try w.writeAll(self.output_buffer[start..(start + leftovers_write_size)]);
+            try w.writeAll(self.output_buffer[start..][0..leftovers_write_size]);
             self.output_leftovers_start += leftovers_write_size;
             self.output_leftovers_len -= leftovers_write_size;
             total_out += leftovers_write_size;
@@ -303,7 +303,7 @@ pub const ZstdDecoder = struct {
             if (self.input_leftovers_len > 0) {
                 const start = input.pos;
                 const len = self.input_leftovers_len;
-                @memmove(self.input_buffer[0..len], self.input_buffer[start..(start + len)]);
+                @memmove(self.input_buffer[0..len], self.input_buffer[start..][0..len]);
             }
 
             const output_size = output.pos;

@@ -548,8 +548,8 @@ fn readValue(Type: type, data: []const u8) !Type {
             const ReadType = @Int(info.signedness, local_size * std.mem.byte_size_in_bits);
             const read_len = @min(local_size, data.len);
             const read_data, const padding = switch (endian) {
-                .little => .{ data[0..read_len], data[read_len..data.len] },
-                .big => .{ data[(data.len - read_len)..data.len], data[0..(data.len - read_len)] },
+                .little => .{ data[0..read_len], data[read_len..] },
+                .big => .{ data[(data.len - read_len)..], data[0..(data.len - read_len)] },
             };
             var read_value = std.mem.readVarInt(ReadType, read_data, endian);
             if (endian == .little and
@@ -1136,7 +1136,7 @@ const GetLocalLayoutState = struct {
         if (len.* + name.len > buffer.len) {
             @compileError("Maximum field path length exceeded.");
         }
-        @memcpy(buffer[len.*..(len.* + name.len)], name);
+        @memcpy(buffer[len.*..][0..name.len], name);
         len.* += name.len;
     }
 
