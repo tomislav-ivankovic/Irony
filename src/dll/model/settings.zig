@@ -325,6 +325,8 @@ pub const IngameCameraSettings = struct {
 pub const FreeLookCameraSettings = struct {
     speed: f32 = 500.0,
     speed_multiplier: f32 = 4.0,
+    acceleration_time: f32 = 0.2,
+    deceleration_time: f32 = 0.15,
     look_sensitivity: f32 = 0.003,
     vertical_fov: f32 = 40.0 * std.math.rad_per_deg,
 };

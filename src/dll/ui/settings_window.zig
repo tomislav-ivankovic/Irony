@@ -871,6 +871,8 @@ fn drawFreeLookCameraSettings(
 ) void {
     drawFloat("Speed", &value.speed, &default.speed, 10, 0, 100000, "%.0f cm/s", 0);
     drawScale("Speed Multiplier", &value.speed_multiplier, &default.speed_multiplier);
+    drawFloat("Acceleration Time", &value.acceleration_time, &default.acceleration_time, 0.01, 0, 10, "%.2f s", 0);
+    drawFloat("Deceleration Time", &value.deceleration_time, &default.deceleration_time, 0.01, 0, 10, "%.2f s", 0);
     drawDisplayScaledFloat(
         "Look Sensitivity",
         &value.look_sensitivity,
@@ -2103,6 +2105,16 @@ test "free look camera settings should function correctly" {
             try testing.expectEqual(12, current.speed_multiplier);
             ctx.itemClick("Speed Multiplier/###default", imgui.ImGuiMouseButton_Left, 0);
             try testing.expectEqual(default.speed_multiplier, current.speed_multiplier);
+
+            ctx.itemInputValueFloat("Acceleration Time", 1.5);
+            try testing.expectEqual(1.5, current.acceleration_time);
+            ctx.itemClick("Acceleration Time/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.acceleration_time, current.acceleration_time);
+
+            ctx.itemInputValueFloat("Deceleration Time", 1.5);
+            try testing.expectEqual(1.5, current.deceleration_time);
+            ctx.itemClick("Deceleration Time/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.deceleration_time, current.deceleration_time);
 
             ctx.itemInputValueFloat("Look Sensitivity", 0.2);
             try testing.expectApproxEqAbs(0.0034907, current.look_sensitivity, 0.0000001);

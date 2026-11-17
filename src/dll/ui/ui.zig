@@ -19,6 +19,7 @@ pub const Ui = struct {
     game_memory_window: ui.GameMemoryWindow,
     frame_window: ui.FrameWindow,
     about_window: ui.AboutWindow(.{}),
+    free_look_camera: ui.FreeLookCamera,
 
     const Self = @This();
 
@@ -33,6 +34,7 @@ pub const Ui = struct {
             .game_memory_window = .{},
             .frame_window = .{},
             .about_window = .{},
+            .free_look_camera = .{},
         };
     }
 
@@ -99,7 +101,7 @@ pub const Ui = struct {
         self.main_window.handleKeybinds(controller);
         ui.TaiWindow.handleKeybinds(tai);
         ui.handleCameraShortcuts(camera_director);
-        ui.handleFreeLookCameraInput(camera_director, delta_time, &settings.free_look_camera);
+        self.free_look_camera.processInput(camera_director, delta_time, &settings.free_look_camera);
 
         if (!self.is_open) {
             return;

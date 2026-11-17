@@ -123,7 +123,7 @@ test {
     _ = @import("dll/rendering/triangles.zig");
 
     _ = @import("dll/ui/about_window.zig");
-    _ = @import("dll/ui/camera.zig");
+    _ = @import("dll/ui/camera_menu.zig");
     _ = @import("dll/ui/collision_spheres.zig");
     _ = @import("dll/ui/confirm_dialog.zig");
     _ = @import("dll/ui/control_hints.zig");
@@ -133,6 +133,7 @@ test {
     _ = @import("dll/ui/dialog.zig");
     _ = @import("dll/ui/file_menu.zig");
     _ = @import("dll/ui/forward_directions.zig");
+    _ = @import("dll/ui/free_look_camera.zig");
     _ = @import("dll/ui/frame_window.zig");
     _ = @import("dll/ui/game_memory_window.zig");
     _ = @import("dll/ui/hit_lines.zig");

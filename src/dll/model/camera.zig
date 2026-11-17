@@ -11,13 +11,12 @@ pub const Camera = struct {
     const Self = @This();
     const max_pitch = 0.5 * std.math.pi - 0.001;
 
-    // Translation is in camera-local axes: x forward, y right, z up.
-    pub fn translateLocal(self: *Self, local_translation: sdk.math.Vec3) void {
-        const world_translation = local_translation
+    // Local translation is in camera-local axes: x forward, y right, z up.
+    pub fn localToWorldTranslation(self: *const Self, local_translation: sdk.math.Vec3) sdk.math.Vec3 {
+        return local_translation
             .rotateX(-self.roll)
             .rotateY(self.pitch)
             .rotateZ(self.yaw);
-        self.position = self.position.add(world_translation);
     }
 
     pub fn rotatePitchYaw(self: *Self, pitch_delta: f32, yaw_delta: f32) void {
@@ -32,40 +31,40 @@ pub const Camera = struct {
 
 const testing = std.testing;
 
-test "translateLocal should translate in camera local axes" {
-    var camera = Camera{
+test "localToWorldTranslation should convert camera local axes to world axes" {
+    const camera = Camera{
         .position = .fromArray(.{ 1, 2, 3 }),
         .pitch = 0,
         .yaw = 0.5 * std.math.pi,
         .roll = 0,
     };
-    camera.translateLocal(.fromArray(.{ 10, 0, 0 }));
-    try testing.expectApproxEqAbs(1, camera.position.x(), 0.0001);
-    try testing.expectApproxEqAbs(12, camera.position.y(), 0.0001);
-    try testing.expectApproxEqAbs(3, camera.position.z(), 0.0001);
+    const forward = camera.localToWorldTranslation(.fromArray(.{ 10, 0, 0 }));
+    try testing.expectApproxEqAbs(0, forward.x(), 0.0001);
+    try testing.expectApproxEqAbs(10, forward.y(), 0.0001);
+    try testing.expectApproxEqAbs(0, forward.z(), 0.0001);
 
-    camera.translateLocal(.fromArray(.{ 0, 10, 0 }));
-    try testing.expectApproxEqAbs(-9, camera.position.x(), 0.0001);
-    try testing.expectApproxEqAbs(12, camera.position.y(), 0.0001);
-    try testing.expectApproxEqAbs(3, camera.position.z(), 0.0001);
+    const right = camera.localToWorldTranslation(.fromArray(.{ 0, 10, 0 }));
+    try testing.expectApproxEqAbs(-10, right.x(), 0.0001);
+    try testing.expectApproxEqAbs(0, right.y(), 0.0001);
+    try testing.expectApproxEqAbs(0, right.z(), 0.0001);
 
-    camera.translateLocal(.fromArray(.{ 0, 0, 10 }));
-    try testing.expectApproxEqAbs(-9, camera.position.x(), 0.0001);
-    try testing.expectApproxEqAbs(12, camera.position.y(), 0.0001);
-    try testing.expectApproxEqAbs(13, camera.position.z(), 0.0001);
+    const up = camera.localToWorldTranslation(.fromArray(.{ 0, 0, 10 }));
+    try testing.expectApproxEqAbs(0, up.x(), 0.0001);
+    try testing.expectApproxEqAbs(0, up.y(), 0.0001);
+    try testing.expectApproxEqAbs(10, up.z(), 0.0001);
 }
 
-test "translateLocal should translate forward in the direction the camera is pitched" {
-    var camera = Camera{
+test "localToWorldTranslation should convert forward to the direction the camera is pitched" {
+    const camera = Camera{
         .position = .fromArray(.{ 1, 2, 3 }),
         .pitch = 0.5 * std.math.pi,
         .yaw = 0,
         .roll = 0,
     };
-    camera.translateLocal(.fromArray(.{ 10, 0, 0 }));
-    try testing.expectApproxEqAbs(1, camera.position.x(), 0.0001);
-    try testing.expectApproxEqAbs(2, camera.position.y(), 0.0001);
-    try testing.expectApproxEqAbs(13, camera.position.z(), 0.0001);
+    const forward = camera.localToWorldTranslation(.fromArray(.{ 10, 0, 0 }));
+    try testing.expectApproxEqAbs(0, forward.x(), 0.0001);
+    try testing.expectApproxEqAbs(0, forward.y(), 0.0001);
+    try testing.expectApproxEqAbs(10, forward.z(), 0.0001);
 }
 
 test "rotatePitchYaw should add to pitch and yaw and leave roll unchanged" {
