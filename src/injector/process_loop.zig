@@ -146,7 +146,7 @@ test "should do nothing when no process is found" {
 test "should open process when process exists and onProcessOpen returns true" {
     var win_io = WinIo.init(testing.allocator, .{});
     defer win_io.deinit();
-    const io = win_io.io();
+    const io = win_io.ioWithFeatures(.{ .process_spawn = true, .fs = true });
 
     var wait_process = try std.process.spawn(io, .{ .argv = &.{"wait.exe"} });
     defer wait_process.kill(io);
@@ -202,7 +202,7 @@ test "should open process when process exists and onProcessOpen returns true" {
 test "should open and close process when process exists and onProcessOpen returns false" {
     var win_io = WinIo.init(testing.allocator, .{});
     defer win_io.deinit();
-    const io = win_io.io();
+    const io = win_io.ioWithFeatures(.{ .process_spawn = true, .fs = true });
 
     var wait_process = try std.process.spawn(io, .{ .argv = &.{"wait.exe"} });
     defer wait_process.kill(io);
@@ -254,7 +254,7 @@ test "should open and close process when process exists and onProcessOpen return
 test "should close process when process stops running" {
     var win_io = WinIo.init(testing.allocator, .{});
     defer win_io.deinit();
-    const io = win_io.io();
+    const io = win_io.ioWithFeatures(.{ .process_spawn = true, .fs = true });
 
     var wait_process = try std.process.spawn(io, .{ .argv = &.{"wait.exe"} });
     const pid = w32.GetProcessId(wait_process.id);

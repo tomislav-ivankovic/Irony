@@ -18,7 +18,8 @@ pub const std_options = std.Options{
         sdk.ui.toasts.logMessage,
     }).logFn,
 };
-pub const std_options_debug_io = WinIo.global_single_threaded.io();
+const global_io = WinIo.global_single_threaded.ioWithFeatures(.{ .fs = true, .fs_modify = true });
+pub const std_options_debug_io = global_io;
 const dx = switch (build_info.rendering_api) {
     .dx11 => sdk.dx11,
     .dx12 => sdk.dx12,
@@ -51,7 +52,6 @@ var shutdown_routine_shared_value: ?sdk.os.SharedValue(w32.LPTHREAD_START_ROUTIN
 var main_thread: ?std.Thread = null;
 var main_thread_running = std.atomic.Value(bool).init(false);
 
-var single_threaded_io = WinIo.init_single_threaded;
 var pending_event_mutex = std.Io.Mutex.init;
 var producer_mutex = std.Io.Mutex.init;
 var consumer_condition = std.Io.Condition.init;
@@ -93,9 +93,8 @@ pub fn DllMain(
 }
 
 fn initialize(module_handle: w32.HINSTANCE) !void {
-    const sio = single_threaded_io.io();
-    buffer_logger.setIo(sio);
-    sdk.ui.toasts.setIo(sio);
+    buffer_logger.setIo(global_io);
+    sdk.ui.toasts.setIo(global_io);
 
     std.log.debug("Creating module handle shared value...", .{});
     module_handle_shared_value = if (createModuleHandleSharedValue(module_handle)) |shared_value| block: {
@@ -127,7 +126,6 @@ fn initialize(module_handle: w32.HINSTANCE) !void {
 }
 
 fn deinitialize() void {
-    const sio = single_threaded_io.io();
     std.log.debug("Shutting down main thread...", .{});
     if (main_thread_running.load(.seq_cst)) {
         if (main_thread) |*thread| {
@@ -137,7 +135,7 @@ fn deinitialize() void {
 
             std.log.debug("Waiting for main thread to shut down...", .{});
             while (main_thread_running.load(.seq_cst)) {
-                sio.sleep(.fromMilliseconds(100), .awake) catch |err| {
+                global_io.sleep(.fromMilliseconds(100), .awake) catch |err| {
                     sdk.misc.error_context.new("Failed to sleep for 100 ms.", .{});
                     sdk.misc.error_context.logWarning(err);
                 };
@@ -200,6 +198,43 @@ pub fn main() void {
     std.log.info("Main thread started.", .{});
     defer std.log.info("Main thread stopped.", .{});
 
+    std.log.debug("Finding base directory...", .{});
+    var virtual_cwd_io = if (sdk.io.VirtualCwdIo.initFromModule(global_io, &dll_module)) |vio| block: {
+        std.log.info("Base directory found: {s}", .{vio.path.asSlice()});
+        break :block vio;
+    } else |err| block: {
+        sdk.misc.error_context.append("Failed to find base directory. Using working directory instead.", .{});
+        sdk.misc.error_context.logError(err);
+        break :block null;
+    };
+    defer if (virtual_cwd_io) |*vio| {
+        vio.deinit();
+    };
+
+    const io = if (virtual_cwd_io) |*vio| vio.io() else global_io;
+
+    buffer_logger.setIo(io);
+    sdk.ui.toasts.setIo(io);
+    defer {
+        sdk.ui.toasts.setIo(global_io);
+        buffer_logger.setIo(global_io);
+    }
+
+    std.log.debug("Starting file logging...", .{});
+    if (file_logger.start(io, log_file_name)) {
+        std.log.info("File logging started.", .{});
+    } else |err| {
+        sdk.misc.error_context.append("Failed to start file logging.", .{});
+        sdk.misc.error_context.logError(err);
+    }
+    defer {
+        std.log.info("Stopping file logging...", .{});
+        file_logger.stop();
+        std.log.info("File logging stopped.", .{});
+    }
+
+    std.log.info("{s} version {s}", .{ build_info.display_name, build_info.version });
+
     std.log.debug("Initializing main allocator...", .{});
     var safe_allocator = switch (main_allocator_kind) {
         .safe => std.heap.SafeAllocator.init(std.heap.page_allocator, .{}),
@@ -226,53 +261,6 @@ pub fn main() void {
             std.log.err("Main allocator detected memory leaks of {} bytes.", .{leaked_bytes});
         }
     }
-
-    std.log.debug("Initializing main IO...", .{});
-    var main_io = WinIo.init(allocator, .{});
-    std.log.info("Main IO initialized.", .{});
-    defer {
-        std.log.debug("De-initializing main IO...", .{});
-        main_io.deinit();
-        std.log.info("Main IO de-initialized.", .{});
-    }
-
-    std.log.debug("Finding base directory...", .{});
-    var virtual_cwd_io = if (sdk.io.VirtualCwdIo.initFromModule(main_io.io(), &dll_module)) |vio| block: {
-        std.log.info("Base directory found: {s}", .{vio.path.asSlice()});
-        break :block vio;
-    } else |err| block: {
-        sdk.misc.error_context.append("Failed to find base directory. Using working directory instead.", .{});
-        sdk.misc.error_context.logError(err);
-        break :block null;
-    };
-    defer if (virtual_cwd_io) |*vio| {
-        vio.deinit();
-    };
-
-    const sio = single_threaded_io.io();
-    const io = if (virtual_cwd_io) |*vio| vio.io() else main_io.io();
-
-    buffer_logger.setIo(io);
-    sdk.ui.toasts.setIo(io);
-    defer {
-        sdk.ui.toasts.setIo(sio);
-        buffer_logger.setIo(sio);
-    }
-
-    std.log.debug("Starting file logging...", .{});
-    if (file_logger.start(io, log_file_name)) {
-        std.log.info("File logging started.", .{});
-    } else |err| {
-        sdk.misc.error_context.append("Failed to start file logging.", .{});
-        sdk.misc.error_context.logError(err);
-    }
-    defer {
-        std.log.info("Stopping file logging...", .{});
-        file_logger.stop();
-        std.log.info("File logging stopped.", .{});
-    }
-
-    std.log.info("{s} version {s}", .{ build_info.display_name, build_info.version });
 
     std.log.debug("Initializing hooking...", .{});
     sdk.memory.hooking.init() catch |err| {
@@ -368,22 +356,22 @@ pub fn main() void {
         }
     }
 
-    defer producer_condition.broadcast(sio);
-    pending_event_mutex.lock(sio) catch |err| {
+    defer producer_condition.broadcast(global_io);
+    pending_event_mutex.lock(global_io) catch |err| {
         sdk.misc.error_context.new("Failed to get lock for pending event.", .{});
         sdk.misc.error_context.logError(err);
         return;
     };
-    defer pending_event_mutex.unlock(sio);
+    defer pending_event_mutex.unlock(global_io);
     listening_to_events.store(.all, .seq_cst);
     defer listening_to_events.store(.none, .seq_cst);
 
     while (true) {
-        consumer_condition.wait(sio, &pending_event_mutex) catch continue;
+        consumer_condition.wait(global_io, &pending_event_mutex) catch continue;
         const event = pending_event orelse continue;
         defer {
             pending_event = null;
-            producer_condition.signal(sio);
+            producer_condition.signal(global_io);
         }
         switch (event) {
             .present => |*host_context| switch (state) {
@@ -443,7 +431,7 @@ pub fn main() void {
             .shut_down => {
                 listening_to_events.store(.only_present, .seq_cst);
                 state = .shutting_down;
-                producer_condition.broadcast(sio);
+                producer_condition.broadcast(global_io);
             },
         }
     }
@@ -506,29 +494,28 @@ fn sendEvent(event: *const Event) void {
     if (!isListeningToEvent(event)) {
         return;
     }
-    const sio = single_threaded_io.io();
-    producer_mutex.lock(sio) catch return;
-    defer producer_mutex.unlock(sio);
+    producer_mutex.lock(global_io) catch return;
+    defer producer_mutex.unlock(global_io);
     if (!isListeningToEvent(event)) {
         return;
     }
-    pending_event_mutex.lock(sio) catch return;
-    defer pending_event_mutex.unlock(sio);
+    pending_event_mutex.lock(global_io) catch return;
+    defer pending_event_mutex.unlock(global_io);
     if (!isListeningToEvent(event)) {
         return;
     }
     while (pending_event != null) {
         const timeout = std.Io.Timeout{ .duration = .{ .raw = .fromMilliseconds(10), .clock = .awake } };
-        producer_condition.waitTimeout(sio, &pending_event_mutex, timeout) catch {};
+        producer_condition.waitTimeout(global_io, &pending_event_mutex, timeout) catch {};
         if (!isListeningToEvent(event)) {
             return;
         }
     }
     pending_event = event.*;
-    consumer_condition.signal(sio);
+    consumer_condition.signal(global_io);
     while (pending_event != null) {
         const timeout = std.Io.Timeout{ .duration = .{ .raw = .fromMilliseconds(10), .clock = .awake } };
-        producer_condition.waitTimeout(sio, &pending_event_mutex, timeout) catch {};
+        producer_condition.waitTimeout(global_io, &pending_event_mutex, timeout) catch {};
         if (!isListeningToEvent(event)) {
             return;
         }
@@ -601,9 +588,8 @@ fn processKeyboardInput(input: *const w32.RAWKEYBOARD) dll.EventBus.KeyboardInpu
         return bus.processKeyboardInput(input);
     }
 
-    const sio = single_threaded_io.io();
-    pending_event_mutex.lock(sio) catch return .pass_through;
-    defer pending_event_mutex.unlock(sio);
+    pending_event_mutex.lock(global_io) catch return .pass_through;
+    defer pending_event_mutex.unlock(global_io);
     already_holding_pending_event_mutex = true;
     defer already_holding_pending_event_mutex = false;
 
@@ -622,9 +608,8 @@ fn processWindowMessage(
         return bus.processWindowMessage(window, u_msg, w_param, l_param);
     }
 
-    const sio = single_threaded_io.io();
-    pending_event_mutex.lock(sio) catch return null;
-    defer pending_event_mutex.unlock(sio);
+    pending_event_mutex.lock(global_io) catch return null;
+    defer pending_event_mutex.unlock(global_io);
     already_holding_pending_event_mutex = true;
     defer already_holding_pending_event_mutex = false;
 

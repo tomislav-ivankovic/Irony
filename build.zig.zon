@@ -99,8 +99,8 @@
             .hash = "win32-25.0.28-preview-mX5pFQ8t5QNuXMsGluHTUtIed00-Mu4MEcV4wHxTJqpg",
         },
         .win_io = .{
-            .url = "https://github.com/tomislav-ivankovic/win-io/archive/refs/tags/0.17.0.zip",
-            .hash = "win_io-0.17.0--A59huJqBgDeAEuIl0QBsfrxvxBgBNgkBcsY53aSEZQ_",
+            .url = "https://github.com/tomislav-ivankovic/win-io/archive/ea475b9bcb099ea3963777a7f7fd0818f7cf081d.tar.gz",
+            .hash = "win_io-0.17.0--A59hvbABgA1iytDowLvPyq91bPcR725FZp7awPkIoH2",
         },
         .minhook = .{
             .url = "https://github.com/TsudaKageyu/minhook/archive/refs/tags/v1.3.3.tar.gz",

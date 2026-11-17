@@ -1,5 +1,4 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const build_info = @import("build_info");
 const WinIo = @import("win_io");
 const sdk = @import("sdk/root.zig");
@@ -13,7 +12,8 @@ pub const std_options = std.Options{
     .log_level = .info,
     .logFn = composite_logger.logFn,
 };
-pub const std_options_debug_io = WinIo.global_single_threaded.io();
+const global_io = WinIo.global_single_threaded.ioWithFeatures(.{ .fs = true });
+pub const std_options_debug_io = global_io;
 
 const access_rights = sdk.os.Process.AccessRights{
     .CREATE_THREAD = 1,
@@ -46,34 +46,13 @@ pub const Mode = enum {
 };
 var mode = Mode.normal;
 
-const MainAllocatorKind = enum { safe, fast };
-const main_allocator_kind: MainAllocatorKind = switch (builtin.mode) {
-    .debug, .safe => .safe,
-    .fast, .small => .fast,
-};
-
 pub fn main(init: std.process.Init.Minimal) !void {
-    var safe_allocator = switch (main_allocator_kind) {
-        .safe => std.heap.SafeAllocator.init(std.heap.page_allocator, .{}),
-        .fast => {},
-    };
-    defer switch (main_allocator_kind) {
-        .safe => _ = safe_allocator.deinit(),
-        .fast => {},
-    };
-    const allocator = switch (main_allocator_kind) {
-        .safe => safe_allocator.allocator(),
-        .fast => std.heap.c_allocator,
-    };
-
-    var win_io = WinIo.init(allocator, .{});
-    defer win_io.deinit();
-    console_logger.setIo(win_io.io());
+    console_logger.setIo(global_io);
 
     std.log.info("Application started up.", .{});
 
     std.log.debug("Finding base directory...", .{});
-    const virtual_cwd_io = if (sdk.io.VirtualCwdIo.initFromMainModule(win_io.io())) |vio| block: {
+    const virtual_cwd_io = if (sdk.io.VirtualCwdIo.initFromMainModule(global_io)) |vio| block: {
         std.log.info("Base directory set to: {s}", .{vio.path.asSlice()});
         break :block vio;
     } else |err| block: {
@@ -85,7 +64,7 @@ pub fn main(init: std.process.Init.Minimal) !void {
         vio.deinit();
     };
 
-    const io = if (virtual_cwd_io) |*vio| vio.io() else win_io.io();
+    const io = if (virtual_cwd_io) |*vio| vio.io() else global_io;
 
     std.log.debug("Starting file logging...", .{});
     if (file_logger.start(io, log_file_name)) {
