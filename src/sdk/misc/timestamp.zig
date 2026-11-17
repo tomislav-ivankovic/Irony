@@ -1,6 +1,6 @@
 const std = @import("std");
-const lib_c_time = @import("lib_c_time");
 const misc = @import("root.zig");
+const os = @import("../os/root.zig");
 
 pub const TimeZone = enum {
     utc,
@@ -19,27 +19,17 @@ pub const Timestamp = struct {
     const Self = @This();
 
     pub fn fromNano(nano_timestamp: i128, time_zone: TimeZone) !Self {
-        const cFunction: *const @TypeOf(lib_c_time.gmtime) = switch (time_zone) {
-            .utc => lib_c_time.gmtime,
-            .local => lib_c_time.localtime,
+        const system_time = os.systemTimeFromNano(nano_timestamp, time_zone) catch |err| {
+            misc.error_context.append("Failed to convert nano timestamp to system time.", .{});
+            return err;
         };
-        const c_function_name = switch (time_zone) {
-            .utc => "gmtime",
-            .local => "localtime",
-        };
-        const sec_timestamp: lib_c_time.time_t = @intCast(@divFloor(nano_timestamp, std.time.ns_per_s));
-        const time_struct_pointer = cFunction(&sec_timestamp) orelse {
-            misc.error_context.new("C function {s} returned null.", .{c_function_name});
-            return error.CError;
-        };
-        const time_struct: lib_c_time.struct_tm = time_struct_pointer.*;
         return Self{
-            .year = time_struct.tm_year + 1900,
-            .month = @intCast(time_struct.tm_mon + 1),
-            .day = @intCast(time_struct.tm_mday),
-            .hour = @intCast(time_struct.tm_hour),
-            .minute = @intCast(time_struct.tm_min),
-            .second = @intCast(time_struct.tm_sec),
+            .year = system_time.wYear,
+            .month = @intCast(system_time.wMonth),
+            .day = @intCast(system_time.wDay),
+            .hour = @intCast(system_time.wHour),
+            .minute = @intCast(system_time.wMinute),
+            .second = @intCast(system_time.wSecond),
             .nano = @intCast(@mod(nano_timestamp, std.time.ns_per_s)),
         };
     }

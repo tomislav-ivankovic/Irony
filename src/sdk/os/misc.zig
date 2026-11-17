@@ -118,6 +118,37 @@ pub fn getExecutableTimestamp() !u32 {
     return nt_headers.FileHeader.TimeDateStamp;
 }
 
+pub fn systemTimeFromNano(nano_timestamp: i128, time_zone: misc.TimeZone) !w32.SYSTEMTIME {
+    const ticks_per_second = std.time.ns_per_s / 100;
+    const windows_ticks = @divFloor(nano_timestamp, 100) - (std.time.epoch.windows * ticks_per_second);
+    const ticks = std.math.cast(u63, windows_ticks) orelse {
+        misc.error_context.new("Timestamp {} ns is out of the range representable by FILETIME.", .{nano_timestamp});
+        return error.OutOfRange;
+    };
+    const file_time = w32.FILETIME{
+        .dwLowDateTime = @truncate(ticks),
+        .dwHighDateTime = @truncate(ticks >> 32),
+    };
+    var utc_time: w32.SYSTEMTIME = undefined;
+    if (w32.FileTimeToSystemTime(&file_time, &utc_time) == 0) {
+        misc.error_context.new("{f}", .{os.Error.getLast()});
+        misc.error_context.append("FileTimeToSystemTime returned 0.", .{});
+        return error.OsError;
+    }
+    switch (time_zone) {
+        .utc => return utc_time,
+        .local => {
+            var local_time: w32.SYSTEMTIME = undefined;
+            if (w32.SystemTimeToTzSpecificLocalTime(null, &utc_time, &local_time) == 0) {
+                misc.error_context.new("{f}", .{os.Error.getLast()});
+                misc.error_context.append("SystemTimeToTzSpecificLocalTime returned 0.", .{});
+                return error.OsError;
+            }
+            return local_time;
+        },
+    }
+}
+
 pub fn httpsGet(
     allocator: std.mem.Allocator,
     comptime url: []const u8,
@@ -273,4 +304,55 @@ test "getExecutableTimestamp should return a value greater than 1 day ago and le
     const day_ago = now - std.time.s_per_day;
     try testing.expect(timestamp > day_ago);
     try testing.expect(timestamp <= now);
+}
+
+test "systemTimeFromNano should return correct value when time zone is UTC" {
+    try testing.expectEqual(w32.SYSTEMTIME{
+        .wYear = 2020,
+        .wMonth = 1,
+        .wDayOfWeek = 4,
+        .wDay = 2,
+        .wHour = 3,
+        .wMinute = 4,
+        .wSecond = 5,
+        .wMilliseconds = 123,
+    }, systemTimeFromNano(1577934245123456789, .utc));
+    try testing.expectEqual(w32.SYSTEMTIME{
+        .wYear = 1601,
+        .wMonth = 1,
+        .wDayOfWeek = 1,
+        .wDay = 1,
+        .wHour = 0,
+        .wMinute = 0,
+        .wSecond = 0,
+        .wMilliseconds = 0,
+    }, systemTimeFromNano(-11644473600000000000, .utc));
+}
+
+test "systemTimeFromNano should offset local time from UTC by the bias of the current time zone" {
+    var time_zone_information: w32.TIME_ZONE_INFORMATION = undefined;
+    const time_zone_id = w32.GetTimeZoneInformation(&time_zone_information);
+    try testing.expect(time_zone_id != std.math.maxInt(u32)); // TIME_ZONE_ID_INVALID
+    const bias_minutes = time_zone_information.Bias + switch (time_zone_id) {
+        w32.TIME_ZONE_ID_DAYLIGHT => time_zone_information.DaylightBias,
+        else => time_zone_information.StandardBias,
+    };
+
+    const now = std.Io.Clock.real.now(testing.io).nanoseconds;
+    const utc_time = try systemTimeFromNano(now, .utc);
+    const local_time = try systemTimeFromNano(now, .local);
+
+    var utc_file_time: w32.FILETIME = undefined;
+    var local_file_time: w32.FILETIME = undefined;
+    try testing.expect(w32.SystemTimeToFileTime(&utc_time, &utc_file_time) != 0);
+    try testing.expect(w32.SystemTimeToFileTime(&local_time, &local_file_time) != 0);
+    const utc_ticks = (@as(i64, utc_file_time.dwHighDateTime) << 32) | utc_file_time.dwLowDateTime;
+    const local_ticks = (@as(i64, local_file_time.dwHighDateTime) << 32) | local_file_time.dwLowDateTime;
+    const ticks_per_minute = 60 * (std.time.ns_per_s / 100);
+    try testing.expectEqual(-bias_minutes, @divExact(local_ticks - utc_ticks, ticks_per_minute));
+}
+
+test "systemTimeFromNano should return error when timestamp is before year 1601" {
+    try testing.expectError(error.OutOfRange, systemTimeFromNano(-11644473600000000001, .utc));
+    try testing.expectError(error.OutOfRange, systemTimeFromNano(-11644473600000000001, .local));
 }
