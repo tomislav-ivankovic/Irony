@@ -63,7 +63,13 @@ pub const TestingContext = struct {
         return .{
             .allocator = allocator,
             .old_allocator = old_allocator,
-            .shared_ui = if (isolate_ui_tests) {} else try Ui.init(),
+            .shared_ui = switch (isolate_ui_tests) {
+                true => {},
+                false => Ui.init() catch |err| {
+                    misc.error_context.append("Failed to initialize shared UI.", .{});
+                    return err;
+                },
+            },
         };
     }
 
@@ -80,7 +86,13 @@ pub const TestingContext = struct {
         comptime guiFunction: *const Function,
         comptime testFunction: *const Function,
     ) !void {
-        var isolated_ui = if (isolate_ui_tests) try Ui.init() else {};
+        var isolated_ui = switch (isolate_ui_tests) {
+            true => Ui.init() catch |err| {
+                misc.error_context.append("Failed to initialize isolated UI.", .{});
+                return err;
+            },
+            false => {},
+        };
         defer if (isolate_ui_tests) isolated_ui.deinit();
         const current_ui = if (isolate_ui_tests) &isolated_ui else &self.shared_ui;
         const engine = current_ui.engine;

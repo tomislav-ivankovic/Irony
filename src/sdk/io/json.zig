@@ -256,20 +256,28 @@ const ValueOps = struct {
         const Impl = struct {
             fn write(writer: *std.Io.Writer, value_pointer: *const anyopaque) anyerror!void {
                 const typed_value_pointer: *const Type = @ptrCast(@alignCast(value_pointer));
-                switch (@typeInfo(Type)) {
-                    .bool => try writeBool(writer, typed_value_pointer.*),
-                    .int => try writeInt(writer, typed_value_pointer.*),
-                    .float => try writeFloat(writer, typed_value_pointer.*),
+                const result = switch (@typeInfo(Type)) {
+                    .bool => writeBool(writer, typed_value_pointer.*),
+                    .int => writeInt(writer, typed_value_pointer.*),
+                    .float => writeFloat(writer, typed_value_pointer.*),
                     else => @compileError("Unsupported type: " ++ @typeName(Type)),
-                }
+                };
+                result catch |err| {
+                    misc.error_context.append("Failed to write {s} value.", .{@typeName(Type)});
+                    return err;
+                };
             }
             fn read(reader: *std.json.Reader, allocator: std.mem.Allocator, value_pointer: *anyopaque) anyerror!void {
                 const typed_value_pointer: *Type = @ptrCast(@alignCast(value_pointer));
-                typed_value_pointer.* = switch (@typeInfo(Type)) {
-                    .bool => try readBool(reader),
-                    .int => try readInt(Type, reader, allocator),
-                    .float => try readFloat(Type, reader, allocator),
+                const result = switch (@typeInfo(Type)) {
+                    .bool => readBool(reader),
+                    .int => readInt(Type, reader, allocator),
+                    .float => readFloat(Type, reader, allocator),
                     else => @compileError("Unsupported type: " ++ @typeName(Type)),
+                };
+                typed_value_pointer.* = result catch |err| {
+                    misc.error_context.append("Failed to read {s} value.", .{@typeName(Type)});
+                    return err;
                 };
             }
         };
@@ -462,7 +470,10 @@ const PackedOps = struct {
                 whitespace: *const JsonWhitespace,
             ) anyerror!void {
                 const unpacked = unpack(@ptrCast(@alignCast(value_pointer)));
-                try writeNode(writer, getNode(Unpacked), &unpacked, whitespace);
+                writeNode(writer, getNode(Unpacked), &unpacked, whitespace) catch |err| {
+                    misc.error_context.append("Failed to write unpacked value.", .{});
+                    return err;
+                };
             }
             fn read(
                 context: *const ReadContext,
@@ -470,12 +481,12 @@ const PackedOps = struct {
                 default_pointer: ?*const anyopaque,
             ) anyerror!void {
                 var unpacked: Unpacked = undefined;
-                if (default_pointer) |pointer| {
-                    const default_unpacked = unpack(@ptrCast(@alignCast(pointer)));
-                    try readNode(context, getNode(Unpacked), &unpacked, &default_unpacked);
-                } else {
-                    try readNode(context, getNode(Unpacked), &unpacked, null);
-                }
+                const default_unpacked = if (default_pointer) |pointer| unpack(@ptrCast(@alignCast(pointer))) else null;
+                const default_unpacked_pointer = if (default_unpacked) |*value| value else null;
+                readNode(context, getNode(Unpacked), &unpacked, default_unpacked_pointer) catch |err| {
+                    misc.error_context.append("Failed to read unpacked value.", .{});
+                    return err;
+                };
                 const typed_value_pointer: *Packed = @ptrCast(@alignCast(value_pointer));
                 typed_value_pointer.* = pack(&unpacked);
             }
@@ -658,8 +669,14 @@ fn writeNode(
     whitespace: *const JsonWhitespace,
 ) anyerror!void {
     switch (node.kind) {
-        .void => try writeVoid(writer),
-        .value => |ops| try ops.write(writer, value_pointer),
+        .void => writeVoid(writer) catch |err| {
+            misc.error_context.append("Failed to write void.", .{});
+            return err;
+        },
+        .value => |ops| ops.write(writer, value_pointer) catch |err| {
+            misc.error_context.append("Failed to write value.", .{});
+            return err;
+        },
         .@"enum" => |*@"enum"| {
             const tag_name = @"enum".names[@"enum".ops.getIndex(value_pointer)];
             std.json.Stringify.encodeJsonString(tag_name, .{}, writer) catch |err| {
@@ -833,7 +850,10 @@ fn writeNode(
                 return err;
             };
         },
-        .@"packed" => |ops| try ops.write(writer, value_pointer, whitespace),
+        .@"packed" => |ops| ops.write(writer, value_pointer, whitespace) catch |err| {
+            misc.error_context.append("Failed to write packed value.", .{});
+            return err;
+        },
         .bounded_array => |*array| {
             const len = array.ops.getLen(value_pointer);
             const buffer_pointer = offsetConstPointer(value_pointer, array.buffer_offset);
@@ -958,7 +978,10 @@ fn readNode(
 ) anyerror!void {
     const start_height = context.reader.stackHeight();
     readNodeValue(context, node, value_pointer, default_pointer) catch |err| {
-        try recoverFromReadError(context, err, start_height, default_pointer != null);
+        recoverFromReadError(context, err, start_height, default_pointer != null) catch |recover_err| {
+            misc.error_context.append("Failed to recover from read error.", .{});
+            return recover_err;
+        };
         copyBytes(value_pointer, default_pointer.?, node.size);
     };
     if (node.sanitize) |sanitize| {
@@ -993,10 +1016,19 @@ fn readNodeValue(
     const reader = context.reader;
     const allocator = context.allocator;
     switch (node.kind) {
-        .void => try readVoid(reader),
-        .value => |ops| try ops.read(reader, allocator, value_pointer),
+        .void => readVoid(reader) catch |err| {
+            misc.error_context.append("Failed to read void.", .{});
+            return err;
+        },
+        .value => |ops| ops.read(reader, allocator, value_pointer) catch |err| {
+            misc.error_context.append("Failed to read value.", .{});
+            return err;
+        },
         .@"enum" => |*@"enum"| {
-            const index = try readEnumIndex(reader, allocator, @"enum".names);
+            const index = readEnumIndex(reader, allocator, @"enum".names) catch |err| {
+                misc.error_context.append("Failed to read enum value.", .{});
+                return err;
+            };
             @"enum".ops.setIndex(value_pointer, index);
         },
         .optional => |*optional| {
@@ -1250,7 +1282,10 @@ fn readNodeValue(
                 return error.UnexpectedToken;
             }
         },
-        .@"packed" => |ops| try ops.read(context, value_pointer, default_pointer),
+        .@"packed" => |ops| ops.read(context, value_pointer, default_pointer) catch |err| {
+            misc.error_context.append("Failed to read packed value.", .{});
+            return err;
+        },
         .bounded_array => |*array| {
             const ops = array.ops;
             if (array.is_string) {
