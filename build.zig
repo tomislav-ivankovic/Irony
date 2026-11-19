@@ -152,14 +152,15 @@ pub fn build(b: *std.Build) void {
         "skip_display",
         b.option(bool, "skip_display", "Whether to skip tests that require a display to succeed.") orelse false,
     );
+    const UiTestsMode = enum { shared, isolated };
     tests_config.addOption(
-        bool,
-        "isolate_ui_tests",
+        UiTestsMode,
+        "ui_tests",
         b.option(
-            bool,
-            "isolate_ui_tests",
-            "Whether every UI test gets its own test engine and ImGui context instead of sharing them between tests.",
-        ) orelse false,
+            UiTestsMode,
+            "ui_tests",
+            "Whether UI tests share one test engine and ImGui context or every UI test gets its own.",
+        ) orelse .shared,
     );
     tests.root_module.addOptions("config", tests_config);
 

@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 const imgui = @import("imgui");
 const misc = @import("../misc/root.zig");
 const ui = @import("root.zig");
-const isolate_ui_tests = @import("config").isolate_ui_tests;
+const ui_tests = @import("config").ui_tests;
 
 threadlocal var allocator_instance = std.heap.DebugAllocator(.{}){};
 threadlocal var instance: ?TestingContext = null;
@@ -47,7 +47,10 @@ pub fn deinitTestingContextAndDetectLeaks() void {
 pub const TestingContext = struct {
     allocator: std.mem.Allocator,
     old_allocator: ?std.mem.Allocator,
-    shared_ui: if (isolate_ui_tests) void else Ui,
+    shared_ui: switch (ui_tests) {
+        .shared => Ui,
+        .isolated => void,
+    },
 
     const Self = @This();
     pub const Function = fn (ctx: ui.TestContext) anyerror!void;
@@ -63,19 +66,20 @@ pub const TestingContext = struct {
         return .{
             .allocator = allocator,
             .old_allocator = old_allocator,
-            .shared_ui = switch (isolate_ui_tests) {
-                true => {},
-                false => Ui.init() catch |err| {
+            .shared_ui = switch (ui_tests) {
+                .shared => Ui.init() catch |err| {
                     misc.error_context.append("Failed to initialize shared UI.", .{});
                     return err;
                 },
+                .isolated => {},
             },
         };
     }
 
     pub fn deinit(self: *Self) void {
-        if (!isolate_ui_tests) {
-            self.shared_ui.deinit();
+        switch (ui_tests) {
+            .shared => self.shared_ui.deinit(),
+            .isolated => {},
         }
         ui.setAllocator(self.old_allocator);
     }
@@ -86,15 +90,21 @@ pub const TestingContext = struct {
         comptime guiFunction: *const Function,
         comptime testFunction: *const Function,
     ) !void {
-        var isolated_ui = switch (isolate_ui_tests) {
-            true => Ui.init() catch |err| {
+        var isolated_ui = switch (ui_tests) {
+            .shared => {},
+            .isolated => Ui.init() catch |err| {
                 misc.error_context.append("Failed to initialize isolated UI.", .{});
                 return err;
             },
-            false => {},
         };
-        defer if (isolate_ui_tests) isolated_ui.deinit();
-        const current_ui = if (isolate_ui_tests) &isolated_ui else &self.shared_ui;
+        defer switch (ui_tests) {
+            .shared => {},
+            .isolated => isolated_ui.deinit(),
+        };
+        const current_ui = switch (ui_tests) {
+            .shared => &self.shared_ui,
+            .isolated => &isolated_ui,
+        };
         const engine = current_ui.engine;
         imgui.igSetCurrentContext(current_ui.imgui_context);
 
