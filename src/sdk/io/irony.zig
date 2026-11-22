@@ -51,18 +51,19 @@ pub fn writeIronyFormat(
     defer encoder.deinit();
     var encoder_writer = encoder.writer();
 
-    const root = comptime getRootNode(Frame);
-    encoder_writer.writeInt(FrameSize, @intCast(root.serialized_size), endian) catch |err| {
-        misc.error_context.new("Failed to write frame size: {}", .{root.serialized_size});
+    const frame_info = TypeInfo.fromType(Frame);
+    frame_info.checkFormatLimits();
+    encoder_writer.writeInt(FrameSize, @intCast(frame_info.serialized_size), endian) catch |err| {
+        misc.error_context.new("Failed to write frame size: {}", .{frame_info.serialized_size});
         return err;
     };
 
-    writeFieldList(&encoder_writer, root) catch |err| {
+    writeFieldList(&encoder_writer, frame_info) catch |err| {
         misc.error_context.append("Failed to write field list.", .{});
         return err;
     };
 
-    writeFrames(Frame, allocator, &encoder_writer, root, frames) catch |err| {
+    writeFrames(Frame, allocator, &encoder_writer, frame_info, frames) catch |err| {
         misc.error_context.append("Failed to write frames.", .{});
         return err;
     };
@@ -120,8 +121,9 @@ pub fn readIronyFormat(
         return err;
     };
 
-    const root = comptime getRootNode(Frame);
-    const remote_fields = readFieldList(&decoder_reader, remote_frame_size, root) catch |err| {
+    const frame_info = TypeInfo.fromType(Frame);
+    frame_info.checkFormatLimits();
+    const remote_fields = readFieldList(&decoder_reader, remote_frame_size, frame_info) catch |err| {
         misc.error_context.append("Failed to read field list.", .{});
         return err;
     };
@@ -131,7 +133,7 @@ pub fn readIronyFormat(
         allocator,
         &decoder_reader,
         remote_frame_size,
-        root,
+        frame_info,
         &remote_fields,
         default_frame,
     ) catch |err| {
@@ -140,23 +142,23 @@ pub fn readIronyFormat(
     };
 }
 
-fn writeFieldList(writer: *std.Io.Writer, root: *const Node) !void {
-    writer.writeInt(NumberOfFields, @intCast(root.number_of_fields), endian) catch |err| {
-        misc.error_context.new("Failed to write number of fields: {}", .{root.number_of_fields});
+fn writeFieldList(writer: *std.Io.Writer, info: *const TypeInfo) !void {
+    writer.writeInt(NumberOfFields, @intCast(info.number_of_fields), endian) catch |err| {
+        misc.error_context.new("Failed to write number of fields: {}", .{info.number_of_fields});
         return err;
     };
     var path = FieldPath{};
-    writeFields(writer, root, &path, 0) catch |err| {
+    writeFields(writer, info, &path, 0) catch |err| {
         misc.error_context.append("Failed to write fields of the frame.", .{});
         return err;
     };
 }
 
-fn writeFields(writer: *std.Io.Writer, node: *const Node, path: *FieldPath, data_offset: usize) !void {
-    switch (node.kind) {
-        .empty => {},
-        .value => writeField(writer, path.get(), data_offset, node.serialized_size) catch |err| {
-            misc.error_context.append("Failed to write value field: {s}", .{path.get()});
+fn writeFields(writer: *std.Io.Writer, info: *const TypeInfo, path: *FieldPath, data_offset: usize) !void {
+    switch (info.kind) {
+        .void => {},
+        .primitive_value => writeField(writer, path.asSlice(), data_offset, info.serialized_size) catch |err| {
+            misc.error_context.append("Failed to write primitive value field: {s}", .{path.asSlice()});
             return err;
         },
         .@"struct" => |*@"struct"| {
@@ -164,11 +166,11 @@ fn writeFields(writer: *std.Io.Writer, node: *const Node, path: *FieldPath, data
             for (@"struct".fields) |*field| {
                 const saved_len = path.push(field.name);
                 defer path.pop(saved_len);
-                writeFields(writer, field.node, path, field_data_offset) catch |err| {
+                writeFields(writer, field.info, path, field_data_offset) catch |err| {
                     misc.error_context.append("Failed to write fields of struct field: {s}", .{field.name});
                     return err;
                 };
-                field_data_offset += field.node.serialized_size;
+                field_data_offset += field.info.serialized_size;
             }
         },
         .array => |*array| {
@@ -184,8 +186,8 @@ fn writeFields(writer: *std.Io.Writer, node: *const Node, path: *FieldPath, data
         },
         .optional => |*optional| {
             const saved_len = path.push(tag_path_component);
-            writeField(writer, path.get(), data_offset, serializedSizeOf(bool)) catch |err| {
-                misc.error_context.append("Failed to write optional's tag field: {s}", .{path.get()});
+            writeField(writer, path.asSlice(), data_offset, serializedSizeOf(bool)) catch |err| {
+                misc.error_context.append("Failed to write optional's tag field: {s}", .{path.asSlice()});
                 return err;
             };
             path.pop(saved_len);
@@ -198,8 +200,8 @@ fn writeFields(writer: *std.Io.Writer, node: *const Node, path: *FieldPath, data
         },
         .@"union" => |*@"union"| {
             const saved_len = path.push(tag_path_component);
-            writeField(writer, path.get(), data_offset, @"union".tag_size) catch |err| {
-                misc.error_context.append("Failed to write union's tag field: {s}", .{path.get()});
+            writeField(writer, path.asSlice(), data_offset, @"union".tag_size) catch |err| {
+                misc.error_context.append("Failed to write union's tag field: {s}", .{path.asSlice()});
                 return err;
             };
             path.pop(saved_len);
@@ -237,42 +239,41 @@ fn writeField(writer: *std.Io.Writer, path: []const u8, offset: usize, size: usi
 fn readFieldList(
     reader: *std.Io.Reader,
     remote_frame_size: FrameSize,
-    comptime root: *const Node,
-) ![root.number_of_fields]?RemoteField {
-    var remote_fields: [root.number_of_fields]?RemoteField = @splat(null);
+    comptime frame_info: *const TypeInfo,
+) ![frame_info.number_of_fields]?RemoteField {
+    var remote_fields: [frame_info.number_of_fields]?RemoteField = @splat(null);
     const remote_fields_len = reader.takeInt(NumberOfFields, endian) catch |err| {
         misc.error_context.new("Failed to read number of fields.", .{});
         return err;
     };
     for (0..remote_fields_len) |index| {
         errdefer misc.error_context.append("Failed to read field: {}", .{index});
-        const path_len = reader.takeInt(FieldPathLength, endian) catch |err| {
+        var path = FieldPath{};
+        path.len = reader.takeInt(FieldPathLength, endian) catch |err| {
             misc.error_context.new("Failed to read the size of the field path.", .{});
             return err;
         };
-        var path_buffer: [max_field_path_len]u8 = undefined;
-        const path = path_buffer[0..path_len];
-        reader.readSliceAll(path) catch |err| {
+        reader.readSliceAll(path.buffer[0..path.len]) catch |err| {
             misc.error_context.new("Failed to read the field path.", .{});
             return err;
         };
         const remote_offset = reader.takeInt(FieldOffset, endian) catch |err| {
-            misc.error_context.new("Failed to read the field offset. Field path is: {s}", .{path});
+            misc.error_context.new("Failed to read the field offset. Field path is: {s}", .{path.asSlice()});
             return err;
         };
         const remote_size = reader.takeInt(FieldSize, endian) catch |err| {
-            misc.error_context.new("Failed to read the field size. Field path is: {s}", .{path});
+            misc.error_context.new("Failed to read the field size. Field path is: {s}", .{path.asSlice()});
             return err;
         };
         const total = std.math.add(FrameSize, remote_offset, remote_size) catch |err| {
-            misc.error_context.new("Field exceeded frame size limits: {s}", .{path});
+            misc.error_context.new("Field exceeded frame size limits: {s}", .{path.asSlice()});
             return err;
         };
         if (total > remote_frame_size) {
-            misc.error_context.new("Field exceeded frame size limits: {s}", .{path});
+            misc.error_context.new("Field exceeded frame size limits: {s}", .{path.asSlice()});
             return error.InvalidRemoteField;
         }
-        if (findFieldIndex(root, path)) |local_index| {
+        if (path.toIndex(frame_info)) |local_index| {
             remote_fields[local_index] = .{
                 .offset = remote_offset,
                 .size = remote_size,
@@ -282,145 +283,11 @@ fn readFieldList(
     return remote_fields;
 }
 
-fn findFieldIndex(root: *const Node, path: []const u8) ?usize {
-    var node = root;
-    var field_index: usize = 0;
-    var components = std.mem.splitScalar(u8, path, path_separator);
-    var component_maybe = if (path.len == 0) null else components.next();
-    while (true) : (component_maybe = components.next()) {
-        const component = component_maybe orelse return switch (node.kind) {
-            .value => field_index,
-            else => null,
-        };
-        switch (node.kind) {
-            .empty, .value => return null,
-            .@"struct" => |*@"struct"| {
-                for (@"struct".fields) |*field| {
-                    if (std.mem.eql(u8, field.name, component)) {
-                        node = field.node;
-                        break;
-                    }
-                    field_index += field.node.number_of_fields;
-                } else return null;
-            },
-            .array => |*array| {
-                const index = std.fmt.parseInt(usize, component, 10) catch return null;
-                if (index >= array.len) {
-                    return null;
-                }
-                field_index += index * array.element.number_of_fields;
-                node = array.element;
-            },
-            .optional => |*optional| {
-                if (std.mem.eql(u8, component, tag_path_component)) {
-                    return if (components.next() == null) field_index else null;
-                }
-                if (!std.mem.eql(u8, component, payload_path_component)) {
-                    return null;
-                }
-                field_index += 1;
-                node = optional.payload;
-            },
-            .@"union" => |*@"union"| {
-                if (std.mem.eql(u8, component, tag_path_component)) {
-                    return if (components.next() == null) field_index else null;
-                }
-                field_index += 1;
-                for (@"union".names, @"union".variants) |name, variant| {
-                    if (std.mem.eql(u8, name, component)) {
-                        node = variant;
-                        break;
-                    }
-                    field_index += variant.number_of_fields;
-                } else return null;
-            },
-        }
-    }
-}
-
-fn getFieldPath(root: *const Node, field_index: usize, path: *FieldPath) void {
-    var node = root;
-    var index = field_index;
-    while (true) switch (node.kind) {
-        .empty, .value => return,
-        .@"struct" => |*@"struct"| for (@"struct".fields) |*field| {
-            if (index < field.node.number_of_fields) {
-                _ = path.push(field.name);
-                node = field.node;
-                break;
-            }
-            index -= field.node.number_of_fields;
-        } else unreachable,
-        .array => |*array| {
-            const element_fields = array.element.number_of_fields;
-            _ = path.pushIndex(index / element_fields);
-            index %= element_fields;
-            node = array.element;
-        },
-        .optional => |*optional| {
-            if (index == 0) {
-                _ = path.push(tag_path_component);
-                return;
-            }
-            index -= 1;
-            _ = path.push(payload_path_component);
-            node = optional.payload;
-        },
-        .@"union" => |*@"union"| {
-            if (index == 0) {
-                _ = path.push(tag_path_component);
-                return;
-            }
-            index -= 1;
-            for (@"union".names, @"union".variants) |name, variant| {
-                if (index < variant.number_of_fields) {
-                    _ = path.push(name);
-                    node = variant;
-                    break;
-                }
-                index -= variant.number_of_fields;
-            } else unreachable;
-        },
-    };
-}
-
-const FieldPath = struct {
-    buffer: [max_field_path_len]u8 = undefined,
-    len: usize = 0,
-
-    const Self = @This();
-
-    fn get(self: *const Self) []const u8 {
-        return self.buffer[0..self.len];
-    }
-
-    fn push(self: *Self, component: []const u8) usize {
-        const saved_len = self.len;
-        if (self.len > 0) {
-            self.buffer[self.len] = path_separator;
-            self.len += 1;
-        }
-        @memcpy(self.buffer[self.len..][0..component.len], component);
-        self.len += component.len;
-        return saved_len;
-    }
-
-    fn pushIndex(self: *Self, index: usize) usize {
-        var index_buffer: [std.math.log10_int(@as(usize, std.math.maxInt(usize))) + 1]u8 = undefined;
-        const index_len = std.fmt.printInt(&index_buffer, index, 10, .lower, .{});
-        return self.push(index_buffer[0..index_len]);
-    }
-
-    fn pop(self: *Self, saved_len: usize) void {
-        self.len = saved_len;
-    }
-};
-
 fn writeFrames(
     Frame: type,
     allocator: std.mem.Allocator,
     writer: *std.Io.Writer,
-    root: *const Node,
+    frame_info: *const TypeInfo,
     frames: []const Frame,
 ) !void {
     if (frames.len > max_number_of_frames) {
@@ -435,7 +302,7 @@ fn writeFrames(
         return err;
     };
 
-    const frame_size = root.serialized_size;
+    const frame_size = frame_info.serialized_size;
     const array_of_structs = allocator.alloc(u8, frames.len * frame_size) catch |err| {
         misc.error_context.new("Failed to allocate array of structs buffer.", .{});
         return err;
@@ -443,7 +310,7 @@ fn writeFrames(
     defer allocator.free(array_of_structs);
     @memset(array_of_structs, 0);
 
-    const plan = WritePlan.init(allocator, root) catch |err| {
+    const plan = WritePlan.init(allocator, frame_info) catch |err| {
         misc.error_context.append("Failed to initialize write plan.", .{});
         return err;
     };
@@ -472,7 +339,7 @@ fn readFrames(
     allocator: std.mem.Allocator,
     reader: *std.Io.Reader,
     remote_frame_size: FrameSize,
-    root: *const Node,
+    frame_info: *const TypeInfo,
     remote_fields: []const ?RemoteField,
     default_frame: *const Frame,
 ) ![]Frame {
@@ -522,17 +389,311 @@ fn readFrames(
     for (frames, 0..) |*frame, frame_index| {
         frame.* = default_frame.*;
         const context = ReadContext{
-            .root = root,
+            .frame_info = frame_info,
             .remote_fields = remote_fields,
             .frame_data = array_of_structs[(frame_index * remote_frame_size)..][0..remote_frame_size],
             .frame_index = frame_index,
         };
-        _ = readNode(&context, root, 0, frame, default_frame);
+        _ = readValue(&context, frame_info, 0, frame, default_frame);
     }
     return frames;
 }
 
-fn writeValue(Type: type, value: Type, data: []u8) void {
+const WritePlan = struct {
+    steps: []const Step,
+
+    const Self = @This();
+
+    pub const Step = union(enum) {
+        primitive_value: PrimitiveValue,
+        optional: Optional,
+        @"union": Union,
+    };
+    pub const PrimitiveValue = struct {
+        memory_offset: usize,
+        data_offset: usize,
+        data_size: usize,
+        ops: *const PrimitiveValueOps,
+    };
+    pub const Optional = struct {
+        memory_offset: usize,
+        tag_data_offset: usize,
+        payload_len: usize,
+        ops: *const OptionalOps,
+    };
+    pub const Union = struct {
+        memory_offset: usize,
+        tag_data_offset: usize,
+        tag_data_size: usize,
+        variants: []const *const TypeInfo,
+        ops: *const UnionOps,
+    };
+
+    pub fn init(allocator: std.mem.Allocator, info: *const TypeInfo) !Self {
+        const steps = allocator.alloc(Step, info.number_of_fields) catch |err| {
+            misc.error_context.new("Failed to allocate {} write plan steps.", .{info.number_of_fields});
+            return err;
+        };
+        var len: usize = 0;
+        fillSteps(steps, &len, info, 0, 0);
+        return .{ .steps = steps };
+    }
+
+    pub fn deinit(self: *const Self, allocator: std.mem.Allocator) void {
+        allocator.free(self.steps);
+    }
+
+    fn fillSteps(steps: []Step, len: *usize, info: *const TypeInfo, memory_offset: usize, data_offset: usize) void {
+        switch (info.kind) {
+            .void => {},
+            .primitive_value => |ops| {
+                steps[len.*] = .{ .primitive_value = .{
+                    .memory_offset = memory_offset,
+                    .data_offset = data_offset,
+                    .data_size = info.serialized_size,
+                    .ops = ops,
+                } };
+                len.* += 1;
+            },
+            .@"struct" => |*@"struct"| {
+                var field_data_offset = data_offset;
+                for (@"struct".fields) |*field| {
+                    fillSteps(steps, len, field.info, memory_offset + field.offset, field_data_offset);
+                    field_data_offset += field.info.serialized_size;
+                }
+            },
+            .array => |*array| {
+                const element = array.element;
+                for (0..array.len) |index| {
+                    const element_memory_offset = memory_offset + (index * element.size);
+                    const element_data_offset = data_offset + (index * element.serialized_size);
+                    fillSteps(steps, len, element, element_memory_offset, element_data_offset);
+                }
+            },
+            .optional => |*optional| {
+                steps[len.*] = .{ .optional = .{
+                    .memory_offset = memory_offset,
+                    .tag_data_offset = data_offset,
+                    .payload_len = optional.payload.number_of_fields,
+                    .ops = optional.ops,
+                } };
+                len.* += 1;
+                fillSteps(steps, len, optional.payload, 0, data_offset + serializedSizeOf(bool));
+            },
+            .@"union" => |*@"union"| {
+                steps[len.*] = .{ .@"union" = .{
+                    .memory_offset = memory_offset,
+                    .tag_data_offset = data_offset,
+                    .tag_data_size = @"union".tag_size,
+                    .variants = @"union".variants,
+                    .ops = @"union".ops,
+                } };
+                len.* += 1;
+                for (@"union".variants) |variant| {
+                    fillSteps(steps, len, variant, 0, data_offset + @"union".tag_size);
+                }
+            },
+        }
+    }
+
+    pub fn write(self: *const Self, frame_data: []u8, frame: *const anyopaque) void {
+        writeSteps(self.steps, frame_data, frame);
+    }
+
+    fn writeSteps(steps: []const Step, frame_data: []u8, base_pointer: *const anyopaque) void {
+        var index: usize = 0;
+        while (index < steps.len) switch (steps[index]) {
+            .primitive_value => |*primitive_value| {
+                const value_pointer = offsetConstPointer(base_pointer, primitive_value.memory_offset);
+                const data = frame_data[primitive_value.data_offset..][0..primitive_value.data_size];
+                primitive_value.ops.write(value_pointer, data);
+                index += 1;
+            },
+            .optional => |*optional| {
+                const optional_pointer = offsetConstPointer(base_pointer, optional.memory_offset);
+                const payload_steps = steps[(index + 1)..][0..optional.payload_len];
+                if (optional.ops.isSome(optional_pointer)) {
+                    frame_data[optional.tag_data_offset] = 1;
+                    const payload_pointer = optional.ops.getPayload(@constCast(optional_pointer));
+                    writeSteps(payload_steps, frame_data, payload_pointer);
+                }
+                index += 1 + payload_steps.len;
+            },
+            .@"union" => |*@"union"| {
+                const ops = @"union".ops;
+                const union_pointer = offsetConstPointer(base_pointer, @"union".memory_offset);
+                const tag_data = frame_data[@"union".tag_data_offset..][0..@"union".tag_data_size];
+                ops.writeActiveTag(union_pointer, tag_data);
+                const active_index = ops.getActiveFieldIndex(union_pointer);
+                const variant_pointer = ops.getFieldPointer(@constCast(union_pointer), active_index);
+                index += 1;
+                for (@"union".variants, 0..) |variant, variant_index| {
+                    const variant_steps = steps[index..][0..variant.number_of_fields];
+                    if (variant_index == active_index) {
+                        writeSteps(variant_steps, frame_data, variant_pointer);
+                    }
+                    index += variant_steps.len;
+                }
+            },
+        };
+    }
+};
+
+const ReadContext = struct {
+    frame_info: *const TypeInfo,
+    remote_fields: []const ?RemoteField,
+    frame_data: []const u8,
+    frame_index: usize,
+
+    const Self = @This();
+
+    fn getFieldData(self: *const Self, field_index: usize) ?[]const u8 {
+        const remote_field = self.remote_fields[field_index] orelse return null;
+        return self.frame_data[remote_field.offset..][0..remote_field.size];
+    }
+
+    fn handleReadError(self: *const Self, err: anyerror, field_index: usize) void {
+        const path = FieldPath.fromIndex(self.frame_info, field_index);
+        misc.error_context.append(
+            "Failed to read field with path {s} on frame {}. Falling back to default value.",
+            .{ path.asSlice(), self.frame_index },
+        );
+        if (!builtin.is_test) {
+            misc.error_context.logWarning(err);
+        }
+    }
+};
+
+const ReadValueResult = enum {
+    completed,
+    needs_parent_default,
+};
+
+fn readValue(
+    context: *const ReadContext,
+    info: *const TypeInfo,
+    field_index: usize,
+    lhs_pointer: *anyopaque,
+    default_pointer_maybe: ?*const anyopaque,
+) ReadValueResult {
+    const success = switch (info.kind) {
+        .void => true,
+        .primitive_value => |ops| block: {
+            const data = context.getFieldData(field_index) orelse break :block false;
+            ops.read(data, lhs_pointer) catch |err| {
+                context.handleReadError(err, field_index);
+                break :block false;
+            };
+            break :block true;
+        },
+        .@"struct" => |*@"struct"| block: {
+            var success = true;
+            var child_field_index = field_index;
+            for (@"struct".fields) |*field| {
+                const field_default_pointer = if (default_pointer_maybe) |default_pointer| block_default: {
+                    break :block_default offsetConstPointer(default_pointer, field.offset);
+                } else field.default_value;
+                const field_pointer = offsetPointer(lhs_pointer, field.offset);
+                const result = readValue(context, field.info, child_field_index, field_pointer, field_default_pointer);
+                if (result == .needs_parent_default) {
+                    success = false;
+                }
+                child_field_index += field.info.number_of_fields;
+            }
+            break :block success;
+        },
+        .array => |*array| block: {
+            var success = true;
+            const element = array.element;
+            for (0..array.len) |index| {
+                const offset = index * element.size;
+                const element_default_pointer = if (default_pointer_maybe) |default_pointer| block_default: {
+                    break :block_default offsetConstPointer(default_pointer, offset);
+                } else null;
+                const element_pointer = offsetPointer(lhs_pointer, offset);
+                const element_field_index = field_index + (index * element.number_of_fields);
+                const result = readValue(context, element, element_field_index, element_pointer, element_default_pointer);
+                if (result == .needs_parent_default) {
+                    success = false;
+                }
+            }
+            break :block success;
+        },
+        .optional => |*optional| block: {
+            const ops = optional.ops;
+            const data = context.getFieldData(field_index) orelse break :block false;
+            const is_some = readPrimitiveValue(bool, data) catch |err| {
+                context.handleReadError(err, field_index);
+                break :block false;
+            };
+            if (!is_some) {
+                ops.setNull(lhs_pointer);
+                break :block true;
+            }
+            if (!ops.isSome(lhs_pointer)) {
+                ops.setSome(lhs_pointer);
+            }
+            const payload_default_pointer = if (default_pointer_maybe) |default_pointer| block_default: {
+                if (!ops.isSome(default_pointer)) {
+                    break :block_default null;
+                }
+                break :block_default ops.getPayload(@constCast(default_pointer));
+            } else null;
+            const payload_pointer = ops.getPayload(lhs_pointer);
+            const result = readValue(context, optional.payload, field_index + 1, payload_pointer, payload_default_pointer);
+            break :block result == .completed;
+        },
+        .@"union" => |*@"union"| block: {
+            const ops = @"union".ops;
+            const data = context.getFieldData(field_index) orelse break :block false;
+            ops.readActiveTag(lhs_pointer, data) catch |err| {
+                context.handleReadError(err, field_index);
+                break :block false;
+            };
+            const index = ops.getActiveFieldIndex(lhs_pointer);
+            var variant_field_index = field_index + 1;
+            for (@"union".variants[0..index]) |variant| {
+                variant_field_index += variant.number_of_fields;
+            }
+            const variant_default_pointer = if (default_pointer_maybe) |default_pointer| block_default: {
+                if (ops.getActiveFieldIndex(default_pointer) != index) {
+                    break :block_default null;
+                }
+                break :block_default ops.getFieldPointer(@constCast(default_pointer), index);
+            } else null;
+            const variant_pointer = ops.getFieldPointer(lhs_pointer, index);
+            const variant = @"union".variants[index];
+            const result = readValue(context, variant, variant_field_index, variant_pointer, variant_default_pointer);
+            break :block result == .completed;
+        },
+    };
+    if (!success) {
+        const default_pointer = default_pointer_maybe orelse return .needs_parent_default;
+        copyBytes(lhs_pointer, default_pointer, info.size);
+    }
+    if (info.sanitize) |sanitize| {
+        sanitize(lhs_pointer);
+    }
+    return .completed;
+}
+
+fn copyBytes(destination: *anyopaque, source: *const anyopaque, size: usize) void {
+    const destination_bytes: [*]u8 = @ptrCast(destination);
+    const source_bytes: [*]const u8 = @ptrCast(source);
+    @memcpy(destination_bytes[0..size], source_bytes[0..size]);
+}
+
+fn offsetPointer(pointer: *anyopaque, offset: usize) *anyopaque {
+    const bytes: [*]u8 = @ptrCast(pointer);
+    return @ptrCast(bytes + offset);
+}
+
+fn offsetConstPointer(pointer: *const anyopaque, offset: usize) *const anyopaque {
+    const bytes: [*]const u8 = @ptrCast(pointer);
+    return @ptrCast(bytes + offset);
+}
+
+fn writePrimitiveValue(Type: type, value: Type, data: []u8) void {
     switch (@typeInfo(Type)) {
         .bool => data[0] = @intFromBool(value),
         .int => |*info| {
@@ -540,27 +701,27 @@ fn writeValue(Type: type, value: Type, data: []u8) void {
             const WriteType = @Int(info.signedness, size * std.mem.byte_size_in_bits);
             std.mem.writeInt(WriteType, data[0..size], value, endian);
         },
-        .float => |*info| writeValue(@Int(.unsigned, info.bits), @bitCast(value), data),
-        .@"enum" => |*info| writeValue(info.tag_type, @backingInt(value), data),
+        .float => |*info| writePrimitiveValue(@Int(.unsigned, info.bits), @bitCast(value), data),
+        .@"enum" => |*info| writePrimitiveValue(info.tag_type, @backingInt(value), data),
         .@"struct" => |*info| {
             const IntType = info.backing_integer orelse @compileError("Unsupported type: " ++ @typeName(Type));
-            writeValue(IntType, @backingInt(value), data);
+            writePrimitiveValue(IntType, @backingInt(value), data);
         },
         .@"union" => |*info| {
             if (info.layout != .@"packed") {
                 @compileError("Unsupported type: " ++ @typeName(Type));
             }
-            writeValue(@Int(.unsigned, @bitSizeOf(Type)), @backingInt(value), data);
+            writePrimitiveValue(@Int(.unsigned, @bitSizeOf(Type)), @backingInt(value), data);
         },
         else => @compileError("Unsupported type: " ++ @typeName(Type)),
     }
 }
 
-fn readValue(Type: type, data: []const u8) !Type {
+fn readPrimitiveValue(Type: type, data: []const u8) !Type {
     switch (@typeInfo(Type)) {
         .void => return {},
         .bool => {
-            const byte = readValue(u8, data) catch |err| {
+            const byte = readPrimitiveValue(u8, data) catch |err| {
                 misc.error_context.append("Failed to read bool's byte.", .{});
                 return err;
             };
@@ -610,7 +771,7 @@ fn readValue(Type: type, data: []const u8) !Type {
                 const read_size = serializedSizeOf(ReadType);
                 if (read_size == data.len) {
                     const IntType = @Int(.unsigned, read_size * std.mem.byte_size_in_bits);
-                    const int_value = readValue(IntType, data) catch |err| {
+                    const int_value = readPrimitiveValue(IntType, data) catch |err| {
                         misc.error_context.append(
                             "Failed to read float's int value. ({s} -> {s})",
                             .{ @typeName(ReadType), @typeName(IntType) },
@@ -626,7 +787,7 @@ fn readValue(Type: type, data: []const u8) !Type {
         },
         .@"enum" => |*info| {
             const IntType = info.tag_type;
-            const int_value = readValue(IntType, data) catch |err| {
+            const int_value = readPrimitiveValue(IntType, data) catch |err| {
                 misc.error_context.append(
                     "Failed to read enum's tag. ({s} -> {s})",
                     .{ @typeName(Type), @typeName(IntType) },
@@ -643,7 +804,7 @@ fn readValue(Type: type, data: []const u8) !Type {
         },
         .@"struct" => |*info| {
             const IntType = info.backing_integer orelse @compileError("Unsupported type: " ++ @typeName(Type));
-            const int_value = readValue(IntType, data) catch |err| {
+            const int_value = readPrimitiveValue(IntType, data) catch |err| {
                 misc.error_context.append(
                     "Failed to read packed struct's int value. ({s} -> {s})",
                     .{ @typeName(Type), @typeName(IntType) },
@@ -657,7 +818,7 @@ fn readValue(Type: type, data: []const u8) !Type {
                 @compileError("Unsupported type: " ++ @typeName(Type));
             }
             const IntType = @Int(.unsigned, @bitSizeOf(Type));
-            const int_value = readValue(IntType, data) catch |err| {
+            const int_value = readPrimitiveValue(IntType, data) catch |err| {
                 misc.error_context.append(
                     "Failed to read packed union's int value. ({s} -> {s})",
                     .{ @typeName(Type), @typeName(IntType) },
@@ -670,7 +831,7 @@ fn readValue(Type: type, data: []const u8) !Type {
     }
 }
 
-const Node = struct {
+const TypeInfo = struct {
     size: usize,
     serialized_size: usize,
     number_of_fields: usize,
@@ -679,8 +840,8 @@ const Node = struct {
     kind: Kind,
 
     pub const Kind = union(enum) {
-        empty: void,
-        value: *const ValueOps,
+        void: void,
+        primitive_value: *const PrimitiveValueOps,
         @"struct": Struct,
         array: Array,
         optional: Optional,
@@ -693,37 +854,184 @@ const Node = struct {
         name: [:0]const u8,
         offset: usize,
         default_value: ?*const anyopaque,
-        node: *const Node,
+        info: *const TypeInfo,
     };
     pub const Array = struct {
         len: usize,
-        element: *const Node,
+        element: *const TypeInfo,
     };
     pub const Optional = struct {
-        payload: *const Node,
+        payload: *const TypeInfo,
         ops: *const OptionalOps,
     };
     pub const Union = struct {
         tag_size: usize,
         names: []const [:0]const u8,
-        variants: []const *const Node,
+        variants: []const *const TypeInfo,
         ops: *const UnionOps,
     };
+
+    pub inline fn fromType(Type: type) *const TypeInfo {
+        return comptime &Of(Type).info;
+    }
+
+    pub fn checkFormatLimits(comptime self: *const TypeInfo) void {
+        comptime {
+            if (self.serialized_size > max_frame_size) {
+                @compileError("The frame size exceeds maximum allowed.");
+            }
+            if (self.number_of_fields > max_number_of_fields) {
+                @compileError("Maximum number of fields exceeded.");
+            }
+            if (self.max_path_len > max_field_path_len + 1) {
+                @compileError("Maximum field path length exceeded.");
+            }
+        }
+    }
+
+    fn Of(Type: type) type {
+        return struct {
+            const info = build(Type);
+        };
+    }
+
+    fn build(Type: type) TypeInfo {
+        switch (@typeInfo(Type)) {
+            .void => return .{
+                .size = 0,
+                .serialized_size = 0,
+                .number_of_fields = 0,
+                .max_path_len = 0,
+                .sanitize = null,
+                .kind = .void,
+            },
+            .bool, .int, .float, .@"enum" => return buildPrimitiveValue(Type),
+            .@"struct" => |*info| {
+                if (info.layout == .@"packed") {
+                    return buildPrimitiveValue(Type);
+                }
+                var fields: [info.field_names.len]TypeInfo.StructField = undefined;
+                var serialized_size: usize = 0;
+                var number_of_fields: usize = 0;
+                var max_path_len: usize = 0;
+                for (info.field_names, info.field_types, info.field_attrs, &fields) |field_name, Field, attr, *field| {
+                    const field_info = fromType(Field);
+                    field.* = .{
+                        .name = field_name,
+                        .offset = @offsetOf(Type, field_name),
+                        .default_value = attr.default_value_ptr,
+                        .info = field_info,
+                    };
+                    serialized_size += field_info.serialized_size;
+                    number_of_fields += field_info.number_of_fields;
+                    max_path_len = @max(max_path_len, getChildPathLen(field_name.len, field_info));
+                }
+                const final_fields = fields;
+                return .{
+                    .size = @sizeOf(Type),
+                    .serialized_size = serialized_size,
+                    .number_of_fields = number_of_fields,
+                    .max_path_len = max_path_len,
+                    .sanitize = misc.getTypeErasedSanitize(Type),
+                    .kind = .{ .@"struct" = .{ .fields = &final_fields } },
+                };
+            },
+            .array => |*info| {
+                const element = fromType(info.child);
+                const max_index_len = if (info.len > 1) std.math.log10_int(@as(usize, info.len - 1)) + 1 else 1;
+                return .{
+                    .size = @sizeOf(Type),
+                    .serialized_size = info.len * element.serialized_size,
+                    .number_of_fields = info.len * element.number_of_fields,
+                    .max_path_len = getChildPathLen(max_index_len, element),
+                    .sanitize = misc.getTypeErasedSanitize(Type),
+                    .kind = .{ .array = .{ .len = info.len, .element = element } },
+                };
+            },
+            .optional => |*info| {
+                const payload = fromType(info.child);
+                return .{
+                    .size = @sizeOf(Type),
+                    .serialized_size = serializedSizeOf(bool) + payload.serialized_size,
+                    .number_of_fields = 1 + payload.number_of_fields,
+                    .max_path_len = @max(
+                        getChildPathLen(tag_path_component.len, null),
+                        getChildPathLen(payload_path_component.len, payload),
+                    ),
+                    .sanitize = misc.getTypeErasedSanitize(Type),
+                    .kind = .{ .optional = .{
+                        .payload = payload,
+                        .ops = OptionalOps.fromType(Type),
+                    } },
+                };
+            },
+            .@"union" => |*info| {
+                if (info.layout == .@"packed") {
+                    return buildPrimitiveValue(Type);
+                }
+                const Tag = info.tag_type orelse @compileError(
+                    "Union " ++ @typeName(Type) ++ " is not serializable. (Not tagged and not packed.)",
+                );
+                const tag_size = serializedSizeOf(Tag);
+                var variants: [info.field_types.len]*const TypeInfo = undefined;
+                var max_variant_size: usize = 0;
+                var number_of_fields: usize = 1;
+                var max_path_len: usize = getChildPathLen(tag_path_component.len, null);
+                for (info.field_names, info.field_types, &variants) |field_name, Field, *variant| {
+                    variant.* = fromType(Field);
+                    max_variant_size = @max(max_variant_size, variant.*.serialized_size);
+                    number_of_fields += variant.*.number_of_fields;
+                    max_path_len = @max(max_path_len, getChildPathLen(field_name.len, variant.*));
+                }
+                const final_variants = variants;
+                return .{
+                    .size = @sizeOf(Type),
+                    .serialized_size = tag_size + max_variant_size,
+                    .number_of_fields = number_of_fields,
+                    .max_path_len = max_path_len,
+                    .sanitize = misc.getTypeErasedSanitize(Type),
+                    .kind = .{ .@"union" = .{
+                        .tag_size = tag_size,
+                        .names = info.field_names,
+                        .variants = &final_variants,
+                        .ops = UnionOps.fromType(Type),
+                    } },
+                };
+            },
+            else => @compileError("Unsupported type: " ++ @typeName(Type)),
+        }
+    }
+
+    fn buildPrimitiveValue(Type: type) TypeInfo {
+        return .{
+            .size = @sizeOf(Type),
+            .serialized_size = serializedSizeOf(Type),
+            .number_of_fields = 1,
+            .max_path_len = 0,
+            .sanitize = misc.getTypeErasedSanitize(Type),
+            .kind = .{ .primitive_value = PrimitiveValueOps.fromType(Type) },
+        };
+    }
+
+    fn getChildPathLen(component_len: usize, child: ?*const TypeInfo) usize {
+        const child_path_len = if (child) |info| info.max_path_len else 0;
+        return 1 + component_len + child_path_len;
+    }
 };
 
-const ValueOps = struct {
+const PrimitiveValueOps = struct {
     write: *const fn (value_pointer: *const anyopaque, data: []u8) void,
     read: *const fn (data: []const u8, value_pointer: *anyopaque) anyerror!void,
 
-    pub fn fromType(Type: type) *const ValueOps {
+    pub fn fromType(Type: type) *const PrimitiveValueOps {
         const Impl = struct {
             fn write(value_pointer: *const anyopaque, data: []u8) void {
                 const typed_value_pointer: *const Type = @ptrCast(@alignCast(value_pointer));
-                writeValue(Type, typed_value_pointer.*, data);
+                writePrimitiveValue(Type, typed_value_pointer.*, data);
             }
             fn read(data: []const u8, value_pointer: *anyopaque) anyerror!void {
                 const typed_value_pointer: *Type = @ptrCast(@alignCast(value_pointer));
-                typed_value_pointer.* = readValue(Type, data) catch |err| {
+                typed_value_pointer.* = readPrimitiveValue(Type, data) catch |err| {
                     misc.error_context.append("Failed to read value.", .{});
                     return err;
                 };
@@ -805,11 +1113,11 @@ const UnionOps = struct {
             }
             fn writeActiveTag(union_pointer: *const anyopaque, data: []u8) void {
                 const typed_union_pointer: *const Union = @ptrCast(@alignCast(union_pointer));
-                writeValue(Tag, std.meta.activeTag(typed_union_pointer.*), data);
+                writePrimitiveValue(Tag, std.meta.activeTag(typed_union_pointer.*), data);
             }
             fn readActiveTag(union_pointer: *anyopaque, data: []const u8) anyerror!void {
                 const typed_union_pointer: *Union = @ptrCast(@alignCast(union_pointer));
-                const next_tag = readValue(Tag, data) catch |err| {
+                const next_tag = readPrimitiveValue(Tag, data) catch |err| {
                     misc.error_context.append("Failed to read union's tag value.", .{});
                     return err;
                 };
@@ -834,446 +1142,141 @@ const UnionOps = struct {
     }
 };
 
-fn getRootNode(Frame: type) *const Node {
-    const root = getNode(Frame);
-    if (root.serialized_size > max_frame_size) {
-        @compileError("The frame size exceeds maximum allowed.");
-    }
-    if (root.number_of_fields > max_number_of_fields) {
-        @compileError("Maximum number of fields exceeded.");
-    }
-    if (root.max_path_len > max_field_path_len + 1) {
-        @compileError("Maximum field path length exceeded.");
-    }
-    return root;
-}
-
-fn getNode(Type: type) *const Node {
-    return &NodeOf(Type).node;
-}
-
-fn NodeOf(Type: type) type {
-    return struct {
-        const node = buildNode(Type);
-    };
-}
-
-fn buildNode(Type: type) Node {
-    switch (@typeInfo(Type)) {
-        .void => return .{
-            .size = 0,
-            .serialized_size = 0,
-            .number_of_fields = 0,
-            .max_path_len = 0,
-            .sanitize = null,
-            .kind = .empty,
-        },
-        .bool, .int, .float, .@"enum" => return buildValueNode(Type),
-        .@"struct" => |*info| {
-            if (info.layout == .@"packed") {
-                return buildValueNode(Type);
-            }
-            var fields: [info.field_names.len]Node.StructField = undefined;
-            var serialized_size: usize = 0;
-            var number_of_fields: usize = 0;
-            var max_path_len: usize = 0;
-            for (info.field_names, info.field_types, info.field_attrs, &fields) |field_name, Field, attr, *field| {
-                const field_node = getNode(Field);
-                field.* = .{
-                    .name = field_name,
-                    .offset = @offsetOf(Type, field_name),
-                    .default_value = attr.default_value_ptr,
-                    .node = field_node,
-                };
-                serialized_size += field_node.serialized_size;
-                number_of_fields += field_node.number_of_fields;
-                max_path_len = @max(max_path_len, getChildPathLen(field_name.len, field_node));
-            }
-            const final_fields = fields;
-            return .{
-                .size = @sizeOf(Type),
-                .serialized_size = serialized_size,
-                .number_of_fields = number_of_fields,
-                .max_path_len = max_path_len,
-                .sanitize = misc.getTypeErasedSanitize(Type),
-                .kind = .{ .@"struct" = .{ .fields = &final_fields } },
-            };
-        },
-        .array => |*info| {
-            const element = getNode(info.child);
-            const max_index_len = if (info.len > 1) std.math.log10_int(@as(usize, info.len - 1)) + 1 else 1;
-            return .{
-                .size = @sizeOf(Type),
-                .serialized_size = info.len * element.serialized_size,
-                .number_of_fields = info.len * element.number_of_fields,
-                .max_path_len = getChildPathLen(max_index_len, element),
-                .sanitize = misc.getTypeErasedSanitize(Type),
-                .kind = .{ .array = .{ .len = info.len, .element = element } },
-            };
-        },
-        .optional => |*info| {
-            const payload = getNode(info.child);
-            return .{
-                .size = @sizeOf(Type),
-                .serialized_size = serializedSizeOf(bool) + payload.serialized_size,
-                .number_of_fields = 1 + payload.number_of_fields,
-                .max_path_len = @max(
-                    getChildPathLen(tag_path_component.len, null),
-                    getChildPathLen(payload_path_component.len, payload),
-                ),
-                .sanitize = misc.getTypeErasedSanitize(Type),
-                .kind = .{ .optional = .{
-                    .payload = payload,
-                    .ops = OptionalOps.fromType(Type),
-                } },
-            };
-        },
-        .@"union" => |*info| {
-            if (info.layout == .@"packed") {
-                return buildValueNode(Type);
-            }
-            const Tag = info.tag_type orelse @compileError(
-                "Union " ++ @typeName(Type) ++ " is not serializable. (Not tagged and not packed.)",
-            );
-            const tag_size = serializedSizeOf(Tag);
-            var variants: [info.field_types.len]*const Node = undefined;
-            var max_variant_size: usize = 0;
-            var number_of_fields: usize = 1;
-            var max_path_len: usize = getChildPathLen(tag_path_component.len, null);
-            for (info.field_names, info.field_types, &variants) |field_name, Field, *variant| {
-                variant.* = getNode(Field);
-                max_variant_size = @max(max_variant_size, variant.*.serialized_size);
-                number_of_fields += variant.*.number_of_fields;
-                max_path_len = @max(max_path_len, getChildPathLen(field_name.len, variant.*));
-            }
-            const final_variants = variants;
-            return .{
-                .size = @sizeOf(Type),
-                .serialized_size = tag_size + max_variant_size,
-                .number_of_fields = number_of_fields,
-                .max_path_len = max_path_len,
-                .sanitize = misc.getTypeErasedSanitize(Type),
-                .kind = .{ .@"union" = .{
-                    .tag_size = tag_size,
-                    .names = info.field_names,
-                    .variants = &final_variants,
-                    .ops = UnionOps.fromType(Type),
-                } },
-            };
-        },
-        else => @compileError("Unsupported type: " ++ @typeName(Type)),
-    }
-}
-
-fn buildValueNode(Type: type) Node {
-    return .{
-        .size = @sizeOf(Type),
-        .serialized_size = serializedSizeOf(Type),
-        .number_of_fields = 1,
-        .max_path_len = 0,
-        .sanitize = misc.getTypeErasedSanitize(Type),
-        .kind = .{ .value = ValueOps.fromType(Type) },
-    };
-}
-
-fn getChildPathLen(component_len: usize, child: ?*const Node) usize {
-    const child_path_len = if (child) |node| node.max_path_len else 0;
-    return 1 + component_len + child_path_len;
-}
-
-const WritePlan = struct {
-    steps: []const Step,
+const FieldPath = struct {
+    buffer: [max_field_path_len]u8 = undefined,
+    len: usize = 0,
 
     const Self = @This();
 
-    pub const Step = union(enum) {
-        value: Value,
-        optional: Optional,
-        @"union": Union,
-    };
-    pub const Value = struct {
-        memory_offset: usize,
-        data_offset: usize,
-        data_size: usize,
-        ops: *const ValueOps,
-    };
-    pub const Optional = struct {
-        memory_offset: usize,
-        tag_data_offset: usize,
-        payload_len: usize,
-        ops: *const OptionalOps,
-    };
-    pub const Union = struct {
-        memory_offset: usize,
-        tag_data_offset: usize,
-        tag_data_size: usize,
-        variants: []const *const Node,
-        ops: *const UnionOps,
-    };
-
-    pub fn init(allocator: std.mem.Allocator, root: *const Node) !Self {
-        const steps = allocator.alloc(Step, root.number_of_fields) catch |err| {
-            misc.error_context.new("Failed to allocate {} write plan steps.", .{root.number_of_fields});
-            return err;
-        };
-        var len: usize = 0;
-        fillSteps(steps, &len, root, 0, 0);
-        return .{ .steps = steps };
-    }
-
-    pub fn deinit(self: *const Self, allocator: std.mem.Allocator) void {
-        allocator.free(self.steps);
-    }
-
-    fn fillSteps(steps: []Step, len: *usize, node: *const Node, memory_offset: usize, data_offset: usize) void {
-        switch (node.kind) {
-            .empty => {},
-            .value => |ops| {
-                steps[len.*] = .{ .value = .{
-                    .memory_offset = memory_offset,
-                    .data_offset = data_offset,
-                    .data_size = node.serialized_size,
-                    .ops = ops,
-                } };
-                len.* += 1;
-            },
-            .@"struct" => |*@"struct"| {
-                var field_data_offset = data_offset;
-                for (@"struct".fields) |*field| {
-                    fillSteps(steps, len, field.node, memory_offset + field.offset, field_data_offset);
-                    field_data_offset += field.node.serialized_size;
+    pub fn fromIndex(frame_info: *const TypeInfo, field_index: usize) Self {
+        var path = Self{};
+        var info = frame_info;
+        var index = field_index;
+        while (true) switch (info.kind) {
+            .void, .primitive_value => return path,
+            .@"struct" => |*@"struct"| for (@"struct".fields) |*field| {
+                if (index < field.info.number_of_fields) {
+                    _ = path.push(field.name);
+                    info = field.info;
+                    break;
                 }
-            },
+                index -= field.info.number_of_fields;
+            } else unreachable,
             .array => |*array| {
-                const element = array.element;
-                for (0..array.len) |index| {
-                    const element_memory_offset = memory_offset + (index * element.size);
-                    const element_data_offset = data_offset + (index * element.serialized_size);
-                    fillSteps(steps, len, element, element_memory_offset, element_data_offset);
-                }
+                const element_fields = array.element.number_of_fields;
+                _ = path.pushIndex(index / element_fields);
+                index %= element_fields;
+                info = array.element;
             },
             .optional => |*optional| {
-                steps[len.*] = .{ .optional = .{
-                    .memory_offset = memory_offset,
-                    .tag_data_offset = data_offset,
-                    .payload_len = optional.payload.number_of_fields,
-                    .ops = optional.ops,
-                } };
-                len.* += 1;
-                fillSteps(steps, len, optional.payload, 0, data_offset + serializedSizeOf(bool));
+                if (index == 0) {
+                    _ = path.push(tag_path_component);
+                    return path;
+                }
+                index -= 1;
+                _ = path.push(payload_path_component);
+                info = optional.payload;
             },
             .@"union" => |*@"union"| {
-                steps[len.*] = .{ .@"union" = .{
-                    .memory_offset = memory_offset,
-                    .tag_data_offset = data_offset,
-                    .tag_data_size = @"union".tag_size,
-                    .variants = @"union".variants,
-                    .ops = @"union".ops,
-                } };
-                len.* += 1;
-                for (@"union".variants) |variant| {
-                    fillSteps(steps, len, variant, 0, data_offset + @"union".tag_size);
+                if (index == 0) {
+                    _ = path.push(tag_path_component);
+                    return path;
                 }
-            },
-        }
-    }
-
-    pub fn write(self: *const Self, frame_data: []u8, frame: *const anyopaque) void {
-        writeSteps(self.steps, frame_data, frame);
-    }
-
-    fn writeSteps(steps: []const Step, frame_data: []u8, base_pointer: *const anyopaque) void {
-        var index: usize = 0;
-        while (index < steps.len) switch (steps[index]) {
-            .value => |*value| {
-                const value_pointer = offsetConstPointer(base_pointer, value.memory_offset);
-                value.ops.write(value_pointer, frame_data[value.data_offset..][0..value.data_size]);
-                index += 1;
-            },
-            .optional => |*optional| {
-                const optional_pointer = offsetConstPointer(base_pointer, optional.memory_offset);
-                const payload_steps = steps[(index + 1)..][0..optional.payload_len];
-                if (optional.ops.isSome(optional_pointer)) {
-                    frame_data[optional.tag_data_offset] = 1;
-                    const payload_pointer = optional.ops.getPayload(@constCast(optional_pointer));
-                    writeSteps(payload_steps, frame_data, payload_pointer);
-                }
-                index += 1 + payload_steps.len;
-            },
-            .@"union" => |*@"union"| {
-                const ops = @"union".ops;
-                const union_pointer = offsetConstPointer(base_pointer, @"union".memory_offset);
-                const tag_data = frame_data[@"union".tag_data_offset..][0..@"union".tag_data_size];
-                ops.writeActiveTag(union_pointer, tag_data);
-                const active_index = ops.getActiveFieldIndex(union_pointer);
-                const variant_pointer = ops.getFieldPointer(@constCast(union_pointer), active_index);
-                index += 1;
-                for (@"union".variants, 0..) |variant, variant_index| {
-                    const variant_steps = steps[index..][0..variant.number_of_fields];
-                    if (variant_index == active_index) {
-                        writeSteps(variant_steps, frame_data, variant_pointer);
+                index -= 1;
+                for (@"union".names, @"union".variants) |name, variant| {
+                    if (index < variant.number_of_fields) {
+                        _ = path.push(name);
+                        info = variant;
+                        break;
                     }
-                    index += variant_steps.len;
-                }
+                    index -= variant.number_of_fields;
+                } else unreachable;
             },
         };
     }
-};
 
-const ReadContext = struct {
-    root: *const Node,
-    remote_fields: []const ?RemoteField,
-    frame_data: []const u8,
-    frame_index: usize,
-
-    const Self = @This();
-
-    fn getFieldData(self: *const Self, field_index: usize) ?[]const u8 {
-        const remote_field = self.remote_fields[field_index] orelse return null;
-        return self.frame_data[remote_field.offset..][0..remote_field.size];
-    }
-
-    fn handleReadError(self: *const Self, err: anyerror, field_index: usize) void {
-        var path = FieldPath{};
-        getFieldPath(self.root, field_index, &path);
-        misc.error_context.append(
-            "Failed to read field with path {s} on frame {}. Falling back to default value.",
-            .{ path.get(), self.frame_index },
-        );
-        if (!builtin.is_test) {
-            misc.error_context.logWarning(err);
+    pub fn toIndex(self: *const Self, frame_info: *const TypeInfo) ?usize {
+        const path = self.asSlice();
+        var info = frame_info;
+        var field_index: usize = 0;
+        var components = std.mem.splitScalar(u8, path, path_separator);
+        var component_maybe = if (path.len == 0) null else components.next();
+        while (true) : (component_maybe = components.next()) {
+            const component = component_maybe orelse return switch (info.kind) {
+                .primitive_value => field_index,
+                else => null,
+            };
+            switch (info.kind) {
+                .void, .primitive_value => return null,
+                .@"struct" => |*@"struct"| {
+                    for (@"struct".fields) |*field| {
+                        if (std.mem.eql(u8, field.name, component)) {
+                            info = field.info;
+                            break;
+                        }
+                        field_index += field.info.number_of_fields;
+                    } else return null;
+                },
+                .array => |*array| {
+                    const index = std.fmt.parseInt(usize, component, 10) catch return null;
+                    if (index >= array.len) {
+                        return null;
+                    }
+                    field_index += index * array.element.number_of_fields;
+                    info = array.element;
+                },
+                .optional => |*optional| {
+                    if (std.mem.eql(u8, component, tag_path_component)) {
+                        return if (components.next() == null) field_index else null;
+                    }
+                    if (!std.mem.eql(u8, component, payload_path_component)) {
+                        return null;
+                    }
+                    field_index += 1;
+                    info = optional.payload;
+                },
+                .@"union" => |*@"union"| {
+                    if (std.mem.eql(u8, component, tag_path_component)) {
+                        return if (components.next() == null) field_index else null;
+                    }
+                    field_index += 1;
+                    for (@"union".names, @"union".variants) |name, variant| {
+                        if (std.mem.eql(u8, name, component)) {
+                            info = variant;
+                            break;
+                        }
+                        field_index += variant.number_of_fields;
+                    } else return null;
+                },
+            }
         }
     }
-};
 
-const ReadNodeResult = enum {
-    completed,
-    needs_parent_default,
-};
-
-fn readNode(
-    context: *const ReadContext,
-    node: *const Node,
-    field_index: usize,
-    lhs_pointer: *anyopaque,
-    default_pointer_maybe: ?*const anyopaque,
-) ReadNodeResult {
-    const success = switch (node.kind) {
-        .empty => true,
-        .value => |ops| block: {
-            const data = context.getFieldData(field_index) orelse break :block false;
-            ops.read(data, lhs_pointer) catch |err| {
-                context.handleReadError(err, field_index);
-                break :block false;
-            };
-            break :block true;
-        },
-        .@"struct" => |*@"struct"| block: {
-            var success = true;
-            var child_field_index = field_index;
-            for (@"struct".fields) |*field| {
-                const field_default_pointer = if (default_pointer_maybe) |default_pointer| block_default: {
-                    break :block_default offsetConstPointer(default_pointer, field.offset);
-                } else field.default_value;
-                const field_pointer = offsetPointer(lhs_pointer, field.offset);
-                const result = readNode(context, field.node, child_field_index, field_pointer, field_default_pointer);
-                if (result == .needs_parent_default) {
-                    success = false;
-                }
-                child_field_index += field.node.number_of_fields;
-            }
-            break :block success;
-        },
-        .array => |*array| block: {
-            var success = true;
-            const element = array.element;
-            for (0..array.len) |index| {
-                const offset = index * element.size;
-                const element_default_pointer = if (default_pointer_maybe) |default_pointer| block_default: {
-                    break :block_default offsetConstPointer(default_pointer, offset);
-                } else null;
-                const element_pointer = offsetPointer(lhs_pointer, offset);
-                const element_field_index = field_index + (index * element.number_of_fields);
-                const result = readNode(context, element, element_field_index, element_pointer, element_default_pointer);
-                if (result == .needs_parent_default) {
-                    success = false;
-                }
-            }
-            break :block success;
-        },
-        .optional => |*optional| block: {
-            const ops = optional.ops;
-            const data = context.getFieldData(field_index) orelse break :block false;
-            const is_some = readValue(bool, data) catch |err| {
-                context.handleReadError(err, field_index);
-                break :block false;
-            };
-            if (!is_some) {
-                ops.setNull(lhs_pointer);
-                break :block true;
-            }
-            if (!ops.isSome(lhs_pointer)) {
-                ops.setSome(lhs_pointer);
-            }
-            const payload_default_pointer = if (default_pointer_maybe) |default_pointer| block_default: {
-                if (!ops.isSome(default_pointer)) {
-                    break :block_default null;
-                }
-                break :block_default ops.getPayload(@constCast(default_pointer));
-            } else null;
-            const payload_pointer = ops.getPayload(lhs_pointer);
-            const result = readNode(context, optional.payload, field_index + 1, payload_pointer, payload_default_pointer);
-            break :block result == .completed;
-        },
-        .@"union" => |*@"union"| block: {
-            const ops = @"union".ops;
-            const data = context.getFieldData(field_index) orelse break :block false;
-            ops.readActiveTag(lhs_pointer, data) catch |err| {
-                context.handleReadError(err, field_index);
-                break :block false;
-            };
-            const index = ops.getActiveFieldIndex(lhs_pointer);
-            var variant_field_index = field_index + 1;
-            for (@"union".variants[0..index]) |variant| {
-                variant_field_index += variant.number_of_fields;
-            }
-            const variant_default_pointer = if (default_pointer_maybe) |default_pointer| block_default: {
-                if (ops.getActiveFieldIndex(default_pointer) != index) {
-                    break :block_default null;
-                }
-                break :block_default ops.getFieldPointer(@constCast(default_pointer), index);
-            } else null;
-            const variant_pointer = ops.getFieldPointer(lhs_pointer, index);
-            const variant = @"union".variants[index];
-            const result = readNode(context, variant, variant_field_index, variant_pointer, variant_default_pointer);
-            break :block result == .completed;
-        },
-    };
-    if (!success) {
-        const default_pointer = default_pointer_maybe orelse return .needs_parent_default;
-        copyBytes(lhs_pointer, default_pointer, node.size);
+    pub fn asSlice(self: *const Self) []const u8 {
+        return self.buffer[0..self.len];
     }
-    if (node.sanitize) |sanitize| {
-        sanitize(lhs_pointer);
+
+    pub fn push(self: *Self, component: []const u8) usize {
+        const saved_len = self.len;
+        if (self.len > 0) {
+            self.buffer[self.len] = path_separator;
+            self.len += 1;
+        }
+        @memcpy(self.buffer[self.len..][0..component.len], component);
+        self.len += component.len;
+        return saved_len;
     }
-    return .completed;
-}
 
-fn copyBytes(destination: *anyopaque, source: *const anyopaque, size: usize) void {
-    const destination_bytes: [*]u8 = @ptrCast(destination);
-    const source_bytes: [*]const u8 = @ptrCast(source);
-    @memcpy(destination_bytes[0..size], source_bytes[0..size]);
-}
+    pub fn pushIndex(self: *Self, index: usize) usize {
+        var index_buffer: [std.math.log10_int(@as(usize, std.math.maxInt(usize))) + 1]u8 = undefined;
+        const index_len = std.fmt.printInt(&index_buffer, index, 10, .lower, .{});
+        return self.push(index_buffer[0..index_len]);
+    }
 
-fn offsetPointer(pointer: *anyopaque, offset: usize) *anyopaque {
-    const bytes: [*]u8 = @ptrCast(pointer);
-    return @ptrCast(bytes + offset);
-}
-
-fn offsetConstPointer(pointer: *const anyopaque, offset: usize) *const anyopaque {
-    const bytes: [*]const u8 = @ptrCast(pointer);
-    return @ptrCast(bytes + offset);
-}
+    pub fn pop(self: *Self, saved_len: usize) void {
+        self.len = saved_len;
+    }
+};
 
 fn serializedSizeOf(Type: type) comptime_int {
     return switch (@typeInfo(Type)) {
