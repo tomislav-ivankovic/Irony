@@ -4,6 +4,7 @@ const misc = @import("../misc/root.zig");
 const math = @import("../math/root.zig");
 
 const buffer_size = 1024;
+const max_object_fields = 256;
 
 pub const JsonWhitespace = union(enum) {
     none: void,
@@ -71,7 +72,7 @@ pub fn writeJsonValue(
     writer: *std.Io.Writer,
     whitespace: *const JsonWhitespace,
 ) !void {
-    return writeNode(writer, getNode(Type), value, whitespace) catch |err| {
+    return writeValue(writer, TypeInfo.fromType(Type), value, whitespace) catch |err| {
         misc.error_context.append("Failed to write root value.", .{});
         return err;
     };
@@ -82,9 +83,8 @@ pub fn readJsonValue(comptime Type: type, reader: *std.Io.Reader, default: ?*con
     var allocator = std.heap.FixedBufferAllocator.init(&buffer);
     var json_reader = std.json.Reader.init(allocator.allocator(), reader);
     defer json_reader.deinit();
-    const context = ReadContext{ .reader = &json_reader, .allocator = allocator.allocator() };
     var value: Type = undefined;
-    readNode(&context, getNode(Type), &value, default) catch |err| {
+    readValue(&json_reader, allocator.allocator(), TypeInfo.fromType(Type), &value, default) catch |err| {
         misc.error_context.append("Failed to read root value.", .{});
         return err;
     };
@@ -102,7 +102,7 @@ pub fn writeLargeJsonArray(
     };
     for (slice, 0..) |*element, index| {
         errdefer misc.error_context.append("Failed to write array element at index: {}", .{index});
-        writeNode(writer, getNode(Element), element, &.none) catch |err| {
+        writeValue(writer, TypeInfo.fromType(Element), element, &.none) catch |err| {
             misc.error_context.append("Failed to write element value.", .{});
             return err;
         };
@@ -129,7 +129,6 @@ pub fn readLargeJsonArray(
     var buffer_allocator = std.heap.FixedBufferAllocator.init(&buffer);
     var json_reader = std.json.Reader.init(buffer_allocator.allocator(), reader);
     defer json_reader.deinit();
-    const context = ReadContext{ .reader = &json_reader, .allocator = buffer_allocator.allocator() };
 
     const begin_token = json_reader.next() catch |err| {
         misc.error_context.new("Failed to read array begin token.", .{});
@@ -153,7 +152,8 @@ pub fn readLargeJsonArray(
             break;
         }
         var element: Element = undefined;
-        readNode(&context, getNode(Element), &element, default_element) catch |err| {
+        const element_info = TypeInfo.fromType(Element);
+        readValue(&json_reader, buffer_allocator.allocator(), element_info, &element, default_element) catch |err| {
             misc.error_context.append("Failed to read element value.", .{});
             return err;
         };
@@ -171,16 +171,960 @@ pub fn readLargeJsonArray(
     return list;
 }
 
-const max_object_fields = 256;
+fn writeValue(
+    writer: *std.Io.Writer,
+    info: *const TypeInfo,
+    value_pointer: *const anyopaque,
+    whitespace: *const JsonWhitespace,
+) anyerror!void {
+    switch (info.kind) {
+        .void => writeVoid(writer) catch |err| {
+            misc.error_context.append("Failed to write void.", .{});
+            return err;
+        },
+        .primitive_value => |ops| ops.write(writer, value_pointer) catch |err| {
+            misc.error_context.append("Failed to write primitive value.", .{});
+            return err;
+        },
+        .@"enum" => |*@"enum"| {
+            const tag_name = @"enum".names[@"enum".ops.getIndex(value_pointer)];
+            std.json.Stringify.encodeJsonString(tag_name, .{}, writer) catch |err| {
+                misc.error_context.new("Failed to write enum value: {s}", .{tag_name});
+                return err;
+            };
+        },
+        .optional => |*optional| {
+            if (optional.ops.isSome(value_pointer)) {
+                const payload_pointer = optional.ops.getPayload(@constCast(value_pointer));
+                writeValue(writer, optional.payload, payload_pointer, whitespace) catch |err| {
+                    misc.error_context.append("Failed to write optional's payload.", .{});
+                    return err;
+                };
+            } else {
+                writer.writeAll("null") catch |err| {
+                    misc.error_context.new("Failed to write optional's null value.", .{});
+                    return err;
+                };
+            }
+        },
+        .array => |*array| {
+            const indented_whitespace = whitespace.indented();
+            writer.writeByte('[') catch |err| {
+                misc.error_context.new("Failed to write array begin token.", .{});
+                return err;
+            };
+            indented_whitespace.write(writer) catch |err| {
+                misc.error_context.append("Failed to write first element whitespace.", .{});
+                return err;
+            };
+            for (0..array.len) |index| {
+                errdefer misc.error_context.append("Failed to write array element at index: {}", .{index});
+                const element_pointer = offsetConstPointer(value_pointer, index * array.element.size);
+                writeValue(writer, array.element, element_pointer, &indented_whitespace) catch |err| {
+                    misc.error_context.append("Failed to write element value.", .{});
+                    return err;
+                };
+                if (index < array.len - 1) {
+                    writer.writeByte(',') catch |err| {
+                        misc.error_context.new("Failed to write next element separator.", .{});
+                        return err;
+                    };
+                    indented_whitespace.write(writer) catch |err| {
+                        misc.error_context.append("Failed to write next element whitespace.", .{});
+                        return err;
+                    };
+                }
+            }
+            whitespace.write(writer) catch |err| {
+                misc.error_context.append("Failed to write array end token whitespace.", .{});
+                return err;
+            };
+            writer.writeByte(']') catch |err| {
+                misc.error_context.new("Failed to write array end token.", .{});
+                return err;
+            };
+        },
+        .tuple => |*tuple| {
+            const indented_whitespace = whitespace.indented();
+            writer.writeByte('[') catch |err| {
+                misc.error_context.new("Failed to write tuple begin token.", .{});
+                return err;
+            };
+            indented_whitespace.write(writer) catch |err| {
+                misc.error_context.append("Failed to write first field whitespace.", .{});
+                return err;
+            };
+            for (tuple.fields, 0..) |*field, index| {
+                errdefer misc.error_context.append("Failed to write tuple field: {}", .{index});
+                const field_pointer = offsetConstPointer(value_pointer, field.offset);
+                writeValue(writer, field.info, field_pointer, &indented_whitespace) catch |err| {
+                    misc.error_context.append("Failed to write field value.", .{});
+                    return err;
+                };
+                if (index < tuple.fields.len - 1) {
+                    writer.writeByte(',') catch |err| {
+                        misc.error_context.new("Failed to write next field separator.", .{});
+                        return err;
+                    };
+                    indented_whitespace.write(writer) catch |err| {
+                        misc.error_context.append("Failed to write next field whitespace.", .{});
+                        return err;
+                    };
+                }
+            }
+            whitespace.write(writer) catch |err| {
+                misc.error_context.append("Failed to write tuple end token whitespace.", .{});
+                return err;
+            };
+            writer.writeByte(']') catch |err| {
+                misc.error_context.new("Failed to write tuple end token.", .{});
+                return err;
+            };
+        },
+        .@"struct" => |*@"struct"| {
+            const indented_whitespace = whitespace.indented();
+            writer.writeByte('{') catch |err| {
+                misc.error_context.new("Failed to write struct begin token.", .{});
+                return err;
+            };
+            indented_whitespace.write(writer) catch |err| {
+                misc.error_context.append("Failed to write first field whitespace.", .{});
+                return err;
+            };
+            for (@"struct".fields, 0..) |*field, index| {
+                errdefer misc.error_context.append("Failed to write struct field: {s}", .{field.name});
+                std.json.Stringify.encodeJsonString(field.name, .{}, writer) catch |err| {
+                    misc.error_context.new("Failed to write field name.", .{});
+                    return err;
+                };
+                writer.writeByte(':') catch |err| {
+                    misc.error_context.new("Failed to write name value separator.", .{});
+                    return err;
+                };
+                indented_whitespace.writeSpace(writer) catch |err| {
+                    misc.error_context.append("Failed to write field value whitespace.", .{});
+                    return err;
+                };
+                const field_pointer = offsetConstPointer(value_pointer, field.offset);
+                writeValue(writer, field.info, field_pointer, &indented_whitespace) catch |err| {
+                    misc.error_context.append("Failed to write field value.", .{});
+                    return err;
+                };
+                if (index < @"struct".fields.len - 1) {
+                    writer.writeByte(',') catch |err| {
+                        misc.error_context.new("Failed to write next field separator.", .{});
+                        return err;
+                    };
+                    indented_whitespace.write(writer) catch |err| {
+                        misc.error_context.append("Failed to write next field whitespace.", .{});
+                        return err;
+                    };
+                }
+            }
+            whitespace.write(writer) catch |err| {
+                misc.error_context.append("Failed to write struct end token whitespace.", .{});
+                return err;
+            };
+            writer.writeByte('}') catch |err| {
+                misc.error_context.new("Failed to write struct end token.", .{});
+                return err;
+            };
+        },
+        .@"union" => |*@"union"| {
+            const field_index = @"union".ops.getActiveFieldIndex(value_pointer);
+            const tag_name = @"union".names[field_index];
+            writer.writeAll("{ ") catch |err| {
+                misc.error_context.new("Failed to write union begin token.", .{});
+                return err;
+            };
+            std.json.Stringify.encodeJsonString(tag_name, .{}, writer) catch |err| {
+                misc.error_context.new("Failed to write union's tag: {s}", .{tag_name});
+                return err;
+            };
+            writer.writeByte(':') catch |err| {
+                misc.error_context.new("Failed to write union's tag payload separator: {s}", .{tag_name});
+                return err;
+            };
+            whitespace.writeSpace(writer) catch |err| {
+                misc.error_context.append("Failed to write union's tag payload whitespace.", .{});
+                return err;
+            };
+            const payload_pointer = @"union".ops.getFieldPointer(@constCast(value_pointer), field_index);
+            writeValue(writer, @"union".variants[field_index], payload_pointer, whitespace) catch |err| {
+                misc.error_context.append("Failed to write union's payload: {s}", .{tag_name});
+                return err;
+            };
+            writer.writeAll(" }") catch |err| {
+                misc.error_context.new("Failed to write union end token.", .{});
+                return err;
+            };
+        },
+        .@"packed" => |ops| ops.write(writer, value_pointer, whitespace) catch |err| {
+            misc.error_context.append("Failed to write packed value.", .{});
+            return err;
+        },
+        .bounded_array => |*array| {
+            const len = array.ops.getLen(value_pointer);
+            const buffer_pointer = offsetConstPointer(value_pointer, array.buffer_offset);
+            if (array.is_string) {
+                const string = @as([*]const u8, @ptrCast(buffer_pointer))[0..len];
+                std.json.Stringify.encodeJsonString(string, .{}, writer) catch |err| {
+                    misc.error_context.new("Failed to write bounded string value: {s}", .{string});
+                    return err;
+                };
+                return;
+            }
+            const indented_whitespace = whitespace.indented();
+            writer.writeByte('[') catch |err| {
+                misc.error_context.new("Failed to write bounded array begin token.", .{});
+                return err;
+            };
+            indented_whitespace.write(writer) catch |err| {
+                misc.error_context.append("Failed to write first element whitespace.", .{});
+                return err;
+            };
+            for (0..len) |index| {
+                errdefer misc.error_context.append("Failed to write bounded array element: {}", .{index});
+                const element_pointer = offsetConstPointer(buffer_pointer, index * array.element.size);
+                writeValue(writer, array.element, element_pointer, &indented_whitespace) catch |err| {
+                    misc.error_context.append("Failed to write element value.", .{});
+                    return err;
+                };
+                if (index < len - 1) {
+                    writer.writeByte(',') catch |err| {
+                        misc.error_context.new("Failed to write next element separator.", .{});
+                        return err;
+                    };
+                    indented_whitespace.write(writer) catch |err| {
+                        misc.error_context.append("Failed to write next element whitespace.", .{});
+                        return err;
+                    };
+                }
+            }
+            whitespace.write(writer) catch |err| {
+                misc.error_context.append("Failed to write bounded array end token whitespace.", .{});
+                return err;
+            };
+            writer.writeByte(']') catch |err| {
+                misc.error_context.new("Failed to write bounded array end token.", .{});
+                return err;
+            };
+        },
+        .enum_array => |*array| {
+            const indented_whitespace = whitespace.indented();
+            writer.writeByte('{') catch |err| {
+                misc.error_context.new("Failed to write enum array start token.", .{});
+                return err;
+            };
+            indented_whitespace.write(writer) catch |err| {
+                misc.error_context.append("Failed to write first entry whitespace.", .{});
+                return err;
+            };
+            for (array.entries, 0..) |*entry, index| {
+                errdefer misc.error_context.append("Failed to write enum array entry: {s}", .{entry.name});
+                std.json.Stringify.encodeJsonString(entry.name, .{}, writer) catch |err| {
+                    misc.error_context.new("Failed to write entry key.", .{});
+                    return err;
+                };
+                writer.writeByte(':') catch |err| {
+                    misc.error_context.new("Failed to write key value separator.", .{});
+                    return err;
+                };
+                indented_whitespace.writeSpace(writer) catch |err| {
+                    misc.error_context.append("Failed to write entry value whitespace.", .{});
+                    return err;
+                };
+                const entry_pointer = offsetConstPointer(value_pointer, entry.offset);
+                writeValue(writer, array.value, entry_pointer, &indented_whitespace) catch |err| {
+                    misc.error_context.append("Failed to write entry value.", .{});
+                    return err;
+                };
+                if (index < array.entries.len - 1) {
+                    writer.writeByte(',') catch |err| {
+                        misc.error_context.new("Failed to write next entry separator.", .{});
+                        return err;
+                    };
+                    indented_whitespace.write(writer) catch |err| {
+                        misc.error_context.append("Failed to write next entry whitespace.", .{});
+                        return err;
+                    };
+                }
+            }
+            whitespace.write(writer) catch |err| {
+                misc.error_context.append("Failed to write enum array end token whitespace.", .{});
+                return err;
+            };
+            writer.writeByte('}') catch |err| {
+                misc.error_context.new("Failed to write enum array end token.", .{});
+                return err;
+            };
+        },
+        .single_line => |*single_line| {
+            const inner_whitespace: JsonWhitespace = switch (whitespace.*) {
+                .none => .none,
+                .space => .space,
+                .new_line => .space,
+            };
+            const inner_pointer = offsetConstPointer(value_pointer, single_line.offset);
+            writeValue(writer, single_line.info, inner_pointer, &inner_whitespace) catch |err| {
+                misc.error_context.append("Failed to write {s}'s array.", .{single_line.name});
+                return err;
+            };
+        },
+    }
+}
 
-const Node = struct {
+fn readValue(
+    reader: *std.json.Reader,
+    allocator: std.mem.Allocator,
+    info: *const TypeInfo,
+    value_pointer: *anyopaque,
+    default_pointer: ?*const anyopaque,
+) anyerror!void {
+    const start_height = reader.stackHeight();
+    readValueInner(reader, allocator, info, value_pointer, default_pointer) catch |err| {
+        recoverFromReadError(reader, err, start_height, default_pointer != null) catch |recover_err| {
+            misc.error_context.append("Failed to recover from read error.", .{});
+            return recover_err;
+        };
+        copyBytes(value_pointer, default_pointer.?, info.size);
+    };
+    if (info.sanitize) |sanitize| {
+        sanitize(value_pointer);
+    }
+}
+
+fn recoverFromReadError(reader: *std.json.Reader, err: anyerror, start_height: usize, has_default: bool) !void {
+    if (reader.stackHeight() != start_height) {
+        reader.skipUntilStackHeight(start_height) catch |skip_err| {
+            misc.error_context.new("Failed to skip the invalid value.", .{});
+            return skip_err;
+        };
+    }
+    if (has_default) {
+        misc.error_context.append("Falling back to default value.", .{});
+        if (!builtin.is_test) {
+            misc.error_context.logWarning(err);
+        }
+    } else {
+        misc.error_context.append("No default value to fall back to.", .{});
+        return err;
+    }
+}
+
+fn readValueInner(
+    reader: *std.json.Reader,
+    allocator: std.mem.Allocator,
+    info: *const TypeInfo,
+    value_pointer: *anyopaque,
+    default_pointer: ?*const anyopaque,
+) anyerror!void {
+    switch (info.kind) {
+        .void => readVoid(reader) catch |err| {
+            misc.error_context.append("Failed to read void.", .{});
+            return err;
+        },
+        .primitive_value => |ops| ops.read(reader, allocator, value_pointer) catch |err| {
+            misc.error_context.append("Failed to read primitive value.", .{});
+            return err;
+        },
+        .@"enum" => |*@"enum"| {
+            const index = readEnumIndex(reader, allocator, @"enum".names) catch |err| {
+                misc.error_context.append("Failed to read enum value.", .{});
+                return err;
+            };
+            @"enum".ops.setIndex(value_pointer, index);
+        },
+        .optional => |*optional| {
+            const ops = optional.ops;
+            const token_type = reader.peekNextTokenType() catch |err| {
+                misc.error_context.new("Failed to peek optional token type.", .{});
+                return err;
+            };
+            if (token_type == .null) {
+                _ = reader.next() catch |err| {
+                    misc.error_context.new("Failed to read null token.", .{});
+                    return err;
+                };
+                ops.setNull(value_pointer);
+                return;
+            }
+            const default_payload_pointer = if (default_pointer) |pointer| block: {
+                if (!ops.isSome(pointer)) {
+                    break :block null;
+                }
+                break :block ops.getPayload(@constCast(pointer));
+            } else null;
+            ops.setSome(value_pointer);
+            const payload_pointer = ops.getPayload(value_pointer);
+            readValue(reader, allocator, optional.payload, payload_pointer, default_payload_pointer) catch |err| {
+                misc.error_context.append("Failed to read optional's payload.", .{});
+                return err;
+            };
+        },
+        .array => |*array| {
+            const begin_token = reader.next() catch |err| {
+                misc.error_context.new("Failed to read array begin token.", .{});
+                return err;
+            };
+            if (begin_token != .array_begin) {
+                misc.error_context.new("Expected array begin token but got: {s}", .{@tagName(begin_token)});
+                return error.UnexpectedToken;
+            }
+            if (default_pointer) |pointer| {
+                copyBytes(value_pointer, pointer, info.size);
+            }
+            var index: usize = 0;
+            while (true) {
+                errdefer misc.error_context.append("Failed to read array element at index: {}", .{index});
+                const token_type = reader.peekNextTokenType() catch |err| {
+                    misc.error_context.new("Failed to peek element token type.", .{});
+                    return err;
+                };
+                if (token_type == .array_end) {
+                    break;
+                }
+                if (index < array.len) {
+                    const offset = index * array.element.size;
+                    const default_element_pointer = if (default_pointer) |pointer| block: {
+                        break :block offsetConstPointer(pointer, offset);
+                    } else null;
+                    const element_pointer = offsetPointer(value_pointer, offset);
+                    readValue(reader, allocator, array.element, element_pointer, default_element_pointer) catch |err| {
+                        misc.error_context.append("Failed to read element value.", .{});
+                        return err;
+                    };
+                } else {
+                    reader.skipValue() catch |err| {
+                        misc.error_context.new("Failed to skip element value.", .{});
+                        return err;
+                    };
+                }
+                index += 1;
+            }
+            _ = reader.next() catch |err| {
+                misc.error_context.new("Failed to read array end token.", .{});
+                return err;
+            };
+            if (default_pointer == null and index < array.len) {
+                misc.error_context.new("JSON array ended early with length: {}", .{index});
+                return error.EarlyEnd;
+            }
+        },
+        .tuple => |*tuple| {
+            const begin_token = reader.next() catch |err| {
+                misc.error_context.new("Failed to read tuple begin token.", .{});
+                return err;
+            };
+            if (begin_token != .array_begin) {
+                misc.error_context.new("Expected array begin token but got: {s}", .{@tagName(begin_token)});
+                return error.UnexpectedToken;
+            }
+            if (default_pointer) |pointer| {
+                copyBytes(value_pointer, pointer, info.size);
+            }
+            var index: usize = 0;
+            for (tuple.fields) |*field| {
+                errdefer misc.error_context.append("Failed to read tuple field: {}", .{index});
+                const token_type = reader.peekNextTokenType() catch |err| {
+                    misc.error_context.new("Failed to peek field token type.", .{});
+                    return err;
+                };
+                if (token_type == .array_end) {
+                    break;
+                }
+                const default_field_pointer = if (default_pointer) |pointer| block: {
+                    break :block offsetConstPointer(pointer, field.offset);
+                } else null;
+                const field_pointer = offsetPointer(value_pointer, field.offset);
+                readValue(reader, allocator, field.info, field_pointer, default_field_pointer) catch |err| {
+                    misc.error_context.append("Failed to read field value.", .{});
+                    return err;
+                };
+                index += 1;
+            }
+            while (true) {
+                errdefer misc.error_context.append("Failed to skip tuple field: {}", .{index});
+                const token_type = reader.peekNextTokenType() catch |err| {
+                    misc.error_context.new("Failed to peek field token type.", .{});
+                    return err;
+                };
+                if (token_type == .array_end) {
+                    break;
+                }
+                reader.skipValue() catch |err| {
+                    misc.error_context.new("Failed to skip field value.", .{});
+                    return err;
+                };
+                index += 1;
+            }
+            _ = reader.next() catch |err| {
+                misc.error_context.new("Failed to read tuple end token.", .{});
+                return err;
+            };
+            if (default_pointer == null and index < tuple.fields.len) {
+                misc.error_context.new("JSON array ended early with length: {}", .{index});
+                return error.EarlyEnd;
+            }
+        },
+        .@"struct" => |*@"struct"| {
+            const begin_token = reader.next() catch |err| {
+                misc.error_context.new("Failed to read struct begin token.", .{});
+                return err;
+            };
+            if (begin_token != .object_begin) {
+                misc.error_context.new("Expected object begin token but got: {s}", .{@tagName(begin_token)});
+                return error.UnexpectedToken;
+            }
+            if (default_pointer) |pointer| {
+                copyBytes(value_pointer, pointer, info.size);
+            }
+            var found_fields_buffer: [max_object_fields]bool = undefined;
+            const found_fields = found_fields_buffer[0..@"struct".fields.len];
+            @memset(found_fields, default_pointer != null);
+            while (true) {
+                const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
+                    misc.error_context.new("Failed to read next struct field token.", .{});
+                    return err;
+                };
+                var is_token_freed = false;
+                defer if (!is_token_freed) {
+                    freeIfAllocated(allocator, token);
+                    is_token_freed = true;
+                };
+                const key = switch (token) {
+                    .allocated_string => |string| string,
+                    .object_end => break,
+                    else => {
+                        misc.error_context.new("Expected string or object end token but got: {s}", .{@tagName(token)});
+                        return error.UnexpectedToken;
+                    },
+                };
+                var field_found = false;
+                for (@"struct".fields, found_fields) |*field, *found| {
+                    if (std.mem.eql(u8, field.name, key)) {
+                        if (!is_token_freed) { // Field name is not needed while parsing the field value.
+                            freeIfAllocated(allocator, token);
+                            is_token_freed = true;
+                        }
+                        const default_field_pointer = if (default_pointer) |pointer| block: {
+                            break :block offsetConstPointer(pointer, field.offset);
+                        } else field.default_value;
+                        const field_pointer = offsetPointer(value_pointer, field.offset);
+                        readValue(reader, allocator, field.info, field_pointer, default_field_pointer) catch |err| {
+                            misc.error_context.append("Failed to read field value: {s}", .{field.name});
+                            return err;
+                        };
+                        field_found = true;
+                        found.* = true;
+                        break;
+                    }
+                }
+                if (!field_found) {
+                    reader.skipValue() catch |err| {
+                        misc.error_context.new("Failed to skip field value: {s}", .{key});
+                        return err;
+                    };
+                }
+            }
+            for (@"struct".fields, found_fields) |*field, found| {
+                if (!found) {
+                    const err = error.FieldNotFound;
+                    misc.error_context.new("Failed to find struct field inside JSON object: {s}", .{field.name});
+                    const default_field_pointer = if (default_pointer) |pointer| block: {
+                        break :block offsetConstPointer(pointer, field.offset);
+                    } else field.default_value;
+                    if (default_field_pointer) |pointer| {
+                        misc.error_context.append("Falling back to default value.", .{});
+                        if (!builtin.is_test) {
+                            misc.error_context.logWarning(err);
+                        }
+                        const field_pointer = offsetPointer(value_pointer, field.offset);
+                        copyBytes(field_pointer, pointer, field.info.size);
+                        if (field.info.sanitize) |sanitize| {
+                            sanitize(field_pointer);
+                        }
+                    } else {
+                        return err;
+                    }
+                }
+            }
+        },
+        .@"union" => |*@"union"| {
+            const ops = @"union".ops;
+            const begin_token = reader.next() catch |err| {
+                misc.error_context.new("Failed to read union begin token.", .{});
+                return err;
+            };
+            if (begin_token != .object_begin) {
+                misc.error_context.new("Expected object begin token but got: {s}", .{@tagName(begin_token)});
+                return error.UnexpectedToken;
+            }
+            const default_field_index = if (default_pointer) |pointer| ops.getActiveFieldIndex(pointer) else null;
+            const tag_start_height = reader.stackHeight();
+            const field_index = readEnumIndex(reader, allocator, @"union".names) catch |err| block: {
+                recoverFromReadError(reader, err, tag_start_height, default_field_index != null) catch |e| {
+                    misc.error_context.append("Failed to read union's tag. ({s})", .{@"union".tag_type_name});
+                    return e;
+                };
+                break :block default_field_index.?;
+            };
+            ops.setActiveField(value_pointer, field_index);
+            const default_payload_pointer = if (default_field_index == field_index) block: {
+                break :block ops.getFieldPointer(@constCast(default_pointer.?), field_index);
+            } else null;
+            const payload_pointer = ops.getFieldPointer(value_pointer, field_index);
+            const variant = @"union".variants[field_index];
+            readValue(reader, allocator, variant, payload_pointer, default_payload_pointer) catch |err| {
+                misc.error_context.append("Failed to read union's payload.", .{});
+                return err;
+            };
+            const end_token = reader.next() catch |err| {
+                misc.error_context.new("Failed to read union end token.", .{});
+                return err;
+            };
+            if (end_token != .object_end) {
+                misc.error_context.new("Expected object end token but got: {s}", .{@tagName(end_token)});
+                return error.UnexpectedToken;
+            }
+        },
+        .@"packed" => |ops| ops.read(reader, allocator, value_pointer, default_pointer) catch |err| {
+            misc.error_context.append("Failed to read packed value.", .{});
+            return err;
+        },
+        .bounded_array => |*array| {
+            const ops = array.ops;
+            if (array.is_string) {
+                const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
+                    misc.error_context.new("Failed to read bounded string token.", .{});
+                    return err;
+                };
+                defer freeIfAllocated(allocator, token);
+                const string = switch (token) {
+                    .allocated_string => |string| string,
+                    else => {
+                        misc.error_context.new("Expected a string token but got: {s}", .{@tagName(token)});
+                        return error.UnexpectedToken;
+                    },
+                };
+                ops.setStringTrimmed(value_pointer, string);
+                return;
+            }
+            const begin_token = reader.next() catch |err| {
+                misc.error_context.new("Failed to read bounded array begin token.", .{});
+                return err;
+            };
+            if (begin_token != .array_begin) {
+                misc.error_context.new("Expected array begin token but got: {s}", .{@tagName(begin_token)});
+                return error.UnexpectedToken;
+            }
+            const default_len = if (default_pointer) |pointer| ops.getLen(pointer) else 0;
+            const buffer_pointer = offsetPointer(value_pointer, array.buffer_offset);
+            ops.setEmpty(value_pointer);
+            var len: usize = 0;
+            var index: usize = 0;
+            while (true) {
+                errdefer misc.error_context.append("Failed to read bounded array element at index: {}", .{index});
+                const token_type = reader.peekNextTokenType() catch |err| {
+                    misc.error_context.new("Failed to peek element token type.", .{});
+                    return err;
+                };
+                if (token_type == .array_end) {
+                    break;
+                }
+                if (len < array.max_len) {
+                    const offset = len * array.element.size;
+                    const default_element_pointer = if (index < default_len) block: {
+                        const default_buffer_pointer = offsetConstPointer(default_pointer.?, array.buffer_offset);
+                        break :block offsetConstPointer(default_buffer_pointer, index * array.element.size);
+                    } else null;
+                    const element_pointer = offsetPointer(buffer_pointer, offset);
+                    readValue(reader, allocator, array.element, element_pointer, default_element_pointer) catch |err| {
+                        misc.error_context.append("Failed to read element value.", .{});
+                        return err;
+                    };
+                    len += 1;
+                    ops.setLen(value_pointer, len);
+                } else {
+                    reader.skipValue() catch |err| {
+                        misc.error_context.new("Failed to skip element value.", .{});
+                        return err;
+                    };
+                }
+                index += 1;
+            }
+            _ = reader.next() catch |err| {
+                misc.error_context.new("Failed to read bounded array end token.", .{});
+                return err;
+            };
+        },
+        .enum_array => |*array| {
+            const begin_token = reader.next() catch |err| {
+                misc.error_context.new("Failed to read enum array begin token.", .{});
+                return err;
+            };
+            if (begin_token != .object_begin) {
+                misc.error_context.new("Expected object begin token but got: {s}", .{@tagName(begin_token)});
+                return error.UnexpectedToken;
+            }
+            if (default_pointer) |pointer| {
+                copyBytes(value_pointer, pointer, info.size);
+            }
+            var found_keys_buffer: [max_object_fields]bool = undefined;
+            const found_keys = found_keys_buffer[0..array.entries.len];
+            @memset(found_keys, default_pointer != null);
+            while (true) {
+                const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
+                    misc.error_context.new("Failed to read next enum array entry token.", .{});
+                    return err;
+                };
+                var is_token_freed = false;
+                defer if (!is_token_freed) {
+                    freeIfAllocated(allocator, token);
+                    is_token_freed = true;
+                };
+                const key_name = switch (token) {
+                    .allocated_string => |string| string,
+                    .object_end => break,
+                    else => {
+                        misc.error_context.new("Expected string or object end token but got: {s}", .{@tagName(token)});
+                        return error.UnexpectedToken;
+                    },
+                };
+                var key_found = false;
+                for (array.entries, found_keys) |*entry, *found| {
+                    if (std.mem.eql(u8, entry.name, key_name)) {
+                        errdefer misc.error_context.append("Failed to read enum array entry: {s}", .{entry.name});
+                        if (!is_token_freed) { // Key name is not needed while parsing the value.
+                            freeIfAllocated(allocator, token);
+                            is_token_freed = true;
+                        }
+                        const default_entry_pointer = if (default_pointer) |pointer| block: {
+                            break :block offsetConstPointer(pointer, entry.offset);
+                        } else null;
+                        const entry_pointer = offsetPointer(value_pointer, entry.offset);
+                        readValue(reader, allocator, array.value, entry_pointer, default_entry_pointer) catch |err| {
+                            misc.error_context.append("Failed to read entry value.", .{});
+                            return err;
+                        };
+                        key_found = true;
+                        found.* = true;
+                        break;
+                    }
+                }
+                if (!key_found) {
+                    reader.skipValue() catch |err| {
+                        misc.error_context.new("Failed to skip enum array entry value: {s}", .{key_name});
+                        return err;
+                    };
+                }
+            }
+            for (array.entries, found_keys) |*entry, found| {
+                if (!found) {
+                    misc.error_context.new("Failed to find enum array entry inside JSON object: {s}", .{entry.name});
+                    return error.EntryNotFound;
+                }
+            }
+        },
+        .single_line => |*single_line| {
+            const default_inner_pointer = if (default_pointer) |pointer| block: {
+                break :block offsetConstPointer(pointer, single_line.offset);
+            } else null;
+            const inner_pointer = offsetPointer(value_pointer, single_line.offset);
+            readValue(reader, allocator, single_line.info, inner_pointer, default_inner_pointer) catch |err| {
+                misc.error_context.append("Failed to read {s}'s array.", .{single_line.name});
+                return err;
+            };
+        },
+    }
+}
+
+fn readEnumIndex(reader: *std.json.Reader, allocator: std.mem.Allocator, names: []const [:0]const u8) !usize {
+    const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
+        misc.error_context.new("Failed to read enum value token.", .{});
+        return err;
+    };
+    defer freeIfAllocated(allocator, token);
+    const string = switch (token) {
+        .allocated_string => |string| string,
+        else => {
+            misc.error_context.new("Expected a string token but got: {s}", .{@tagName(token)});
+            return error.UnexpectedToken;
+        },
+    };
+    for (names, 0..) |name, index| {
+        if (std.mem.eql(u8, name, string)) {
+            return index;
+        }
+    }
+    misc.error_context.new("Invalid enum value: {s}", .{string});
+    return error.InvalidEnumValue;
+}
+
+fn copyBytes(destination: *anyopaque, source: *const anyopaque, size: usize) void {
+    const destination_bytes: [*]u8 = @ptrCast(destination);
+    const source_bytes: [*]const u8 = @ptrCast(source);
+    @memcpy(destination_bytes[0..size], source_bytes[0..size]);
+}
+
+fn offsetPointer(pointer: *anyopaque, offset: usize) *anyopaque {
+    const bytes: [*]u8 = @ptrCast(pointer);
+    return @ptrCast(bytes + offset);
+}
+
+fn offsetConstPointer(pointer: *const anyopaque, offset: usize) *const anyopaque {
+    const bytes: [*]const u8 = @ptrCast(pointer);
+    return @ptrCast(bytes + offset);
+}
+
+fn writeVoid(writer: *std.Io.Writer) !void {
+    writer.writeAll("{}") catch |err| {
+        misc.error_context.new("Failed to write void value.", .{});
+        return err;
+    };
+}
+
+fn readVoid(reader: *std.json.Reader) !void {
+    const token_type = reader.peekNextTokenType() catch |err| {
+        misc.error_context.new("Failed to peek void token type.", .{});
+        return err;
+    };
+    if (token_type != .object_begin) {
+        misc.error_context.new("Expected object begin token but got: {s}", .{@tagName(token_type)});
+        return error.UnexpectedToken;
+    }
+    reader.skipValue() catch |err| {
+        misc.error_context.new("Failed to skip void value.", .{});
+        return err;
+    };
+}
+
+fn writeBool(writer: *std.Io.Writer, value: bool) !void {
+    const string = if (value) "true" else "false";
+    writer.writeAll(string) catch |err| {
+        misc.error_context.new("Failed to write boolean value: {s}", .{string});
+        return err;
+    };
+}
+
+fn readBool(reader: *std.json.Reader) !bool {
+    const token = reader.next() catch |err| {
+        misc.error_context.new("Failed to read boolean value token.", .{});
+        return err;
+    };
+    switch (token) {
+        .false => return false,
+        .true => return true,
+        else => {
+            misc.error_context.new("Expected true or false token but got: {s}", .{@tagName(token)});
+            return error.UnexpectedToken;
+        },
+    }
+}
+
+fn writeInt(writer: *std.Io.Writer, value: anytype) !void {
+    writer.print("{}", .{value}) catch |err| {
+        misc.error_context.new("Failed to write int value: {}", .{value});
+        return err;
+    };
+}
+
+fn readInt(Type: type, reader: *std.json.Reader, allocator: std.mem.Allocator) !Type {
+    const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
+        misc.error_context.new("Failed to read int value token.", .{});
+        return err;
+    };
+    defer freeIfAllocated(allocator, token);
+    const string = switch (token) {
+        .allocated_number => |string| string,
+        else => {
+            misc.error_context.new("Expected a number token but got: {s}", .{@tagName(token)});
+            return error.UnexpectedToken;
+        },
+    };
+    return std.fmt.parseInt(Type, string, 10) catch |err| {
+        misc.error_context.new("Failed to parse string as integer: {s}", .{string});
+        return err;
+    };
+}
+
+fn writeFloat(writer: *std.Io.Writer, value: anytype) !void {
+    writer.print("{}", .{value}) catch |err| {
+        misc.error_context.new("Failed to write float value: {}", .{value});
+        return err;
+    };
+}
+
+fn readFloat(Type: type, reader: *std.json.Reader, allocator: std.mem.Allocator) !Type {
+    const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
+        misc.error_context.new("Failed to read float value token.", .{});
+        return err;
+    };
+    defer freeIfAllocated(allocator, token);
+    const string = switch (token) {
+        .allocated_number => |string| string,
+        else => {
+            misc.error_context.new("Expected a number token but got: {s}", .{@tagName(token)});
+            return error.UnexpectedToken;
+        },
+    };
+    return std.fmt.parseFloat(Type, string) catch |err| {
+        misc.error_context.new("Failed to parse string as float: {s}", .{string});
+        return err;
+    };
+}
+
+fn freeIfAllocated(allocator: std.mem.Allocator, token: std.json.Token) void {
+    switch (token) {
+        .allocated_number, .allocated_string => |slice| {
+            allocator.free(slice);
+        },
+        else => {},
+    }
+}
+
+inline fn isBoundedArray(Type: type) bool {
+    comptime return hasTag(Type, misc.bounded_array_tag);
+}
+
+inline fn isEnumArray(Type: type) bool {
+    comptime {
+        const info = @typeInfo(Type);
+        if (info != .@"struct") return false;
+        if (!@hasDecl(Type, "Indexer")) return false;
+        if (!@hasDecl(Type, "Key")) return false;
+        if (!@hasDecl(Type, "Value")) return false;
+        if (!@hasDecl(Type, "len")) return false;
+        return true;
+    }
+}
+
+inline fn isVector(Type: type) bool {
+    comptime return hasTag(Type, math.vector_tag);
+}
+
+inline fn isMatrix(Type: type) bool {
+    comptime return hasTag(Type, math.matrix_tag);
+}
+
+inline fn hasTag(Type: type, comptime tag: type) bool {
+    comptime {
+        const info = @typeInfo(Type);
+        if (info != .@"struct" and info != .@"enum" and info != .@"union") return false;
+        if (!@hasDecl(Type, "tag")) return false;
+        if (@TypeOf(Type.tag) != type) return false;
+        return Type.tag == tag;
+    }
+}
+
+const TypeInfo = struct {
     size: usize,
     sanitize: ?*const fn (value_pointer: *anyopaque) void,
     kind: Kind,
 
     pub const Kind = union(enum) {
         void: void,
-        value: *const ValueOps,
+        primitive_value: *const PrimitiveValueOps,
         @"enum": Enum,
         optional: Optional,
         array: Array,
@@ -197,19 +1141,19 @@ const Node = struct {
         ops: *const EnumOps,
     };
     pub const Optional = struct {
-        payload: *const Node,
+        payload: *const TypeInfo,
         ops: *const OptionalOps,
     };
     pub const Array = struct {
         len: usize,
-        element: *const Node,
+        element: *const TypeInfo,
     };
     pub const Tuple = struct {
         fields: []const TupleField,
     };
     pub const TupleField = struct {
         offset: usize,
-        node: *const Node,
+        info: *const TypeInfo,
     };
     pub const Struct = struct {
         fields: []const StructField,
@@ -218,24 +1162,24 @@ const Node = struct {
         name: [:0]const u8,
         offset: usize,
         default_value: ?*const anyopaque,
-        node: *const Node,
+        info: *const TypeInfo,
     };
     pub const Union = struct {
         tag_type_name: [:0]const u8,
         names: []const [:0]const u8,
-        variants: []const *const Node,
+        variants: []const *const TypeInfo,
         ops: *const UnionOps,
     };
     pub const BoundedArray = struct {
         max_len: usize,
         buffer_offset: usize,
         is_string: bool,
-        element: *const Node,
+        element: *const TypeInfo,
         ops: *const BoundedArrayOps,
     };
     pub const EnumArray = struct {
         entries: []const EnumArrayEntry,
-        value: *const Node,
+        value: *const TypeInfo,
     };
     pub const EnumArrayEntry = struct {
         name: [:0]const u8,
@@ -244,15 +1188,182 @@ const Node = struct {
     pub const SingleLine = struct {
         name: [:0]const u8,
         offset: usize,
-        node: *const Node,
+        info: *const TypeInfo,
     };
+
+    pub inline fn fromType(Type: type) *const TypeInfo {
+        return comptime &Of(Type).info;
+    }
+
+    fn Of(Type: type) type {
+        return struct {
+            const info = build(Type);
+        };
+    }
+
+    fn build(Type: type) TypeInfo {
+        if (isBoundedArray(Type)) {
+            return .{
+                .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
+                .kind = .{ .bounded_array = .{
+                    .max_len = Type.max_len,
+                    .buffer_offset = @offsetOf(Type, "buffer"),
+                    .is_string = Type.Child == u8,
+                    .element = fromType(Type.Child),
+                    .ops = BoundedArrayOps.fromType(Type),
+                } },
+            };
+        }
+        if (isEnumArray(Type)) {
+            const key_names = @typeInfo(Type.Key).@"enum".field_names;
+            if (key_names.len > max_object_fields) {
+                @compileError("Enum array " ++ @typeName(Type) ++ " has too many keys.");
+            }
+            var entries: [key_names.len]TypeInfo.EnumArrayEntry = undefined;
+            for (key_names, &entries) |key_name, *entry| {
+                const index = Type.Indexer.indexOf(@field(Type.Key, key_name));
+                entry.* = .{
+                    .name = key_name,
+                    .offset = @offsetOf(Type, "values") + (index * @sizeOf(Type.Value)),
+                };
+            }
+            const final_entries = entries;
+            return .{
+                .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
+                .kind = .{ .enum_array = .{
+                    .entries = &final_entries,
+                    .value = fromType(Type.Value),
+                } },
+            };
+        }
+        if (isVector(Type)) {
+            return .{
+                .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
+                .kind = .{ .single_line = .{
+                    .name = "vector",
+                    .offset = @offsetOf(Type, "array"),
+                    .info = fromType(Type.Array),
+                } },
+            };
+        }
+        if (isMatrix(Type)) {
+            return .{
+                .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
+                .kind = .{ .single_line = .{
+                    .name = "matrix",
+                    .offset = @offsetOf(Type, "array"),
+                    .info = fromType(Type.Flat),
+                } },
+            };
+        }
+        switch (@typeInfo(Type)) {
+            .void => return .{ .size = 0, .sanitize = null, .kind = .void },
+            .bool, .int, .float => return .{
+                .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
+                .kind = .{ .primitive_value = PrimitiveValueOps.fromType(Type) },
+            },
+            .@"enum" => |*info| {
+                switch (info.mode) {
+                    .exhaustive => {},
+                    .nonexhaustive => @compileError(
+                        "Enum " ++ @typeName(Type) ++ " is nonexhaustive and therefore not supported.",
+                    ),
+                }
+                return .{
+                    .size = @sizeOf(Type),
+                    .sanitize = misc.getTypeErasedSanitize(Type),
+                    .kind = .{ .@"enum" = .{
+                        .names = info.field_names,
+                        .ops = EnumOps.fromType(Type),
+                    } },
+                };
+            },
+            .optional => |*info| return .{
+                .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
+                .kind = .{ .optional = .{
+                    .payload = fromType(info.child),
+                    .ops = OptionalOps.fromType(Type),
+                } },
+            },
+            .array => |*info| return .{
+                .size = @sizeOf(Type),
+                .sanitize = misc.getTypeErasedSanitize(Type),
+                .kind = .{ .array = .{
+                    .len = info.len,
+                    .element = fromType(info.child),
+                } },
+            },
+            .@"struct" => |*info| {
+                if (info.layout == .@"packed") {
+                    return .{ .size = @sizeOf(Type), .sanitize = misc.getTypeErasedSanitize(Type), .kind = .{ .@"packed" = PackedOps.fromType(Type) } };
+                }
+                if (info.is_tuple) {
+                    var fields: [info.field_names.len]TypeInfo.TupleField = undefined;
+                    for (info.field_names, info.field_types, &fields) |field_name, Field, *field| {
+                        field.* = .{ .offset = @offsetOf(Type, field_name), .info = fromType(Field) };
+                    }
+                    const final_fields = fields;
+                    return .{
+                        .size = @sizeOf(Type),
+                        .sanitize = misc.getTypeErasedSanitize(Type),
+                        .kind = .{ .tuple = .{ .fields = &final_fields } },
+                    };
+                }
+                if (info.field_names.len > max_object_fields) {
+                    @compileError("Struct " ++ @typeName(Type) ++ " has too many fields.");
+                }
+                var fields: [info.field_names.len]TypeInfo.StructField = undefined;
+                for (info.field_names, info.field_types, info.field_attrs, &fields) |field_name, Field, attr, *field| {
+                    field.* = .{
+                        .name = field_name,
+                        .offset = @offsetOf(Type, field_name),
+                        .default_value = attr.default_value_ptr,
+                        .info = fromType(Field),
+                    };
+                }
+                const final_fields = fields;
+                return .{
+                    .size = @sizeOf(Type),
+                    .sanitize = misc.getTypeErasedSanitize(Type),
+                    .kind = .{ .@"struct" = .{ .fields = &final_fields } },
+                };
+            },
+            .@"union" => |*info| {
+                const Tag = info.tag_type orelse {
+                    @compileError("Union " ++ @typeName(Type) ++ " is not tagged and therefore not serializable.");
+                };
+                var variants: [info.field_types.len]*const TypeInfo = undefined;
+                for (info.field_types, &variants) |Payload, *variant| {
+                    variant.* = fromType(Payload);
+                }
+                const final_variants = variants;
+                return .{
+                    .size = @sizeOf(Type),
+                    .sanitize = misc.getTypeErasedSanitize(Type),
+                    .kind = .{ .@"union" = .{
+                        .tag_type_name = @typeName(Tag),
+                        .names = info.field_names,
+                        .variants = &final_variants,
+                        .ops = UnionOps.fromType(Type),
+                    } },
+                };
+            },
+            else => @compileError("Unsupported type: " ++ @typeName(Type)),
+        }
+    }
 };
 
-const ValueOps = struct {
+const PrimitiveValueOps = struct {
     write: *const fn (writer: *std.Io.Writer, value_pointer: *const anyopaque) anyerror!void,
     read: *const fn (reader: *std.json.Reader, allocator: std.mem.Allocator, value_pointer: *anyopaque) anyerror!void,
 
-    pub fn fromType(Type: type) *const ValueOps {
+    pub fn fromType(Type: type) *const PrimitiveValueOps {
         const Impl = struct {
             fn write(writer: *std.Io.Writer, value_pointer: *const anyopaque) anyerror!void {
                 const typed_value_pointer: *const Type = @ptrCast(@alignCast(value_pointer));
@@ -441,7 +1552,8 @@ const PackedOps = struct {
         whitespace: *const JsonWhitespace,
     ) anyerror!void,
     read: *const fn (
-        context: *const ReadContext,
+        reader: *std.json.Reader,
+        allocator: std.mem.Allocator,
         value_pointer: *anyopaque,
         default_pointer: ?*const anyopaque,
     ) anyerror!void,
@@ -470,20 +1582,22 @@ const PackedOps = struct {
                 whitespace: *const JsonWhitespace,
             ) anyerror!void {
                 const unpacked = unpack(@ptrCast(@alignCast(value_pointer)));
-                writeNode(writer, getNode(Unpacked), &unpacked, whitespace) catch |err| {
+                writeValue(writer, TypeInfo.fromType(Unpacked), &unpacked, whitespace) catch |err| {
                     misc.error_context.append("Failed to write unpacked value.", .{});
                     return err;
                 };
             }
             fn read(
-                context: *const ReadContext,
+                reader: *std.json.Reader,
+                allocator: std.mem.Allocator,
                 value_pointer: *anyopaque,
                 default_pointer: ?*const anyopaque,
             ) anyerror!void {
                 var unpacked: Unpacked = undefined;
                 const default_unpacked = if (default_pointer) |pointer| unpack(@ptrCast(@alignCast(pointer))) else null;
                 const default_unpacked_pointer = if (default_unpacked) |*value| value else null;
-                readNode(context, getNode(Unpacked), &unpacked, default_unpacked_pointer) catch |err| {
+                const unpacked_info = TypeInfo.fromType(Unpacked);
+                readValue(reader, allocator, unpacked_info, &unpacked, default_unpacked_pointer) catch |err| {
                     misc.error_context.append("Failed to read unpacked value.", .{});
                     return err;
                 };
@@ -494,1122 +1608,6 @@ const PackedOps = struct {
         return &.{ .write = Impl.write, .read = Impl.read };
     }
 };
-
-fn getNode(Type: type) *const Node {
-    return &NodeOf(Type).node;
-}
-
-fn NodeOf(Type: type) type {
-    return struct {
-        const node = buildNode(Type);
-    };
-}
-
-fn buildNode(Type: type) Node {
-    if (isBoundedArray(Type)) {
-        return .{
-            .size = @sizeOf(Type),
-            .sanitize = misc.getTypeErasedSanitize(Type),
-            .kind = .{ .bounded_array = .{
-                .max_len = Type.max_len,
-                .buffer_offset = @offsetOf(Type, "buffer"),
-                .is_string = Type.Child == u8,
-                .element = getNode(Type.Child),
-                .ops = BoundedArrayOps.fromType(Type),
-            } },
-        };
-    }
-    if (isEnumArray(Type)) {
-        const key_names = @typeInfo(Type.Key).@"enum".field_names;
-        if (key_names.len > max_object_fields) {
-            @compileError("Enum array " ++ @typeName(Type) ++ " has too many keys.");
-        }
-        var entries: [key_names.len]Node.EnumArrayEntry = undefined;
-        for (key_names, &entries) |key_name, *entry| {
-            const index = Type.Indexer.indexOf(@field(Type.Key, key_name));
-            entry.* = .{
-                .name = key_name,
-                .offset = @offsetOf(Type, "values") + (index * @sizeOf(Type.Value)),
-            };
-        }
-        const final_entries = entries;
-        return .{
-            .size = @sizeOf(Type),
-            .sanitize = misc.getTypeErasedSanitize(Type),
-            .kind = .{ .enum_array = .{
-                .entries = &final_entries,
-                .value = getNode(Type.Value),
-            } },
-        };
-    }
-    if (isVector(Type)) {
-        return .{
-            .size = @sizeOf(Type),
-            .sanitize = misc.getTypeErasedSanitize(Type),
-            .kind = .{ .single_line = .{
-                .name = "vector",
-                .offset = @offsetOf(Type, "array"),
-                .node = getNode(Type.Array),
-            } },
-        };
-    }
-    if (isMatrix(Type)) {
-        return .{
-            .size = @sizeOf(Type),
-            .sanitize = misc.getTypeErasedSanitize(Type),
-            .kind = .{ .single_line = .{
-                .name = "matrix",
-                .offset = @offsetOf(Type, "array"),
-                .node = getNode(Type.Flat),
-            } },
-        };
-    }
-    switch (@typeInfo(Type)) {
-        .void => return .{ .size = 0, .sanitize = null, .kind = .void },
-        .bool, .int, .float => return .{
-            .size = @sizeOf(Type),
-            .sanitize = misc.getTypeErasedSanitize(Type),
-            .kind = .{ .value = ValueOps.fromType(Type) },
-        },
-        .@"enum" => |*info| {
-            switch (info.mode) {
-                .exhaustive => {},
-                .nonexhaustive => @compileError(
-                    "Enum " ++ @typeName(Type) ++ " is nonexhaustive and therefore not supported.",
-                ),
-            }
-            return .{
-                .size = @sizeOf(Type),
-                .sanitize = misc.getTypeErasedSanitize(Type),
-                .kind = .{ .@"enum" = .{
-                    .names = info.field_names,
-                    .ops = EnumOps.fromType(Type),
-                } },
-            };
-        },
-        .optional => |*info| return .{
-            .size = @sizeOf(Type),
-            .sanitize = misc.getTypeErasedSanitize(Type),
-            .kind = .{ .optional = .{
-                .payload = getNode(info.child),
-                .ops = OptionalOps.fromType(Type),
-            } },
-        },
-        .array => |*info| return .{
-            .size = @sizeOf(Type),
-            .sanitize = misc.getTypeErasedSanitize(Type),
-            .kind = .{ .array = .{
-                .len = info.len,
-                .element = getNode(info.child),
-            } },
-        },
-        .@"struct" => |*info| {
-            if (info.layout == .@"packed") {
-                return .{ .size = @sizeOf(Type), .sanitize = misc.getTypeErasedSanitize(Type), .kind = .{ .@"packed" = PackedOps.fromType(Type) } };
-            }
-            if (info.is_tuple) {
-                var fields: [info.field_names.len]Node.TupleField = undefined;
-                for (info.field_names, info.field_types, &fields) |field_name, Field, *field| {
-                    field.* = .{ .offset = @offsetOf(Type, field_name), .node = getNode(Field) };
-                }
-                const final_fields = fields;
-                return .{
-                    .size = @sizeOf(Type),
-                    .sanitize = misc.getTypeErasedSanitize(Type),
-                    .kind = .{ .tuple = .{ .fields = &final_fields } },
-                };
-            }
-            if (info.field_names.len > max_object_fields) {
-                @compileError("Struct " ++ @typeName(Type) ++ " has too many fields.");
-            }
-            var fields: [info.field_names.len]Node.StructField = undefined;
-            for (info.field_names, info.field_types, info.field_attrs, &fields) |field_name, Field, attr, *field| {
-                field.* = .{
-                    .name = field_name,
-                    .offset = @offsetOf(Type, field_name),
-                    .default_value = attr.default_value_ptr,
-                    .node = getNode(Field),
-                };
-            }
-            const final_fields = fields;
-            return .{
-                .size = @sizeOf(Type),
-                .sanitize = misc.getTypeErasedSanitize(Type),
-                .kind = .{ .@"struct" = .{ .fields = &final_fields } },
-            };
-        },
-        .@"union" => |*info| {
-            const Tag = info.tag_type orelse {
-                @compileError("Union " ++ @typeName(Type) ++ " is not tagged and therefore not serializable.");
-            };
-            var variants: [info.field_types.len]*const Node = undefined;
-            for (info.field_types, &variants) |Payload, *variant| {
-                variant.* = getNode(Payload);
-            }
-            const final_variants = variants;
-            return .{
-                .size = @sizeOf(Type),
-                .sanitize = misc.getTypeErasedSanitize(Type),
-                .kind = .{ .@"union" = .{
-                    .tag_type_name = @typeName(Tag),
-                    .names = info.field_names,
-                    .variants = &final_variants,
-                    .ops = UnionOps.fromType(Type),
-                } },
-            };
-        },
-        else => @compileError("Unsupported type: " ++ @typeName(Type)),
-    }
-}
-
-fn writeNode(
-    writer: *std.Io.Writer,
-    node: *const Node,
-    value_pointer: *const anyopaque,
-    whitespace: *const JsonWhitespace,
-) anyerror!void {
-    switch (node.kind) {
-        .void => writeVoid(writer) catch |err| {
-            misc.error_context.append("Failed to write void.", .{});
-            return err;
-        },
-        .value => |ops| ops.write(writer, value_pointer) catch |err| {
-            misc.error_context.append("Failed to write value.", .{});
-            return err;
-        },
-        .@"enum" => |*@"enum"| {
-            const tag_name = @"enum".names[@"enum".ops.getIndex(value_pointer)];
-            std.json.Stringify.encodeJsonString(tag_name, .{}, writer) catch |err| {
-                misc.error_context.new("Failed to write enum value: {s}", .{tag_name});
-                return err;
-            };
-        },
-        .optional => |*optional| {
-            if (optional.ops.isSome(value_pointer)) {
-                const payload_pointer = optional.ops.getPayload(@constCast(value_pointer));
-                writeNode(writer, optional.payload, payload_pointer, whitespace) catch |err| {
-                    misc.error_context.append("Failed to write optional's payload.", .{});
-                    return err;
-                };
-            } else {
-                writer.writeAll("null") catch |err| {
-                    misc.error_context.new("Failed to write optional's null value.", .{});
-                    return err;
-                };
-            }
-        },
-        .array => |*array| {
-            const indented_whitespace = whitespace.indented();
-            writer.writeByte('[') catch |err| {
-                misc.error_context.new("Failed to write array begin token.", .{});
-                return err;
-            };
-            indented_whitespace.write(writer) catch |err| {
-                misc.error_context.append("Failed to write first element whitespace.", .{});
-                return err;
-            };
-            for (0..array.len) |index| {
-                errdefer misc.error_context.append("Failed to write array element at index: {}", .{index});
-                const element_pointer = offsetConstPointer(value_pointer, index * array.element.size);
-                writeNode(writer, array.element, element_pointer, &indented_whitespace) catch |err| {
-                    misc.error_context.append("Failed to write element value.", .{});
-                    return err;
-                };
-                if (index < array.len - 1) {
-                    writer.writeByte(',') catch |err| {
-                        misc.error_context.new("Failed to write next element separator.", .{});
-                        return err;
-                    };
-                    indented_whitespace.write(writer) catch |err| {
-                        misc.error_context.append("Failed to write next element whitespace.", .{});
-                        return err;
-                    };
-                }
-            }
-            whitespace.write(writer) catch |err| {
-                misc.error_context.append("Failed to write array end token whitespace.", .{});
-                return err;
-            };
-            writer.writeByte(']') catch |err| {
-                misc.error_context.new("Failed to write array end token.", .{});
-                return err;
-            };
-        },
-        .tuple => |*tuple| {
-            const indented_whitespace = whitespace.indented();
-            writer.writeByte('[') catch |err| {
-                misc.error_context.new("Failed to write tuple begin token.", .{});
-                return err;
-            };
-            indented_whitespace.write(writer) catch |err| {
-                misc.error_context.append("Failed to write first field whitespace.", .{});
-                return err;
-            };
-            for (tuple.fields, 0..) |*field, index| {
-                errdefer misc.error_context.append("Failed to write tuple field: {}", .{index});
-                const field_pointer = offsetConstPointer(value_pointer, field.offset);
-                writeNode(writer, field.node, field_pointer, &indented_whitespace) catch |err| {
-                    misc.error_context.append("Failed to write field value.", .{});
-                    return err;
-                };
-                if (index < tuple.fields.len - 1) {
-                    writer.writeByte(',') catch |err| {
-                        misc.error_context.new("Failed to write next field separator.", .{});
-                        return err;
-                    };
-                    indented_whitespace.write(writer) catch |err| {
-                        misc.error_context.append("Failed to write next field whitespace.", .{});
-                        return err;
-                    };
-                }
-            }
-            whitespace.write(writer) catch |err| {
-                misc.error_context.append("Failed to write tuple end token whitespace.", .{});
-                return err;
-            };
-            writer.writeByte(']') catch |err| {
-                misc.error_context.new("Failed to write tuple end token.", .{});
-                return err;
-            };
-        },
-        .@"struct" => |*@"struct"| {
-            const indented_whitespace = whitespace.indented();
-            writer.writeByte('{') catch |err| {
-                misc.error_context.new("Failed to write struct begin token.", .{});
-                return err;
-            };
-            indented_whitespace.write(writer) catch |err| {
-                misc.error_context.append("Failed to write first field whitespace.", .{});
-                return err;
-            };
-            for (@"struct".fields, 0..) |*field, index| {
-                errdefer misc.error_context.append("Failed to write struct field: {s}", .{field.name});
-                std.json.Stringify.encodeJsonString(field.name, .{}, writer) catch |err| {
-                    misc.error_context.new("Failed to write field name.", .{});
-                    return err;
-                };
-                writer.writeByte(':') catch |err| {
-                    misc.error_context.new("Failed to write name value separator.", .{});
-                    return err;
-                };
-                indented_whitespace.writeSpace(writer) catch |err| {
-                    misc.error_context.append("Failed to write field value whitespace.", .{});
-                    return err;
-                };
-                const field_pointer = offsetConstPointer(value_pointer, field.offset);
-                writeNode(writer, field.node, field_pointer, &indented_whitespace) catch |err| {
-                    misc.error_context.append("Failed to write field value.", .{});
-                    return err;
-                };
-                if (index < @"struct".fields.len - 1) {
-                    writer.writeByte(',') catch |err| {
-                        misc.error_context.new("Failed to write next field separator.", .{});
-                        return err;
-                    };
-                    indented_whitespace.write(writer) catch |err| {
-                        misc.error_context.append("Failed to write next field whitespace.", .{});
-                        return err;
-                    };
-                }
-            }
-            whitespace.write(writer) catch |err| {
-                misc.error_context.append("Failed to write struct end token whitespace.", .{});
-                return err;
-            };
-            writer.writeByte('}') catch |err| {
-                misc.error_context.new("Failed to write struct end token.", .{});
-                return err;
-            };
-        },
-        .@"union" => |*@"union"| {
-            const field_index = @"union".ops.getActiveFieldIndex(value_pointer);
-            const tag_name = @"union".names[field_index];
-            writer.writeAll("{ ") catch |err| {
-                misc.error_context.new("Failed to write union begin token.", .{});
-                return err;
-            };
-            std.json.Stringify.encodeJsonString(tag_name, .{}, writer) catch |err| {
-                misc.error_context.new("Failed to write union's tag: {s}", .{tag_name});
-                return err;
-            };
-            writer.writeByte(':') catch |err| {
-                misc.error_context.new("Failed to write union's tag payload separator: {s}", .{tag_name});
-                return err;
-            };
-            whitespace.writeSpace(writer) catch |err| {
-                misc.error_context.append("Failed to write union's tag payload whitespace.", .{});
-                return err;
-            };
-            const payload_pointer = @"union".ops.getFieldPointer(@constCast(value_pointer), field_index);
-            writeNode(writer, @"union".variants[field_index], payload_pointer, whitespace) catch |err| {
-                misc.error_context.append("Failed to write union's payload: {s}", .{tag_name});
-                return err;
-            };
-            writer.writeAll(" }") catch |err| {
-                misc.error_context.new("Failed to write union end token.", .{});
-                return err;
-            };
-        },
-        .@"packed" => |ops| ops.write(writer, value_pointer, whitespace) catch |err| {
-            misc.error_context.append("Failed to write packed value.", .{});
-            return err;
-        },
-        .bounded_array => |*array| {
-            const len = array.ops.getLen(value_pointer);
-            const buffer_pointer = offsetConstPointer(value_pointer, array.buffer_offset);
-            if (array.is_string) {
-                const string = @as([*]const u8, @ptrCast(buffer_pointer))[0..len];
-                std.json.Stringify.encodeJsonString(string, .{}, writer) catch |err| {
-                    misc.error_context.new("Failed to write bounded string value: {s}", .{string});
-                    return err;
-                };
-                return;
-            }
-            const indented_whitespace = whitespace.indented();
-            writer.writeByte('[') catch |err| {
-                misc.error_context.new("Failed to write bounded array begin token.", .{});
-                return err;
-            };
-            indented_whitespace.write(writer) catch |err| {
-                misc.error_context.append("Failed to write first element whitespace.", .{});
-                return err;
-            };
-            for (0..len) |index| {
-                errdefer misc.error_context.append("Failed to write bounded array element: {}", .{index});
-                const element_pointer = offsetConstPointer(buffer_pointer, index * array.element.size);
-                writeNode(writer, array.element, element_pointer, &indented_whitespace) catch |err| {
-                    misc.error_context.append("Failed to write element value.", .{});
-                    return err;
-                };
-                if (index < len - 1) {
-                    writer.writeByte(',') catch |err| {
-                        misc.error_context.new("Failed to write next element separator.", .{});
-                        return err;
-                    };
-                    indented_whitespace.write(writer) catch |err| {
-                        misc.error_context.append("Failed to write next element whitespace.", .{});
-                        return err;
-                    };
-                }
-            }
-            whitespace.write(writer) catch |err| {
-                misc.error_context.append("Failed to write bounded array end token whitespace.", .{});
-                return err;
-            };
-            writer.writeByte(']') catch |err| {
-                misc.error_context.new("Failed to write bounded array end token.", .{});
-                return err;
-            };
-        },
-        .enum_array => |*array| {
-            const indented_whitespace = whitespace.indented();
-            writer.writeByte('{') catch |err| {
-                misc.error_context.new("Failed to write enum array start token.", .{});
-                return err;
-            };
-            indented_whitespace.write(writer) catch |err| {
-                misc.error_context.append("Failed to write first entry whitespace.", .{});
-                return err;
-            };
-            for (array.entries, 0..) |*entry, index| {
-                errdefer misc.error_context.append("Failed to write enum array entry: {s}", .{entry.name});
-                std.json.Stringify.encodeJsonString(entry.name, .{}, writer) catch |err| {
-                    misc.error_context.new("Failed to write entry key.", .{});
-                    return err;
-                };
-                writer.writeByte(':') catch |err| {
-                    misc.error_context.new("Failed to write key value separator.", .{});
-                    return err;
-                };
-                indented_whitespace.writeSpace(writer) catch |err| {
-                    misc.error_context.append("Failed to write entry value whitespace.", .{});
-                    return err;
-                };
-                const entry_pointer = offsetConstPointer(value_pointer, entry.offset);
-                writeNode(writer, array.value, entry_pointer, &indented_whitespace) catch |err| {
-                    misc.error_context.append("Failed to write entry value.", .{});
-                    return err;
-                };
-                if (index < array.entries.len - 1) {
-                    writer.writeByte(',') catch |err| {
-                        misc.error_context.new("Failed to write next entry separator.", .{});
-                        return err;
-                    };
-                    indented_whitespace.write(writer) catch |err| {
-                        misc.error_context.append("Failed to write next entry whitespace.", .{});
-                        return err;
-                    };
-                }
-            }
-            whitespace.write(writer) catch |err| {
-                misc.error_context.append("Failed to write enum array end token whitespace.", .{});
-                return err;
-            };
-            writer.writeByte('}') catch |err| {
-                misc.error_context.new("Failed to write enum array end token.", .{});
-                return err;
-            };
-        },
-        .single_line => |*single_line| {
-            const inner_whitespace: JsonWhitespace = switch (whitespace.*) {
-                .none => .none,
-                .space => .space,
-                .new_line => .space,
-            };
-            const inner_pointer = offsetConstPointer(value_pointer, single_line.offset);
-            writeNode(writer, single_line.node, inner_pointer, &inner_whitespace) catch |err| {
-                misc.error_context.append("Failed to write {s}'s array.", .{single_line.name});
-                return err;
-            };
-        },
-    }
-}
-
-const ReadContext = struct {
-    reader: *std.json.Reader,
-    allocator: std.mem.Allocator,
-};
-
-fn readNode(
-    context: *const ReadContext,
-    node: *const Node,
-    value_pointer: *anyopaque,
-    default_pointer: ?*const anyopaque,
-) anyerror!void {
-    const start_height = context.reader.stackHeight();
-    readNodeValue(context, node, value_pointer, default_pointer) catch |err| {
-        recoverFromReadError(context, err, start_height, default_pointer != null) catch |recover_err| {
-            misc.error_context.append("Failed to recover from read error.", .{});
-            return recover_err;
-        };
-        copyBytes(value_pointer, default_pointer.?, node.size);
-    };
-    if (node.sanitize) |sanitize| {
-        sanitize(value_pointer);
-    }
-}
-
-fn recoverFromReadError(context: *const ReadContext, err: anyerror, start_height: usize, has_default: bool) !void {
-    if (context.reader.stackHeight() != start_height) {
-        context.reader.skipUntilStackHeight(start_height) catch |skip_err| {
-            misc.error_context.new("Failed to skip the invalid value.", .{});
-            return skip_err;
-        };
-    }
-    if (has_default) {
-        misc.error_context.append("Falling back to default value.", .{});
-        if (!builtin.is_test) {
-            misc.error_context.logWarning(err);
-        }
-    } else {
-        misc.error_context.append("No default value to fall back to.", .{});
-        return err;
-    }
-}
-
-fn readNodeValue(
-    context: *const ReadContext,
-    node: *const Node,
-    value_pointer: *anyopaque,
-    default_pointer: ?*const anyopaque,
-) anyerror!void {
-    const reader = context.reader;
-    const allocator = context.allocator;
-    switch (node.kind) {
-        .void => readVoid(reader) catch |err| {
-            misc.error_context.append("Failed to read void.", .{});
-            return err;
-        },
-        .value => |ops| ops.read(reader, allocator, value_pointer) catch |err| {
-            misc.error_context.append("Failed to read value.", .{});
-            return err;
-        },
-        .@"enum" => |*@"enum"| {
-            const index = readEnumIndex(reader, allocator, @"enum".names) catch |err| {
-                misc.error_context.append("Failed to read enum value.", .{});
-                return err;
-            };
-            @"enum".ops.setIndex(value_pointer, index);
-        },
-        .optional => |*optional| {
-            const ops = optional.ops;
-            const token_type = reader.peekNextTokenType() catch |err| {
-                misc.error_context.new("Failed to peek optional token type.", .{});
-                return err;
-            };
-            if (token_type == .null) {
-                _ = reader.next() catch |err| {
-                    misc.error_context.new("Failed to read null token.", .{});
-                    return err;
-                };
-                ops.setNull(value_pointer);
-                return;
-            }
-            const default_payload_pointer = if (default_pointer) |pointer| block: {
-                if (!ops.isSome(pointer)) {
-                    break :block null;
-                }
-                break :block ops.getPayload(@constCast(pointer));
-            } else null;
-            ops.setSome(value_pointer);
-            readNode(context, optional.payload, ops.getPayload(value_pointer), default_payload_pointer) catch |err| {
-                misc.error_context.append("Failed to read optional's payload.", .{});
-                return err;
-            };
-        },
-        .array => |*array| {
-            const begin_token = reader.next() catch |err| {
-                misc.error_context.new("Failed to read array begin token.", .{});
-                return err;
-            };
-            if (begin_token != .array_begin) {
-                misc.error_context.new("Expected array begin token but got: {s}", .{@tagName(begin_token)});
-                return error.UnexpectedToken;
-            }
-            if (default_pointer) |pointer| {
-                copyBytes(value_pointer, pointer, node.size);
-            }
-            var index: usize = 0;
-            while (true) {
-                errdefer misc.error_context.append("Failed to read array element at index: {}", .{index});
-                const token_type = reader.peekNextTokenType() catch |err| {
-                    misc.error_context.new("Failed to peek element token type.", .{});
-                    return err;
-                };
-                if (token_type == .array_end) {
-                    break;
-                }
-                if (index < array.len) {
-                    const offset = index * array.element.size;
-                    const default_element_pointer = if (default_pointer) |pointer| block: {
-                        break :block offsetConstPointer(pointer, offset);
-                    } else null;
-                    const element_pointer = offsetPointer(value_pointer, offset);
-                    readNode(context, array.element, element_pointer, default_element_pointer) catch |err| {
-                        misc.error_context.append("Failed to read element value.", .{});
-                        return err;
-                    };
-                } else {
-                    reader.skipValue() catch |err| {
-                        misc.error_context.new("Failed to skip element value.", .{});
-                        return err;
-                    };
-                }
-                index += 1;
-            }
-            _ = reader.next() catch |err| {
-                misc.error_context.new("Failed to read array end token.", .{});
-                return err;
-            };
-            if (default_pointer == null and index < array.len) {
-                misc.error_context.new("JSON array ended early with length: {}", .{index});
-                return error.EarlyEnd;
-            }
-        },
-        .tuple => |*tuple| {
-            const begin_token = reader.next() catch |err| {
-                misc.error_context.new("Failed to read tuple begin token.", .{});
-                return err;
-            };
-            if (begin_token != .array_begin) {
-                misc.error_context.new("Expected array begin token but got: {s}", .{@tagName(begin_token)});
-                return error.UnexpectedToken;
-            }
-            if (default_pointer) |pointer| {
-                copyBytes(value_pointer, pointer, node.size);
-            }
-            var index: usize = 0;
-            for (tuple.fields) |*field| {
-                errdefer misc.error_context.append("Failed to read tuple field: {}", .{index});
-                const token_type = reader.peekNextTokenType() catch |err| {
-                    misc.error_context.new("Failed to peek field token type.", .{});
-                    return err;
-                };
-                if (token_type == .array_end) {
-                    break;
-                }
-                const default_field_pointer = if (default_pointer) |pointer| block: {
-                    break :block offsetConstPointer(pointer, field.offset);
-                } else null;
-                const field_pointer = offsetPointer(value_pointer, field.offset);
-                readNode(context, field.node, field_pointer, default_field_pointer) catch |err| {
-                    misc.error_context.append("Failed to read field value.", .{});
-                    return err;
-                };
-                index += 1;
-            }
-            while (true) {
-                errdefer misc.error_context.append("Failed to skip tuple field: {}", .{index});
-                const token_type = reader.peekNextTokenType() catch |err| {
-                    misc.error_context.new("Failed to peek field token type.", .{});
-                    return err;
-                };
-                if (token_type == .array_end) {
-                    break;
-                }
-                reader.skipValue() catch |err| {
-                    misc.error_context.new("Failed to skip field value.", .{});
-                    return err;
-                };
-                index += 1;
-            }
-            _ = reader.next() catch |err| {
-                misc.error_context.new("Failed to read tuple end token.", .{});
-                return err;
-            };
-            if (default_pointer == null and index < tuple.fields.len) {
-                misc.error_context.new("JSON array ended early with length: {}", .{index});
-                return error.EarlyEnd;
-            }
-        },
-        .@"struct" => |*@"struct"| {
-            const begin_token = reader.next() catch |err| {
-                misc.error_context.new("Failed to read struct begin token.", .{});
-                return err;
-            };
-            if (begin_token != .object_begin) {
-                misc.error_context.new("Expected object begin token but got: {s}", .{@tagName(begin_token)});
-                return error.UnexpectedToken;
-            }
-            if (default_pointer) |pointer| {
-                copyBytes(value_pointer, pointer, node.size);
-            }
-            var found_fields_buffer: [max_object_fields]bool = undefined;
-            const found_fields = found_fields_buffer[0..@"struct".fields.len];
-            @memset(found_fields, default_pointer != null);
-            while (true) {
-                const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
-                    misc.error_context.new("Failed to read next struct field token.", .{});
-                    return err;
-                };
-                var is_token_freed = false;
-                defer if (!is_token_freed) {
-                    freeIfAllocated(allocator, token);
-                    is_token_freed = true;
-                };
-                const key = switch (token) {
-                    .allocated_string => |string| string,
-                    .object_end => break,
-                    else => {
-                        misc.error_context.new("Expected string or object end token but got: {s}", .{@tagName(token)});
-                        return error.UnexpectedToken;
-                    },
-                };
-                var field_found = false;
-                for (@"struct".fields, found_fields) |*field, *found| {
-                    if (std.mem.eql(u8, field.name, key)) {
-                        if (!is_token_freed) { // Field name is not needed while parsing the field value.
-                            freeIfAllocated(allocator, token);
-                            is_token_freed = true;
-                        }
-                        const default_field_pointer = if (default_pointer) |pointer| block: {
-                            break :block offsetConstPointer(pointer, field.offset);
-                        } else field.default_value;
-                        const field_pointer = offsetPointer(value_pointer, field.offset);
-                        readNode(context, field.node, field_pointer, default_field_pointer) catch |err| {
-                            misc.error_context.append("Failed to read field value: {s}", .{field.name});
-                            return err;
-                        };
-                        field_found = true;
-                        found.* = true;
-                        break;
-                    }
-                }
-                if (!field_found) {
-                    reader.skipValue() catch |err| {
-                        misc.error_context.new("Failed to skip field value: {s}", .{key});
-                        return err;
-                    };
-                }
-            }
-            for (@"struct".fields, found_fields) |*field, found| {
-                if (!found) {
-                    const err = error.FieldNotFound;
-                    misc.error_context.new("Failed to find struct field inside JSON object: {s}", .{field.name});
-                    const default_field_pointer = if (default_pointer) |pointer| block: {
-                        break :block offsetConstPointer(pointer, field.offset);
-                    } else field.default_value;
-                    if (default_field_pointer) |pointer| {
-                        misc.error_context.append("Falling back to default value.", .{});
-                        if (!builtin.is_test) {
-                            misc.error_context.logWarning(err);
-                        }
-                        const field_pointer = offsetPointer(value_pointer, field.offset);
-                        copyBytes(field_pointer, pointer, field.node.size);
-                        if (field.node.sanitize) |sanitize| {
-                            sanitize(field_pointer);
-                        }
-                    } else {
-                        return err;
-                    }
-                }
-            }
-        },
-        .@"union" => |*@"union"| {
-            const ops = @"union".ops;
-            const begin_token = reader.next() catch |err| {
-                misc.error_context.new("Failed to read union begin token.", .{});
-                return err;
-            };
-            if (begin_token != .object_begin) {
-                misc.error_context.new("Expected object begin token but got: {s}", .{@tagName(begin_token)});
-                return error.UnexpectedToken;
-            }
-            const default_field_index = if (default_pointer) |pointer| ops.getActiveFieldIndex(pointer) else null;
-            const tag_start_height = reader.stackHeight();
-            const field_index = readEnumIndex(reader, allocator, @"union".names) catch |err| block: {
-                recoverFromReadError(context, err, tag_start_height, default_field_index != null) catch |e| {
-                    misc.error_context.append("Failed to read union's tag. ({s})", .{@"union".tag_type_name});
-                    return e;
-                };
-                break :block default_field_index.?;
-            };
-            ops.setActiveField(value_pointer, field_index);
-            const default_payload_pointer = if (default_field_index == field_index) block: {
-                break :block ops.getFieldPointer(@constCast(default_pointer.?), field_index);
-            } else null;
-            const payload_pointer = ops.getFieldPointer(value_pointer, field_index);
-            readNode(context, @"union".variants[field_index], payload_pointer, default_payload_pointer) catch |err| {
-                misc.error_context.append("Failed to read union's payload.", .{});
-                return err;
-            };
-            const end_token = reader.next() catch |err| {
-                misc.error_context.new("Failed to read union end token.", .{});
-                return err;
-            };
-            if (end_token != .object_end) {
-                misc.error_context.new("Expected object end token but got: {s}", .{@tagName(end_token)});
-                return error.UnexpectedToken;
-            }
-        },
-        .@"packed" => |ops| ops.read(context, value_pointer, default_pointer) catch |err| {
-            misc.error_context.append("Failed to read packed value.", .{});
-            return err;
-        },
-        .bounded_array => |*array| {
-            const ops = array.ops;
-            if (array.is_string) {
-                const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
-                    misc.error_context.new("Failed to read bounded string token.", .{});
-                    return err;
-                };
-                defer freeIfAllocated(allocator, token);
-                const string = switch (token) {
-                    .allocated_string => |string| string,
-                    else => {
-                        misc.error_context.new("Expected a string token but got: {s}", .{@tagName(token)});
-                        return error.UnexpectedToken;
-                    },
-                };
-                ops.setStringTrimmed(value_pointer, string);
-                return;
-            }
-            const begin_token = reader.next() catch |err| {
-                misc.error_context.new("Failed to read bounded array begin token.", .{});
-                return err;
-            };
-            if (begin_token != .array_begin) {
-                misc.error_context.new("Expected array begin token but got: {s}", .{@tagName(begin_token)});
-                return error.UnexpectedToken;
-            }
-            const default_len = if (default_pointer) |pointer| ops.getLen(pointer) else 0;
-            const buffer_pointer = offsetPointer(value_pointer, array.buffer_offset);
-            ops.setEmpty(value_pointer);
-            var len: usize = 0;
-            var index: usize = 0;
-            while (true) {
-                errdefer misc.error_context.append("Failed to read bounded array element at index: {}", .{index});
-                const token_type = reader.peekNextTokenType() catch |err| {
-                    misc.error_context.new("Failed to peek element token type.", .{});
-                    return err;
-                };
-                if (token_type == .array_end) {
-                    break;
-                }
-                if (len < array.max_len) {
-                    const offset = len * array.element.size;
-                    const default_element_pointer = if (index < default_len) block: {
-                        const default_buffer_pointer = offsetConstPointer(default_pointer.?, array.buffer_offset);
-                        break :block offsetConstPointer(default_buffer_pointer, index * array.element.size);
-                    } else null;
-                    const element_pointer = offsetPointer(buffer_pointer, offset);
-                    readNode(context, array.element, element_pointer, default_element_pointer) catch |err| {
-                        misc.error_context.append("Failed to read element value.", .{});
-                        return err;
-                    };
-                    len += 1;
-                    ops.setLen(value_pointer, len);
-                } else {
-                    reader.skipValue() catch |err| {
-                        misc.error_context.new("Failed to skip element value.", .{});
-                        return err;
-                    };
-                }
-                index += 1;
-            }
-            _ = reader.next() catch |err| {
-                misc.error_context.new("Failed to read bounded array end token.", .{});
-                return err;
-            };
-        },
-        .enum_array => |*array| {
-            const begin_token = reader.next() catch |err| {
-                misc.error_context.new("Failed to read enum array begin token.", .{});
-                return err;
-            };
-            if (begin_token != .object_begin) {
-                misc.error_context.new("Expected object begin token but got: {s}", .{@tagName(begin_token)});
-                return error.UnexpectedToken;
-            }
-            if (default_pointer) |pointer| {
-                copyBytes(value_pointer, pointer, node.size);
-            }
-            var found_keys_buffer: [max_object_fields]bool = undefined;
-            const found_keys = found_keys_buffer[0..array.entries.len];
-            @memset(found_keys, default_pointer != null);
-            while (true) {
-                const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
-                    misc.error_context.new("Failed to read next enum array entry token.", .{});
-                    return err;
-                };
-                var is_token_freed = false;
-                defer if (!is_token_freed) {
-                    freeIfAllocated(allocator, token);
-                    is_token_freed = true;
-                };
-                const key_name = switch (token) {
-                    .allocated_string => |string| string,
-                    .object_end => break,
-                    else => {
-                        misc.error_context.new("Expected string or object end token but got: {s}", .{@tagName(token)});
-                        return error.UnexpectedToken;
-                    },
-                };
-                var key_found = false;
-                for (array.entries, found_keys) |*entry, *found| {
-                    if (std.mem.eql(u8, entry.name, key_name)) {
-                        errdefer misc.error_context.append("Failed to read enum array entry: {s}", .{entry.name});
-                        if (!is_token_freed) { // Key name is not needed while parsing the value.
-                            freeIfAllocated(allocator, token);
-                            is_token_freed = true;
-                        }
-                        const default_entry_pointer = if (default_pointer) |pointer| block: {
-                            break :block offsetConstPointer(pointer, entry.offset);
-                        } else null;
-                        const entry_pointer = offsetPointer(value_pointer, entry.offset);
-                        readNode(context, array.value, entry_pointer, default_entry_pointer) catch |err| {
-                            misc.error_context.append("Failed to read entry value.", .{});
-                            return err;
-                        };
-                        key_found = true;
-                        found.* = true;
-                        break;
-                    }
-                }
-                if (!key_found) {
-                    reader.skipValue() catch |err| {
-                        misc.error_context.new("Failed to skip enum array entry value: {s}", .{key_name});
-                        return err;
-                    };
-                }
-            }
-            for (array.entries, found_keys) |*entry, found| {
-                if (!found) {
-                    misc.error_context.new("Failed to find enum array entry inside JSON object: {s}", .{entry.name});
-                    return error.EntryNotFound;
-                }
-            }
-        },
-        .single_line => |*single_line| {
-            const default_inner_pointer = if (default_pointer) |pointer| block: {
-                break :block offsetConstPointer(pointer, single_line.offset);
-            } else null;
-            const inner_pointer = offsetPointer(value_pointer, single_line.offset);
-            readNode(context, single_line.node, inner_pointer, default_inner_pointer) catch |err| {
-                misc.error_context.append("Failed to read {s}'s array.", .{single_line.name});
-                return err;
-            };
-        },
-    }
-}
-
-fn readEnumIndex(reader: *std.json.Reader, allocator: std.mem.Allocator, names: []const [:0]const u8) !usize {
-    const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
-        misc.error_context.new("Failed to read enum value token.", .{});
-        return err;
-    };
-    defer freeIfAllocated(allocator, token);
-    const string = switch (token) {
-        .allocated_string => |string| string,
-        else => {
-            misc.error_context.new("Expected a string token but got: {s}", .{@tagName(token)});
-            return error.UnexpectedToken;
-        },
-    };
-    for (names, 0..) |name, index| {
-        if (std.mem.eql(u8, name, string)) {
-            return index;
-        }
-    }
-    misc.error_context.new("Invalid enum value: {s}", .{string});
-    return error.InvalidEnumValue;
-}
-
-fn copyBytes(destination: *anyopaque, source: *const anyopaque, size: usize) void {
-    const destination_bytes: [*]u8 = @ptrCast(destination);
-    const source_bytes: [*]const u8 = @ptrCast(source);
-    @memcpy(destination_bytes[0..size], source_bytes[0..size]);
-}
-
-fn offsetPointer(pointer: *anyopaque, offset: usize) *anyopaque {
-    const bytes: [*]u8 = @ptrCast(pointer);
-    return @ptrCast(bytes + offset);
-}
-
-fn offsetConstPointer(pointer: *const anyopaque, offset: usize) *const anyopaque {
-    const bytes: [*]const u8 = @ptrCast(pointer);
-    return @ptrCast(bytes + offset);
-}
-
-fn writeVoid(writer: *std.Io.Writer) !void {
-    writer.writeAll("{}") catch |err| {
-        misc.error_context.new("Failed to write void value.", .{});
-        return err;
-    };
-}
-
-fn readVoid(reader: *std.json.Reader) !void {
-    const token_type = reader.peekNextTokenType() catch |err| {
-        misc.error_context.new("Failed to peek void token type.", .{});
-        return err;
-    };
-    if (token_type != .object_begin) {
-        misc.error_context.new("Expected object begin token but got: {s}", .{@tagName(token_type)});
-        return error.UnexpectedToken;
-    }
-    reader.skipValue() catch |err| {
-        misc.error_context.new("Failed to skip void value.", .{});
-        return err;
-    };
-}
-
-fn writeBool(writer: *std.Io.Writer, value: bool) !void {
-    const string = if (value) "true" else "false";
-    writer.writeAll(string) catch |err| {
-        misc.error_context.new("Failed to write boolean value: {s}", .{string});
-        return err;
-    };
-}
-
-fn readBool(reader: *std.json.Reader) !bool {
-    const token = reader.next() catch |err| {
-        misc.error_context.new("Failed to read boolean value token.", .{});
-        return err;
-    };
-    switch (token) {
-        .false => return false,
-        .true => return true,
-        else => {
-            misc.error_context.new("Expected true or false token but got: {s}", .{@tagName(token)});
-            return error.UnexpectedToken;
-        },
-    }
-}
-
-fn writeInt(writer: *std.Io.Writer, value: anytype) !void {
-    writer.print("{}", .{value}) catch |err| {
-        misc.error_context.new("Failed to write int value: {}", .{value});
-        return err;
-    };
-}
-
-fn readInt(Type: type, reader: *std.json.Reader, allocator: std.mem.Allocator) !Type {
-    const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
-        misc.error_context.new("Failed to read int value token.", .{});
-        return err;
-    };
-    defer freeIfAllocated(allocator, token);
-    const string = switch (token) {
-        .allocated_number => |string| string,
-        else => {
-            misc.error_context.new("Expected a number token but got: {s}", .{@tagName(token)});
-            return error.UnexpectedToken;
-        },
-    };
-    return std.fmt.parseInt(Type, string, 10) catch |err| {
-        misc.error_context.new("Failed to parse string as integer: {s}", .{string});
-        return err;
-    };
-}
-
-fn writeFloat(writer: *std.Io.Writer, value: anytype) !void {
-    writer.print("{}", .{value}) catch |err| {
-        misc.error_context.new("Failed to write float value: {}", .{value});
-        return err;
-    };
-}
-
-fn readFloat(Type: type, reader: *std.json.Reader, allocator: std.mem.Allocator) !Type {
-    const token = reader.nextAllocMax(allocator, .alloc_always, buffer_size) catch |err| {
-        misc.error_context.new("Failed to read float value token.", .{});
-        return err;
-    };
-    defer freeIfAllocated(allocator, token);
-    const string = switch (token) {
-        .allocated_number => |string| string,
-        else => {
-            misc.error_context.new("Expected a number token but got: {s}", .{@tagName(token)});
-            return error.UnexpectedToken;
-        },
-    };
-    return std.fmt.parseFloat(Type, string) catch |err| {
-        misc.error_context.new("Failed to parse string as float: {s}", .{string});
-        return err;
-    };
-}
-
-inline fn isBoundedArray(Type: type) bool {
-    comptime return hasTag(Type, misc.bounded_array_tag);
-}
-
-inline fn isEnumArray(Type: type) bool {
-    comptime {
-        const info = @typeInfo(Type);
-        if (info != .@"struct") return false;
-        if (!@hasDecl(Type, "Indexer")) return false;
-        if (!@hasDecl(Type, "Key")) return false;
-        if (!@hasDecl(Type, "Value")) return false;
-        if (!@hasDecl(Type, "len")) return false;
-        return true;
-    }
-}
-
-inline fn isVector(Type: type) bool {
-    comptime return hasTag(Type, math.vector_tag);
-}
-
-inline fn isMatrix(Type: type) bool {
-    comptime return hasTag(Type, math.matrix_tag);
-}
-
-fn freeIfAllocated(allocator: std.mem.Allocator, token: std.json.Token) void {
-    switch (token) {
-        .allocated_number, .allocated_string => |slice| {
-            allocator.free(slice);
-        },
-        else => {},
-    }
-}
-
-inline fn hasTag(Type: type, comptime tag: type) bool {
-    comptime {
-        const info = @typeInfo(Type);
-        if (info != .@"struct" and info != .@"enum" and info != .@"union") return false;
-        if (!@hasDecl(Type, "tag")) return false;
-        if (@TypeOf(Type.tag) != type) return false;
-        return Type.tag == tag;
-    }
-}
 
 const testing = std.testing;
 
