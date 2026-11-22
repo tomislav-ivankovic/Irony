@@ -12,19 +12,19 @@ pub fn drawData(label: [:0]const u8, pointer: anytype) void {
             "The drawData function expects a pointer but provided value is of type: " ++ @typeName(@TypeOf(pointer)),
         );
     }
-    const node = getNode(@typeInfo(@TypeOf(pointer)).pointer.child);
+    const info = TypeInfo.fromType(@typeInfo(@TypeOf(pointer)).pointer.child);
     const ctx = Context{
         .label = label,
-        .type_name = node.type_name,
+        .type_name = info.type_name,
         .address = @intFromPtr(pointer),
         .bit_offset = null,
-        .bit_size = node.bit_size,
+        .bit_size = info.bit_size,
         .parent = null,
     };
-    drawNode(&ctx, node, @intFromPtr(pointer), 0);
+    drawValue(&ctx, info, @intFromPtr(pointer), 0);
 }
 
-const Node = struct {
+const TypeInfo = struct {
     type_name: [:0]const u8,
     size: usize,
     bit_size: usize,
@@ -50,7 +50,7 @@ const Node = struct {
         converted_value: ConvertedValue,
         custom_pointer: CustomPointer,
         proxy: Proxy,
-        alias: *const Node,
+        alias: *const TypeInfo,
         bounded_array: BoundedArray,
     };
     pub const Number = struct {
@@ -61,14 +61,14 @@ const Node = struct {
     pub const Enum = struct {
         names: []const [:0]const u8,
         values: []const u128,
-        tag: *const Node,
+        tag: *const TypeInfo,
     };
     pub const Optional = struct {
-        payload: *const Node,
+        payload: *const TypeInfo,
         getPayload: *const fn (pointer: *const anyopaque) ?*const anyopaque,
     };
     pub const ErrorUnion = struct {
-        payload: *const Node,
+        payload: *const TypeInfo,
         getValue: *const fn (pointer: *const anyopaque) ErrorUnionValue,
     };
     pub const ErrorUnionValue = union(enum) {
@@ -77,11 +77,11 @@ const Node = struct {
     };
     pub const Array = struct {
         len: usize,
-        element: *const Node,
+        element: *const TypeInfo,
     };
     pub const Struct = struct {
         is_packed: bool,
-        backing_integer: ?*const Node,
+        backing_integer: ?*const TypeInfo,
         fields: []const StructField,
     };
     pub const StructField = struct {
@@ -89,19 +89,19 @@ const Node = struct {
         is_hidden: bool,
         bit_offset: usize,
         bit_size: usize,
-        node: *const Node,
+        info: *const TypeInfo,
     };
     pub const Union = struct {
         fields: []const UnionField,
     };
     pub const UnionField = struct {
         name: [:0]const u8,
-        node: *const Node,
+        info: *const TypeInfo,
     };
     pub const TaggedUnion = struct {
-        tag: *const Node,
+        tag: *const TypeInfo,
         tag_bit_size: usize,
-        variants: []const *const Node,
+        variants: []const *const TypeInfo,
         getActive: *const fn (pointer: *const anyopaque) ActiveVariant,
     };
     pub const ActiveVariant = struct {
@@ -110,10 +110,10 @@ const Node = struct {
     };
     pub const Pointer = struct {
         /// Null for pointers that point to an unknown number of elements.
-        getChild: ?*const fn () *const Node,
+        getChild: ?*const fn () *const TypeInfo,
     };
     pub const Slice = struct {
-        getElement: *const fn () *const Node,
+        getElement: *const fn () *const TypeInfo,
         getValue: *const fn (pointer: *const anyopaque) SliceValue,
     };
     pub const SliceValue = struct {
@@ -123,239 +123,250 @@ const Node = struct {
     };
     pub const ConvertedValue = struct {
         raw_bit_offset: usize,
-        raw: *const Node,
+        raw: *const TypeInfo,
         drawConverted: *const fn (parent: *const Context, pointer: *const anyopaque) void,
     };
     pub const CustomPointer = struct {
         address_bit_offset: usize,
-        getChild: *const fn () *const Node,
+        getChild: *const fn () *const TypeInfo,
         toConstPointer: *const fn (pointer: *const anyopaque) ?*const anyopaque,
     };
     pub const Proxy = struct {
         trail_offset: usize,
-        getChild: *const fn () *const Node,
+        getChild: *const fn () *const TypeInfo,
         toConstPointer: *const fn (pointer: *const anyopaque) ?*const anyopaque,
     };
     pub const BoundedArray = struct {
         len_offset: usize,
-        len: *const Node,
+        len: *const TypeInfo,
         buffer_offset: usize,
         buffer_len: usize,
-        element: *const Node,
+        element: *const TypeInfo,
     };
-};
 
-fn getNode(Type: type) *const Node {
-    return &NodeOf(Type).node;
-}
-
-fn getNodeFunction(Type: type) *const fn () *const Node {
-    return struct {
-        fn call() *const Node {
-            return getNode(Type);
-        }
-    }.call;
-}
-
-fn NodeOf(Type: type) type {
-    return struct {
-        const node = Node{
-            .type_name = @typeName(Type),
-            .size = @sizeOf(Type),
-            .bit_size = bitSizeOf(Type),
-            .kind = buildKind(Type),
-        };
-    };
-}
-
-fn buildKind(Type: type) Node.Kind {
-    if (Type == sdk.memory.PointerTrail) {
-        return .pointer_trail;
-    } else if (hasTag(Type, sdk.memory.converted_value_tag)) {
-        return .{ .converted_value = .{
-            .raw_bit_offset = @bitOffsetOf(Type, "raw"),
-            .raw = getNode(@FieldType(Type, "raw")),
-            .drawConverted = struct {
-                fn call(parent: *const Context, pointer: *const anyopaque) void {
-                    const typed_pointer: *const Type = @ptrCast(@alignCast(pointer));
-                    const converted = typed_pointer.convert();
-                    drawChild(parent, "converted", getNode(@TypeOf(converted)), @intFromPtr(&converted), null);
-                }
-            }.call,
-        } };
-    } else if (hasTag(Type, sdk.memory.pointer_tag)) {
-        return .{ .custom_pointer = .{
-            .address_bit_offset = @bitOffsetOf(Type, "address"),
-            .getChild = getNodeFunction(Type.Child),
-            .toConstPointer = struct {
-                fn call(pointer: *const anyopaque) ?*const anyopaque {
-                    const typed_pointer: *const Type = @ptrCast(@alignCast(pointer));
-                    return @ptrCast(typed_pointer.toConstPointer());
-                }
-            }.call,
-        } };
-    } else if (hasTag(Type, sdk.memory.proxy_tag)) {
-        return .{ .proxy = .{
-            .trail_offset = @offsetOf(Type, "trail"),
-            .getChild = getNodeFunction(Type.Child),
-            .toConstPointer = struct {
-                fn call(pointer: *const anyopaque) ?*const anyopaque {
-                    const typed_pointer: *const Type = @ptrCast(@alignCast(pointer));
-                    return @ptrCast(typed_pointer.toConstPointer());
-                }
-            }.call,
-        } };
-    } else if (hasTag(Type, sdk.math.vector_tag)) {
-        return .{ .alias = if (@typeInfo(Type.Array).array.len > 4) getNode(Type.Array) else getNode(Type.Coords) };
-    } else if (hasTag(Type, sdk.misc.bounded_array_tag)) {
-        return .{ .bounded_array = .{
-            .len_offset = @offsetOf(Type, "len"),
-            .len = getNode(Type.Length),
-            .buffer_offset = @offsetOf(Type, "buffer"),
-            .buffer_len = Type.max_len,
-            .element = getNode(Type.Child),
-        } };
+    pub inline fn fromType(Type: type) *const TypeInfo {
+        return comptime &Of(Type).info;
     }
-    return switch (@typeInfo(Type)) {
-        .void => .void,
-        .null => .null,
-        .undefined => .undefined,
-        .bool => .bool,
-        .int => |*info| .{ .number = .{
-            .kind = switch (info.signedness) {
-                .unsigned => .unsigned,
-                .signed => .signed,
-            },
-            .bits = readBitSize(Type),
-            .is_character = Type == u8,
-        } },
-        .float => .{ .number = .{ .kind = .float, .bits = readBitSize(Type), .is_character = false } },
-        .@"enum" => |*info| block: {
-            const Tag = info.tag_type;
-            const UnsignedTag = @Int(.unsigned, @bitSizeOf(Tag));
-            var values: [info.field_values.len]u128 = undefined;
-            for (info.field_values, &values) |field_value, *value| {
-                value.* = @as(UnsignedTag, @bitCast(@as(Tag, field_value)));
+
+    pub fn fromTypeFunction(Type: type) *const fn () *const TypeInfo {
+        return struct {
+            fn call() *const TypeInfo {
+                return fromType(Type);
             }
-            const final_values = values;
-            break :block .{ .@"enum" = .{
-                .names = info.field_names,
-                .values = &final_values,
-                .tag = getNode(info.tag_type),
-            } };
-        },
-        .error_set => .error_set,
-        .optional => |*info| .{ .optional = .{
-            .payload = getNode(info.child),
-            .getPayload = struct {
-                fn call(pointer: *const anyopaque) ?*const anyopaque {
-                    const typed_pointer: *const Type = @ptrCast(@alignCast(pointer));
-                    if (typed_pointer.*) |*payload| {
-                        return @ptrCast(payload);
-                    } else {
-                        return null;
-                    }
-                }
-            }.call,
-        } },
-        .error_union => |*info| .{ .error_union = .{
-            .payload = getNode(info.payload),
-            .getValue = struct {
-                fn call(pointer: *const anyopaque) Node.ErrorUnionValue {
-                    const typed_pointer: *const Type = @ptrCast(@alignCast(pointer));
-                    if (typed_pointer.*) |*payload| {
-                        return .{ .payload = @ptrCast(payload) };
-                    } else |err| {
-                        return .{ .err = err };
-                    }
-                }
-            }.call,
-        } },
-        .array => |*info| .{ .array = .{ .len = info.len, .element = getNode(info.child) } },
-        .@"struct" => |*info| block: {
-            var fields: [info.field_names.len]Node.StructField = undefined;
-            for (info.field_names, info.field_types, &fields) |field_name, Field, *field| {
-                field.* = .{
-                    .name = field_name,
-                    .is_hidden = std.mem.startsWith(u8, field_name, "_"),
-                    .bit_offset = @bitOffsetOf(Type, field_name),
-                    .bit_size = switch (info.layout) {
-                        .auto, .@"extern" => std.mem.byte_size_in_bits * @sizeOf(Field),
-                        .@"packed" => bitSizeOf(Field),
-                    },
-                    .node = getNode(Field),
-                };
-            }
-            const final_fields = fields;
-            break :block .{ .@"struct" = .{
-                .is_packed = info.layout == .@"packed",
-                .backing_integer = if (info.backing_integer) |BackingInt| getNode(BackingInt) else null,
-                .fields = &final_fields,
-            } };
-        },
-        .@"union" => |*info| if (info.tag_type) |Tag| block: {
-            var variants: [info.field_types.len]*const Node = undefined;
-            for (info.field_types, &variants) |Field, *variant| {
-                variant.* = getNode(Field);
-            }
-            const final_variants = variants;
-            break :block .{ .tagged_union = .{
-                .tag = getNode(Tag),
-                .tag_bit_size = @sizeOf(Tag) * std.mem.byte_size_in_bits,
-                .variants = &final_variants,
-                .getActive = struct {
-                    fn call(pointer: *const anyopaque) Node.ActiveVariant {
+        }.call;
+    }
+
+    fn Of(Type: type) type {
+        return struct {
+            const info = TypeInfo{
+                .type_name = @typeName(Type),
+                .size = @sizeOf(Type),
+                .bit_size = bitSizeOf(Type),
+                .kind = buildKind(Type),
+            };
+        };
+    }
+
+    fn buildKind(Type: type) TypeInfo.Kind {
+        if (Type == sdk.memory.PointerTrail) {
+            return .pointer_trail;
+        } else if (hasTag(Type, sdk.memory.converted_value_tag)) {
+            return .{ .converted_value = .{
+                .raw_bit_offset = @bitOffsetOf(Type, "raw"),
+                .raw = fromType(@FieldType(Type, "raw")),
+                .drawConverted = struct {
+                    fn call(parent: *const Context, pointer: *const anyopaque) void {
                         const typed_pointer: *const Type = @ptrCast(@alignCast(pointer));
-                        return switch (typed_pointer.*) {
-                            inline else => |*payload, tag| .{
-                                .index = comptime std.meta.fieldIndex(Type, @tagName(tag)).?,
-                                .address = @intFromPtr(payload),
-                            },
-                        };
+                        const converted = typed_pointer.convert();
+                        drawChild(parent, "converted", fromType(@TypeOf(converted)), @intFromPtr(&converted), null);
                     }
                 }.call,
             } };
-        } else block: {
-            var fields: [info.field_names.len]Node.UnionField = undefined;
-            for (info.field_names, info.field_types, &fields) |field_name, Field, *field| {
-                field.* = .{ .name = field_name, .node = getNode(Field) };
-            }
-            const final_fields = fields;
-            break :block .{ .@"union" = .{ .fields = &final_fields } };
-        },
-        .pointer => |*info| switch (@typeInfo(info.child)) {
-            .@"fn", .@"opaque" => buildKind(usize),
-            else => switch (info.size) {
-                .one => .{ .pointer = .{ .getChild = getNodeFunction(info.child) } },
-                .slice => .{ .slice = .{
-                    .getElement = getNodeFunction(info.child),
-                    .getValue = struct {
-                        fn call(pointer: *const anyopaque) Node.SliceValue {
+        } else if (hasTag(Type, sdk.memory.pointer_tag)) {
+            return .{ .custom_pointer = .{
+                .address_bit_offset = @bitOffsetOf(Type, "address"),
+                .getChild = fromTypeFunction(Type.Child),
+                .toConstPointer = struct {
+                    fn call(pointer: *const anyopaque) ?*const anyopaque {
+                        const typed_pointer: *const Type = @ptrCast(@alignCast(pointer));
+                        return @ptrCast(typed_pointer.toConstPointer());
+                    }
+                }.call,
+            } };
+        } else if (hasTag(Type, sdk.memory.proxy_tag)) {
+            return .{ .proxy = .{
+                .trail_offset = @offsetOf(Type, "trail"),
+                .getChild = fromTypeFunction(Type.Child),
+                .toConstPointer = struct {
+                    fn call(pointer: *const anyopaque) ?*const anyopaque {
+                        const typed_pointer: *const Type = @ptrCast(@alignCast(pointer));
+                        return @ptrCast(typed_pointer.toConstPointer());
+                    }
+                }.call,
+            } };
+        } else if (hasTag(Type, sdk.math.vector_tag)) {
+            const Alias = if (@typeInfo(Type.Array).array.len > 4) Type.Array else Type.Coords;
+            return .{ .alias = fromType(Alias) };
+        } else if (hasTag(Type, sdk.misc.bounded_array_tag)) {
+            return .{ .bounded_array = .{
+                .len_offset = @offsetOf(Type, "len"),
+                .len = fromType(Type.Length),
+                .buffer_offset = @offsetOf(Type, "buffer"),
+                .buffer_len = Type.max_len,
+                .element = fromType(Type.Child),
+            } };
+        }
+        return switch (@typeInfo(Type)) {
+            .void => .void,
+            .null => .null,
+            .undefined => .undefined,
+            .bool => .bool,
+            .int => |*info| .{ .number = .{
+                .kind = switch (info.signedness) {
+                    .unsigned => .unsigned,
+                    .signed => .signed,
+                },
+                .bits = readBitSize(Type),
+                .is_character = Type == u8,
+            } },
+            .float => .{ .number = .{ .kind = .float, .bits = readBitSize(Type), .is_character = false } },
+            .@"enum" => |*info| block: {
+                const Tag = info.tag_type;
+                const UnsignedTag = @Int(.unsigned, @bitSizeOf(Tag));
+                var values: [info.field_values.len]u128 = undefined;
+                for (info.field_values, &values) |field_value, *value| {
+                    value.* = @as(UnsignedTag, @bitCast(@as(Tag, field_value)));
+                }
+                const final_values = values;
+                break :block .{ .@"enum" = .{
+                    .names = info.field_names,
+                    .values = &final_values,
+                    .tag = fromType(info.tag_type),
+                } };
+            },
+            .error_set => .error_set,
+            .optional => |*info| .{ .optional = .{
+                .payload = fromType(info.child),
+                .getPayload = struct {
+                    fn call(pointer: *const anyopaque) ?*const anyopaque {
+                        const typed_pointer: *const Type = @ptrCast(@alignCast(pointer));
+                        if (typed_pointer.*) |*payload| {
+                            return @ptrCast(payload);
+                        } else {
+                            return null;
+                        }
+                    }
+                }.call,
+            } },
+            .error_union => |*info| .{ .error_union = .{
+                .payload = fromType(info.payload),
+                .getValue = struct {
+                    fn call(pointer: *const anyopaque) TypeInfo.ErrorUnionValue {
+                        const typed_pointer: *const Type = @ptrCast(@alignCast(pointer));
+                        if (typed_pointer.*) |*payload| {
+                            return .{ .payload = @ptrCast(payload) };
+                        } else |err| {
+                            return .{ .err = err };
+                        }
+                    }
+                }.call,
+            } },
+            .array => |*info| .{ .array = .{ .len = info.len, .element = fromType(info.child) } },
+            .@"struct" => |*info| block: {
+                var fields: [info.field_names.len]TypeInfo.StructField = undefined;
+                for (info.field_names, info.field_types, &fields) |field_name, Field, *field| {
+                    field.* = .{
+                        .name = field_name,
+                        .is_hidden = std.mem.startsWith(u8, field_name, "_"),
+                        .bit_offset = @bitOffsetOf(Type, field_name),
+                        .bit_size = switch (info.layout) {
+                            .auto, .@"extern" => std.mem.byte_size_in_bits * @sizeOf(Field),
+                            .@"packed" => bitSizeOf(Field),
+                        },
+                        .info = fromType(Field),
+                    };
+                }
+                const final_fields = fields;
+                break :block .{ .@"struct" = .{
+                    .is_packed = info.layout == .@"packed",
+                    .backing_integer = if (info.backing_integer) |BackingInt| fromType(BackingInt) else null,
+                    .fields = &final_fields,
+                } };
+            },
+            .@"union" => |*info| if (info.tag_type) |Tag| block: {
+                var variants: [info.field_types.len]*const TypeInfo = undefined;
+                for (info.field_types, &variants) |Field, *variant| {
+                    variant.* = fromType(Field);
+                }
+                const final_variants = variants;
+                break :block .{ .tagged_union = .{
+                    .tag = fromType(Tag),
+                    .tag_bit_size = @sizeOf(Tag) * std.mem.byte_size_in_bits,
+                    .variants = &final_variants,
+                    .getActive = struct {
+                        fn call(pointer: *const anyopaque) TypeInfo.ActiveVariant {
                             const typed_pointer: *const Type = @ptrCast(@alignCast(pointer));
-                            return .{
-                                .elements_address = @intFromPtr(typed_pointer.ptr),
-                                .len = typed_pointer.len,
-                                .len_address = @intFromPtr(&typed_pointer.len),
+                            return switch (typed_pointer.*) {
+                                inline else => |*payload, tag| .{
+                                    .index = comptime std.meta.fieldIndex(Type, @tagName(tag)).?,
+                                    .address = @intFromPtr(payload),
+                                },
                             };
                         }
                     }.call,
-                } },
-                .many, .c => .{ .pointer = .{ .getChild = null } },
+                } };
+            } else block: {
+                var fields: [info.field_names.len]TypeInfo.UnionField = undefined;
+                for (info.field_names, info.field_types, &fields) |field_name, Field, *field| {
+                    field.* = .{ .name = field_name, .info = fromType(Field) };
+                }
+                const final_fields = fields;
+                break :block .{ .@"union" = .{ .fields = &final_fields } };
             },
-        },
-        else => @compileError("Unsupported data type: " ++ @typeName(Type)),
-    };
-}
-
-fn readBitSize(Type: type) u16 {
-    if (@bitSizeOf(Type) > 128) {
-        @compileError("Numbers larger than 128 bits are not supported: " ++ @typeName(Type));
+            .pointer => |*info| switch (@typeInfo(info.child)) {
+                .@"fn", .@"opaque" => buildKind(usize),
+                else => switch (info.size) {
+                    .one => .{ .pointer = .{ .getChild = fromTypeFunction(info.child) } },
+                    .slice => .{ .slice = .{
+                        .getElement = fromTypeFunction(info.child),
+                        .getValue = struct {
+                            fn call(pointer: *const anyopaque) TypeInfo.SliceValue {
+                                const typed_pointer: *const Type = @ptrCast(@alignCast(pointer));
+                                return .{
+                                    .elements_address = @intFromPtr(typed_pointer.ptr),
+                                    .len = typed_pointer.len,
+                                    .len_address = @intFromPtr(&typed_pointer.len),
+                                };
+                            }
+                        }.call,
+                    } },
+                    .many, .c => .{ .pointer = .{ .getChild = null } },
+                },
+            },
+            else => @compileError("Unsupported data type: " ++ @typeName(Type)),
+        };
     }
-    return @bitSizeOf(Type);
-}
 
-fn drawNode(ctx: *const Context, node: *const Node, address: usize, bit_shift: usize) void {
-    switch (node.kind) {
+    fn readBitSize(Type: type) u16 {
+        if (@bitSizeOf(Type) > 128) {
+            @compileError("Numbers larger than 128 bits are not supported: " ++ @typeName(Type));
+        }
+        return @bitSizeOf(Type);
+    }
+
+    inline fn hasTag(comptime Type: type, comptime tag: type) bool {
+        comptime {
+            const info = @typeInfo(Type);
+            if (info != .@"struct" and info != .@"enum" and info != .@"union") return false;
+            if (!@hasDecl(Type, "tag")) return false;
+            if (@TypeOf(Type.tag) != type) return false;
+            return Type.tag == tag;
+        }
+    }
+};
+
+fn drawValue(ctx: *const Context, info: *const TypeInfo, address: usize, bit_shift: usize) void {
+    switch (info.kind) {
         .void => drawValueText(ctx, "{} (void instance)"),
         .null => drawValueText(ctx, "null"),
         .undefined => drawValueText(ctx, "undefined"),
@@ -367,12 +378,12 @@ fn drawNode(ctx: *const Context, node: *const Node, address: usize, bit_shift: u
             drawError(ctx, @errorFromInt(@as(ErrorInt, @intCast(readBits(address, bit_shift, @bitSizeOf(ErrorInt))))));
         },
         .optional => |*optional| if (optional.getPayload(@ptrFromInt(address))) |payload| {
-            drawNode(ctx, optional.payload, @intFromPtr(payload), 0);
+            drawValue(ctx, optional.payload, @intFromPtr(payload), 0);
         } else {
             drawValueText(ctx, "null");
         },
         .error_union => |*error_union| switch (error_union.getValue(@ptrFromInt(address))) {
-            .payload => |payload| drawNode(ctx, error_union.payload, @intFromPtr(payload), 0),
+            .payload => |payload| drawValue(ctx, error_union.payload, @intFromPtr(payload), 0),
             .err => |err| drawError(ctx, err),
         },
         .array => |*array| {
@@ -385,7 +396,7 @@ fn drawNode(ctx: *const Context, node: *const Node, address: usize, bit_shift: u
             if (!beginNodeWithDefaultMenu(ctx)) return;
             defer endNode();
             for (@"union".fields) |*field| {
-                drawChildShifted(ctx, field.name, field.node, address, bit_shift, null, field.node.bit_size);
+                drawChildShifted(ctx, field.name, field.info, address, bit_shift, null, field.info.bit_size);
             }
         },
         .tagged_union => |*tagged_union| {
@@ -400,16 +411,16 @@ fn drawNode(ctx: *const Context, node: *const Node, address: usize, bit_shift: u
         .pointer => |*pointer| {
             if (!beginNodeWithDefaultMenu(ctx)) return;
             defer endNode();
-            drawChild(ctx, "address", getNode(usize), address, null);
+            drawChild(ctx, "address", TypeInfo.fromType(usize), address, null);
             const getChild = pointer.getChild orelse return;
             drawChild(ctx, "value", getChild(), readAddress(address), null);
         },
         .slice => |*slice| {
             if (!beginNodeWithDefaultMenu(ctx)) return;
             defer endNode();
-            drawChild(ctx, "address", getNode(usize), address, null);
+            drawChild(ctx, "address", TypeInfo.fromType(usize), address, null);
             const value = slice.getValue(@ptrFromInt(address));
-            drawChild(ctx, "len", getNode(usize), value.len_address, null);
+            drawChild(ctx, "len", TypeInfo.fromType(usize), value.len_address, null);
             drawElements(ctx, slice.getElement(), value.elements_address, value.len, value.elements_address);
         },
         .pointer_trail => drawPointerTrail(ctx, @ptrFromInt(address)),
@@ -427,7 +438,7 @@ fn drawNode(ctx: *const Context, node: *const Node, address: usize, bit_shift: u
             if (!beginNodeWithDefaultMenu(ctx)) return;
             defer endNode();
             const address_address = address + (custom_pointer.address_bit_offset / std.mem.byte_size_in_bits);
-            drawChild(ctx, "address", getNode(usize), address_address, custom_pointer.address_bit_offset);
+            drawChild(ctx, "address", TypeInfo.fromType(usize), address_address, custom_pointer.address_bit_offset);
             drawPointedValue(ctx, custom_pointer.getChild(), value_pointer);
         },
         .proxy => |*proxy| {
@@ -436,10 +447,10 @@ fn drawNode(ctx: *const Context, node: *const Node, address: usize, bit_shift: u
             defer if (value_pointer == null) popErrorStyle();
             if (!beginNodeWithDefaultMenu(ctx)) return;
             defer endNode();
-            drawChild(ctx, "trail", getNode(sdk.memory.PointerTrail), address + proxy.trail_offset, null);
+            drawChild(ctx, "trail", TypeInfo.fromType(sdk.memory.PointerTrail), address + proxy.trail_offset, null);
             drawPointedValue(ctx, proxy.getChild(), value_pointer);
         },
-        .alias => |alias| drawNode(ctx, alias, address, bit_shift),
+        .alias => |alias| drawValue(ctx, alias, address, bit_shift),
         .bounded_array => |*bounded_array| {
             if (!beginNodeWithDefaultMenu(ctx)) return;
             defer endNode();
@@ -465,7 +476,7 @@ fn drawValueText(ctx: *const Context, text: [:0]const u8) void {
     drawMenuText("value", text);
 }
 
-fn drawNumber(ctx: *const Context, number: *const Node.Number, raw: u128) void {
+fn drawNumber(ctx: *const Context, number: *const TypeInfo.Number, raw: u128) void {
     var buffer: [string_buffer_size]u8 = undefined;
     const text = switch (number.kind) {
         .unsigned => if (number.is_character and std.ascii.isPrint(@intCast(raw)))
@@ -490,13 +501,13 @@ fn drawNumber(ctx: *const Context, number: *const Node.Number, raw: u128) void {
     drawNumberMenuItems(raw, number.bits);
 }
 
-fn drawEnum(ctx: *const Context, @"enum": *const Node.Enum, address: usize, bit_shift: usize) void {
+fn drawEnum(ctx: *const Context, @"enum": *const TypeInfo.Enum, address: usize, bit_shift: usize) void {
     const bits = @"enum".tag.kind.number.bits;
     const raw = readBits(address, bit_shift, bits);
     const index = std.mem.indexOfScalar(u128, @"enum".values, raw) orelse {
         pushErrorStyle();
         defer popErrorStyle();
-        drawNode(ctx, @"enum".tag, address, bit_shift);
+        drawValue(ctx, @"enum".tag, address, bit_shift);
         return;
     };
     const text = @"enum".names[index];
@@ -518,7 +529,7 @@ fn drawError(ctx: *const Context, err: anyerror) void {
     drawValueText(ctx, text);
 }
 
-fn drawStruct(ctx: *const Context, @"struct": *const Node.Struct, address: usize, bit_shift: usize) void {
+fn drawStruct(ctx: *const Context, @"struct": *const TypeInfo.Struct, address: usize, bit_shift: usize) void {
     imgui.igPushID_Str(ctx.label);
     const storage = imgui.igGetStateStorage();
     const show_hidden_id = imgui.igGetID_Str("show_hidden");
@@ -547,17 +558,17 @@ fn drawStruct(ctx: *const Context, @"struct": *const Node.Struct, address: usize
         }
         if (@"struct".is_packed) {
             const field_shift = bit_shift + field.bit_offset;
-            drawChildShifted(ctx, field.name, field.node, address, field_shift, field.bit_offset, field.bit_size);
+            drawChildShifted(ctx, field.name, field.info, address, field_shift, field.bit_offset, field.bit_size);
         } else {
             const field_address = address + (field.bit_offset / std.mem.byte_size_in_bits);
-            drawChildShifted(ctx, field.name, field.node, field_address, 0, field.bit_offset, field.bit_size);
+            drawChildShifted(ctx, field.name, field.info, field_address, 0, field.bit_offset, field.bit_size);
         }
     }
 }
 
 fn drawElements(
     ctx: *const Context,
-    element: *const Node,
+    element: *const TypeInfo,
     elements_address: usize,
     len: usize,
     offset_base_address: usize,
@@ -576,34 +587,34 @@ fn drawPointerTrail(ctx: *const Context, pointer: *const sdk.memory.PointerTrail
     defer endNode();
 
     const offsets = pointer.getOffsets();
-    drawChild(ctx, "offsets", getNode(@TypeOf(offsets)), @intFromPtr(&offsets), null);
+    drawChild(ctx, "offsets", TypeInfo.fromType(@TypeOf(offsets)), @intFromPtr(&offsets), null);
 
     const resolved = pointer.resolve();
-    drawChild(ctx, "resolved", getNode(@TypeOf(resolved)), @intFromPtr(&resolved), null);
+    drawChild(ctx, "resolved", TypeInfo.fromType(@TypeOf(resolved)), @intFromPtr(&resolved), null);
 }
 
-fn drawPointedValue(ctx: *const Context, node: *const Node, value_pointer: ?*const anyopaque) void {
+fn drawPointedValue(ctx: *const Context, info: *const TypeInfo, value_pointer: ?*const anyopaque) void {
     const pointer = value_pointer orelse {
         drawTreeText("value", "not readable");
         return;
     };
-    drawChild(ctx, "value", node, @intFromPtr(pointer), null);
+    drawChild(ctx, "value", info, @intFromPtr(pointer), null);
 }
 
 fn drawChild(
     parent: *const Context,
     label: [:0]const u8,
-    node: *const Node,
+    info: *const TypeInfo,
     address: usize,
     bit_offset: ?usize,
 ) void {
-    drawChildShifted(parent, label, node, address, 0, bit_offset, node.bit_size);
+    drawChildShifted(parent, label, info, address, 0, bit_offset, info.bit_size);
 }
 
 fn drawChildShifted(
     parent: *const Context,
     label: [:0]const u8,
-    node: *const Node,
+    info: *const TypeInfo,
     address: usize,
     bit_shift: usize,
     bit_offset: ?usize,
@@ -611,13 +622,13 @@ fn drawChildShifted(
 ) void {
     const ctx = Context{
         .label = label,
-        .type_name = node.type_name,
+        .type_name = info.type_name,
         .address = address,
         .bit_offset = bit_offset,
         .bit_size = bit_size,
         .parent = parent,
     };
-    drawNode(&ctx, node, address, bit_shift);
+    drawValue(&ctx, info, address, bit_shift);
 }
 
 const error_string = "display error";
@@ -649,16 +660,6 @@ const Context = struct {
         try writer.writeAll(self.label);
     }
 };
-
-inline fn hasTag(comptime Type: type, comptime tag: type) bool {
-    comptime {
-        const info = @typeInfo(Type);
-        if (info != .@"struct" and info != .@"enum" and info != .@"union") return false;
-        if (!@hasDecl(Type, "tag")) return false;
-        if (@TypeOf(Type.tag) != type) return false;
-        return Type.tag == tag;
-    }
-}
 
 /// Reads `bits` bits starting `bit_shift` bits after `address`, in little endian order.
 fn readBits(address: usize, bit_shift: usize, bits: usize) u128 {
