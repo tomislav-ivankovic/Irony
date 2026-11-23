@@ -337,10 +337,11 @@ pub const Player = struct {
         var max = -std.math.inf(f32);
         for (lines) |*hit_line| {
             const line = &hit_line.line;
-            min = @min(min, line.point_1.z());
-            max = @max(max, line.point_1.z());
-            min = @min(min, line.point_2.z());
-            max = @max(max, line.point_2.z());
+            const thickness = hit_line.half_thickness;
+            min = @min(min, line.point_1.z() - thickness);
+            max = @max(max, line.point_1.z() + thickness);
+            min = @min(min, line.point_2.z() - thickness);
+            max = @max(max, line.point_2.z() + thickness);
         }
         return .{ .min = @max(min - floor_height, 0), .max = @max(max - floor_height, 0) };
     }
@@ -872,21 +873,30 @@ test "Player.getHitLinesHeight should return correct value" {
     const player = Player{
         .hit_lines = .{
             .buffer = .{
-                .{ .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 4, 5, 6 }) } },
+                .{
+                    .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 4, 5, 6 }) },
+                    .half_thickness = 1,
+                },
                 .{ .line = .{ .point_1 = .fromArray(.{ 7, 8, 9 }), .point_2 = .fromArray(.{ 10, 11, 12 }) } },
                 .{ .line = .{ .point_1 = .fromArray(.{ 13, 14, 15 }), .point_2 = .fromArray(.{ 16, 17, 18 }) } },
-                .{ .line = .{ .point_1 = .fromArray(.{ 19, 20, 21 }), .point_2 = .fromArray(.{ 22, 23, 24 }) } },
+                .{
+                    .line = .{ .point_1 = .fromArray(.{ 19, 20, 21 }), .point_2 = .fromArray(.{ 22, 23, 24 }) },
+                    .half_thickness = 3,
+                },
                 .{ .line = .{ .point_1 = .fromArray(.{ 25, 26, 27 }), .point_2 = .fromArray(.{ 28, 29, 30 }) } },
                 .{ .line = .{ .point_1 = .fromArray(.{ 31, 32, 33 }), .point_2 = .fromArray(.{ 34, 35, 36 }) } },
                 .{ .line = .{ .point_1 = .fromArray(.{ 37, 38, 39 }), .point_2 = .fromArray(.{ 40, 41, 42 }) } },
-                .{ .line = .{ .point_1 = .fromArray(.{ 43, 44, 45 }), .point_2 = .fromArray(.{ 46, 47, 48 }) } },
+                .{
+                    .line = .{ .point_1 = .fromArray(.{ 43, 44, 45 }), .point_2 = .fromArray(.{ 46, 47, 48 }) },
+                    .half_thickness = 2,
+                },
             },
             .len = 8,
         },
     };
-    try testing.expectEqual(model.F32MinMax{ .min = 3, .max = 48 }, player.getHitLinesHeight(0));
-    try testing.expectEqual(model.F32MinMax{ .min = 13, .max = 58 }, player.getHitLinesHeight(-10));
-    try testing.expectEqual(model.F32MinMax{ .min = 0, .max = 38 }, player.getHitLinesHeight(10));
+    try testing.expectEqual(model.F32MinMax{ .min = 2, .max = 50 }, player.getHitLinesHeight(0));
+    try testing.expectEqual(model.F32MinMax{ .min = 12, .max = 60 }, player.getHitLinesHeight(-10));
+    try testing.expectEqual(model.F32MinMax{ .min = 0, .max = 40 }, player.getHitLinesHeight(10));
     try testing.expectEqual(model.F32MinMax{ .min = 0, .max = 0 }, player.getHitLinesHeight(50));
     try testing.expectEqual(model.F32MinMax{ .min = null, .max = null }, player.getHitLinesHeight(null));
     const no_lines_player = Player{ .hit_lines = .{ .buffer = undefined, .len = 0 } };

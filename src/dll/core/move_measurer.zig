@@ -58,13 +58,13 @@ pub const MoveMeasurer = struct {
                 }
             }
             const line = &hit_line.line;
-            const line_min_z = @min(line.point_1.z(), line.point_2.z());
+            const line_min_z = @min(line.point_1.z(), line.point_2.z()) - hit_line.half_thickness;
             if (state.min_attack_z) |state_z| {
                 state.min_attack_z = @min(state_z, line_min_z);
             } else {
                 state.min_attack_z = line_min_z;
             }
-            const line_max_z = @max(line.point_1.z(), line.point_2.z());
+            const line_max_z = @max(line.point_1.z(), line.point_2.z()) + hit_line.half_thickness;
             if (state.max_attack_z) |state_z| {
                 state.max_attack_z = @max(state_z, line_max_z);
             } else {
@@ -100,7 +100,7 @@ pub const MoveMeasurer = struct {
         const line = &hit_line.line;
         const range_1 = line.point_1.swizzle("xy").subtract(reference_point).dot(direction);
         const range_2 = line.point_2.swizzle("xy").subtract(reference_point).dot(direction);
-        return @max(range_1, range_2);
+        return @max(range_1, range_2) + hit_line.half_thickness;
     }
 
     fn findHurtRange(state: *const PlayerState, player: *const model.Player) ?f32 {
@@ -145,23 +145,6 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
             });
         }
     }.call;
-    const hitLines = struct {
-        fn call(array: anytype) model.HitLines {
-            if (@typeInfo(@TypeOf(array)) != .array) {
-                const coerced: [array.len]sdk.math.LineSegment3 = array;
-                return call(coerced);
-            }
-            if (array.len > model.HitLines.max_len) {
-                @compileError("Array length exceeds maximum allowed number of lines.");
-            }
-            var buffer: [model.HitLines.max_len]model.HitLine = undefined;
-            for (array, 0..) |line, index| {
-                buffer[index] = .{ .line = line, .flags = .{} };
-            }
-            return .{ .buffer = buffer, .len = array.len };
-        }
-    }.call;
-
     var frame = model.Frame{};
     var measurer = MoveMeasurer{};
 
@@ -173,7 +156,7 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
                 .collision_spheres = .initFill(.{ .center = .fromArray(.{ 0, 0, 0 }), .radius = 0.0 }),
                 .rotation = std.math.pi,
                 .hurt_cylinders = hurtCylinders(0),
-                .hit_lines = hitLines(.{}),
+                .hit_lines = .empty,
             },
             .{},
         },
@@ -192,7 +175,7 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
                 .collision_spheres = .initFill(.{ .center = .fromArray(.{ 0, 1, 0 }), .radius = 0.0 }),
                 .rotation = 0.5 * std.math.pi,
                 .hurt_cylinders = hurtCylinders(1),
-                .hit_lines = hitLines(.{}),
+                .hit_lines = .empty,
             },
             .{},
         },
@@ -211,18 +194,24 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
                 .collision_spheres = .initFill(.{ .center = .fromArray(.{ 0, 2, 0 }), .radius = 0.0 }),
                 .rotation = 0.5 * std.math.pi,
                 .hurt_cylinders = hurtCylinders(2),
-                .hit_lines = hitLines(.{
-                    sdk.math.LineSegment3{ .point_1 = .fromArray(.{ 0, 4, 1 }), .point_2 = .fromArray(.{ 1, 5, 2 }) },
-                    sdk.math.LineSegment3{ .point_1 = .fromArray(.{ 0, 0, 2 }), .point_2 = .fromArray(.{ -1, 0, 1 }) },
+                .hit_lines = .fromArray(.{
+                    model.HitLine{
+                        .line = .{ .point_1 = .fromArray(.{ 0, 4, 1 }), .point_2 = .fromArray(.{ 1, 5, 2 }) },
+                        .half_thickness = 0.5,
+                    },
+                    model.HitLine{
+                        .line = .{ .point_1 = .fromArray(.{ 0, 0, 2 }), .point_2 = .fromArray(.{ -1, 0, 1 }) },
+                        .half_thickness = 0.25,
+                    },
                 }),
             },
             .{},
         },
     };
     measurer.measure(&frame);
-    try testing.expectEqual(1, frame.players[0].min_attack_z);
-    try testing.expectEqual(2, frame.players[0].max_attack_z);
-    try testing.expectEqual(3, frame.players[0].attack_range);
+    try testing.expectEqual(0.5, frame.players[0].min_attack_z);
+    try testing.expectEqual(2.5, frame.players[0].max_attack_z);
+    try testing.expectEqual(3.5, frame.players[0].attack_range);
     try testing.expectEqual(null, frame.players[0].recovery_range);
 
     frame = .{ // last active frame
@@ -233,17 +222,20 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
                 .collision_spheres = .initFill(.{ .center = .fromArray(.{ 0, 3, 0 }), .radius = 0.0 }),
                 .rotation = 0.5 * std.math.pi,
                 .hurt_cylinders = hurtCylinders(3),
-                .hit_lines = hitLines(.{
-                    sdk.math.LineSegment3{ .point_1 = .fromArray(.{ 0, 5, 2 }), .point_2 = .fromArray(.{ 0, 6, 3 }) },
+                .hit_lines = .fromArray(.{
+                    model.HitLine{
+                        .line = .{ .point_1 = .fromArray(.{ 0, 5, 2 }), .point_2 = .fromArray(.{ 0, 6, 3 }) },
+                        .half_thickness = 0.25,
+                    },
                 }),
             },
             .{},
         },
     };
     measurer.measure(&frame);
-    try testing.expectEqual(1, frame.players[0].min_attack_z);
-    try testing.expectEqual(3, frame.players[0].max_attack_z);
-    try testing.expectEqual(4, frame.players[0].attack_range);
+    try testing.expectEqual(0.5, frame.players[0].min_attack_z);
+    try testing.expectEqual(3.25, frame.players[0].max_attack_z);
+    try testing.expectEqual(4.25, frame.players[0].attack_range);
     try testing.expectEqual(null, frame.players[0].recovery_range);
 
     frame = .{ // first recovery frame
@@ -254,15 +246,15 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
                 .collision_spheres = .initFill(.{ .center = .fromArray(.{ 0, 2, 0 }), .radius = 0.0 }),
                 .rotation = 0.5 * std.math.pi,
                 .hurt_cylinders = hurtCylinders(2),
-                .hit_lines = hitLines(.{}),
+                .hit_lines = .empty,
             },
             .{},
         },
     };
     measurer.measure(&frame);
-    try testing.expectEqual(1, frame.players[0].min_attack_z);
-    try testing.expectEqual(3, frame.players[0].max_attack_z);
-    try testing.expectEqual(4, frame.players[0].attack_range);
+    try testing.expectEqual(0.5, frame.players[0].min_attack_z);
+    try testing.expectEqual(3.25, frame.players[0].max_attack_z);
+    try testing.expectEqual(4.25, frame.players[0].attack_range);
     try testing.expectEqual(null, frame.players[0].recovery_range);
 
     frame = .{ // last attack frame
@@ -273,16 +265,16 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
                 .collision_spheres = .initFill(.{ .center = .fromArray(.{ 0, 1, 0 }), .radius = 0.0 }),
                 .rotation = 0.5 * std.math.pi,
                 .hurt_cylinders = hurtCylinders(1),
-                .hit_lines = hitLines(.{}),
+                .hit_lines = .empty,
             },
             .{},
         },
     };
     measurer.measure(&frame);
-    try testing.expectEqual(1, frame.players[0].min_attack_z);
-    try testing.expectEqual(3, frame.players[0].max_attack_z);
-    try testing.expectEqual(4, frame.players[0].attack_range);
-    try testing.expectEqual(3, frame.players[0].recovery_range);
+    try testing.expectEqual(0.5, frame.players[0].min_attack_z);
+    try testing.expectEqual(3.25, frame.players[0].max_attack_z);
+    try testing.expectEqual(4.25, frame.players[0].attack_range);
+    try testing.expectEqual(3.25, frame.players[0].recovery_range);
 
     frame = .{ // animation after attack starts
         .players = .{
@@ -292,7 +284,7 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
                 .collision_spheres = .initFill(.{ .center = .fromArray(.{ 0, 1, 0 }), .radius = 0.0 }),
                 .rotation = 0.5 * std.math.pi,
                 .hurt_cylinders = hurtCylinders(1),
-                .hit_lines = hitLines(.{}),
+                .hit_lines = .empty,
             },
             .{},
         },
@@ -301,7 +293,7 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
     try testing.expectEqual(null, frame.players[0].min_attack_z);
     try testing.expectEqual(null, frame.players[0].max_attack_z);
     try testing.expectEqual(null, frame.players[0].attack_range);
-    try testing.expectEqual(3, frame.players[0].recovery_range);
+    try testing.expectEqual(3.25, frame.players[0].recovery_range);
 
     frame = .{ // last frame of animation after attack
         .players = .{
@@ -311,7 +303,7 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
                 .collision_spheres = .initFill(.{ .center = .fromArray(.{ 0, 1, 0 }), .radius = 0.0 }),
                 .rotation = 0.5 * std.math.pi,
                 .hurt_cylinders = hurtCylinders(1),
-                .hit_lines = hitLines(.{}),
+                .hit_lines = .empty,
             },
             .{},
         },
@@ -330,7 +322,7 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
                 .collision_spheres = .initFill(.{ .center = .fromArray(.{ 0, 1, 0 }), .radius = 0.0 }),
                 .rotation = 0.5 * std.math.pi,
                 .hurt_cylinders = hurtCylinders(1),
-                .hit_lines = hitLines(.{}),
+                .hit_lines = .empty,
             },
             .{},
         },

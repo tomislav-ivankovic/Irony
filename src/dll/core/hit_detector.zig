@@ -30,7 +30,13 @@ pub const HitDetector = struct {
         const cylinders: *model.HurtCylinders = if (defender.hurt_cylinders) |*c| c else return;
         for (&cylinders.values) |*cylinder| {
             for (lines) |*line| {
-                const intersects = sdk.math.checkCylinderLineSegmentIntersection(cylinder.cylinder, line.line);
+                // Same as the game: thickness is applied by inflating the hurt cylinder instead of the line.
+                const inflated_cylinder = sdk.math.Cylinder{
+                    .center = cylinder.cylinder.center,
+                    .radius = cylinder.cylinder.radius + line.half_thickness,
+                    .half_height = cylinder.cylinder.half_height + line.half_thickness,
+                };
+                const intersects = sdk.math.checkCylinderLineSegmentIntersection(inflated_cylinder, line.line);
                 const connects = intersects and !crushes and !inactive;
                 const power_crushes = connects and is_power_crushing;
                 const block = connects and is_blocking_outcome;
@@ -235,10 +241,8 @@ test "should detect a high crush correctly" {
         .{
             .crushing = .{ .high_crushing = true },
             .hit_outcome = .none,
-            .hurt_cylinders = hurtCylinders(
-            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
-             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
-            ),
+            .hurt_cylinders = hurtCylinders(@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+                @as([7]sdk.math.Cylinder, @splat(connected_cylinder))),
         },
     } };
     var hit_detector = HitDetector{};
@@ -290,10 +294,8 @@ test "should detect a low crush correctly" {
         .{
             .crushing = .{ .low_crushing = true },
             .hit_outcome = .none,
-            .hurt_cylinders = hurtCylinders(
-            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
-             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
-            ),
+            .hurt_cylinders = hurtCylinders(@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+                @as([7]sdk.math.Cylinder, @splat(connected_cylinder))),
         },
     } };
     var hit_detector = HitDetector{};
@@ -345,10 +347,8 @@ test "should detect a mid crush correctly" {
         .{
             .crushing = .{ .invincibility = true },
             .hit_outcome = .none,
-            .hurt_cylinders = hurtCylinders(
-            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
-             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
-            ),
+            .hurt_cylinders = hurtCylinders(@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+                @as([7]sdk.math.Cylinder, @splat(connected_cylinder))),
         },
     } };
     var hit_detector = HitDetector{};
@@ -400,10 +400,8 @@ test "should detect an anti air only crush correctly" {
         .{
             .crushing = .{ .anti_air_only_crushing = true },
             .hit_outcome = .none,
-            .hurt_cylinders = hurtCylinders(
-            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
-             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
-            ),
+            .hurt_cylinders = hurtCylinders(@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+                @as([7]sdk.math.Cylinder, @splat(connected_cylinder))),
         },
     } };
     var hit_detector = HitDetector{};
@@ -455,10 +453,8 @@ test "should detect a power crush correctly" {
         .{
             .crushing = .{ .power_crushing = true },
             .hit_outcome = .none,
-            .hurt_cylinders = hurtCylinders(
-            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
-             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
-            ),
+            .hurt_cylinders = hurtCylinders(@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+                @as([7]sdk.math.Cylinder, @splat(connected_cylinder))),
         },
     } };
     var hit_detector = HitDetector{};
@@ -513,10 +509,8 @@ test "should detect a block correctly" {
         .{
             .crushing = .{},
             .hit_outcome = .blocked_standing,
-            .hurt_cylinders = hurtCylinders(
-            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
-             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
-            ),
+            .hurt_cylinders = hurtCylinders(@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+                @as([7]sdk.math.Cylinder, @splat(connected_cylinder))),
         },
     } };
     var hit_detector = HitDetector{};
@@ -571,10 +565,8 @@ test "should detect a normal hit correctly" {
         .{
             .crushing = .{},
             .hit_outcome = .normal_hit_standing,
-            .hurt_cylinders = hurtCylinders(
-            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
-             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
-            ),
+            .hurt_cylinders = hurtCylinders(@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+                @as([7]sdk.math.Cylinder, @splat(connected_cylinder))),
         },
     } };
     var hit_detector = HitDetector{};
@@ -629,10 +621,8 @@ test "should detect a counter hit correctly" {
         .{
             .crushing = .{},
             .hit_outcome = .counter_hit_standing,
-            .hurt_cylinders = hurtCylinders(
-            	@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
-             	@as([7]sdk.math.Cylinder, @splat(connected_cylinder))
-            ),
+            .hurt_cylinders = hurtCylinders(@as([7]sdk.math.Cylinder, @splat(whiffed_cylinder)) ++
+                @as([7]sdk.math.Cylinder, @splat(connected_cylinder))),
         },
     } };
     var hit_detector = HitDetector{};
@@ -721,4 +711,90 @@ test "should detect inactive lines correctly" {
         .is_connected = true,
         .is_blocked = true,
     }, frame_4.players[0].hit_lines.asSlice()[0].flags);
+}
+
+test "should take hit line thickness into account horizontally" {
+    const hit_line = sdk.math.LineSegment3{
+        .point_1 = .fromArray(.{ 0, 0, 0 }),
+        .point_2 = .fromArray(.{ 1, 0, 0 }),
+    };
+    const hurt_cylinder = sdk.math.Cylinder{
+        .center = .fromArray(.{ 3, 0, 0 }),
+        .radius = 1,
+        .half_height = 1,
+    };
+    var hit_lines = hitLines(.{ hit_line, hit_line });
+    hit_lines.asSlice()[0].half_thickness = 0.9;
+    hit_lines.asSlice()[1].half_thickness = 1.1;
+    var frame = model.Frame{ .players = .{
+        .{
+            .attack_type = .unblockable_mid,
+            .hit_lines = hit_lines,
+        },
+        .{
+            .crushing = .{},
+            .hit_outcome = .none,
+            .hurt_cylinders = hurtCylinders(@splat(hurt_cylinder)),
+        },
+    } };
+    var hit_detector = HitDetector{};
+    hit_detector.detect(&frame);
+
+    try testing.expectEqual(2, frame.players[0].hit_lines.asSlice().len);
+    try testing.expectEqual(model.HitLineFlags{}, frame.players[0].hit_lines.asSlice()[0].flags);
+    try testing.expectEqual(model.HitLineFlags{
+        .is_intersecting = true,
+        .is_connected = true,
+    }, frame.players[0].hit_lines.asSlice()[1].flags);
+
+    try testing.expect(frame.players[1].hurt_cylinders != null);
+    for (&frame.players[1].hurt_cylinders.?.values) |*cylinder| {
+        try testing.expectEqual(model.HurtCylinderFlags{
+            .is_intersecting = true,
+            .is_connected = true,
+        }, cylinder.flags);
+    }
+}
+
+test "should take hit line thickness into account vertically" {
+    const hit_line = sdk.math.LineSegment3{
+        .point_1 = .fromArray(.{ -1, 0, 0 }),
+        .point_2 = .fromArray(.{ 1, 0, 0 }),
+    };
+    const hurt_cylinder = sdk.math.Cylinder{
+        .center = .fromArray(.{ 0, 0, 3 }),
+        .radius = 1,
+        .half_height = 1,
+    };
+    var hit_lines = hitLines(.{ hit_line, hit_line });
+    hit_lines.asSlice()[0].half_thickness = 1.9;
+    hit_lines.asSlice()[1].half_thickness = 2.1;
+    var frame = model.Frame{ .players = .{
+        .{
+            .attack_type = .unblockable_mid,
+            .hit_lines = hit_lines,
+        },
+        .{
+            .crushing = .{},
+            .hit_outcome = .none,
+            .hurt_cylinders = hurtCylinders(@splat(hurt_cylinder)),
+        },
+    } };
+    var hit_detector = HitDetector{};
+    hit_detector.detect(&frame);
+
+    try testing.expectEqual(2, frame.players[0].hit_lines.asSlice().len);
+    try testing.expectEqual(model.HitLineFlags{}, frame.players[0].hit_lines.asSlice()[0].flags);
+    try testing.expectEqual(model.HitLineFlags{
+        .is_intersecting = true,
+        .is_connected = true,
+    }, frame.players[0].hit_lines.asSlice()[1].flags);
+
+    try testing.expect(frame.players[1].hurt_cylinders != null);
+    for (&frame.players[1].hurt_cylinders.?.values) |*cylinder| {
+        try testing.expectEqual(model.HurtCylinderFlags{
+            .is_intersecting = true,
+            .is_connected = true,
+        }, cylinder.flags);
+    }
 }
