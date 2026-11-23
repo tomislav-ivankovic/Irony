@@ -337,11 +337,11 @@ pub const Player = struct {
         var max = -std.math.inf(f32);
         for (lines) |*hit_line| {
             const line = &hit_line.line;
-            const thickness = hit_line.half_thickness;
-            min = @min(min, line.point_1.z() - thickness);
-            max = @max(max, line.point_1.z() + thickness);
-            min = @min(min, line.point_2.z() - thickness);
-            max = @max(max, line.point_2.z() + thickness);
+            const half_height = hit_line.half_height;
+            min = @min(min, line.point_1.z() - half_height);
+            max = @max(max, line.point_1.z() + half_height);
+            min = @min(min, line.point_2.z() - half_height);
+            max = @max(max, line.point_2.z() + half_height);
         }
         return .{ .min = @max(min - floor_height, 0), .max = @max(max - floor_height, 0) };
     }
@@ -875,20 +875,22 @@ test "Player.getHitLinesHeight should return correct value" {
             .buffer = .{
                 .{
                     .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 4, 5, 6 }) },
-                    .half_thickness = 1,
+                    .radius = 100,
+                    .half_height = 1,
                 },
                 .{ .line = .{ .point_1 = .fromArray(.{ 7, 8, 9 }), .point_2 = .fromArray(.{ 10, 11, 12 }) } },
                 .{ .line = .{ .point_1 = .fromArray(.{ 13, 14, 15 }), .point_2 = .fromArray(.{ 16, 17, 18 }) } },
                 .{
                     .line = .{ .point_1 = .fromArray(.{ 19, 20, 21 }), .point_2 = .fromArray(.{ 22, 23, 24 }) },
-                    .half_thickness = 3,
+                    .half_height = 3,
                 },
                 .{ .line = .{ .point_1 = .fromArray(.{ 25, 26, 27 }), .point_2 = .fromArray(.{ 28, 29, 30 }) } },
                 .{ .line = .{ .point_1 = .fromArray(.{ 31, 32, 33 }), .point_2 = .fromArray(.{ 34, 35, 36 }) } },
                 .{ .line = .{ .point_1 = .fromArray(.{ 37, 38, 39 }), .point_2 = .fromArray(.{ 40, 41, 42 }) } },
                 .{
                     .line = .{ .point_1 = .fromArray(.{ 43, 44, 45 }), .point_2 = .fromArray(.{ 46, 47, 48 }) },
-                    .half_thickness = 2,
+                    .radius = 100,
+                    .half_height = 2,
                 },
             },
             .len = 8,

@@ -139,7 +139,10 @@ pub fn hitLineToUnrealSpace(
             converted.sweep_start.position = pointToUnrealSpace(value.sweep_start.position);
             switch (game_id) {
                 .t7 => {},
-                .t8 => converted.half_thickness = scaleToUnrealSpace(value.half_thickness),
+                .t8 => {
+                    converted.half_thickness = scaleToUnrealSpace(value.half_thickness);
+                    converted.vertical_height = scaleToUnrealSpace(value.vertical_height);
+                },
             }
             return converted;
         }
@@ -157,7 +160,10 @@ pub fn hitLineFromUnrealSpace(
             converted.sweep_start.position = pointFromUnrealSpace(value.sweep_start.position);
             switch (game_id) {
                 .t7 => {},
-                .t8 => converted.half_thickness = scaleFromUnrealSpace(value.half_thickness),
+                .t8 => {
+                    converted.half_thickness = scaleFromUnrealSpace(value.half_thickness);
+                    converted.vertical_height = scaleFromUnrealSpace(value.vertical_height);
+                },
             }
             return converted;
         }
@@ -556,9 +562,9 @@ test "hitLineToUnrealSpace and hitLineFromUnrealSpace should cancel out in T8" {
         .point_2 = .{ .position = .fromArray(.{ 4, 5, 6 }), ._padding = undefined },
         .sweep_start = .{ .position = .fromArray(.{ 7, 8, 9 }), ._padding = undefined },
         .half_thickness = 10,
-        ._padding_1 = undefined,
+        .vertical_height = 11,
         .ignore = .true,
-        ._padding_2 = undefined,
+        ._padding = undefined,
     };
     try testing.expectEqual(value, hitLineToUnrealSpace(.t8)(hitLineFromUnrealSpace(.t8)(value)));
     try testing.expectEqual(value, hitLineFromUnrealSpace(.t8)(hitLineToUnrealSpace(.t8)(value)));

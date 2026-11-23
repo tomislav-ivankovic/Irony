@@ -58,13 +58,13 @@ pub const MoveMeasurer = struct {
                 }
             }
             const line = &hit_line.line;
-            const line_min_z = @min(line.point_1.z(), line.point_2.z()) - hit_line.half_thickness;
+            const line_min_z = @min(line.point_1.z(), line.point_2.z()) - hit_line.half_height;
             if (state.min_attack_z) |state_z| {
                 state.min_attack_z = @min(state_z, line_min_z);
             } else {
                 state.min_attack_z = line_min_z;
             }
-            const line_max_z = @max(line.point_1.z(), line.point_2.z()) + hit_line.half_thickness;
+            const line_max_z = @max(line.point_1.z(), line.point_2.z()) + hit_line.half_height;
             if (state.max_attack_z) |state_z| {
                 state.max_attack_z = @max(state_z, line_max_z);
             } else {
@@ -100,7 +100,7 @@ pub const MoveMeasurer = struct {
         const line = &hit_line.line;
         const range_1 = line.point_1.swizzle("xy").subtract(reference_point).dot(direction);
         const range_2 = line.point_2.swizzle("xy").subtract(reference_point).dot(direction);
-        return @max(range_1, range_2) + hit_line.half_thickness;
+        return @max(range_1, range_2) + hit_line.radius;
     }
 
     fn findHurtRange(state: *const PlayerState, player: *const model.Player) ?f32 {
@@ -197,11 +197,13 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
                 .hit_lines = .fromArray(.{
                     model.HitLine{
                         .line = .{ .point_1 = .fromArray(.{ 0, 4, 1 }), .point_2 = .fromArray(.{ 1, 5, 2 }) },
-                        .half_thickness = 0.5,
+                        .radius = 0.5,
+                        .half_height = 0.75,
                     },
                     model.HitLine{
                         .line = .{ .point_1 = .fromArray(.{ 0, 0, 2 }), .point_2 = .fromArray(.{ -1, 0, 1 }) },
-                        .half_thickness = 0.25,
+                        .radius = 0.25,
+                        .half_height = 0.25,
                     },
                 }),
             },
@@ -209,8 +211,8 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
         },
     };
     measurer.measure(&frame);
-    try testing.expectEqual(0.5, frame.players[0].min_attack_z);
-    try testing.expectEqual(2.5, frame.players[0].max_attack_z);
+    try testing.expectEqual(0.25, frame.players[0].min_attack_z);
+    try testing.expectEqual(2.75, frame.players[0].max_attack_z);
     try testing.expectEqual(3.5, frame.players[0].attack_range);
     try testing.expectEqual(null, frame.players[0].recovery_range);
 
@@ -225,7 +227,8 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
                 .hit_lines = .fromArray(.{
                     model.HitLine{
                         .line = .{ .point_1 = .fromArray(.{ 0, 5, 2 }), .point_2 = .fromArray(.{ 0, 6, 3 }) },
-                        .half_thickness = 0.25,
+                        .radius = 0.25,
+                        .half_height = 0.5,
                     },
                 }),
             },
@@ -233,8 +236,8 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
         },
     };
     measurer.measure(&frame);
-    try testing.expectEqual(0.5, frame.players[0].min_attack_z);
-    try testing.expectEqual(3.25, frame.players[0].max_attack_z);
+    try testing.expectEqual(0.25, frame.players[0].min_attack_z);
+    try testing.expectEqual(3.5, frame.players[0].max_attack_z);
     try testing.expectEqual(4.25, frame.players[0].attack_range);
     try testing.expectEqual(null, frame.players[0].recovery_range);
 
@@ -252,8 +255,8 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
         },
     };
     measurer.measure(&frame);
-    try testing.expectEqual(0.5, frame.players[0].min_attack_z);
-    try testing.expectEqual(3.25, frame.players[0].max_attack_z);
+    try testing.expectEqual(0.25, frame.players[0].min_attack_z);
+    try testing.expectEqual(3.5, frame.players[0].max_attack_z);
     try testing.expectEqual(4.25, frame.players[0].attack_range);
     try testing.expectEqual(null, frame.players[0].recovery_range);
 
@@ -271,8 +274,8 @@ test "should set min_attack_z, max_attack_z, attack_range, recovery_range to cor
         },
     };
     measurer.measure(&frame);
-    try testing.expectEqual(0.5, frame.players[0].min_attack_z);
-    try testing.expectEqual(3.25, frame.players[0].max_attack_z);
+    try testing.expectEqual(0.25, frame.players[0].min_attack_z);
+    try testing.expectEqual(3.5, frame.players[0].max_attack_z);
     try testing.expectEqual(4.25, frame.players[0].attack_range);
     try testing.expectEqual(3.25, frame.players[0].recovery_range);
 

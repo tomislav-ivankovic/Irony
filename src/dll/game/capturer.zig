@@ -783,9 +783,16 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                         .point_1 = line.point_1.position,
                         .point_2 = line.point_2.position,
                     },
-                    .half_thickness = switch (game_id) {
+                    .radius = switch (game_id) {
                         .t7 => 0,
                         .t8 => line.half_thickness,
+                    },
+                    .half_height = switch (game_id) {
+                        .t7 => 0,
+                        .t8 => switch (line.vertical_height > 0) {
+                            true => 0,
+                            false => line.half_thickness,
+                        },
                     },
                 }) catch break;
             }
@@ -3137,32 +3144,35 @@ test "should capture hit lines correctly in T8" {
             point_1: [3]f32,
             point_2: [3]f32,
             half_thickness: f32,
+            vertical_height: f32,
             ignore: bool,
         ) @typeInfo(game.HitLines(.t8)).array.child {
             return .fromConverted(.{
                 .point_1 = .{ .position = .fromArray(point_1) },
                 .point_2 = .{ .position = .fromArray(point_2) },
                 .half_thickness = half_thickness,
+                .vertical_height = vertical_height,
                 .ignore = .fromBool(ignore),
             });
         }
     }.call;
     const line = struct {
-        fn call(point_1: [3]f32, point_2: [3]f32, half_thickness: f32) model.HitLine {
+        fn call(point_1: [3]f32, point_2: [3]f32, radius: f32, half_height: f32) model.HitLine {
             return .{
                 .line = .{
                     .point_1 = .fromArray(point_1),
                     .point_2 = .fromArray(point_2),
                 },
-                .half_thickness = half_thickness,
+                .radius = radius,
+                .half_height = half_height,
             };
         }
     }.call;
-    var hit_lines: game.HitLines(.t8) = @splat(hitLine(.{ 0, 0, 0 }, .{ 0, 0, 0 }, 0, true));
-    hit_lines[0] = hitLine(.{ 1, 2, 3 }, .{ 4, 5, 6 }, 100, false);
-    hit_lines[1] = hitLine(.{ 7, 8, 9 }, .{ 10, 11, 12 }, 200, true);
-    hit_lines[2] = hitLine(.{ 13, 14, 15 }, .{ 16, 17, 18 }, 300, false);
-    hit_lines[15] = hitLine(.{ 19, 20, 21 }, .{ 22, 23, 24 }, 400, false);
+    var hit_lines: game.HitLines(.t8) = @splat(hitLine(.{ 0, 0, 0 }, .{ 0, 0, 0 }, 0, 0, true));
+    hit_lines[0] = hitLine(.{ 1, 2, 3 }, .{ 4, 5, 6 }, 100, 0, false);
+    hit_lines[1] = hitLine(.{ 7, 8, 9 }, .{ 10, 11, 12 }, 200, 0, true);
+    hit_lines[2] = hitLine(.{ 13, 14, 15 }, .{ 16, 17, 18 }, 300, 500, false);
+    hit_lines[15] = hitLine(.{ 19, 20, 21 }, .{ 22, 23, 24 }, 400, 0, false);
 
     const gm = game.Memory(.t8).testingInit;
     var capturer = Capturer(.t8){};
@@ -3211,11 +3221,11 @@ test "should capture hit lines correctly in T8" {
         },
     }));
     try testing.expectEqualSlices(model.HitLine, &.{
-        line(.{ 1, 2, 3 }, .{ 4, 5, 6 }, 100),
+        line(.{ 1, 2, 3 }, .{ 4, 5, 6 }, 100, 100),
     }, frame_2.getPlayerById(.player_1).hit_lines.asSlice());
     try testing.expectEqualSlices(model.HitLine, &.{
-        line(.{ 1, 2, 3 }, .{ 4, 5, 6 }, 100),
-        line(.{ 13, 14, 15 }, .{ 16, 17, 18 }, 300),
+        line(.{ 1, 2, 3 }, .{ 4, 5, 6 }, 100, 100),
+        line(.{ 13, 14, 15 }, .{ 16, 17, 18 }, 300, 0),
     }, frame_2.getPlayerById(.player_2).hit_lines.asSlice());
 
     const frame_3 = capturer.captureFrame(&gm(.{
@@ -3231,9 +3241,9 @@ test "should capture hit lines correctly in T8" {
         .player_2 = null,
     }));
     try testing.expectEqualSlices(model.HitLine, &.{
-        line(.{ 1, 2, 3 }, .{ 4, 5, 6 }, 100),
-        line(.{ 13, 14, 15 }, .{ 16, 17, 18 }, 300),
-        line(.{ 19, 20, 21 }, .{ 22, 23, 24 }, 400),
+        line(.{ 1, 2, 3 }, .{ 4, 5, 6 }, 100, 100),
+        line(.{ 13, 14, 15 }, .{ 16, 17, 18 }, 300, 0),
+        line(.{ 19, 20, 21 }, .{ 22, 23, 24 }, 400, 400),
     }, frame_3.getPlayerById(.player_1).hit_lines.asSlice());
     try testing.expectEqualSlices(model.HitLine, &.{}, frame_3.getPlayerById(.player_2).hit_lines.asSlice());
 }

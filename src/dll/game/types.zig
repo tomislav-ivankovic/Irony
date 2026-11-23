@@ -273,9 +273,9 @@ pub fn HitLine(comptime game_id: build_info.Game) type {
             point_2: HitLinePoint = .{},
             sweep_start: HitLinePoint = .{},
             half_thickness: f32 = 0,
-            _padding_1: [4]u8 = @splat(0),
+            vertical_height: f32 = 0,
             ignore: Bool = .false,
-            _padding_2: [7]u8 = @splat(0),
+            _padding: [7]u8 = @splat(0),
 
             comptime {
                 std.debug.assert(@sizeOf(@This()) == 64);

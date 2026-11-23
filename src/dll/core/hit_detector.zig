@@ -33,8 +33,8 @@ pub const HitDetector = struct {
                 // Same as the game: thickness is applied by inflating the hurt cylinder instead of the line.
                 const inflated_cylinder = sdk.math.Cylinder{
                     .center = cylinder.cylinder.center,
-                    .radius = cylinder.cylinder.radius + line.half_thickness,
-                    .half_height = cylinder.cylinder.half_height + line.half_thickness,
+                    .radius = cylinder.cylinder.radius + line.radius,
+                    .half_height = cylinder.cylinder.half_height + line.half_height,
                 };
                 const intersects = sdk.math.checkCylinderLineSegmentIntersection(inflated_cylinder, line.line);
                 const connects = intersects and !crushes and !inactive;
@@ -713,7 +713,7 @@ test "should detect inactive lines correctly" {
     }, frame_4.players[0].hit_lines.asSlice()[0].flags);
 }
 
-test "should take hit line thickness into account horizontally" {
+test "should take hit line radius into account" {
     const hit_line = sdk.math.LineSegment3{
         .point_1 = .fromArray(.{ 0, 0, 0 }),
         .point_2 = .fromArray(.{ 1, 0, 0 }),
@@ -724,8 +724,8 @@ test "should take hit line thickness into account horizontally" {
         .half_height = 1,
     };
     var hit_lines = hitLines(.{ hit_line, hit_line });
-    hit_lines.asSlice()[0].half_thickness = 0.9;
-    hit_lines.asSlice()[1].half_thickness = 1.1;
+    hit_lines.asSlice()[0].radius = 0.9;
+    hit_lines.asSlice()[1].radius = 1.1;
     var frame = model.Frame{ .players = .{
         .{
             .attack_type = .unblockable_mid,
@@ -756,7 +756,7 @@ test "should take hit line thickness into account horizontally" {
     }
 }
 
-test "should take hit line thickness into account vertically" {
+test "should take hit line half height into account" {
     const hit_line = sdk.math.LineSegment3{
         .point_1 = .fromArray(.{ -1, 0, 0 }),
         .point_2 = .fromArray(.{ 1, 0, 0 }),
@@ -767,8 +767,8 @@ test "should take hit line thickness into account vertically" {
         .half_height = 1,
     };
     var hit_lines = hitLines(.{ hit_line, hit_line });
-    hit_lines.asSlice()[0].half_thickness = 1.9;
-    hit_lines.asSlice()[1].half_thickness = 2.1;
+    hit_lines.asSlice()[0].half_height = 1.9;
+    hit_lines.asSlice()[1].half_height = 2.1;
     var frame = model.Frame{ .players = .{
         .{
             .attack_type = .unblockable_mid,
