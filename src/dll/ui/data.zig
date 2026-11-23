@@ -99,12 +99,11 @@ const TypeInfo = struct {
         info: *const TypeInfo,
     };
     pub const TaggedUnion = struct {
-        tag: *const TypeInfo,
-        tag_bit_size: usize,
         variants: []const *const TypeInfo,
         getActive: *const fn (pointer: *const anyopaque) ActiveVariant,
     };
     pub const ActiveVariant = struct {
+        tag_name: [:0]const u8,
         index: usize,
         address: usize,
     };
@@ -293,21 +292,20 @@ const TypeInfo = struct {
                     .fields = &final_fields,
                 } };
             },
-            .@"union" => |*info| if (info.tag_type) |Tag| block: {
+            .@"union" => |*info| if (info.tag_type != null) block: {
                 var variants: [info.field_types.len]*const TypeInfo = undefined;
                 for (info.field_types, &variants) |Field, *variant| {
                     variant.* = fromType(Field);
                 }
                 const final_variants = variants;
                 break :block .{ .tagged_union = .{
-                    .tag = fromType(Tag),
-                    .tag_bit_size = @sizeOf(Tag) * std.mem.byte_size_in_bits,
                     .variants = &final_variants,
                     .getActive = struct {
                         fn call(pointer: *const anyopaque) TypeInfo.ActiveVariant {
                             const typed_pointer: *const Type = @ptrCast(@alignCast(pointer));
                             return switch (typed_pointer.*) {
                                 inline else => |*payload, tag| .{
+                                    .tag_name = @tagName(tag),
                                     .index = comptime std.meta.fieldIndex(Type, @tagName(tag)).?,
                                     .address = @intFromPtr(payload),
                                 },
@@ -402,8 +400,8 @@ fn drawValue(ctx: *const Context, info: *const TypeInfo, address: usize, bit_shi
         .tagged_union => |*tagged_union| {
             if (!beginNodeWithDefaultMenu(ctx)) return;
             defer endNode();
-            drawChildShifted(ctx, "tag", tagged_union.tag, address, 0, 0, tagged_union.tag_bit_size);
             const active = tagged_union.getActive(@ptrFromInt(address));
+            drawTreeText("tag", active.tag_name);
             const variant = tagged_union.variants[active.index];
             const bit_offset = (active.address - address) * std.mem.byte_size_in_bits;
             drawChildShifted(ctx, "value", variant, active.address, 0, bit_offset, variant.bit_size);
@@ -1565,8 +1563,9 @@ test "should draw tagged union correctly" {
         }
 
         fn testFunction(ctx: sdk.ui.TestContext) !void {
-            const tag_address = @intFromPtr(&value);
-            const value_address = tag_address + 1;
+            const union_address = @intFromPtr(&value);
+            const value_address = @intFromPtr(&value.unsigned);
+            const value_offset = value_address - union_address;
 
             value = .{ .unsigned = 255 };
             ctx.yield(1);
@@ -1579,7 +1578,7 @@ test "should draw tagged union correctly" {
             try ctx.expectItemExists("label: test");
             try ctx.expectItemExists("path: test");
             try ctx.expectItemExists("type: " ++ @typeName(Int8));
-            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ tag_address, tag_address });
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ union_address, union_address });
             try ctx.expectItemExists("size: 2 (0x2) bytes");
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
 
@@ -1587,19 +1586,6 @@ test "should draw tagged union correctly" {
             ctx.itemClick("test", imgui.ImGuiMouseButton_Left, 0);
             try ctx.expectItemExists("test/tag: unsigned");
             try ctx.expectItemExists("test/value: 255 (0xFF)");
-            ctx.itemClick("test/tag", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
-
-            ctx.setRef("//$FOCUSED");
-            try ctx.expectItemExists("label: tag");
-            try ctx.expectItemExists("path: test.tag");
-            try ctx.expectItemExists("type: " ++ @typeName(@typeInfo(Int8).@"union".tag_type.?));
-            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ tag_address, tag_address });
-            try ctx.expectItemExists("offset: 0 (0x0) bytes");
-            try ctx.expectItemExists("size: 1 (0x1) bytes");
-            try ctx.expectItemExists("value: unsigned");
-            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
-
-            ctx.setRef("Window");
             ctx.itemClick("test/value", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
 
             ctx.setRef("//$FOCUSED");
@@ -1607,7 +1593,7 @@ test "should draw tagged union correctly" {
             try ctx.expectItemExists("path: test.value");
             try ctx.expectItemExists("type: u8");
             try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ value_address, value_address });
-            try ctx.expectItemExists("offset: 1 (0x1) bytes");
+            try ctx.expectItemExistsFmt("offset: {} (0x{X}) bytes", .{ value_offset, value_offset });
             try ctx.expectItemExists("size: 1 (0x1) bytes");
             try ctx.expectItemExists("value: 255 (0xFF)");
             ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
@@ -1625,9 +1611,52 @@ test "should draw tagged union correctly" {
             try ctx.expectItemExists("path: test.value");
             try ctx.expectItemExists("type: i8");
             try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ value_address, value_address });
-            try ctx.expectItemExists("offset: 1 (0x1) bytes");
+            try ctx.expectItemExistsFmt("offset: {} (0x{X}) bytes", .{ value_offset, value_offset });
             try ctx.expectItemExists("size: 1 (0x1) bytes");
             try ctx.expectItemExists("value: -1 (0x-1)");
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw tagged union without reading the tag from memory" {
+    const Number = union(enum) {
+        unsigned: u32,
+        float: f32,
+    };
+    const Test = struct {
+        var value: Number = .{ .unsigned = 0 };
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            drawData("test", &value);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            const value_address = @intFromPtr(&value.unsigned);
+            const value_offset = value_address - @intFromPtr(&value);
+
+            value = .{ .unsigned = 1 };
+            ctx.yield(1);
+
+            ctx.setRef("Window");
+            ctx.itemClick("test", imgui.ImGuiMouseButton_Left, 0);
+            try ctx.expectItemExists("test/tag: unsigned");
+            try ctx.expectItemExists("test/value: 1 (0x1)");
+            ctx.itemClick("test/value", imgui.ImGuiMouseButton_Right, imgui.ImGuiTestOpFlags_NoCheckHoveredId);
+
+            ctx.setRef("//$FOCUSED");
+            try ctx.expectItemExistsFmt("address: {} (0x{X})", .{ value_address, value_address });
+            try ctx.expectItemExistsFmt("offset: {} (0x{X}) bytes", .{ value_offset, value_offset });
+            ctx.mouseClickOnVoid(imgui.ImGuiMouseButton_Left, null);
+
+            value = .{ .float = 0 };
+            ctx.yield(1);
+
+            ctx.setRef("Window");
+            try ctx.expectItemExists("test/tag: float");
         }
     };
     const context = try sdk.ui.getTestingContext();
