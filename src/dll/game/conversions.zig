@@ -128,32 +128,40 @@ pub fn u16FromRadians(value: f32) u16 {
     return @intFromFloat(normalized * conversion_factor);
 }
 
-pub fn hitLinePointToUnrealSpace(value: game.HitLinePoint) game.HitLinePoint {
-    var converted = value;
-    converted.position = pointToUnrealSpace(value.position);
-    return converted;
+pub fn hitLineToUnrealSpace(
+    comptime game_id: build_info.Game,
+) *const fn (value: game.HitLine(game_id)) game.HitLine(game_id) {
+    return struct {
+        fn hitLineToUnrealSpace(value: game.HitLine(game_id)) game.HitLine(game_id) {
+            var converted = value;
+            converted.point_1.position = pointToUnrealSpace(value.point_1.position);
+            converted.point_2.position = pointToUnrealSpace(value.point_2.position);
+            converted.sweep_start.position = pointToUnrealSpace(value.sweep_start.position);
+            switch (game_id) {
+                .t7 => {},
+                .t8 => converted.half_thickness = scaleToUnrealSpace(value.half_thickness),
+            }
+            return converted;
+        }
+    }.hitLineToUnrealSpace;
 }
 
-pub fn hitLinePointFromUnrealSpace(value: game.HitLinePoint) game.HitLinePoint {
-    var converted = value;
-    converted.position = pointFromUnrealSpace(value.position);
-    return converted;
-}
-
-pub fn hitLineToUnrealSpace(value: game.HitLine) game.HitLine {
-    var converted = value;
-    for (value.points, 0..) |element, index| {
-        converted.points[index] = hitLinePointToUnrealSpace(element);
-    }
-    return converted;
-}
-
-pub fn hitLineFromUnrealSpace(value: game.HitLine) game.HitLine {
-    var converted = value;
-    for (value.points, 0..) |element, index| {
-        converted.points[index] = hitLinePointFromUnrealSpace(element);
-    }
-    return converted;
+pub fn hitLineFromUnrealSpace(
+    comptime game_id: build_info.Game,
+) *const fn (value: game.HitLine(game_id)) game.HitLine(game_id) {
+    return struct {
+        fn hitLineFromUnrealSpace(value: game.HitLine(game_id)) game.HitLine(game_id) {
+            var converted = value;
+            converted.point_1.position = pointFromUnrealSpace(value.point_1.position);
+            converted.point_2.position = pointFromUnrealSpace(value.point_2.position);
+            converted.sweep_start.position = pointFromUnrealSpace(value.sweep_start.position);
+            switch (game_id) {
+                .t7 => {},
+                .t8 => converted.half_thickness = scaleFromUnrealSpace(value.half_thickness),
+            }
+            return converted;
+        }
+    }.hitLineFromUnrealSpace;
 }
 
 pub fn hurtCylinderToUnrealSpace(
@@ -532,28 +540,28 @@ test "u16ToRadians and u16FromRadians should cancel out" {
     try testing.expectEqual(0xAAAA, u16FromRadians(u16ToRadians(0xAAAA)));
 }
 
-test "hitLinePointToUnrealSpace and hitLinePointFromUnrealSpace should cancel out" {
-    const value = game.HitLinePoint{
-        .position = .fromArray(.{ 1, 2, 3 }),
-        ._padding = undefined,
+test "hitLineToUnrealSpace and hitLineFromUnrealSpace should cancel out in T7" {
+    const value = game.HitLine(.t7){
+        .point_1 = .{ .position = .fromArray(.{ 1, 2, 3 }), ._padding = undefined },
+        .point_2 = .{ .position = .fromArray(.{ 4, 5, 6 }), ._padding = undefined },
+        .sweep_start = .{ .position = .fromArray(.{ 7, 8, 9 }), ._padding = undefined },
     };
-    try testing.expectEqual(value, hitLinePointToUnrealSpace(hitLinePointFromUnrealSpace(value)));
-    try testing.expectEqual(value, hitLinePointFromUnrealSpace(hitLinePointToUnrealSpace(value)));
+    try testing.expectEqual(value, hitLineToUnrealSpace(.t7)(hitLineFromUnrealSpace(.t7)(value)));
+    try testing.expectEqual(value, hitLineFromUnrealSpace(.t7)(hitLineToUnrealSpace(.t7)(value)));
 }
 
-test "hitLineToUnrealSpace and hitLineFromUnrealSpace should cancel out" {
-    const value = game.HitLine{
-        .points = .{
-            .{ .position = .fromArray(.{ 1, 2, 3 }), ._padding = undefined },
-            .{ .position = .fromArray(.{ 4, 5, 6 }), ._padding = undefined },
-            .{ .position = .fromArray(.{ 7, 8, 9 }), ._padding = undefined },
-        },
+test "hitLineToUnrealSpace and hitLineFromUnrealSpace should cancel out in T8" {
+    const value = game.HitLine(.t8){
+        .point_1 = .{ .position = .fromArray(.{ 1, 2, 3 }), ._padding = undefined },
+        .point_2 = .{ .position = .fromArray(.{ 4, 5, 6 }), ._padding = undefined },
+        .sweep_start = .{ .position = .fromArray(.{ 7, 8, 9 }), ._padding = undefined },
+        .half_thickness = 10,
         ._padding_1 = undefined,
         .ignore = .true,
         ._padding_2 = undefined,
     };
-    try testing.expectEqual(value, hitLineToUnrealSpace(hitLineFromUnrealSpace(value)));
-    try testing.expectEqual(value, hitLineFromUnrealSpace(hitLineToUnrealSpace(value)));
+    try testing.expectEqual(value, hitLineToUnrealSpace(.t8)(hitLineFromUnrealSpace(.t8)(value)));
+    try testing.expectEqual(value, hitLineFromUnrealSpace(.t8)(hitLineToUnrealSpace(.t8)(value)));
 }
 
 test "hurtCylinderToUnrealSpace and hurtCylinderFromUnrealSpace should cancel out in T7" {

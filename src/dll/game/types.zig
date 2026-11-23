@@ -69,11 +69,9 @@ pub const StateFlags = sdk.memory.Bitfield(u32, &.{
     .{ .name = "crouched_but_not_fully", .backing_value = 262144 },
 });
 
-pub const CancelFlags = sdk.memory.Bitfield(u32, &.{
-    .{ .name = "in_active_frame_1", .backing_value = 1 },
-    .{ .name = "in_active_frame_2", .backing_value = 2 },
-    .{ .name = "can_interact", .backing_value = 65536 },
-    .{ .name = "can_cancel_recovery", .backing_value = 16777216 },
+pub const CancelFlags = sdk.memory.Bitfield(u16, &.{
+    .{ .name = "can_interact", .backing_value = 1 },
+    .{ .name = "can_cancel_recovery", .backing_value = 256 },
 });
 
 // MovesetExtractor: req
@@ -259,42 +257,48 @@ pub const HitLinePoint = extern struct {
     }
 };
 
-pub const HitLine = extern struct {
-    points: [3]HitLinePoint = @splat(.{}),
-    _padding_1: [8]u8 = @splat(0),
-    ignore: Bool = .false,
-    _padding_2: [7]u8 = @splat(0),
+pub fn HitLine(comptime game_id: build_info.Game) type {
+    return switch (game_id) {
+        .t7 => extern struct {
+            point_1: HitLinePoint = .{},
+            point_2: HitLinePoint = .{},
+            sweep_start: HitLinePoint = .{},
 
-    comptime {
-        std.debug.assert(@sizeOf(@This()) == 64);
-    }
-};
+            comptime {
+                std.debug.assert(@sizeOf(@This()) == 48);
+            }
+        },
+        .t8 => extern struct {
+            point_1: HitLinePoint = .{},
+            point_2: HitLinePoint = .{},
+            sweep_start: HitLinePoint = .{},
+            half_thickness: f32 = 0,
+            _padding_1: [4]u8 = @splat(0),
+            ignore: Bool = .false,
+            _padding_2: [7]u8 = @splat(0),
+
+            comptime {
+                std.debug.assert(@sizeOf(@This()) == 64);
+            }
+        },
+    };
+}
 
 pub fn HitLines(comptime game_id: build_info.Game) type {
-    return switch (game_id) {
-        .t7 => [6]Converted(
-            HitLinePoint,
-            HitLinePoint,
-            game.hitLinePointToUnrealSpace,
-            game.hitLinePointFromUnrealSpace,
-        ),
-        .t8 => [4]Converted(
-            HitLine,
-            HitLine,
-            game.hitLineToUnrealSpace,
-            game.hitLineFromUnrealSpace,
-        ),
+    const len = switch (game_id) {
+        .t7 => 4,
+        .t8 => 16,
     };
-}
-fn getDefaultHitLines(comptime game_id: build_info.Game) HitLines(game_id) {
-    return switch (game_id) {
-        .t7 => .{ .fromRaw(.{}), .fromRaw(.{}), .fromRaw(.{}), .fromRaw(.{}), .fromRaw(.{}), .fromRaw(.{}) },
-        .t8 => .{ .fromRaw(.{}), .fromRaw(.{}), .fromRaw(.{}), .fromRaw(.{}) },
-    };
+    return [len]Converted(
+        HitLine(game_id),
+        HitLine(game_id),
+        game.hitLineToUnrealSpace(game_id),
+        game.hitLineFromUnrealSpace(game_id),
+    );
 }
 comptime {
-    std.debug.assert(@sizeOf(HitLines(.t7)) == 96);
-    std.debug.assert(@sizeOf(HitLines(.t8)) == 256);
+    std.debug.assert(@sizeOf(HitLines(.t7)) == 192);
+    std.debug.assert(@sizeOf(HitLines(.t8)) == 1024);
 }
 
 pub fn HurtCylinder(comptime game_id: build_info.Game) type {
@@ -470,7 +474,8 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x0450, "correct_throw_escape_input", ThrowEscapeInput, &.none),
             field(0x049C, "throw_escape_flags", ThrowEscapeFlags, &.{}),
             field(0x06C0, "power_crushing", Bool, &.false),
-            field(0x0788, "cancel_flags", CancelFlags, &.{}),
+            field(0x0788, "hit_line_count", u8, &0),
+            field(0x078A, "cancel_flags", CancelFlags, &.{}),
             field(0x08B4, "in_special_style", Bool, &.false),
             field(0x095C, "frames_since_round_start", u32, &0),
             field(0x0AE0, "floor_number", u32, &0),
@@ -479,7 +484,7 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x0DDC, "directional_input", DirectionalInput, &.{}),
             field(0x0DE4, "input_side", InputSide, &.left),
             field(0x0E0C, "input", Input(.t7), &.{}),
-            field(0x0E50, "hit_lines", HitLines(.t7), &getDefaultHitLines(.t7)),
+            field(0x0E50, "hit_lines", HitLines(.t7), &@splat(.fromRaw(.{}))),
             field(0x0F10, "hurt_cylinders", HurtCylinders(.t7), &.{}),
             field(0x10D0, "collision_spheres", CollisionSpheres, &.{}),
             field(0x14E8, "health", HealthValue, &.fromRaw(.{})),
@@ -504,7 +509,8 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x0710, "throw_escape_flags", ThrowEscapeFlags, &.{}),
             field(0x0C41, "power_crushing", Bool, &.false),
             field(0x1011, "in_rage", Bool, &.false),
-            field(0x1018, "cancel_flags", CancelFlags, &.{}),
+            field(0x1018, "hit_line_count", u8, &0),
+            field(0x101A, "cancel_flags", CancelFlags, &.{}),
             field(0x1544, "in_special_style", Bool, &.false),
             field(0x1650, "frames_since_round_start", u32, &0),
             field(0x1A30, "floor_number", u32, &0),
@@ -516,7 +522,7 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x2934, "directional_input", DirectionalInput, &.{}),
             field(0x293C, "input_side", InputSide, &.left),
             field(0x2964, "input", Input(.t8), &.{}),
-            field(0x29D0, "hit_lines", HitLines(.t8), &getDefaultHitLines(.t8)),
+            field(0x29D0, "hit_lines", HitLines(.t8), &@splat(.fromRaw(.{}))),
             field(0x2DD0, "hurt_cylinders", HurtCylinders(.t8), &.{}),
             field(0x3290, "collision_spheres", CollisionSpheres, &.{}),
             field(0x3AD0, "health", HealthValue, &.fromRaw(.{})),
