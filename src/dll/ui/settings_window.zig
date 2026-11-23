@@ -634,10 +634,30 @@ fn drawHitLinesSettings(value: *model.HitLinesSettings, default: *const model.Hi
             drawColorsAndThickness("Outline", &v.outline, &d.outline);
         }
     }.call;
+    const drawVolume = struct {
+        fn call(
+            label: [:0]const u8,
+            v: *model.HitLinesSettings.Volume,
+            d: *const model.HitLinesSettings.Volume,
+        ) void {
+            imgui.igText("%s", label.ptr);
+            imgui.igPushID_Str(label);
+            defer imgui.igPopID();
+            imgui.igIndent(0);
+            defer imgui.igUnindent(0);
+
+            drawBool("Enabled", &v.enabled, &d.enabled);
+            imgui.igBeginDisabled(!v.enabled);
+            defer imgui.igEndDisabled();
+
+            drawThickness("Thickness", &v.thickness, &d.thickness);
+        }
+    }.call;
 
     drawDuration("Lingering Duration", &value.duration, &default.duration);
     drawFillAndOutline("Normal Hit Lines", &value.normal, &default.normal);
     drawFillAndOutline("Inactive Or Crushed Hit Lines", &value.inactive_or_crushed, &default.inactive_or_crushed);
+    drawVolume("Thick Hit Line Volumes", &value.volume, &default.volume);
 }
 
 fn drawHurtCylindersSettings(value: *model.HurtCylindersSettings, default: *const model.HurtCylindersSettings) void {
@@ -1567,6 +1587,18 @@ test "hit line settings should function correctly" {
                 default.inactive_or_crushed.outline.thickness,
                 current.inactive_or_crushed.outline.thickness,
             );
+
+            ctx.itemUncheck("Thick Hit Line Volumes/Enabled", 0);
+            try testing.expectEqual(false, current.volume.enabled);
+            ctx.itemClick("Thick Hit Line Volumes/Enabled/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.volume.enabled, current.volume.enabled);
+            ctx.itemCheck("Thick Hit Line Volumes/Enabled", 0);
+            try testing.expectEqual(true, current.volume.enabled);
+
+            ctx.itemInputValueFloat("Thick Hit Line Volumes/Thickness", 123);
+            try testing.expectEqual(123, current.volume.thickness);
+            ctx.itemClick("Thick Hit Line Volumes/Thickness/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.volume.thickness, current.volume.thickness);
         }
     };
     Test.window = .init(testing.allocator);

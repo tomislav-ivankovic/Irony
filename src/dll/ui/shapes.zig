@@ -63,6 +63,19 @@ pub const Shapes = union(enum) {
             ._void => |*s| s.drawCylinder(cylinder, color, thickness),
         }
     }
+
+    pub fn drawSweptCylinder(
+        self: *const Self,
+        swept_cylinder: sdk.math.SweptCylinder,
+        color: sdk.math.Vec4,
+        thickness: f32,
+    ) void {
+        switch (self.*) {
+            ._2d => |*s| s.drawSweptCylinder(swept_cylinder, color, thickness),
+            ._3d => |*s| s.drawSweptCylinder(swept_cylinder, color, thickness),
+            ._void => |*s| s.drawSweptCylinder(swept_cylinder, color, thickness),
+        }
+    }
 };
 
 pub const Shapes2D = struct {
@@ -244,6 +257,64 @@ pub const Shapes2D = struct {
             },
         }
     }
+
+    pub fn drawSweptCylinder(
+        self: *const Self,
+        swept_cylinder: sdk.math.SweptCylinder,
+        color: sdk.math.Vec4,
+        thickness: f32,
+    ) void {
+        const circle_segments = 32;
+        const ends = [2]sdk.math.Vec3{ swept_cylinder.line.point_1, swept_cylinder.line.point_2 };
+        const heights = [2]f32{ -swept_cylinder.half_height, swept_cylinder.half_height };
+        var points: [circle_segments * ends.len * heights.len]sdk.math.Vec2 = undefined;
+        var points_len: usize = 0;
+        for (0..circle_segments) |index| {
+            const i: f32 = @floatFromInt(index);
+            const n: f32 = @floatFromInt(circle_segments);
+            const angle = 2 * std.math.pi * i / n;
+            const x = swept_cylinder.radius * std.math.cos(angle);
+            const y = swept_cylinder.radius * std.math.sin(angle);
+            for (ends) |end| {
+                for (heights) |height| {
+                    const point = end.add(.fromArray(.{ x, y, height }));
+                    points[points_len] = point.pointTransform(self.matrix).swizzle("xy");
+                    points_len += 1;
+                }
+            }
+        }
+        var hull_buffer: [2 * points.len]sdk.math.Vec2 = undefined;
+        const hull = sdk.math.findConvexHull(&points, &hull_buffer);
+
+        const draw_list = imgui.igGetWindowDrawList();
+        const u32_color = imgui.igGetColorU32_Vec4(color.toImVec());
+        const scaled_thickness = self.thickness_scale * thickness;
+
+        imgui.ImDrawList_AddPolyline(
+            draw_list,
+            @ptrCast(hull.ptr),
+            @intCast(hull.len),
+            u32_color,
+            imgui.ImDrawFlags_Closed,
+            scaled_thickness,
+        );
+
+        if (builtin.is_test) {
+            var min = hull[0];
+            var max = hull[0];
+            for (hull[1..]) |point| {
+                min = min.minElements(point);
+                max = max.maxElements(point);
+            }
+            testing_shapes.append(.{ .swept_cylinder = .{
+                .world_swept_cylinder = swept_cylinder,
+                .screen_center = min.add(max).scale(0.5),
+                .screen_half_size = max.subtract(min).scale(0.5),
+                .color = color,
+                .thickness = scaled_thickness,
+            } });
+        }
+    }
 };
 
 pub const Shapes3D = struct {
@@ -324,6 +395,27 @@ pub const Shapes3D = struct {
             } });
         }
     }
+
+    pub fn drawSweptCylinder(
+        self: *const Self,
+        swept_cylinder: sdk.math.SweptCylinder,
+        color: sdk.math.Vec4,
+        thickness: f32,
+    ) void {
+        var fill_color = color;
+        fill_color.asColor().a *= self.fill_alpha;
+        const scaled_thickness = self.thickness_scale * thickness;
+        self.renderer.addSweptCylinder(swept_cylinder, fill_color);
+        if (builtin.is_test) {
+            testing_shapes.append(.{ .swept_cylinder = .{
+                .world_swept_cylinder = swept_cylinder,
+                .screen_center = null,
+                .screen_half_size = null,
+                .color = color,
+                .thickness = scaled_thickness,
+            } });
+        }
+    }
 };
 
 pub const VoidShapes = struct {
@@ -391,6 +483,24 @@ pub const VoidShapes = struct {
             } });
         }
     }
+
+    pub fn drawSweptCylinder(
+        self: *const Self,
+        swept_cylinder: sdk.math.SweptCylinder,
+        color: sdk.math.Vec4,
+        thickness: f32,
+    ) void {
+        _ = self;
+        if (builtin.is_test) {
+            testing_shapes.append(.{ .swept_cylinder = .{
+                .world_swept_cylinder = swept_cylinder,
+                .screen_center = null,
+                .screen_half_size = null,
+                .color = color,
+                .thickness = thickness,
+            } });
+        }
+    }
 };
 
 var testing_shapes_instance = TestingShapes{};
@@ -412,6 +522,7 @@ pub const TestingShapes = struct {
         outline: Line,
         sphere: Sphere,
         cylinder: Cylinder,
+        swept_cylinder: SweptCylinder,
     };
     pub const Point = struct {
         world_position: sdk.math.Vec3,
@@ -441,6 +552,13 @@ pub const TestingShapes = struct {
         thickness: f32,
 
         pub const ScreenShape = enum { rectangle, ellipse };
+    };
+    pub const SweptCylinder = struct {
+        world_swept_cylinder: sdk.math.SweptCylinder,
+        screen_center: ?sdk.math.Vec2,
+        screen_half_size: ?sdk.math.Vec2,
+        color: sdk.math.Vec4,
+        thickness: f32,
     };
 
     pub fn begin(self: *Self, allocator: std.mem.Allocator) void {
@@ -587,6 +705,29 @@ pub const TestingShapes = struct {
         }
         return null;
     }
+
+    pub fn findSweptCylinderWithWorldPoints(
+        self: *const Self,
+        point_1: sdk.math.Vec3,
+        point_2: sdk.math.Vec3,
+        tolerance: f32,
+    ) ?*const SweptCylinder {
+        for (self.list.items) |*shape| {
+            switch (shape.*) {
+                .swept_cylinder => |*swept_cylinder| {
+                    const l = &swept_cylinder.world_swept_cylinder.line;
+                    const t = tolerance;
+                    const is_equal = (l.point_1.equals(point_1, t) and l.point_2.equals(point_2, t)) or
+                        (l.point_1.equals(point_2, t) and l.point_2.equals(point_1, t));
+                    if (is_equal) {
+                        return swept_cylinder;
+                    }
+                },
+                else => continue,
+            }
+        }
+        return null;
+    }
 };
 
 const testing = std.testing;
@@ -643,11 +784,20 @@ test "should put correct shapes into testing shapes when 2D shapes" {
                 .fromArray(.{ 6, 7, 8, 9 }),
                 10,
             );
+            shapes.drawSweptCylinder(
+                .{
+                    .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 4, 5, 6 }) },
+                    .radius = 1,
+                    .half_height = 2,
+                },
+                .fromArray(.{ 3, 4, 5, 6 }),
+                7,
+            );
         }
 
         fn testFunction(_: sdk.ui.TestContext) !void {
             const items = testing_shapes.getAll();
-            try testing.expectEqual(items.len, 6);
+            try testing.expectEqual(items.len, 7);
             try testing.expectEqual(TestingShapes.Shape{ .point = .{
                 .world_position = .fromArray(.{ 1, 2, 3 }),
                 .screen_position = .fromArray(.{ 5, 9 }),
@@ -689,6 +839,16 @@ test "should put correct shapes into testing shapes when 2D shapes" {
                 .color = .fromArray(.{ 6, 7, 8, 9 }),
                 .thickness = 20,
             } }, items[5]);
+            const swept_cylinder = items[6].swept_cylinder;
+            try testing.expectEqual(sdk.math.SweptCylinder{
+                .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 4, 5, 6 }) },
+                .radius = 1,
+                .half_height = 2,
+            }, swept_cylinder.world_swept_cylinder);
+            try testing.expect(swept_cylinder.screen_center.?.equals(.fromArray(.{ 6.5, 12 }), 0.0001));
+            try testing.expect(swept_cylinder.screen_half_size.?.equals(.fromArray(.{ 2.5, 5 }), 0.0001));
+            try testing.expectEqual(sdk.math.Vec4.fromArray(.{ 3, 4, 5, 6 }), swept_cylinder.color);
+            try testing.expectEqual(14, swept_cylinder.thickness);
         }
     };
     testing_shapes.begin(testing.allocator);
@@ -735,9 +895,18 @@ test "should put correct shapes into testing shapes when 3D shapes" {
         .fromArray(.{ 6, 7, 8, 9 }),
         10,
     );
+    shapes.drawSweptCylinder(
+        .{
+            .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 4, 5, 6 }) },
+            .radius = 1,
+            .half_height = 2,
+        },
+        .fromArray(.{ 3, 4, 5, 6 }),
+        7,
+    );
 
     const items = testing_shapes.getAll();
-    try testing.expectEqual(items.len, 5);
+    try testing.expectEqual(items.len, 6);
     try testing.expectEqual(TestingShapes.Shape{ .point = .{
         .world_position = .fromArray(.{ 1, 2, 3 }),
         .screen_position = null,
@@ -771,6 +940,17 @@ test "should put correct shapes into testing shapes when 3D shapes" {
         .color = .fromArray(.{ 6, 7, 8, 9 }),
         .thickness = 20,
     } }, items[4]);
+    try testing.expectEqual(TestingShapes.Shape{ .swept_cylinder = .{
+        .world_swept_cylinder = .{
+            .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 4, 5, 6 }) },
+            .radius = 1,
+            .half_height = 2,
+        },
+        .screen_center = null,
+        .screen_half_size = null,
+        .color = .fromArray(.{ 3, 4, 5, 6 }),
+        .thickness = 14,
+    } }, items[5]);
 }
 
 test "should put correct shapes into testing shapes when void shapes" {
@@ -805,9 +985,18 @@ test "should put correct shapes into testing shapes when void shapes" {
         .fromArray(.{ 6, 7, 8, 9 }),
         10,
     );
+    shapes.drawSweptCylinder(
+        .{
+            .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 4, 5, 6 }) },
+            .radius = 1,
+            .half_height = 2,
+        },
+        .fromArray(.{ 3, 4, 5, 6 }),
+        7,
+    );
 
     const items = testing_shapes.getAll();
-    try testing.expectEqual(items.len, 5);
+    try testing.expectEqual(items.len, 6);
     try testing.expectEqual(TestingShapes.Shape{ .point = .{
         .world_position = .fromArray(.{ 1, 2, 3 }),
         .screen_position = null,
@@ -841,4 +1030,15 @@ test "should put correct shapes into testing shapes when void shapes" {
         .color = .fromArray(.{ 6, 7, 8, 9 }),
         .thickness = 10,
     } }, items[4]);
+    try testing.expectEqual(TestingShapes.Shape{ .swept_cylinder = .{
+        .world_swept_cylinder = .{
+            .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 4, 5, 6 }) },
+            .radius = 1,
+            .half_height = 2,
+        },
+        .screen_center = null,
+        .screen_half_size = null,
+        .color = .fromArray(.{ 3, 4, 5, 6 }),
+        .thickness = 7,
+    } }, items[5]);
 }

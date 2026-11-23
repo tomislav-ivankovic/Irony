@@ -163,8 +163,16 @@ pub const HitLinesSettings = struct {
             .thickness = 1.0,
         },
     },
+    volume: Volume = .{
+        .enabled = true,
+        .thickness = 1.0,
+    },
     duration: f32 = 1.0,
 
+    pub const Volume = struct {
+        enabled: bool,
+        thickness: f32,
+    };
     pub const FillAndOutline = struct {
         enabled: bool,
         fill: ColorsAndThickness,

@@ -29,6 +29,7 @@ test {
     _ = @import("sdk/log/file.zig");
     _ = @import("sdk/log/message.zig");
 
+    _ = @import("sdk/math/convex_hull.zig");
     _ = @import("sdk/math/easing.zig");
     _ = @import("sdk/math/intersection.zig");
     _ = @import("sdk/math/matrix.zig");

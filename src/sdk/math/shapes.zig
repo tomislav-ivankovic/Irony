@@ -26,6 +26,12 @@ pub const Cylinder = struct {
     half_height: f32,
 };
 
+pub const SweptCylinder = struct {
+    line: math.LineSegment3,
+    radius: f32,
+    half_height: f32,
+};
+
 pub const Rectangle = struct {
     center: math.Vec2,
     half_size: math.Vec2,

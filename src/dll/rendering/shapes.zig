@@ -14,6 +14,7 @@ pub const Shapes = struct {
         line: Line,
         sphere: Sphere,
         cylinder: Cylinder,
+        swept_cylinder: SweptCylinder,
 
         pub const Point = struct {
             geometry: sdk.math.Vec3,
@@ -37,6 +38,10 @@ pub const Shapes = struct {
             fill_color: sdk.math.Vec4,
             outline_color: sdk.math.Vec4,
             outline_thickness: f32,
+        };
+        pub const SweptCylinder = struct {
+            geometry: sdk.math.SweptCylinder,
+            color: sdk.math.Vec4,
         };
     };
 
@@ -113,6 +118,13 @@ pub const Shapes = struct {
         } });
     }
 
+    pub fn addSweptCylinder(self: *Self, swept_cylinder: sdk.math.SweptCylinder, color: sdk.math.Vec4) void {
+        self.add(.{ .swept_cylinder = .{
+            .geometry = swept_cylinder,
+            .color = color,
+        } });
+    }
+
     fn add(self: *Self, shape: Shape) void {
         self.list.append(self.allocator, shape) catch |err| {
             sdk.misc.error_context.new("Failed to add the shape to the array list.", .{});
@@ -160,6 +172,9 @@ pub const Shapes = struct {
                         lines,
                         camera_position,
                     );
+                },
+                .swept_cylinder => |*swept_cylinder| {
+                    renderSweptCylinder(swept_cylinder.geometry, swept_cylinder.color, triangles);
                 },
             }
         }
@@ -417,6 +432,116 @@ pub const Shapes = struct {
             lines.add(line_1, color, thickness, 1);
             lines.add(line_2, color, thickness, 1);
         }
+    }
+
+    fn renderSweptCylinder(
+        swept_cylinder: sdk.math.SweptCylinder,
+        color: sdk.math.Vec4,
+        triangles: anytype,
+    ) void {
+        const ends = [2]sdk.math.Vec3{ swept_cylinder.line.point_1, swept_cylinder.line.point_2 };
+        const half_height = swept_cylinder.half_height;
+        const difference = ends[1].subtract(ends[0]);
+        const top_end = getSweptCylinderTopEnd(difference);
+        const bottom_end = 1 - top_end;
+        const start_index = triangles.getNextIndex() orelse unreachable;
+        const Index = @TypeOf(start_index);
+
+        for (0..circle_segments) |segment_index| {
+            for (0..ends.len) |end| {
+                triangles.addVertex(getSweptCylinderPoint(swept_cylinder, segment_index, end, false), color);
+                triangles.addVertex(getSweptCylinderPoint(swept_cylinder, segment_index, end, true), color);
+            }
+        }
+        triangles.addVertex(ends[bottom_end].add(.fromArray(.{ 0, 0, -half_height })), color);
+        triangles.addVertex(ends[top_end].add(.fromArray(.{ 0, 0, half_height })), color);
+
+        const vertex = struct {
+            fn call(start: Index, segment_index: usize, end: usize, is_top: bool) Index {
+                return @intCast(start + (4 * segment_index) + (2 * end) + @intFromBool(is_top));
+            }
+        }.call;
+        const bottom_center_index: Index = @intCast(start_index + (4 * circle_segments));
+        const top_center_index = bottom_center_index + 1;
+        for (0..circle_segments) |segment_index| {
+            const next_segment_index = (segment_index + 1) % circle_segments;
+            const end = getSweptCylinderFaceEnd(segment_index, difference);
+            const next_end = getSweptCylinderFaceEnd(next_segment_index, difference);
+
+            const face_bottom = vertex(start_index, segment_index, end, false);
+            const face_top = vertex(start_index, segment_index, end, true);
+            const next_face_bottom = vertex(start_index, next_segment_index, end, false);
+            const next_face_top = vertex(start_index, next_segment_index, end, true);
+            triangles.addTriangle(face_bottom, next_face_bottom, face_top);
+            triangles.addTriangle(next_face_bottom, next_face_top, face_top);
+
+            const bottom_cap = vertex(start_index, segment_index, bottom_end, false);
+            const next_bottom_cap = vertex(start_index, next_segment_index, bottom_end, false);
+            const top_cap = vertex(start_index, segment_index, top_end, true);
+            const next_top_cap = vertex(start_index, next_segment_index, top_end, true);
+            triangles.addTriangle(bottom_center_index, bottom_cap, next_bottom_cap);
+            triangles.addTriangle(top_cap, next_top_cap, top_center_index);
+
+            const is_top_strip = end != top_end;
+            const strip_1 = vertex(start_index, segment_index, 0, is_top_strip);
+            const strip_2 = vertex(start_index, segment_index, 1, is_top_strip);
+            const next_strip_1 = vertex(start_index, next_segment_index, 0, is_top_strip);
+            const next_strip_2 = vertex(start_index, next_segment_index, 1, is_top_strip);
+            triangles.addTriangle(strip_1, next_strip_1, strip_2);
+            triangles.addTriangle(next_strip_1, next_strip_2, strip_2);
+
+            if (next_end != end) {
+                const wall_bottom_1 = vertex(start_index, next_segment_index, 0, false);
+                const wall_bottom_2 = vertex(start_index, next_segment_index, 1, false);
+                const wall_top_1 = vertex(start_index, next_segment_index, 0, true);
+                const wall_top_2 = vertex(start_index, next_segment_index, 1, true);
+                triangles.addTriangle(wall_bottom_1, wall_bottom_2, wall_top_1);
+                triangles.addTriangle(wall_bottom_2, wall_top_2, wall_top_1);
+            }
+        }
+    }
+
+    fn getSweptCylinderPoint(
+        swept_cylinder: sdk.math.SweptCylinder,
+        segment_index: usize,
+        end: usize,
+        is_top: bool,
+    ) sdk.math.Vec3 {
+        const i: f32 = @floatFromInt(segment_index);
+        const n: f32 = @floatFromInt(circle_segments);
+        const angle = 2 * std.math.pi * i / n;
+        const radius = swept_cylinder.radius;
+        const center = switch (end) {
+            0 => swept_cylinder.line.point_1,
+            else => swept_cylinder.line.point_2,
+        };
+        const z = switch (is_top) {
+            true => swept_cylinder.half_height,
+            false => -swept_cylinder.half_height,
+        };
+        return center.add(.fromArray(.{ radius * std.math.cos(angle), radius * std.math.sin(angle), z }));
+    }
+
+    fn getSweptCylinderFaceNormal(segment_index: usize) sdk.math.Vec2 {
+        const i: f32 = @floatFromInt(segment_index);
+        const n: f32 = @floatFromInt(circle_segments);
+        const angle = 2 * std.math.pi * (i + 0.5) / n;
+        return .fromArray(.{ std.math.cos(angle), std.math.sin(angle) });
+    }
+
+    fn getSweptCylinderFaceEnd(segment_index: usize, difference: sdk.math.Vec3) usize {
+        const normal = getSweptCylinderFaceNormal(segment_index);
+        return switch (normal.dot(difference.swizzle("xy")) > 0) {
+            true => 1,
+            false => 0,
+        };
+    }
+
+    fn getSweptCylinderTopEnd(difference: sdk.math.Vec3) usize {
+        return switch (difference.z() >= 0) {
+            true => 1,
+            false => 0,
+        };
     }
 };
 
@@ -733,5 +858,76 @@ test "should not render cylinder side lines when camera 2D projection is inside 
         try testing.expectEqual(sdk.math.Vec4.fromArray(.{ 0.5, 0.6, 0.7, 0.8 }), item.color);
         try testing.expectEqual(10, item.thickness);
         try testing.expectEqual(1, item.depth_factor);
+    }
+}
+
+test "should render swept cylinder correctly" {
+    // Projected area of a closed convex surface without overlaps is double the area of its shadow.
+    const findProjectedAreas = struct {
+        fn call(triangles: *const MockTriangles) sdk.math.Vec3 {
+            var areas = sdk.math.Vec3.zero;
+            var index: usize = 0;
+            while (index < triangles.indices.items.len) : (index += 3) {
+                const a = triangles.vertices.items[triangles.indices.items[index]].position;
+                const b = triangles.vertices.items[triangles.indices.items[index + 1]].position;
+                const c = triangles.vertices.items[triangles.indices.items[index + 2]].position;
+                const cross = b.subtract(a).cross(c.subtract(a));
+                const area = sdk.math.Vec3.fromArray(.{ @abs(cross.x()), @abs(cross.y()), @abs(cross.z()) });
+                areas = areas.add(area.scale(0.5));
+            }
+            return areas;
+        }
+    }.call;
+    const n: f32 = @floatFromInt(Shapes.circle_segments);
+    const polygon_area = 0.5 * n * std.math.sin(2 * std.math.pi / n);
+    const Case = struct {
+        line: sdk.math.LineSegment3,
+        shadow_areas: sdk.math.Vec3,
+    };
+    const cases = [_]Case{
+        .{
+            .line = .{ .point_1 = .fromArray(.{ 0, 0, 0 }), .point_2 = .fromArray(.{ 4, 0, 0 }) },
+            .shadow_areas = .fromArray(.{ 2, 6, polygon_area + 8 }),
+        },
+        .{
+            .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 5, 2, 5 }) },
+            .shadow_areas = .fromArray(.{ 6, 10, polygon_area + 8 }),
+        },
+        .{
+            .line = .{ .point_1 = .fromArray(.{ 5, 2, 5 }), .point_2 = .fromArray(.{ 1, 2, 3 }) },
+            .shadow_areas = .fromArray(.{ 6, 10, polygon_area + 8 }),
+        },
+        .{
+            .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 1, 2, 6 }) },
+            .shadow_areas = .fromArray(.{ 8, 8, polygon_area }),
+        },
+        .{
+            .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 1, 2, 3 }) },
+            .shadow_areas = .fromArray(.{ 2, 2, polygon_area }),
+        },
+    };
+    for (cases) |case| {
+        var triangles = MockTriangles.init(testing.allocator);
+        defer triangles.deinit();
+        var lines = MockLines.init(testing.allocator);
+        defer lines.deinit();
+        var shapes = Shapes.init(testing.allocator);
+        defer shapes.deinit();
+
+        shapes.addSweptCylinder(
+            .{ .line = case.line, .radius = 1, .half_height = 0.5 },
+            .fromArray(.{ 0.1, 0.2, 0.3, 0.4 }),
+        );
+        shapes.render(&triangles, &lines, .fromArray(.{ 3, 20, 4 }));
+
+        try testing.expectEqual(4 * Shapes.circle_segments + 2, triangles.vertices.items.len);
+        for (triangles.vertices.items) |*vertex| {
+            try testing.expectEqual(sdk.math.Vec4.fromArray(.{ 0.1, 0.2, 0.3, 0.4 }), vertex.color);
+        }
+        try testing.expectEqual(0, lines.list.items.len);
+        const areas = findProjectedAreas(&triangles);
+        try testing.expectApproxEqAbs(2 * case.shadow_areas.x(), areas.x(), 0.0001);
+        try testing.expectApproxEqAbs(2 * case.shadow_areas.y(), areas.y(), 0.0001);
+        try testing.expectApproxEqAbs(2 * case.shadow_areas.z(), areas.z(), 0.0001);
     }
 }

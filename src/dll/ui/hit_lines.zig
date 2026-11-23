@@ -10,6 +10,7 @@ pub const HitLines = struct {
     const Self = @This();
     const LingeringLine = struct {
         line: sdk.math.LineSegment3,
+        half_thickness: f32,
         player_id: model.PlayerId,
         remaining_time: f32,
         attack_type: ?model.AttackType,
@@ -31,6 +32,7 @@ pub const HitLines = struct {
             for (hit_lines) |*hit_line| {
                 _ = self.lingering.addToBack(.{
                     .line = hit_line.line,
+                    .half_thickness = hit_line.half_thickness,
                     .player_id = player_id,
                     .remaining_time = player_settings.duration,
                     .attack_type = player.attack_type,
@@ -68,6 +70,37 @@ pub const HitLines = struct {
         settings: *const model.PlayerSettings(model.HitLinesSettings),
         frame: *const model.Frame,
     ) void {
+        for (model.PlayerId.all) |player_id| {
+            const player_settings = settings.getById(frame, player_id);
+            if (!player_settings.enabled or !player_settings.volume.enabled) {
+                continue;
+            }
+            const player = frame.getPlayerById(player_id);
+            for (player.hit_lines.asSlice()) |hit_line| {
+                if (hit_line.half_thickness <= 0) {
+                    continue;
+                }
+                const line_settings = if (hit_line.flags.is_inactive or hit_line.flags.is_crushed) block: {
+                    if (!player_settings.inactive_or_crushed.enabled) {
+                        continue;
+                    }
+                    break :block &player_settings.inactive_or_crushed;
+                } else block: {
+                    if (!player_settings.normal.enabled) {
+                        continue;
+                    }
+                    break :block &player_settings.normal;
+                };
+                const swept_cylinder = sdk.math.SweptCylinder{
+                    .line = hit_line.line,
+                    .radius = hit_line.half_thickness,
+                    .half_height = hit_line.half_thickness,
+                };
+                const color = line_settings.fill.colors.get(player.attack_type orelse .not_attack);
+                const thickness = player_settings.volume.thickness;
+                shapes.drawSweptCylinder(swept_cylinder, color, thickness);
+            }
+        }
         for (model.PlayerId.all) |player_id| {
             const player_settings = settings.getById(frame, player_id);
             if (!player_settings.enabled) {
@@ -124,6 +157,38 @@ pub const HitLines = struct {
         settings: *const model.PlayerSettings(model.HitLinesSettings),
         frame: *const model.Frame,
     ) void {
+        for (0..self.lingering.len) |index| {
+            const hit_line = self.lingering.get(index) catch unreachable;
+            const player_settings = settings.getById(frame, hit_line.player_id);
+            if (!player_settings.enabled or !player_settings.volume.enabled or hit_line.half_thickness <= 0) {
+                continue;
+            }
+
+            const line_settings = if (hit_line.inactive_or_crushed) block: {
+                if (!player_settings.inactive_or_crushed.enabled) {
+                    continue;
+                }
+                break :block &player_settings.inactive_or_crushed;
+            } else block: {
+                if (!player_settings.normal.enabled) {
+                    continue;
+                }
+                break :block &player_settings.normal;
+            };
+
+            const duration = player_settings.duration;
+            const completion = 1.0 - (hit_line.remaining_time / duration);
+            var color = line_settings.fill.colors.get(hit_line.attack_type orelse .not_attack);
+            color.asColor().a *= 1.0 - (completion * completion * completion * completion);
+            const swept_cylinder = sdk.math.SweptCylinder{
+                .line = hit_line.line,
+                .radius = hit_line.half_thickness,
+                .half_height = hit_line.half_thickness,
+            };
+            const thickness = player_settings.volume.thickness;
+
+            shapes.drawSweptCylinder(swept_cylinder, color, thickness);
+        }
         for (0..self.lingering.len) |index| {
             const hit_line = self.lingering.get(index) catch unreachable;
             const player_settings = settings.getById(frame, hit_line.player_id);
@@ -201,6 +266,7 @@ test "should draw regular lines correctly" {
                     .fill = .{ .colors = .initFill(.fill(0.1)), .thickness = 1 },
                     .outline = .{ .colors = .initFill(.fill(0.2)), .thickness = 2 },
                 },
+                .volume = .{ .enabled = true, .thickness = 5 },
             },
             .{
                 .enabled = true,
@@ -209,22 +275,34 @@ test "should draw regular lines correctly" {
                     .fill = .{ .colors = .initFill(.fill(0.3)), .thickness = 3 },
                     .outline = .{ .colors = .initFill(.fill(0.4)), .thickness = 4 },
                 },
+                .volume = .{ .enabled = false, .thickness = 6 },
             },
         },
     };
     const frame = model.Frame{ .players = .{
         .{ .hit_lines = .fromArray(.{
             model.HitLine{ .line = .{ .point_1 = .fill(1), .point_2 = .fill(2) } },
-            model.HitLine{ .line = .{ .point_1 = .fill(3), .point_2 = .fill(4) } },
+            model.HitLine{ .line = .{ .point_1 = .fill(3), .point_2 = .fill(4) }, .half_thickness = 0.5 },
         }) },
         .{ .hit_lines = .fromArray(.{
             model.HitLine{ .line = .{ .point_1 = .fill(-1), .point_2 = .fill(-2) } },
-            model.HitLine{ .line = .{ .point_1 = .fill(-3), .point_2 = .fill(-4) } },
+            model.HitLine{ .line = .{ .point_1 = .fill(-3), .point_2 = .fill(-4) }, .half_thickness = 0.5 },
         }) },
     } };
     hit_lines.draw(&shapes, &settings, &frame);
 
-    try testing.expectEqual(8, ui.testing_shapes.getAll().len);
+    try testing.expectEqual(9, ui.testing_shapes.getAll().len);
+    const swept_cylinder = ui.testing_shapes.findSweptCylinderWithWorldPoints(.fill(3), .fill(4), 0.0001);
+    try testing.expect(swept_cylinder != null);
+    try testing.expectEqual(sdk.math.SweptCylinder{
+        .line = .{ .point_1 = .fill(3), .point_2 = .fill(4) },
+        .radius = 0.5,
+        .half_height = 0.5,
+    }, swept_cylinder.?.world_swept_cylinder);
+    try testing.expectEqual(sdk.math.Vec4.fill(0.1), swept_cylinder.?.color);
+    try testing.expectEqual(5, swept_cylinder.?.thickness);
+    try testing.expectEqual(null, ui.testing_shapes.findSweptCylinderWithWorldPoints(.fill(1), .fill(2), 0.0001));
+    try testing.expectEqual(null, ui.testing_shapes.findSweptCylinderWithWorldPoints(.fill(-3), .fill(-4), 0.0001));
     const lines = [4](?*const ui.TestingShapes.Line){
         ui.testing_shapes.findLineWithWorldPoints(.fill(1), .fill(2), 0.0001),
         ui.testing_shapes.findLineWithWorldPoints(.fill(3), .fill(4), 0.0001),
@@ -270,13 +348,17 @@ test "should draw lingering lines correctly" {
                     .fill = .{ .colors = .initFill(.fill(0.1)), .thickness = 1 },
                     .outline = .{ .colors = .initFill(.fill(0.2)), .thickness = 2 },
                 },
+                .volume = .{ .enabled = true, .thickness = 3 },
                 .duration = 10,
             },
             .{},
         },
     };
     var frame = model.Frame{ .players = .{
-        .{ .hit_lines = .fromArray(.{model.HitLine{ .line = .{ .point_1 = .fill(1), .point_2 = .fill(2) } }}) },
+        .{ .hit_lines = .fromArray(.{model.HitLine{
+            .line = .{ .point_1 = .fill(1), .point_2 = .fill(2) },
+            .half_thickness = 0.5,
+        }}) },
         .{},
     } };
     hit_lines.processFrame(&settings, &frame);
@@ -284,9 +366,16 @@ test "should draw lingering lines correctly" {
 
     ui.testing_shapes.clear();
     hit_lines.draw(&shapes, &settings, &frame);
-    try testing.expectEqual(2, ui.testing_shapes.getAll().len);
+    try testing.expectEqual(3, ui.testing_shapes.getAll().len);
     var line = ui.testing_shapes.findLineWithWorldPoints(.fill(1), .fill(2), 0.0001);
     var outline = ui.testing_shapes.findOutlineWithWorldPoints(.fill(1), .fill(2), 0.0001);
+    var swept_cylinder = ui.testing_shapes.findSweptCylinderWithWorldPoints(.fill(1), .fill(2), 0.0001);
+    try testing.expect(swept_cylinder != null);
+    try testing.expectEqual(0.5, swept_cylinder.?.world_swept_cylinder.radius);
+    try testing.expectEqual(0.5, swept_cylinder.?.world_swept_cylinder.half_height);
+    try testing.expectApproxEqAbs(0.1, swept_cylinder.?.color.r(), 0.0001);
+    try testing.expectApproxEqAbs(0.1, swept_cylinder.?.color.a(), 0.0001);
+    try testing.expectEqual(3, swept_cylinder.?.thickness);
     try testing.expect(line != null);
     try testing.expectApproxEqAbs(0.1, line.?.color.r(), 0.0001);
     try testing.expectApproxEqAbs(0.1, line.?.color.g(), 0.0001);
@@ -303,9 +392,14 @@ test "should draw lingering lines correctly" {
     ui.testing_shapes.clear();
     hit_lines.update(8);
     hit_lines.draw(&shapes, &settings, &frame);
-    try testing.expectEqual(2, ui.testing_shapes.getAll().len);
+    try testing.expectEqual(3, ui.testing_shapes.getAll().len);
     line = ui.testing_shapes.findLineWithWorldPoints(.fill(1), .fill(2), 0.0001);
     outline = ui.testing_shapes.findOutlineWithWorldPoints(.fill(1), .fill(2), 0.0001);
+    swept_cylinder = ui.testing_shapes.findSweptCylinderWithWorldPoints(.fill(1), .fill(2), 0.0001);
+    try testing.expect(swept_cylinder != null);
+    try testing.expectApproxEqAbs(0.1, swept_cylinder.?.color.r(), 0.0001);
+    try testing.expectApproxEqAbs(0.05, swept_cylinder.?.color.a(), 0.04);
+    try testing.expectEqual(3, swept_cylinder.?.thickness);
     try testing.expect(line != null);
     try testing.expectApproxEqAbs(0.1, line.?.color.r(), 0.0001);
     try testing.expectApproxEqAbs(0.1, line.?.color.g(), 0.0001);
