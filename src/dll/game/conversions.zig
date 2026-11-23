@@ -18,6 +18,22 @@ pub fn floatCast(comptime From: type, comptime To: type) *const fn (value: From)
     }.floatCast;
 }
 
+pub fn intToFloat(comptime From: type, comptime To: type) *const fn (value: From) To {
+    return struct {
+        fn intToFloat(value: From) To {
+            return @floatFromInt(value);
+        }
+    }.intToFloat;
+}
+
+pub fn floatToInt(comptime From: type, comptime To: type) *const fn (value: From) To {
+    return struct {
+        fn floatToInt(value: From) To {
+            return @intFromFloat(@round(value));
+        }
+    }.floatToInt;
+}
+
 pub fn bitShiftLeft(comptime Type: type, comptime left_shift_bits: comptime_int) *const fn (value: Type) Type {
     return struct {
         fn bitShift(value: Type) Type {
@@ -495,6 +511,17 @@ test "floatCast should return the same value as a different float type" {
     try testing.expectEqual(@as(f64, 123), floatCast(f32, f64)(@as(f32, 123)));
     try testing.expectEqual(@as(f32, 456), floatCast(f64, f32)(@as(f64, 456)));
     try testing.expectEqual(@as(f32, 789), floatCast(f32, f32)(@as(f64, 789)));
+}
+
+test "intToFloat should return the same value as a float" {
+    try testing.expectEqual(@as(f32, 123), intToFloat(i32, f32)(123));
+    try testing.expectEqual(@as(f64, -456), intToFloat(i64, f64)(-456));
+}
+
+test "floatToInt should return the value rounded to the nearest integer" {
+    try testing.expectEqual(@as(i32, 123), floatToInt(f32, i32)(123.4));
+    try testing.expectEqual(@as(i32, 124), floatToInt(f32, i32)(123.6));
+    try testing.expectEqual(@as(i64, -457), floatToInt(f64, i64)(-456.6));
 }
 
 test "bitShiftLeft and bitShiftRight should cancel out" {

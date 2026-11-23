@@ -5,6 +5,7 @@ const sdk = @import("../../sdk/root.zig");
 const game = @import("root.zig");
 
 const Bool = sdk.memory.Boolean(.{});
+const Bool32 = sdk.memory.Boolean(.{ .BackingInt = u32 });
 const Pointer = sdk.memory.Pointer;
 const Converted = sdk.memory.ConvertedValue;
 
@@ -105,7 +106,7 @@ pub const ThrowEscapeFlags = sdk.memory.Bitfield(u32, &.{
     .{ .name = "escape_success", .backing_value = 2048 },
 });
 
-pub const AttackType = enum(u32) {
+pub const EncryptedAttackType = enum(u32) {
     not_attack = 0xC000001D,
     high = 0xA000050F,
     mid = 0x8000020A,
@@ -117,6 +118,21 @@ pub const AttackType = enum(u32) {
     throw = 0x60000A1D,
     projectile = 0x10000302,
     antiair_only = 0x10000B1A,
+    _,
+};
+
+pub const AttackType = enum(u16) {
+    not_attack = 0x000,
+    low = 0x10F,
+    mid = 0x217,
+    projectile = 0x31F,
+    special_low = 0x41F,
+    high = 0x512,
+    unblockable_mid = 0x707,
+    unblockable_high = 0x806,
+    unblockable_low = 0x907,
+    throw = 0xA00,
+    antiair_only = 0xB07,
     _,
 };
 
@@ -301,6 +317,109 @@ comptime {
     std.debug.assert(@sizeOf(HitLines(.t8)) == 1024);
 }
 
+pub fn LineProjectile(comptime game_id: build_info.Game) type {
+    const ConvertedHitLine = Converted(
+        HitLine(game_id),
+        HitLine(game_id),
+        game.hitLineToUnrealSpace(game_id),
+        game.hitLineFromUnrealSpace(game_id),
+    );
+    const size = switch (game_id) {
+        .t7 => 0xF0,
+        .t8 => 0x120,
+    };
+    return sdk.memory.StructWithOffsets(size, &.{
+        field(0x04, "lifetime", i32, &0),
+        field(0x0C, "attack_type", AttackType, &.not_attack),
+        field(0x10, "death_timer", i32, &0),
+        field(0x90, "hit_line", ConvertedHitLine, &.fromRaw(.{})),
+    });
+}
+
+pub fn LineProjectiles(comptime game_id: build_info.Game) type {
+    return [5]LineProjectile(game_id);
+}
+
+pub const ObjectProjectileShape = enum(u32) {
+    sphere = 0,
+    cylinder = 1,
+    box = 2, // Only in T8.
+    _,
+};
+
+pub fn ObjectProjectileData(comptime game_id: build_info.Game) type {
+    const Size = struct {
+        fn call(comptime len: usize) type {
+            return Converted(
+                sdk.math.Vector(len, i32),
+                sdk.math.Vector(len, f32),
+                game.convertEachVectorElement(len, game.composeConversions(.{
+                    game.intToFloat(i32, f32),
+                    game.scaleToUnrealSpace,
+                })),
+                game.convertEachVectorElement(len, game.composeConversions(.{
+                    game.scaleFromUnrealSpace,
+                    game.floatToInt(f32, i32),
+                })),
+            );
+        }
+    }.call;
+    return switch (game_id) {
+        .t7 => sdk.memory.StructWithOffsets(null, &.{
+            field(0x2C, "shape", ObjectProjectileShape, &.sphere),
+            // Sphere: radius. Cylinder: radius, half height.
+            field(0x30, "size", Size(2), &.fromRaw(.zero)),
+            field(0x38, "attack_type", AttackType, &.not_attack),
+            field(0x70, "hits_own_team", Bool32, &.false),
+            field(0x74, "hits_other_team", Bool32, &.false),
+        }),
+        .t8 => sdk.memory.StructWithOffsets(null, &.{
+            field(0x2C, "shape", ObjectProjectileShape, &.sphere),
+            // Sphere: radius. Cylinder: radius, half height. Box: half width, half height, half depth.
+            field(0x30, "size", Size(3), &.fromRaw(.zero)),
+            field(0x3C, "attack_type", AttackType, &.not_attack),
+            field(0xA0, "hits_own_team", Bool32, &.false),
+            field(0xA4, "hits_other_team", Bool32, &.false),
+        }),
+    };
+}
+
+pub fn ObjectProjectile(comptime game_id: build_info.Game) type {
+    const Vector = Converted(sdk.math.Vec3, sdk.math.Vec3, game.pointToUnrealSpace, game.pointFromUnrealSpace);
+    const Rotation = Converted(u16, f32, game.u16ToRadians, game.u16FromRadians);
+    const Data = Pointer(ObjectProjectileData(game_id));
+    return switch (game_id) {
+        .t7 => sdk.memory.StructWithOffsets(0x90, &.{
+            field(0x00, "position", Vector, &.fromRaw(.zero)),
+            field(0x10, "velocity", Vector, &.fromRaw(.zero)),
+            field(0x28, "data", Data, &.fromPointer(null)),
+            field(0x30, "remaining_hits", i32, &0),
+            field(0x34, "lifetime", f32, &0),
+            field(0x3C, "delay", f32, &0),
+            field(0x45, "is_disabled", Bool, &.false),
+            field(0x58, "fallback_data", Data, &.fromPointer(null)),
+        }),
+        .t8 => sdk.memory.StructWithOffsets(0xD0, &.{
+            field(0x00, "position", Vector, &.fromRaw(.zero)),
+            field(0x28, "data", Data, &.fromPointer(null)),
+            field(0x30, "remaining_hits", i32, &0),
+            field(0x34, "lifetime", f32, &0),
+            field(0x3C, "delay", f32, &0),
+            field(0x45, "is_disabled", Bool, &.false),
+            field(0x68, "fallback_data", Data, &.fromPointer(null)),
+            field(0x78, "rotation", Rotation, &.fromRaw(0)),
+        }),
+    };
+}
+comptime {
+    std.debug.assert(@sizeOf(ObjectProjectile(.t7)) == 0x90);
+    std.debug.assert(@sizeOf(ObjectProjectile(.t8)) == 0xD0);
+}
+
+pub fn ObjectProjectiles(comptime game_id: build_info.Game) type {
+    return [24]ObjectProjectile(game_id);
+}
+
 pub fn HurtCylinder(comptime game_id: build_info.Game) type {
     return switch (game_id) {
         .t7 => extern struct {
@@ -465,7 +584,7 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x01D4, "animation_frame", u32, &0),
             field(0x0218, "animation", Pointer(Animation(.t7)), &.fromPointer(null)),
             field(0x0264, "state_flags", StateFlags, &.{}),
-            field(0x0328, "attack_type", AttackType, &.not_attack),
+            field(0x0328, "attack_type", EncryptedAttackType, &.not_attack),
             field(0x0350, "animation_id", u32, &0),
             field(0x0390, "can_move", Bool, &.false),
             field(0x039C, "animation_total_frames", u32, &0),
@@ -487,8 +606,11 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x0E50, "hit_lines", HitLines(.t7), &@splat(.fromRaw(.{}))),
             field(0x0F10, "hurt_cylinders", HurtCylinders(.t7), &.{}),
             field(0x10D0, "collision_spheres", CollisionSpheres, &.{}),
+            field(0x1400, "line_projectiles", Pointer(LineProjectiles(.t7)), &.fromPointer(null)),
+            field(0x14D8, "team", u32, &0),
             field(0x14E8, "health", HealthValue, &.fromRaw(.{})),
             field(0x14F8, "max_health", T7MaxHealth, &.fromRaw(0)),
+            field(0x28F0, "object_projectiles", ObjectProjectiles(.t7), &@splat(.{})),
         }),
         .t8 => sdk.memory.StructWithOffsets(null, &.{
             field(0x0004, "id", PlayerId, &.player_1),
@@ -499,7 +621,7 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x0390, "animation_frame", u32, &0),
             field(0x03D8, "animation", Pointer(Animation(.t8)), &.fromPointer(null)),
             field(0x0434, "state_flags", StateFlags, &.{}),
-            field(0x0510, "attack_type", AttackType, &.not_attack),
+            field(0x0510, "attack_type", EncryptedAttackType, &.not_attack),
             field(0x0550, "animation_id", u32, &0),
             field(0x05D4, "can_move", Bool, &.false),
             field(0x05E4, "animation_total_frames", u32, &0),
@@ -525,9 +647,12 @@ pub fn Player(comptime game_id: build_info.Game) type {
             field(0x29D0, "hit_lines", HitLines(.t8), &@splat(.fromRaw(.{}))),
             field(0x2DD0, "hurt_cylinders", HurtCylinders(.t8), &.{}),
             field(0x3290, "collision_spheres", CollisionSpheres, &.{}),
+            field(0x3870, "line_projectiles", Pointer(LineProjectiles(.t8)), &.fromPointer(null)),
+            field(0x3AC4, "team", u8, &0),
             field(0x3AD0, "health", HealthValue, &.fromRaw(.{})),
             field(0x3AE0, "health_recover_limit", HealthValue, &.fromRaw(.{})),
             field(0x3AF0, "max_health", HealthValue, &.fromRaw(.{})),
+            field(0x4F30, "object_projectiles", ObjectProjectiles(.t8), &@splat(.{})),
         }),
     };
 }
