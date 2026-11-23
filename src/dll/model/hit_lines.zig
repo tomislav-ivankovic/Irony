@@ -4,6 +4,7 @@ const game = @import("../game/root.zig");
 
 pub const HitLine = struct {
     line: sdk.math.LineSegment3,
+    half_thickness: f32 = 0,
     flags: HitLineFlags = .{},
 };
 
