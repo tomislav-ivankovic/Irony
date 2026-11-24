@@ -5,6 +5,7 @@ const model = @import("root.zig");
 pub const Projectile = struct {
     shape: ProjectileShape,
     attack_type: ?model.AttackType = null,
+    flags: model.HitLineFlags = .{},
 };
 
 pub const ProjectileShape = union(enum) {

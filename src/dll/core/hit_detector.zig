@@ -17,54 +17,87 @@ pub const HitDetector = struct {
         const lines = attacker.hit_lines.asSlice();
         if (lines.len == 0) {
             already_connected.* = false;
-            return;
         }
+        const cylinders: *model.HurtCylinders = if (defender.hurt_cylinders) |*c| c else return;
+        const defense = Defense.fromPlayer(defender);
 
         const inactive = already_connected.*;
         const crushes = checkCrushing(defender.crushing, attacker.attack_type);
-        const is_power_crushing = if (defender.crushing) |c| c.power_crushing else false;
-        const is_blocking_outcome = isBlockingHitOutcome(defender.hit_outcome);
-        const is_normal_hitting_outcome = isNormalHittingHitOutcome(defender.hit_outcome);
-        const is_counter_hitting_outcome = isCounterHittingHitOutcome(defender.hit_outcome);
-
-        const cylinders: *model.HurtCylinders = if (defender.hurt_cylinders) |*c| c else return;
         for (&cylinders.values) |*cylinder| {
             for (lines) |*line| {
-                // Same as the game: thickness is applied by inflating the hurt cylinder instead of the line.
-                const inflated_cylinder = sdk.math.Cylinder{
-                    .center = cylinder.cylinder.center,
-                    .radius = cylinder.cylinder.radius + line.radius,
-                    .half_height = cylinder.cylinder.half_height + line.half_height,
-                };
-                const intersects = sdk.math.checkCylinderLineSegmentIntersection(inflated_cylinder, line.line);
-                const connects = intersects and !crushes and !inactive;
-                const power_crushes = connects and is_power_crushing;
-                const block = connects and is_blocking_outcome;
-                const normal_hit = connects and is_normal_hitting_outcome;
-                const counter_hit = connects and is_counter_hitting_outcome;
-
-                cylinder.flags.is_intersecting = cylinder.flags.is_intersecting or intersects;
-                cylinder.flags.is_crushing = cylinder.flags.is_crushing or crushes;
-                cylinder.flags.is_power_crushing = cylinder.flags.is_power_crushing or power_crushes;
-                cylinder.flags.is_connected = cylinder.flags.is_connected or connects;
-                cylinder.flags.is_blocking = cylinder.flags.is_blocking or block;
-                cylinder.flags.is_being_normal_hit = cylinder.flags.is_being_normal_hit or normal_hit;
-                cylinder.flags.is_being_counter_hit = cylinder.flags.is_being_counter_hit or counter_hit;
-
-                line.flags.is_inactive = line.flags.is_inactive or inactive;
-                line.flags.is_intersecting = line.flags.is_intersecting or intersects;
-                line.flags.is_crushed = line.flags.is_crushed or crushes;
-                line.flags.is_power_crushed = line.flags.is_power_crushed or power_crushes;
-                line.flags.is_connected = line.flags.is_connected or connects;
-                line.flags.is_blocked = line.flags.is_blocked or block;
-                line.flags.is_normal_hitting = line.flags.is_normal_hitting or normal_hit;
-                line.flags.is_counter_hitting = line.flags.is_counter_hitting or counter_hit;
-
-                if (connects) {
+                const intersects = sdk.math.checkCylinderSweptCylinderIntersection(cylinder.cylinder, .{
+                    .line = line.line,
+                    .radius = line.radius,
+                    .half_height = line.half_height,
+                });
+                if (applyIntersection(&defense, cylinder, &line.flags, intersects, crushes, inactive)) {
                     already_connected.* = true;
                 }
             }
         }
+
+        for (attacker.projectiles.asSlice()) |*projectile| {
+            const projectile_crushes = checkCrushing(defender.crushing, projectile.attack_type);
+            for (&cylinders.values) |*cylinder| {
+                const intersects = switch (projectile.shape) {
+                    .line => |*line| sdk.math.checkCylinderSweptCylinderIntersection(cylinder.cylinder, line.*),
+                    .sphere => |*sphere| sdk.math.checkCylinderSphereIntersection(cylinder.cylinder, sphere.*),
+                    .cylinder => |*c| sdk.math.checkCylinderCylinderIntersection(cylinder.cylinder, c.*),
+                    .box => |*box| sdk.math.checkCylinderBoxIntersection(cylinder.cylinder, box.*),
+                };
+                _ = applyIntersection(&defense, cylinder, &projectile.flags, intersects, projectile_crushes, false);
+            }
+        }
+    }
+
+    const Defense = struct {
+        is_power_crushing: bool,
+        is_blocking_outcome: bool,
+        is_normal_hitting_outcome: bool,
+        is_counter_hitting_outcome: bool,
+
+        fn fromPlayer(defender: *const model.Player) Defense {
+            return .{
+                .is_power_crushing = if (defender.crushing) |c| c.power_crushing else false,
+                .is_blocking_outcome = isBlockingHitOutcome(defender.hit_outcome),
+                .is_normal_hitting_outcome = isNormalHittingHitOutcome(defender.hit_outcome),
+                .is_counter_hitting_outcome = isCounterHittingHitOutcome(defender.hit_outcome),
+            };
+        }
+    };
+
+    fn applyIntersection(
+        defense: *const Defense,
+        cylinder: *model.HurtCylinder,
+        attack_flags: *model.HitLineFlags,
+        intersects: bool,
+        crushes: bool,
+        inactive: bool,
+    ) bool {
+        const connects = intersects and !crushes and !inactive;
+        const power_crushes = connects and defense.is_power_crushing;
+        const block = connects and defense.is_blocking_outcome;
+        const normal_hit = connects and defense.is_normal_hitting_outcome;
+        const counter_hit = connects and defense.is_counter_hitting_outcome;
+
+        cylinder.flags.is_intersecting = cylinder.flags.is_intersecting or intersects;
+        cylinder.flags.is_crushing = cylinder.flags.is_crushing or crushes;
+        cylinder.flags.is_power_crushing = cylinder.flags.is_power_crushing or power_crushes;
+        cylinder.flags.is_connected = cylinder.flags.is_connected or connects;
+        cylinder.flags.is_blocking = cylinder.flags.is_blocking or block;
+        cylinder.flags.is_being_normal_hit = cylinder.flags.is_being_normal_hit or normal_hit;
+        cylinder.flags.is_being_counter_hit = cylinder.flags.is_being_counter_hit or counter_hit;
+
+        attack_flags.is_inactive = attack_flags.is_inactive or inactive;
+        attack_flags.is_intersecting = attack_flags.is_intersecting or intersects;
+        attack_flags.is_crushed = attack_flags.is_crushed or crushes;
+        attack_flags.is_power_crushed = attack_flags.is_power_crushed or power_crushes;
+        attack_flags.is_connected = attack_flags.is_connected or connects;
+        attack_flags.is_blocked = attack_flags.is_blocked or block;
+        attack_flags.is_normal_hitting = attack_flags.is_normal_hitting or normal_hit;
+        attack_flags.is_counter_hitting = attack_flags.is_counter_hitting or counter_hit;
+
+        return connects;
     }
 
     fn checkCrushing(crushing: ?model.Crushing, attack_type: ?model.AttackType) bool {
@@ -797,4 +830,148 @@ test "should take hit line half height into account" {
             .is_connected = true,
         }, cylinder.flags);
     }
+}
+
+test "should detect projectile hits correctly" {
+    const hurt_cylinder = sdk.math.Cylinder{
+        .center = .fromArray(.{ 0, 0, 0 }),
+        .radius = 0.5,
+        .half_height = 0.5,
+    };
+    var frame = model.Frame{ .players = .{
+        .{
+            .attack_type = .not_attack,
+            .projectiles = .fromArray(.{
+                model.Projectile{
+                    .shape = .{ .line = .{
+                        .line = .{ .point_1 = .fromArray(.{ -2, 0, 0 }), .point_2 = .fromArray(.{ -1, 0, 0 }) },
+                        .radius = 0.6,
+                        .half_height = 0.6,
+                    } },
+                    .attack_type = .mid,
+                },
+                model.Projectile{
+                    .shape = .{ .sphere = .{ .center = .fromArray(.{ 1.4, 0, 0 }), .radius = 1 } },
+                    .attack_type = .mid,
+                },
+                model.Projectile{
+                    .shape = .{ .cylinder = .{ .center = .fromArray(.{ 0, 0, 2 }), .radius = 1, .half_height = 1.4 } },
+                    .attack_type = .mid,
+                },
+                model.Projectile{
+                    .shape = .{ .box = .{
+                        .center = .fromArray(.{ 0, 1.4, 0 }),
+                        .half_size = .fromArray(.{ 2, 1, 1 }),
+                        .rotation = 0,
+                    } },
+                    .attack_type = .mid,
+                },
+            }),
+        },
+        .{
+            .crushing = .{},
+            .hit_outcome = .normal_hit_standing,
+            .hurt_cylinders = hurtCylinders(@splat(hurt_cylinder)),
+        },
+    } };
+    var hit_detector = HitDetector{};
+    hit_detector.detect(&frame);
+
+    const projectiles = frame.players[0].projectiles.asSlice();
+    try testing.expectEqual(4, projectiles.len);
+    const hit = model.HitLineFlags{ .is_intersecting = true, .is_connected = true, .is_normal_hitting = true };
+    try testing.expectEqual(hit, projectiles[0].flags);
+    try testing.expectEqual(hit, projectiles[1].flags);
+    try testing.expectEqual(model.HitLineFlags{}, projectiles[2].flags);
+    try testing.expectEqual(hit, projectiles[3].flags);
+
+    try testing.expect(frame.players[1].hurt_cylinders != null);
+    for (&frame.players[1].hurt_cylinders.?.values) |*cylinder| {
+        try testing.expectEqual(model.HurtCylinderFlags{
+            .is_intersecting = true,
+            .is_connected = true,
+            .is_being_normal_hit = true,
+        }, cylinder.flags);
+    }
+}
+
+test "should detect projectile crush using the attack type of the projectile" {
+    const hurt_cylinder = sdk.math.Cylinder{
+        .center = .fromArray(.{ 0, 0, 0 }),
+        .radius = 0.5,
+        .half_height = 0.5,
+    };
+    var frame = model.Frame{ .players = .{
+        .{
+            .attack_type = .low,
+            .projectiles = .fromArray(.{model.Projectile{
+                .shape = .{ .sphere = .{ .center = .fromArray(.{ 1, 0, 0 }), .radius = 1 } },
+                .attack_type = .high,
+            }}),
+        },
+        .{
+            .crushing = .{ .high_crushing = true },
+            .hit_outcome = .none,
+            .hurt_cylinders = hurtCylinders(@splat(hurt_cylinder)),
+        },
+    } };
+    var hit_detector = HitDetector{};
+    hit_detector.detect(&frame);
+
+    try testing.expectEqual(1, frame.players[0].projectiles.asSlice().len);
+    try testing.expectEqual(model.HitLineFlags{
+        .is_intersecting = true,
+        .is_crushed = true,
+    }, frame.players[0].projectiles.asSlice()[0].flags);
+
+    try testing.expect(frame.players[1].hurt_cylinders != null);
+    for (&frame.players[1].hurt_cylinders.?.values) |*cylinder| {
+        try testing.expectEqual(model.HurtCylinderFlags{
+            .is_intersecting = true,
+            .is_crushing = true,
+        }, cylinder.flags);
+    }
+}
+
+test "should not mark projectiles inactive after the move already connected" {
+    const hit_line = sdk.math.LineSegment3{
+        .point_1 = .fromArray(.{ -1, 0, 0 }),
+        .point_2 = .fromArray(.{ 1, 0, 0 }),
+    };
+    const hurt_cylinder = sdk.math.Cylinder{
+        .center = .fromArray(.{ 0, 0, 0 }),
+        .radius = 0.5,
+        .half_height = 0.5,
+    };
+    const frame = model.Frame{ .players = .{
+        .{
+            .attack_type = .mid,
+            .hit_lines = hitLines(.{hit_line}),
+            .projectiles = .fromArray(.{model.Projectile{
+                .shape = .{ .sphere = .{ .center = .fromArray(.{ 1, 0, 0 }), .radius = 1 } },
+                .attack_type = .mid,
+            }}),
+        },
+        .{
+            .crushing = .{},
+            .hit_outcome = .blocked_standing,
+            .hurt_cylinders = hurtCylinders(@splat(hurt_cylinder)),
+        },
+    } };
+    var hit_detector = HitDetector{};
+
+    var frame_1 = frame;
+    hit_detector.detect(&frame_1);
+    var frame_2 = frame;
+    hit_detector.detect(&frame_2);
+
+    try testing.expectEqual(model.HitLineFlags{
+        .is_inactive = true,
+        .is_intersecting = true,
+    }, frame_2.players[0].hit_lines.asSlice()[0].flags);
+    try testing.expectEqual(model.HitLineFlags{
+        .is_intersecting = true,
+        .is_connected = true,
+        .is_blocked = true,
+    }, frame_2.players[0].projectiles.asSlice()[0].flags);
 }
