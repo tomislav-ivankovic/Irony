@@ -32,6 +32,12 @@ pub const SweptCylinder = struct {
     half_height: f32,
 };
 
+pub const Box = struct {
+    center: math.Vec3,
+    half_size: math.Vec3,
+    rotation: f32,
+};
+
 pub const Rectangle = struct {
     center: math.Vec2,
     half_size: math.Vec2,

@@ -26,4 +26,5 @@ pub const Circle = @import("shapes.zig").Circle;
 pub const Sphere = @import("shapes.zig").Sphere;
 pub const Cylinder = @import("shapes.zig").Cylinder;
 pub const SweptCylinder = @import("shapes.zig").SweptCylinder;
+pub const Box = @import("shapes.zig").Box;
 pub const Rectangle = @import("shapes.zig").Rectangle;

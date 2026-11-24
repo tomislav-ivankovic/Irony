@@ -87,6 +87,7 @@ pub const Player = struct {
     hurt_cylinders: ?model.HurtCylinders = null,
     collision_spheres: ?model.CollisionSpheres = null,
     hit_lines: model.HitLines = .empty,
+    projectiles: model.Projectiles = .empty,
 
     const Self = @This();
 

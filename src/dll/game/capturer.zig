@@ -352,6 +352,7 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                 .hurt_cylinders = captureHurtCylinders(player),
                 .collision_spheres = captureCollisionSpheres(player),
                 .hit_lines = captureHitLines(player),
+                .projectiles = captureProjectiles(player),
             };
             return captured_player;
         }
@@ -797,6 +798,108 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
                 }) catch break;
             }
             return result;
+        }
+
+        fn captureProjectiles(player_maybe: ?*const GamePlayer) model.Projectiles {
+            const player = player_maybe orelse return .empty;
+            var result = model.Projectiles.empty;
+            if (player.line_projectiles.toConstPointer()) |line_projectiles| {
+                for (line_projectiles) |*line_projectile| {
+                    // On the frame of the hit, the game starts the death timer. It counts down from the frame after.
+                    const death_timer_on_hit = switch (line_projectile.uses_death_duration != .false) {
+                        true => line_projectile.death_duration,
+                        false => 30000,
+                    };
+                    const is_dying = line_projectile.death_timer >= 1 and
+                        line_projectile.death_timer != death_timer_on_hit;
+                    if (line_projectile.lifetime <= 0 or is_dying) {
+                        continue;
+                    }
+                    const hit_line = line_projectile.hit_line.convert();
+                    switch (game_id) {
+                        .t7 => {},
+                        .t8 => {
+                            if (hit_line.ignore != .false) {
+                                continue;
+                            }
+                        },
+                    }
+                    result.append(.{
+                        .shape = .{ .line = .{
+                            .line = .{
+                                .point_1 = hit_line.point_1.position,
+                                .point_2 = hit_line.point_2.position,
+                            },
+                            .radius = switch (game_id) {
+                                .t7 => 0,
+                                .t8 => hit_line.half_thickness,
+                            },
+                            .half_height = switch (game_id) {
+                                .t7 => 0,
+                                .t8 => switch (hit_line.vertical_height > 0) {
+                                    true => 0,
+                                    false => hit_line.half_thickness,
+                                },
+                            },
+                        } },
+                        .attack_type = captureProjectileAttackType(line_projectile.attack_type),
+                    }) catch return result;
+                }
+            }
+            for (&player.object_projectiles) |*object_projectile| {
+                // On the frame of the hit, the game uses up the remaining hits. It clears the object the frame after.
+                const has_hits_left = object_projectile.remaining_hits > 0 or object_projectile.has_hit != .false;
+                const is_able_to_hit = has_hits_left and
+                    object_projectile.lifetime > 0 and
+                    object_projectile.delay <= 0 and
+                    object_projectile.is_disabled == .false;
+                if (!is_able_to_hit) {
+                    continue;
+                }
+                const data = object_projectile.data.toConstPointer() orelse
+                    object_projectile.fallback_data.toConstPointer() orelse
+                    continue;
+                if (data.hits_own_team == .false and data.hits_other_team == .false) {
+                    continue;
+                }
+                const position = object_projectile.position.convert();
+                const size = data.size.convert();
+                const shape: model.ProjectileShape = switch (data.shape) {
+                    .sphere => .{ .sphere = .{ .center = position, .radius = size.x() } },
+                    .cylinder => .{ .cylinder = .{ .center = position, .radius = size.x(), .half_height = size.y() } },
+                    .box => switch (game_id) {
+                        .t7 => continue,
+                        .t8 => .{ .box = .{
+                            .center = position,
+                            .half_size = .fromArray(.{ size.z(), size.x(), size.y() }),
+                            .rotation = object_projectile.rotation.convert(),
+                        } },
+                    },
+                    _ => continue,
+                };
+                result.append(.{
+                    .shape = shape,
+                    .attack_type = captureProjectileAttackType(data.attack_type),
+                }) catch return result;
+            }
+            return result;
+        }
+
+        fn captureProjectileAttackType(attack_type: game.AttackType) ?model.AttackType {
+            return switch (attack_type) {
+                .not_attack => .not_attack,
+                .high => .high,
+                .mid => .mid,
+                .low => .low,
+                .special_low => .special_low,
+                .unblockable_high => .unblockable_high,
+                .unblockable_mid => .unblockable_mid,
+                .unblockable_low => .unblockable_low,
+                .throw => .throw,
+                .projectile => .projectile,
+                .antiair_only => .antiair_only,
+                else => null,
+            };
         }
 
         fn captureWalls(
@@ -3246,6 +3349,270 @@ test "should capture hit lines correctly in T8" {
         line(.{ 19, 20, 21 }, .{ 22, 23, 24 }, 400, 400),
     }, frame_3.getPlayerById(.player_1).hit_lines.asSlice());
     try testing.expectEqualSlices(model.HitLine, &.{}, frame_3.getPlayerById(.player_2).hit_lines.asSlice());
+}
+
+test "should capture projectiles correctly in T7" {
+    const lineProjectile = struct {
+        fn call(
+            point_1: [3]f32,
+            point_2: [3]f32,
+            attack_type: game.AttackType,
+            lifetime: i32,
+            death_timer: i32,
+        ) game.LineProjectile(.t7) {
+            return .{
+                .lifetime = lifetime,
+                .attack_type = attack_type,
+                .death_timer = death_timer,
+                .hit_line = .fromConverted(.{
+                    .point_1 = .{ .position = .fromArray(point_1) },
+                    .point_2 = .{ .position = .fromArray(point_2) },
+                }),
+            };
+        }
+    }.call;
+    var line_projectiles: game.LineProjectiles(.t7) = @splat(.{});
+    line_projectiles[0] = lineProjectile(.{ 1, 2, 3 }, .{ 4, 5, 6 }, .mid, 10, 0);
+    line_projectiles[2] = lineProjectile(.{ 7, 8, 9 }, .{ 10, 11, 12 }, .high, 0, 0);
+    line_projectiles[1] = lineProjectile(.{ 40, 41, 42 }, .{ 43, 44, 45 }, .unblockable_high, 10, 30);
+    line_projectiles[1].death_duration = 30;
+    line_projectiles[1].uses_death_duration = .true;
+    line_projectiles[3] = lineProjectile(.{ 13, 14, 15 }, .{ 16, 17, 18 }, .high, 10, 29);
+    line_projectiles[3].death_duration = 30;
+    line_projectiles[3].uses_death_duration = .true;
+    line_projectiles[4] = lineProjectile(.{ 19, 20, 21 }, .{ 22, 23, 24 }, .low, 10, 0);
+
+    const sphere = game.ObjectProjectileData(.t7){
+        .shape = .sphere,
+        .size = .fromConverted(.fromArray(.{ 1, 0 })),
+        .attack_type = .projectile,
+        .hits_other_team = .true,
+    };
+    const cylinder = game.ObjectProjectileData(.t7){
+        .shape = .cylinder,
+        .size = .fromConverted(.fromArray(.{ 2, 3 })),
+        .attack_type = .mid,
+        .hits_own_team = .true,
+    };
+    const box = game.ObjectProjectileData(.t7){
+        .shape = .box,
+        .size = .fromConverted(.fromArray(.{ 4, 5 })),
+        .attack_type = .high,
+        .hits_other_team = .true,
+    };
+    const objectProjectile = struct {
+        fn call(position: [3]f32, data: *const game.ObjectProjectileData(.t7)) game.ObjectProjectile(.t7) {
+            return .{
+                .position = .fromConverted(.fromArray(position)),
+                .data = .fromPointer(data),
+                .remaining_hits = 1,
+                .lifetime = 10,
+                .delay = 0,
+            };
+        }
+    }.call;
+    var object_projectiles: game.ObjectProjectiles(.t7) = @splat(.{});
+    object_projectiles[0] = objectProjectile(.{ 25, 26, 27 }, &sphere);
+    object_projectiles[1] = objectProjectile(.{ 28, 29, 30 }, &box);
+    object_projectiles[2] = objectProjectile(.{ 31, 32, 33 }, &sphere);
+    object_projectiles[2].delay = 1;
+    object_projectiles[3] = objectProjectile(.{ 37, 38, 39 }, &sphere);
+    object_projectiles[3].remaining_hits = 0;
+    object_projectiles[3].has_hit = .true;
+    object_projectiles[23] = objectProjectile(.{ 34, 35, 36 }, &cylinder);
+    object_projectiles[23].fallback_data = object_projectiles[23].data;
+    object_projectiles[23].data = .fromPointer(null);
+
+    const gm = game.Memory(.t7).testingInit;
+    var capturer = Capturer(.t7){};
+    const frame = capturer.captureFrame(&gm(.{
+        .player_1 = &.{
+            .line_projectiles = .fromPointer(&line_projectiles),
+            .object_projectiles = object_projectiles,
+        },
+        .player_2 = &.{},
+    }));
+
+    try testing.expectEqualSlices(model.Projectile, &.{
+        .{
+            .shape = .{ .line = .{
+                .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 4, 5, 6 }) },
+                .radius = 0,
+                .half_height = 0,
+            } },
+            .attack_type = .mid,
+        },
+        .{
+            .shape = .{ .line = .{
+                .line = .{ .point_1 = .fromArray(.{ 40, 41, 42 }), .point_2 = .fromArray(.{ 43, 44, 45 }) },
+                .radius = 0,
+                .half_height = 0,
+            } },
+            .attack_type = .unblockable_high,
+        },
+        .{
+            .shape = .{ .line = .{
+                .line = .{ .point_1 = .fromArray(.{ 19, 20, 21 }), .point_2 = .fromArray(.{ 22, 23, 24 }) },
+                .radius = 0,
+                .half_height = 0,
+            } },
+            .attack_type = .low,
+        },
+        .{
+            .shape = .{ .sphere = .{ .center = .fromArray(.{ 25, 26, 27 }), .radius = 1 } },
+            .attack_type = .projectile,
+        },
+        .{
+            .shape = .{ .sphere = .{ .center = .fromArray(.{ 37, 38, 39 }), .radius = 1 } },
+            .attack_type = .projectile,
+        },
+        .{
+            .shape = .{ .cylinder = .{ .center = .fromArray(.{ 34, 35, 36 }), .radius = 2, .half_height = 3 } },
+            .attack_type = .mid,
+        },
+    }, frame.getPlayerById(.player_1).projectiles.asSlice());
+    try testing.expectEqualSlices(model.Projectile, &.{}, frame.getPlayerById(.player_2).projectiles.asSlice());
+}
+
+test "should capture projectiles correctly in T8" {
+    const lineProjectile = struct {
+        fn call(
+            point_1: [3]f32,
+            point_2: [3]f32,
+            half_thickness: f32,
+            vertical_height: f32,
+            ignore: bool,
+            attack_type: game.AttackType,
+        ) game.LineProjectile(.t8) {
+            return .{
+                .lifetime = 10,
+                .attack_type = attack_type,
+                .death_timer = 0,
+                .hit_line = .fromConverted(.{
+                    .point_1 = .{ .position = .fromArray(point_1) },
+                    .point_2 = .{ .position = .fromArray(point_2) },
+                    .half_thickness = half_thickness,
+                    .vertical_height = vertical_height,
+                    .ignore = .fromBool(ignore),
+                }),
+            };
+        }
+    }.call;
+    var line_projectiles: game.LineProjectiles(.t8) = @splat(.{});
+    line_projectiles[0] = lineProjectile(.{ 1, 2, 3 }, .{ 4, 5, 6 }, 7, 0, false, .mid);
+    line_projectiles[1] = lineProjectile(.{ 8, 9, 10 }, .{ 11, 12, 13 }, 14, 0, true, .mid);
+    line_projectiles[2] = lineProjectile(.{ 15, 16, 17 }, .{ 18, 19, 20 }, 21, 22, false, .antiair_only);
+    line_projectiles[3] = lineProjectile(.{ 23, 24, 25 }, .{ 26, 27, 28 }, 29, 0, false, .high);
+    line_projectiles[3].death_timer = 30000;
+    line_projectiles[4] = lineProjectile(.{ 30, 31, 32 }, .{ 33, 34, 35 }, 36, 0, false, .high);
+    line_projectiles[4].death_timer = 5;
+
+    const sphere = game.ObjectProjectileData(.t8){
+        .shape = .sphere,
+        .size = .fromConverted(.fromArray(.{ 1, 0, 0 })),
+        .attack_type = .unblockable_mid,
+        .hits_other_team = .true,
+    };
+    const cylinder = game.ObjectProjectileData(.t8){
+        .shape = .cylinder,
+        .size = .fromConverted(.fromArray(.{ 2, 3, 0 })),
+        .attack_type = .special_low,
+        .hits_own_team = .true,
+    };
+    const box = game.ObjectProjectileData(.t8){
+        .shape = .box,
+        .size = .fromConverted(.fromArray(.{ 4, 5, 6 })),
+        .attack_type = .throw,
+        .hits_other_team = .true,
+    };
+    const harmless = game.ObjectProjectileData(.t8){
+        .shape = .sphere,
+        .size = .fromConverted(.fromArray(.{ 7, 0, 0 })),
+        .attack_type = .mid,
+    };
+    const objectProjectile = struct {
+        fn call(position: [3]f32, data: ?*const game.ObjectProjectileData(.t8)) game.ObjectProjectile(.t8) {
+            return .{
+                .position = .fromConverted(.fromArray(position)),
+                .data = .fromPointer(data),
+                .remaining_hits = 1,
+                .lifetime = 10,
+                .delay = 0,
+            };
+        }
+    }.call;
+    var object_projectiles: game.ObjectProjectiles(.t8) = @splat(.{});
+    object_projectiles[0] = objectProjectile(.{ 37, 38, 39 }, &sphere);
+    object_projectiles[1] = objectProjectile(.{ 40, 41, 42 }, &box);
+    object_projectiles[1].rotation = .fromConverted(-0.5 * std.math.pi);
+    object_projectiles[2] = objectProjectile(.{ 43, 44, 45 }, &sphere);
+    object_projectiles[2].remaining_hits = 0;
+    object_projectiles[3] = objectProjectile(.{ 46, 47, 48 }, &sphere);
+    object_projectiles[3].lifetime = 0;
+    object_projectiles[4] = objectProjectile(.{ 49, 50, 51 }, &sphere);
+    object_projectiles[4].is_disabled = .true;
+    object_projectiles[5] = objectProjectile(.{ 52, 53, 54 }, &harmless);
+    object_projectiles[6] = objectProjectile(.{ 55, 56, 57 }, null);
+    object_projectiles[7] = objectProjectile(.{ 61, 62, 63 }, &sphere);
+    object_projectiles[7].remaining_hits = 0;
+    object_projectiles[7].has_hit = .true;
+    object_projectiles[23] = objectProjectile(.{ 58, 59, 60 }, null);
+    object_projectiles[23].fallback_data = .fromPointer(&cylinder);
+
+    const gm = game.Memory(.t8).testingInit;
+    var capturer = Capturer(.t8){};
+    const frame = capturer.captureFrame(&gm(.{
+        .player_1 = &.{},
+        .player_2 = &.{
+            .line_projectiles = .fromPointer(&line_projectiles),
+            .object_projectiles = object_projectiles,
+        },
+    }));
+
+    const projectiles = frame.getPlayerById(.player_2).projectiles.asSlice();
+    try testing.expectEqual(7, projectiles.len);
+    try testing.expectEqual(model.Projectile{
+        .shape = .{ .line = .{
+            .line = .{ .point_1 = .fromArray(.{ 1, 2, 3 }), .point_2 = .fromArray(.{ 4, 5, 6 }) },
+            .radius = 7,
+            .half_height = 7,
+        } },
+        .attack_type = .mid,
+    }, projectiles[0]);
+    try testing.expectEqual(model.Projectile{
+        .shape = .{ .line = .{
+            .line = .{ .point_1 = .fromArray(.{ 15, 16, 17 }), .point_2 = .fromArray(.{ 18, 19, 20 }) },
+            .radius = 21,
+            .half_height = 0,
+        } },
+        .attack_type = .antiair_only,
+    }, projectiles[1]);
+    try testing.expectEqual(model.Projectile{
+        .shape = .{ .line = .{
+            .line = .{ .point_1 = .fromArray(.{ 23, 24, 25 }), .point_2 = .fromArray(.{ 26, 27, 28 }) },
+            .radius = 29,
+            .half_height = 29,
+        } },
+        .attack_type = .high,
+    }, projectiles[2]);
+    try testing.expectEqual(model.Projectile{
+        .shape = .{ .sphere = .{ .center = .fromArray(.{ 37, 38, 39 }), .radius = 1 } },
+        .attack_type = .unblockable_mid,
+    }, projectiles[3]);
+    try testing.expectEqual(.throw, projectiles[4].attack_type);
+    const captured_box = projectiles[4].shape.box;
+    try testing.expectEqual(sdk.math.Vec3.fromArray(.{ 40, 41, 42 }), captured_box.center);
+    try testing.expectEqual(sdk.math.Vec3.fromArray(.{ 6, 4, 5 }), captured_box.half_size);
+    try testing.expectApproxEqAbs(-0.5 * std.math.pi, captured_box.rotation, 0.0001);
+    try testing.expectEqual(model.Projectile{
+        .shape = .{ .sphere = .{ .center = .fromArray(.{ 61, 62, 63 }), .radius = 1 } },
+        .attack_type = .unblockable_mid,
+    }, projectiles[5]);
+    try testing.expectEqual(model.Projectile{
+        .shape = .{ .cylinder = .{ .center = .fromArray(.{ 58, 59, 60 }), .radius = 2, .half_height = 3 } },
+        .attack_type = .special_low,
+    }, projectiles[6]);
+    try testing.expectEqualSlices(model.Projectile, &.{}, frame.getPlayerById(.player_1).projectiles.asSlice());
 }
 
 test "should capture walls correctly" {

@@ -112,6 +112,7 @@ test {
     _ = @import("dll/model/input.zig");
     _ = @import("dll/model/misc.zig");
     _ = @import("dll/model/player.zig");
+    _ = @import("dll/model/projectiles.zig");
     _ = @import("dll/model/recording.zig");
     _ = @import("dll/model/settings.zig");
     _ = @import("dll/model/skeleton.zig");

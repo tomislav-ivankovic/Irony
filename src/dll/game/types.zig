@@ -332,6 +332,8 @@ pub fn LineProjectile(comptime game_id: build_info.Game) type {
         field(0x04, "lifetime", i32, &0),
         field(0x0C, "attack_type", AttackType, &.not_attack),
         field(0x10, "death_timer", i32, &0),
+        field(0x14, "death_duration", i32, &0),
+        field(0x28, "uses_death_duration", Bool, &.false),
         field(0x90, "hit_line", ConvertedHitLine, &.fromRaw(.{})),
     });
 }
@@ -396,6 +398,7 @@ pub fn ObjectProjectile(comptime game_id: build_info.Game) type {
             field(0x30, "remaining_hits", i32, &0),
             field(0x34, "lifetime", f32, &0),
             field(0x3C, "delay", f32, &0),
+            field(0x40, "has_hit", Bool, &.false),
             field(0x45, "is_disabled", Bool, &.false),
             field(0x58, "fallback_data", Data, &.fromPointer(null)),
         }),
@@ -405,6 +408,7 @@ pub fn ObjectProjectile(comptime game_id: build_info.Game) type {
             field(0x30, "remaining_hits", i32, &0),
             field(0x34, "lifetime", f32, &0),
             field(0x3C, "delay", f32, &0),
+            field(0x40, "has_hit", Bool, &.false),
             field(0x45, "is_disabled", Bool, &.false),
             field(0x68, "fallback_data", Data, &.fromPointer(null)),
             field(0x78, "rotation", Rotation, &.fromRaw(0)),
