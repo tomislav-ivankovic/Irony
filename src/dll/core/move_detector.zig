@@ -17,7 +17,9 @@ pub const MoveDetector = struct {
         first_active_frame: ?u32 = null,
         last_active_frame: ?u32 = null,
         connected_frame: ?u32 = null,
+        previous_projectile_ids: ProjectileIds = .empty,
     };
+    const ProjectileIds = sdk.misc.BoundedArray(model.Projectiles.max_len, u32, 0, false);
 
     pub fn detect(self: *Self, frame: *model.Frame) void {
         detectSide(&self.player_1_state, &frame.players[0], &frame.players[1]);
@@ -25,7 +27,9 @@ pub const MoveDetector = struct {
     }
 
     fn detectSide(state: *PlayerState, player: *model.Player, other_player: *model.Player) void {
+        const has_spawned_projectile = hasSpawnedProjectile(state, player);
         defer {
+            state.previous_projectile_ids = findProjectileIds(player);
             state.previous_animation_id = player.animation_id;
             state.previous_animation_frame = player.animation_frame;
             state.other_previous_animation_id = other_player.animation_id;
@@ -101,22 +105,23 @@ pub const MoveDetector = struct {
             state.* = .{};
             return;
         };
+        const is_attacking = player.hit_lines.len > 0 or has_spawned_projectile;
         if (state.phase) |phase| {
             switch (phase) {
                 .neutral => if (!can_move) {
                     state.phase = .recovery;
                 },
-                .start_up => if (player.hit_lines.len > 0) {
+                .start_up => if (is_attacking) {
                     state.phase = .active;
                     state.first_active_frame = move_frame;
                 },
-                .active => if (player.hit_lines.len == 0) {
+                .active => if (!is_attacking) {
                     state.phase = .recovery;
                     state.last_active_frame = move_frame -| 1;
                 } else if (state.connected_frame != null) {
                     state.phase = .active_recovery;
                 },
-                .active_recovery => if (player.hit_lines.len == 0) {
+                .active_recovery => if (!is_attacking) {
                     state.phase = .recovery;
                     state.last_active_frame = move_frame -| 1;
                 },
@@ -133,6 +138,23 @@ pub const MoveDetector = struct {
         player.first_active_frame = state.first_active_frame;
         player.last_active_frame = state.last_active_frame;
         player.connected_frame = state.connected_frame;
+    }
+
+    fn hasSpawnedProjectile(state: *const PlayerState, player: *const model.Player) bool {
+        for (player.projectiles.asSlice()) |*projectile| {
+            if (std.mem.indexOfScalar(u32, state.previous_projectile_ids.asSlice(), projectile.id) == null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn findProjectileIds(player: *const model.Player) ProjectileIds {
+        var ids = ProjectileIds.empty;
+        for (player.projectiles.asSlice()) |*projectile| {
+            ids.append(projectile.id) catch break;
+        }
+        return ids;
     }
 };
 
@@ -525,4 +547,59 @@ test "should set move_phase, animation_to_move_delta, first_active_frame, last_a
     try testing.expectEqual(null, frame.players[1].first_active_frame);
     try testing.expectEqual(null, frame.players[1].connected_frame);
     try testing.expectEqual(null, frame.players[1].last_active_frame);
+}
+
+test "should detect the active frame of a projectile spawning move from the frame the projectile spawns" {
+    const frame = struct {
+        fn call(animation_id: u32, animation_frame: u32, can_move: bool, projectile_ids: []const u32) model.Frame {
+            var projectiles = model.Projectiles.empty;
+            for (projectile_ids) |id| {
+                projectiles.append(.{ .id = id, .shape = .{ .sphere = .{ .center = .zero, .radius = 1 } } }) catch
+                    unreachable;
+            }
+            return .{ .players = .{
+                .{
+                    .animation_id = animation_id,
+                    .animation_frame = animation_frame,
+                    .attack_type = switch (animation_id) {
+                        10 => .not_attack,
+                        else => .mid,
+                    },
+                    .hit_outcome = .none,
+                    .can_move = can_move,
+                    .projectiles = projectiles,
+                },
+                .{
+                    .animation_id = 20,
+                    .animation_frame = animation_frame,
+                    .attack_type = .not_attack,
+                    .hit_outcome = .none,
+                    .can_move = true,
+                },
+            } };
+        }
+    }.call;
+    var detector = MoveDetector{};
+
+    var current = frame(10, 1, true, &.{}); // previous frame state
+    detector.detect(&current);
+    current = frame(11, 1, false, &.{}); // projectile spawning move starts
+    detector.detect(&current);
+    try testing.expectEqual(.start_up, current.players[0].move_phase);
+    current = frame(11, 2, false, &.{});
+    detector.detect(&current);
+    try testing.expectEqual(.start_up, current.players[0].move_phase);
+    current = frame(11, 3, false, &.{7}); // projectile spawns
+    detector.detect(&current);
+    try testing.expectEqual(.active, current.players[0].move_phase);
+    try testing.expectEqual(2, current.players[0].first_active_frame);
+    current = frame(11, 4, false, &.{7}); // projectile lives on
+    detector.detect(&current);
+    try testing.expectEqual(.recovery, current.players[0].move_phase);
+    try testing.expectEqual(2, current.players[0].last_active_frame);
+    current = frame(11, 5, false, &.{ 7, 8 }); // another projectile spawns during recovery
+    detector.detect(&current);
+    try testing.expectEqual(.recovery, current.players[0].move_phase);
+    try testing.expectEqual(2, current.players[0].first_active_frame);
+    try testing.expectEqual(2, current.players[0].last_active_frame);
 }
