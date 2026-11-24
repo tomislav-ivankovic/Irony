@@ -3,6 +3,7 @@ const sdk = @import("../../sdk/root.zig");
 const model = @import("root.zig");
 
 pub const Projectile = struct {
+    id: u32 = 0,
     shape: ProjectileShape,
     attack_type: ?model.AttackType = null,
     flags: model.HitLineFlags = .{},
