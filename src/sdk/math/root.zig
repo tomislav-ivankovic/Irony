@@ -1,6 +1,11 @@
 pub const step = @import("easing.zig").step;
 pub const smoothStep = @import("easing.zig").smoothStep;
 pub const checkCylinderLineSegmentIntersection = @import("intersection.zig").checkCylinderLineSegmentIntersection;
+pub const checkCylinderSweptCylinderIntersection = @import("intersection.zig").checkCylinderSweptCylinderIntersection;
+pub const checkCylinderSphereIntersection = @import("intersection.zig").checkCylinderSphereIntersection;
+pub const checkCylinderCylinderIntersection = @import("intersection.zig").checkCylinderCylinderIntersection;
+pub const checkCylinderBoxIntersection = @import("intersection.zig").checkCylinderBoxIntersection;
+pub const checkCircleRectangleIntersection = @import("intersection.zig").checkCircleRectangleIntersection;
 pub const checkCircleLineSegmentIntersection = @import("intersection.zig").checkCircleLineSegmentIntersection;
 pub const findConvexHull = @import("convex_hull.zig").findConvexHull;
 pub const findIntervalIntersection = @import("intersection.zig").findIntervalIntersection;

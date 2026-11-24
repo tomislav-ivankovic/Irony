@@ -30,6 +30,46 @@ pub fn checkCylinderLineSegmentIntersection(cylinder: math.Cylinder, line: math.
     );
 }
 
+pub fn checkCylinderSweptCylinderIntersection(cylinder: math.Cylinder, swept_cylinder: math.SweptCylinder) bool {
+    const inflated_cylinder = math.Cylinder{
+        .center = cylinder.center,
+        .radius = cylinder.radius + swept_cylinder.radius,
+        .half_height = cylinder.half_height + swept_cylinder.half_height,
+    };
+    return checkCylinderLineSegmentIntersection(inflated_cylinder, swept_cylinder.line);
+}
+
+pub fn checkCylinderSphereIntersection(cylinder: math.Cylinder, sphere: math.Sphere) bool {
+    const horizontal_distance = cylinder.center.swizzle("xy").distanceTo(sphere.center.swizzle("xy"));
+    const vertical_distance = @abs(cylinder.center.z() - sphere.center.z());
+    const horizontal_gap = @max(horizontal_distance - cylinder.radius, 0);
+    const vertical_gap = @max(vertical_distance - cylinder.half_height, 0);
+    return (horizontal_gap * horizontal_gap) + (vertical_gap * vertical_gap) <= sphere.radius * sphere.radius;
+}
+
+pub fn checkCylinderCylinderIntersection(a: math.Cylinder, b: math.Cylinder) bool {
+    const horizontal_distance = a.center.swizzle("xy").distanceTo(b.center.swizzle("xy"));
+    const vertical_distance = @abs(a.center.z() - b.center.z());
+    return horizontal_distance <= a.radius + b.radius and vertical_distance <= a.half_height + b.half_height;
+}
+
+pub fn checkCylinderBoxIntersection(cylinder: math.Cylinder, box: math.Box) bool {
+    const vertical_distance = @abs(cylinder.center.z() - box.center.z());
+    if (vertical_distance > cylinder.half_height + box.half_size.z()) {
+        return false;
+    }
+    return checkCircleRectangleIntersection(
+        .{ .center = cylinder.center.swizzle("xy"), .radius = cylinder.radius },
+        .{ .center = box.center.swizzle("xy"), .half_size = box.half_size.swizzle("xy"), .rotation = box.rotation },
+    );
+}
+
+pub fn checkCircleRectangleIntersection(circle: math.Circle, rectangle: math.Rectangle) bool {
+    const local_center = circle.center.subtract(rectangle.center).rotateZ(-rectangle.rotation);
+    const closest_point = local_center.maxElements(rectangle.half_size.negate()).minElements(rectangle.half_size);
+    return local_center.distanceSquaredTo(closest_point) <= circle.radius * circle.radius;
+}
+
 pub fn checkCircleLineSegmentIntersection(circle: math.Circle, line: math.LineSegment2) bool {
     const p1 = line.point_1.subtract(circle.center);
     const p2 = line.point_2.subtract(circle.center);
@@ -118,6 +158,128 @@ test "checkCylinderLineSegmentIntersection should return correct value" {
     try testing.expectEqual(true, intersection(cylinder(vec(6, 12), 2, 4), line(vec(5, 10), vec(7, 14))));
     try testing.expectEqual(true, intersection(cylinder(vec(6, 12), 2, 4), line(vec(7, 8), vec(9, 8))));
     try testing.expectEqual(true, intersection(cylinder(vec(6, 12), 2, 4), line(vec(8, 7), vec(8, 9))));
+}
+
+test "checkCylinderSweptCylinderIntersection should return correct value" {
+    const vec = struct {
+        fn call(x: f32, z: f32) math.Vec3 {
+            return math.Vec3.fromArray(.{ x, 0, z });
+        }
+    }.call;
+    const swept = struct {
+        fn call(point_1: math.Vec3, point_2: math.Vec3, radius: f32, half_height: f32) math.SweptCylinder {
+            return .{
+                .line = .{ .point_1 = point_1, .point_2 = point_2 },
+                .radius = radius,
+                .half_height = half_height,
+            };
+        }
+    }.call;
+    const cylinder = math.Cylinder{ .center = vec(0, 0), .radius = 1, .half_height = 1 };
+    const intersection = checkCylinderSweptCylinderIntersection;
+    try testing.expectEqual(false, intersection(cylinder, swept(vec(3, 0), vec(5, 0), 1.9, 1.9)));
+    try testing.expectEqual(true, intersection(cylinder, swept(vec(3, 0), vec(5, 0), 2.1, 0)));
+    try testing.expectEqual(false, intersection(cylinder, swept(vec(-1, 3), vec(1, 3), 1.9, 1.9)));
+    try testing.expectEqual(true, intersection(cylinder, swept(vec(-1, 3), vec(1, 3), 0, 2.1)));
+    try testing.expectEqual(false, intersection(cylinder, swept(vec(-1, 3), vec(1, 3), 10, 0)));
+    try testing.expectEqual(false, intersection(cylinder, swept(vec(3, 3), vec(5, 3), 0, 10)));
+    try testing.expectEqual(true, intersection(cylinder, swept(vec(-5, 0), vec(5, 0), 0, 0)));
+}
+
+test "checkCylinderSphereIntersection should return correct value" {
+    const vec = struct {
+        fn call(x: f32, z: f32) math.Vec3 {
+            return math.Vec3.fromArray(.{ x, 0, z });
+        }
+    }.call;
+    const sphere = struct {
+        fn call(center: math.Vec3, radius: f32) math.Sphere {
+            return .{ .center = center, .radius = radius };
+        }
+    }.call;
+    const cylinder = math.Cylinder{ .center = vec(0, 0), .radius = 2, .half_height = 3 };
+    const intersection = checkCylinderSphereIntersection;
+    try testing.expectEqual(false, intersection(cylinder, sphere(vec(4, 0), 1.9)));
+    try testing.expectEqual(true, intersection(cylinder, sphere(vec(4, 0), 2)));
+    try testing.expectEqual(false, intersection(cylinder, sphere(vec(0, 5), 1.9)));
+    try testing.expectEqual(true, intersection(cylinder, sphere(vec(0, 5), 2)));
+    try testing.expectEqual(false, intersection(cylinder, sphere(vec(5, 7), 4.9)));
+    try testing.expectEqual(true, intersection(cylinder, sphere(vec(5, 7), 5)));
+    try testing.expectEqual(true, intersection(cylinder, sphere(vec(1, 1), 0.1)));
+}
+
+test "checkCylinderCylinderIntersection should return correct value" {
+    const vec = struct {
+        fn call(x: f32, z: f32) math.Vec3 {
+            return math.Vec3.fromArray(.{ x, 0, z });
+        }
+    }.call;
+    const cylinder = struct {
+        fn call(center: math.Vec3, radius: f32, half_height: f32) math.Cylinder {
+            return .{ .center = center, .radius = radius, .half_height = half_height };
+        }
+    }.call;
+    const a = cylinder(vec(0, 0), 2, 3);
+    const intersection = checkCylinderCylinderIntersection;
+    try testing.expectEqual(false, intersection(a, cylinder(vec(4, 0), 1.9, 1)));
+    try testing.expectEqual(true, intersection(a, cylinder(vec(4, 0), 2, 1)));
+    try testing.expectEqual(false, intersection(a, cylinder(vec(0, 6), 1, 2.9)));
+    try testing.expectEqual(true, intersection(a, cylinder(vec(0, 6), 1, 3)));
+    try testing.expectEqual(true, intersection(a, cylinder(vec(3, 5), 1, 2)));
+    try testing.expectEqual(false, intersection(a, cylinder(vec(3, 5), 0.9, 2)));
+    try testing.expectEqual(true, intersection(a, cylinder(vec(1, 1), 0.1, 0.1)));
+}
+
+test "checkCylinderBoxIntersection should return correct value" {
+    const vec = struct {
+        fn call(x: f32, y: f32, z: f32) math.Vec3 {
+            return math.Vec3.fromArray(.{ x, y, z });
+        }
+    }.call;
+    const cylinder = struct {
+        fn call(center: math.Vec3, radius: f32, half_height: f32) math.Cylinder {
+            return .{ .center = center, .radius = radius, .half_height = half_height };
+        }
+    }.call;
+    const box = math.Box{ .center = vec(0, 0, 0), .half_size = vec(4, 1, 2), .rotation = 0.5 * std.math.pi };
+    const intersection = checkCylinderBoxIntersection;
+    try testing.expectEqual(false, intersection(cylinder(vec(3, 0, 0), 1.9, 1), box));
+    try testing.expectEqual(true, intersection(cylinder(vec(3, 0, 0), 2.1, 1), box));
+    try testing.expectEqual(true, intersection(cylinder(vec(0, 5.9, 0), 2, 1), box));
+    try testing.expectEqual(false, intersection(cylinder(vec(0, 6.1, 0), 2, 1), box));
+    try testing.expectEqual(false, intersection(cylinder(vec(0, 0, 4), 1, 1.9), box));
+    try testing.expectEqual(true, intersection(cylinder(vec(0, 0, 4), 1, 2.1), box));
+    try testing.expectEqual(false, intersection(cylinder(vec(0, 0, 4), 10, 1.9), box));
+}
+
+test "checkCircleRectangleIntersection should return correct value" {
+    const vec = struct {
+        fn call(x: f32, y: f32) math.Vec2 {
+            return math.Vec2.fromArray(.{ x, y });
+        }
+    }.call;
+    const circle = struct {
+        fn call(center: math.Vec2, radius: f32) math.Circle {
+            return .{ .center = center, .radius = radius };
+        }
+    }.call;
+    const rectangle = struct {
+        fn call(rotation: f32) math.Rectangle {
+            return .{ .center = vec(1, 2), .half_size = vec(4, 1), .rotation = rotation };
+        }
+    }.call;
+    const intersection = checkCircleRectangleIntersection;
+    try testing.expectEqual(false, intersection(circle(vec(1, 5), 1.9), rectangle(0)));
+    try testing.expectEqual(true, intersection(circle(vec(1, 5), 2), rectangle(0)));
+    try testing.expectEqual(false, intersection(circle(vec(7, 2), 1.9), rectangle(0)));
+    try testing.expectEqual(true, intersection(circle(vec(7, 2), 2), rectangle(0)));
+    try testing.expectEqual(false, intersection(circle(vec(8, 7), 4.9), rectangle(0)));
+    try testing.expectEqual(true, intersection(circle(vec(8, 7), 5), rectangle(0)));
+    try testing.expectEqual(true, intersection(circle(vec(1, 7.9), 2), rectangle(0.5 * std.math.pi)));
+    try testing.expectEqual(false, intersection(circle(vec(1, 8.1), 2), rectangle(0.5 * std.math.pi)));
+    try testing.expectEqual(false, intersection(circle(vec(4, 2), 1.9), rectangle(0.5 * std.math.pi)));
+    try testing.expectEqual(true, intersection(circle(vec(4, 2), 2.1), rectangle(0.5 * std.math.pi)));
+    try testing.expectEqual(true, intersection(circle(vec(1, 2), 0.1), rectangle(0.25 * std.math.pi)));
 }
 
 test "checkCircleLineSegmentIntersection should return correct value" {
