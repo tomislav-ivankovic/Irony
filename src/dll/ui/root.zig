@@ -20,6 +20,7 @@ pub const FreeLookCamera = @import("free_look_camera.zig").FreeLookCamera;
 pub const GameMemoryWindow = @import("game_memory_window.zig").GameMemoryWindow;
 pub const HitLines = @import("hit_lines.zig").HitLines;
 pub const HurtCylinders = @import("hurt_cylinders.zig").HurtCylinders;
+pub const Projectiles = @import("projectiles.zig").Projectiles;
 pub const drawIngameCamera = @import("ingame_camera.zig").drawIngameCamera;
 pub const LogsWindow = @import("logs_window.zig").LogsWindow;
 pub const MainWindow = @import("main_window.zig").MainWindow;

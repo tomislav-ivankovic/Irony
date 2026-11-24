@@ -76,6 +76,14 @@ pub const Shapes = union(enum) {
             ._void => |*s| s.drawSweptCylinder(swept_cylinder, color, thickness),
         }
     }
+
+    pub fn drawBox(self: *const Self, box: sdk.math.Box, color: sdk.math.Vec4, thickness: f32) void {
+        switch (self.*) {
+            ._2d => |*s| s.drawBox(box, color, thickness),
+            ._3d => |*s| s.drawBox(box, color, thickness),
+            ._void => |*s| s.drawBox(box, color, thickness),
+        }
+    }
 };
 
 pub const Shapes2D = struct {
@@ -315,6 +323,58 @@ pub const Shapes2D = struct {
             } });
         }
     }
+
+    pub fn drawBox(self: *const Self, box: sdk.math.Box, color: sdk.math.Vec4, thickness: f32) void {
+        var points: [8]sdk.math.Vec2 = undefined;
+        for (&points, 0..) |*point, index| {
+            const x = switch (index & 1 != 0) {
+                true => box.half_size.x(),
+                false => -box.half_size.x(),
+            };
+            const y = switch (index & 2 != 0) {
+                true => box.half_size.y(),
+                false => -box.half_size.y(),
+            };
+            const z = switch (index & 4 != 0) {
+                true => box.half_size.z(),
+                false => -box.half_size.z(),
+            };
+            const horizontal = sdk.math.Vec2.fromArray(.{ x, y }).rotateZ(box.rotation);
+            const corner = box.center.add(horizontal.extend(z));
+            point.* = corner.pointTransform(self.matrix).swizzle("xy");
+        }
+        var hull_buffer: [2 * points.len]sdk.math.Vec2 = undefined;
+        const hull = sdk.math.findConvexHull(&points, &hull_buffer);
+
+        const draw_list = imgui.igGetWindowDrawList();
+        const u32_color = imgui.igGetColorU32_Vec4(color.toImVec());
+        const scaled_thickness = self.thickness_scale * thickness;
+
+        imgui.ImDrawList_AddPolyline(
+            draw_list,
+            @ptrCast(hull.ptr),
+            @intCast(hull.len),
+            u32_color,
+            imgui.ImDrawFlags_Closed,
+            scaled_thickness,
+        );
+
+        if (builtin.is_test) {
+            var min = hull[0];
+            var max = hull[0];
+            for (hull[1..]) |point| {
+                min = min.minElements(point);
+                max = max.maxElements(point);
+            }
+            testing_shapes.append(.{ .box = .{
+                .world_box = box,
+                .screen_center = min.add(max).scale(0.5),
+                .screen_half_size = max.subtract(min).scale(0.5),
+                .color = color,
+                .thickness = scaled_thickness,
+            } });
+        }
+    }
 };
 
 pub const Shapes3D = struct {
@@ -416,6 +476,22 @@ pub const Shapes3D = struct {
             } });
         }
     }
+
+    pub fn drawBox(self: *const Self, box: sdk.math.Box, color: sdk.math.Vec4, thickness: f32) void {
+        var fill_color = color;
+        fill_color.asColor().a *= self.fill_alpha;
+        const scaled_thickness = self.thickness_scale * thickness;
+        self.renderer.addBox(box, fill_color, color, scaled_thickness);
+        if (builtin.is_test) {
+            testing_shapes.append(.{ .box = .{
+                .world_box = box,
+                .screen_center = null,
+                .screen_half_size = null,
+                .color = color,
+                .thickness = scaled_thickness,
+            } });
+        }
+    }
 };
 
 pub const VoidShapes = struct {
@@ -501,6 +577,19 @@ pub const VoidShapes = struct {
             } });
         }
     }
+
+    pub fn drawBox(self: *const Self, box: sdk.math.Box, color: sdk.math.Vec4, thickness: f32) void {
+        _ = self;
+        if (builtin.is_test) {
+            testing_shapes.append(.{ .box = .{
+                .world_box = box,
+                .screen_center = null,
+                .screen_half_size = null,
+                .color = color,
+                .thickness = thickness,
+            } });
+        }
+    }
 };
 
 var testing_shapes_instance = TestingShapes{};
@@ -523,6 +612,7 @@ pub const TestingShapes = struct {
         sphere: Sphere,
         cylinder: Cylinder,
         swept_cylinder: SweptCylinder,
+        box: Box,
     };
     pub const Point = struct {
         world_position: sdk.math.Vec3,
@@ -552,6 +642,13 @@ pub const TestingShapes = struct {
         thickness: f32,
 
         pub const ScreenShape = enum { rectangle, ellipse };
+    };
+    pub const Box = struct {
+        world_box: sdk.math.Box,
+        screen_center: ?sdk.math.Vec2,
+        screen_half_size: ?sdk.math.Vec2,
+        color: sdk.math.Vec4,
+        thickness: f32,
     };
     pub const SweptCylinder = struct {
         world_swept_cylinder: sdk.math.SweptCylinder,
@@ -706,6 +803,20 @@ pub const TestingShapes = struct {
         return null;
     }
 
+    pub fn findBoxWithWorldCenter(self: *const Self, center: sdk.math.Vec3, tolerance: f32) ?*const Box {
+        for (self.list.items) |*shape| {
+            switch (shape.*) {
+                .box => |*box| {
+                    if (box.world_box.center.equals(center, tolerance)) {
+                        return box;
+                    }
+                },
+                else => continue,
+            }
+        }
+        return null;
+    }
+
     pub fn findSweptCylinderWithWorldPoints(
         self: *const Self,
         point_1: sdk.math.Vec3,
@@ -793,11 +904,17 @@ test "should put correct shapes into testing shapes when 2D shapes" {
                 .fromArray(.{ 3, 4, 5, 6 }),
                 7,
             );
+            shapes._2d.direction = .front;
+            shapes.drawBox(
+                .{ .center = .fromArray(.{ 1, 2, 3 }), .half_size = .fromArray(.{ 1, 2, 3 }), .rotation = 0 },
+                .fromArray(.{ 8, 9, 10, 11 }),
+                12,
+            );
         }
 
         fn testFunction(_: sdk.ui.TestContext) !void {
             const items = testing_shapes.getAll();
-            try testing.expectEqual(items.len, 7);
+            try testing.expectEqual(items.len, 8);
             try testing.expectEqual(TestingShapes.Shape{ .point = .{
                 .world_position = .fromArray(.{ 1, 2, 3 }),
                 .screen_position = .fromArray(.{ 5, 9 }),
@@ -849,6 +966,16 @@ test "should put correct shapes into testing shapes when 2D shapes" {
             try testing.expect(swept_cylinder.screen_half_size.?.equals(.fromArray(.{ 2.5, 5 }), 0.0001));
             try testing.expectEqual(sdk.math.Vec4.fromArray(.{ 3, 4, 5, 6 }), swept_cylinder.color);
             try testing.expectEqual(14, swept_cylinder.thickness);
+            const box = items[7].box;
+            try testing.expectEqual(sdk.math.Box{
+                .center = .fromArray(.{ 1, 2, 3 }),
+                .half_size = .fromArray(.{ 1, 2, 3 }),
+                .rotation = 0,
+            }, box.world_box);
+            try testing.expect(box.screen_center.?.equals(.fromArray(.{ 5, 9 }), 0.0001));
+            try testing.expect(box.screen_half_size.?.equals(.fromArray(.{ 1, 4 }), 0.0001));
+            try testing.expectEqual(sdk.math.Vec4.fromArray(.{ 8, 9, 10, 11 }), box.color);
+            try testing.expectEqual(24, box.thickness);
         }
     };
     testing_shapes.begin(testing.allocator);
@@ -904,9 +1031,14 @@ test "should put correct shapes into testing shapes when 3D shapes" {
         .fromArray(.{ 3, 4, 5, 6 }),
         7,
     );
+    shapes.drawBox(
+        .{ .center = .fromArray(.{ 1, 2, 3 }), .half_size = .fromArray(.{ 1, 2, 3 }), .rotation = 0 },
+        .fromArray(.{ 8, 9, 10, 11 }),
+        12,
+    );
 
     const items = testing_shapes.getAll();
-    try testing.expectEqual(items.len, 6);
+    try testing.expectEqual(items.len, 7);
     try testing.expectEqual(TestingShapes.Shape{ .point = .{
         .world_position = .fromArray(.{ 1, 2, 3 }),
         .screen_position = null,
@@ -951,6 +1083,13 @@ test "should put correct shapes into testing shapes when 3D shapes" {
         .color = .fromArray(.{ 3, 4, 5, 6 }),
         .thickness = 14,
     } }, items[5]);
+    try testing.expectEqual(TestingShapes.Shape{ .box = .{
+        .world_box = .{ .center = .fromArray(.{ 1, 2, 3 }), .half_size = .fromArray(.{ 1, 2, 3 }), .rotation = 0 },
+        .screen_center = null,
+        .screen_half_size = null,
+        .color = .fromArray(.{ 8, 9, 10, 11 }),
+        .thickness = 24,
+    } }, items[6]);
 }
 
 test "should put correct shapes into testing shapes when void shapes" {
@@ -994,9 +1133,14 @@ test "should put correct shapes into testing shapes when void shapes" {
         .fromArray(.{ 3, 4, 5, 6 }),
         7,
     );
+    shapes.drawBox(
+        .{ .center = .fromArray(.{ 1, 2, 3 }), .half_size = .fromArray(.{ 1, 2, 3 }), .rotation = 0 },
+        .fromArray(.{ 8, 9, 10, 11 }),
+        12,
+    );
 
     const items = testing_shapes.getAll();
-    try testing.expectEqual(items.len, 6);
+    try testing.expectEqual(items.len, 7);
     try testing.expectEqual(TestingShapes.Shape{ .point = .{
         .world_position = .fromArray(.{ 1, 2, 3 }),
         .screen_position = null,
@@ -1041,4 +1185,11 @@ test "should put correct shapes into testing shapes when void shapes" {
         .color = .fromArray(.{ 3, 4, 5, 6 }),
         .thickness = 7,
     } }, items[5]);
+    try testing.expectEqual(TestingShapes.Shape{ .box = .{
+        .world_box = .{ .center = .fromArray(.{ 1, 2, 3 }), .half_size = .fromArray(.{ 1, 2, 3 }), .rotation = 0 },
+        .screen_center = null,
+        .screen_half_size = null,
+        .color = .fromArray(.{ 8, 9, 10, 11 }),
+        .thickness = 12,
+    } }, items[6]);
 }

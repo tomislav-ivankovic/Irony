@@ -655,6 +655,18 @@ fn drawHitLinesSettings(value: *model.HitLinesSettings, default: *const model.Hi
     }.call;
 
     drawDuration("Lingering Duration", &value.duration, &default.duration);
+    const lingering_names = std.enums.EnumFieldStruct(model.HitLinesSettings.ProjectileLingering, [:0]const u8, null){
+        .off = "Off",
+        .on_connect = "On Connect",
+        .always = "Always",
+    };
+    drawEnum(
+        model.HitLinesSettings.ProjectileLingering,
+        "Projectile Lingering",
+        &lingering_names,
+        &value.projectile_lingering,
+        &default.projectile_lingering,
+    );
     drawFillAndOutline("Normal Hit Lines", &value.normal, &default.normal);
     drawFillAndOutline("Inactive Or Crushed Hit Lines", &value.inactive_or_crushed, &default.inactive_or_crushed);
     drawVolume("Thick Hit Line Volumes", &value.volume, &default.volume);
@@ -1587,6 +1599,12 @@ test "hit line settings should function correctly" {
                 default.inactive_or_crushed.outline.thickness,
                 current.inactive_or_crushed.outline.thickness,
             );
+
+            ctx.itemClick("Projectile Lingering", imgui.ImGuiMouseButton_Left, 0);
+            ctx.itemClick("//$FOCUSED/Off", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(.off, current.projectile_lingering);
+            ctx.itemClick("Projectile Lingering/###default", imgui.ImGuiMouseButton_Left, 0);
+            try testing.expectEqual(default.projectile_lingering, current.projectile_lingering);
 
             ctx.itemUncheck("Thick Hit Line Volumes/Enabled", 0);
             try testing.expectEqual(false, current.volume.enabled);

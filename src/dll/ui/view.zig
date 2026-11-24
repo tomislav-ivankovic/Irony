@@ -15,6 +15,7 @@ pub const View = struct {
     camera: ui.ViewCamera = .{},
     hurt_cylinders: ui.HurtCylinders = .{},
     hit_lines: ui.HitLines = .{},
+    projectiles: ui.Projectiles = .{},
     measure_tool: ui.MeasureTool = .{},
     control_hints: ui.ControlHints = .{},
 
@@ -23,12 +24,14 @@ pub const View = struct {
     pub fn processFrame(self: *Self, settings: *const model.Settings, frame: *const model.Frame) void {
         self.hurt_cylinders.processFrame(&settings.hurt_cylinders, frame);
         self.hit_lines.processFrame(&settings.hit_lines, frame);
+        self.projectiles.processFrame(&settings.hit_lines, frame);
     }
 
     pub fn update(self: *Self, delta_time: f32) void {
         self.camera.flushWindowMeasurements();
         self.hurt_cylinders.update(delta_time);
         self.hit_lines.update(delta_time);
+        self.projectiles.update(delta_time);
         self.control_hints.update(delta_time);
     }
 
@@ -61,6 +64,7 @@ pub const View = struct {
         ui.drawForwardDirections(&shapes, &settings.forward_directions, frame);
         ui.drawSkeletons(&shapes, &settings.skeletons, frame);
         self.hit_lines.draw(&shapes, &settings.hit_lines, frame);
+        self.projectiles.draw(&shapes, &settings.hit_lines, frame);
         self.measure_tool.draw(&shapes, &settings.measure_tool);
         self.control_hints.draw(direction);
     }
@@ -83,6 +87,7 @@ pub const View = struct {
         ui.drawForwardDirections(&shapes, &settings.forward_directions, frame);
         ui.drawSkeletons(&shapes, &settings.skeletons, frame);
         self.hit_lines.draw(&shapes, &settings.hit_lines, frame);
+        self.projectiles.draw(&shapes, &settings.hit_lines, frame);
         self.measure_tool.draw(&shapes, &settings.measure_tool);
     }
 };

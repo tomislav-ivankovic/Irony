@@ -15,6 +15,7 @@ pub const Shapes = struct {
         sphere: Sphere,
         cylinder: Cylinder,
         swept_cylinder: SweptCylinder,
+        box: Box,
 
         pub const Point = struct {
             geometry: sdk.math.Vec3,
@@ -35,6 +36,12 @@ pub const Shapes = struct {
         };
         pub const Cylinder = struct {
             geometry: sdk.math.Cylinder,
+            fill_color: sdk.math.Vec4,
+            outline_color: sdk.math.Vec4,
+            outline_thickness: f32,
+        };
+        pub const Box = struct {
+            geometry: sdk.math.Box,
             fill_color: sdk.math.Vec4,
             outline_color: sdk.math.Vec4,
             outline_thickness: f32,
@@ -118,6 +125,21 @@ pub const Shapes = struct {
         } });
     }
 
+    pub fn addBox(
+        self: *Self,
+        box: sdk.math.Box,
+        fill_color: sdk.math.Vec4,
+        outline_color: sdk.math.Vec4,
+        outline_thickness: f32,
+    ) void {
+        self.add(.{ .box = .{
+            .geometry = box,
+            .fill_color = fill_color,
+            .outline_color = outline_color,
+            .outline_thickness = outline_thickness,
+        } });
+    }
+
     pub fn addSweptCylinder(self: *Self, swept_cylinder: sdk.math.SweptCylinder, color: sdk.math.Vec4) void {
         self.add(.{ .swept_cylinder = .{
             .geometry = swept_cylinder,
@@ -172,6 +194,10 @@ pub const Shapes = struct {
                         lines,
                         camera_position,
                     );
+                },
+                .box => |*box| {
+                    renderBoxFill(box.geometry, box.fill_color, triangles);
+                    renderBoxOutline(box.geometry, box.outline_color, box.outline_thickness, lines);
                 },
                 .swept_cylinder => |*swept_cylinder| {
                     renderSweptCylinder(swept_cylinder.geometry, swept_cylinder.color, triangles);
@@ -432,6 +458,58 @@ pub const Shapes = struct {
             lines.add(line_1, color, thickness, 1);
             lines.add(line_2, color, thickness, 1);
         }
+    }
+
+    fn renderBoxFill(box: sdk.math.Box, color: sdk.math.Vec4, triangles: anytype) void {
+        const start_index = triangles.getNextIndex() orelse unreachable;
+        for (0..8) |corner_index| {
+            triangles.addVertex(getBoxCorner(box, corner_index), color);
+        }
+        // Corner index bits: 1 = +x, 2 = +y, 4 = +z.
+        const faces = [6][4]u8{
+            .{ 0, 2, 3, 1 },
+            .{ 4, 5, 7, 6 },
+            .{ 0, 1, 5, 4 },
+            .{ 2, 6, 7, 3 },
+            .{ 0, 4, 6, 2 },
+            .{ 1, 3, 7, 5 },
+        };
+        for (faces) |face| {
+            triangles.addTriangle(start_index + face[0], start_index + face[1], start_index + face[2]);
+            triangles.addTriangle(start_index + face[0], start_index + face[2], start_index + face[3]);
+        }
+    }
+
+    fn renderBoxOutline(box: sdk.math.Box, color: sdk.math.Vec4, thickness: f32, lines: anytype) void {
+        for (0..8) |corner_index| {
+            for ([_]usize{ 1, 2, 4 }) |axis_bit| {
+                if (corner_index & axis_bit != 0) {
+                    continue;
+                }
+                lines.add(.{
+                    .point_1 = getBoxCorner(box, corner_index),
+                    .point_2 = getBoxCorner(box, corner_index | axis_bit),
+                }, color, thickness, 1);
+            }
+        }
+    }
+
+    fn getBoxCorner(box: sdk.math.Box, corner_index: usize) sdk.math.Vec3 {
+        const half_size = box.half_size;
+        const x = switch (corner_index & 1 != 0) {
+            true => half_size.x(),
+            false => -half_size.x(),
+        };
+        const y = switch (corner_index & 2 != 0) {
+            true => half_size.y(),
+            false => -half_size.y(),
+        };
+        const z = switch (corner_index & 4 != 0) {
+            true => half_size.z(),
+            false => -half_size.z(),
+        };
+        const horizontal = sdk.math.Vec2.fromArray(.{ x, y }).rotateZ(box.rotation);
+        return box.center.add(horizontal.extend(z));
     }
 
     fn renderSweptCylinder(
@@ -859,6 +937,52 @@ test "should not render cylinder side lines when camera 2D projection is inside 
         try testing.expectEqual(10, item.thickness);
         try testing.expectEqual(1, item.depth_factor);
     }
+}
+
+test "should render box correctly" {
+    var triangles = MockTriangles.init(testing.allocator);
+    defer triangles.deinit();
+    var lines = MockLines.init(testing.allocator);
+    defer lines.deinit();
+    var shapes = Shapes.init(testing.allocator);
+    defer shapes.deinit();
+
+    shapes.addBox(
+        .{ .center = .fromArray(.{ 1, 2, 3 }), .half_size = .fromArray(.{ 4, 1, 2 }), .rotation = 0.5 * std.math.pi },
+        .fromArray(.{ 0.1, 0.2, 0.3, 0.4 }),
+        .fromArray(.{ 0.5, 0.6, 0.7, 0.8 }),
+        10,
+    );
+    shapes.render(&triangles, &lines, .zero);
+
+    try testing.expectEqual(8, triangles.vertices.items.len);
+    try testing.expectEqual(3 * 12, triangles.indices.items.len);
+    for (triangles.vertices.items) |*vertex| {
+        // Rotated by a quarter turn, the box spans 1 along x and 4 along y around the center.
+        try testing.expectApproxEqAbs(1, @abs(vertex.position.x() - 1), 0.0001);
+        try testing.expectApproxEqAbs(4, @abs(vertex.position.y() - 2), 0.0001);
+        try testing.expectApproxEqAbs(2, @abs(vertex.position.z() - 3), 0.0001);
+        try testing.expectEqual(sdk.math.Vec4.fromArray(.{ 0.1, 0.2, 0.3, 0.4 }), vertex.color);
+    }
+    var face_area: f32 = 0;
+    var index: usize = 0;
+    while (index < triangles.indices.items.len) : (index += 3) {
+        const a = triangles.vertices.items[triangles.indices.items[index]].position;
+        const b = triangles.vertices.items[triangles.indices.items[index + 1]].position;
+        const c = triangles.vertices.items[triangles.indices.items[index + 2]].position;
+        face_area += 0.5 * b.subtract(a).cross(c.subtract(a)).length();
+    }
+    try testing.expectApproxEqAbs(2 * ((2 * 8) + (2 * 4) + (8 * 4)), face_area, 0.001);
+
+    try testing.expectEqual(12, lines.list.items.len);
+    var edge_length: f32 = 0;
+    for (lines.list.items) |*line| {
+        edge_length += line.geometry.point_1.distanceTo(line.geometry.point_2);
+        try testing.expectEqual(sdk.math.Vec4.fromArray(.{ 0.5, 0.6, 0.7, 0.8 }), line.color);
+        try testing.expectEqual(10, line.thickness);
+        try testing.expectEqual(1, line.depth_factor);
+    }
+    try testing.expectApproxEqAbs(4 * (8 + 2 + 4), edge_length, 0.001);
 }
 
 test "should render swept cylinder correctly" {

@@ -168,11 +168,8 @@ pub const HitLinesSettings = struct {
         .thickness = 1.0,
     },
     duration: f32 = 1.0,
+    projectile_lingering: ProjectileLingering = .always,
 
-    pub const Volume = struct {
-        enabled: bool,
-        thickness: f32,
-    };
     pub const FillAndOutline = struct {
         enabled: bool,
         fill: ColorsAndThickness,
@@ -181,6 +178,15 @@ pub const HitLinesSettings = struct {
     pub const ColorsAndThickness = struct {
         colors: std.EnumArray(model.AttackType, sdk.math.Vec4),
         thickness: f32,
+    };
+    pub const Volume = struct {
+        enabled: bool,
+        thickness: f32,
+    };
+    pub const ProjectileLingering = enum {
+        off,
+        on_connect,
+        always,
     };
 };
 
