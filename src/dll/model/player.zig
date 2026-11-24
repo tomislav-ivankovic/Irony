@@ -347,6 +347,33 @@ pub const Player = struct {
         return .{ .min = @max(min - floor_height, 0), .max = @max(max - floor_height, 0) };
     }
 
+    pub fn getProjectilesHeight(self: *const Self, floor_z: ?f32) model.F32MinMax {
+        const projectiles: []const model.Projectile = self.projectiles.asSlice();
+        if (projectiles.len == 0) {
+            return .{ .min = null, .max = null };
+        }
+        const floor_height = floor_z orelse return .{ .min = null, .max = null };
+        var min = std.math.inf(f32);
+        var max = -std.math.inf(f32);
+        for (projectiles) |*projectile| {
+            const bottom: f32, const top: f32 = switch (projectile.shape) {
+                .line => |*swept| .{
+                    @min(swept.line.point_1.z(), swept.line.point_2.z()) - swept.half_height,
+                    @max(swept.line.point_1.z(), swept.line.point_2.z()) + swept.half_height,
+                },
+                .sphere => |*sphere| .{ sphere.center.z() - sphere.radius, sphere.center.z() + sphere.radius },
+                .cylinder => |*cylinder| .{
+                    cylinder.center.z() - cylinder.half_height,
+                    cylinder.center.z() + cylinder.half_height,
+                },
+                .box => |*box| .{ box.center.z() - box.half_size.z(), box.center.z() + box.half_size.z() },
+            };
+            min = @min(min, bottom);
+            max = @max(max, top);
+        }
+        return .{ .min = @max(min - floor_height, 0), .max = @max(max - floor_height, 0) };
+    }
+
     pub fn getAttackHeight(self: *const Self, floor_z: ?f32) model.F32MinMax {
         const floor_height = floor_z orelse return .{ .min = null, .max = null };
         if (self.move_phase == .active or self.move_phase == .active_recovery) {
@@ -904,6 +931,36 @@ test "Player.getHitLinesHeight should return correct value" {
     try testing.expectEqual(model.F32MinMax{ .min = null, .max = null }, player.getHitLinesHeight(null));
     const no_lines_player = Player{ .hit_lines = .{ .buffer = undefined, .len = 0 } };
     try testing.expectEqual(model.F32MinMax{ .min = null, .max = null }, no_lines_player.getHitLinesHeight(0));
+}
+
+test "Player.getProjectilesHeight should return correct value" {
+    const player = Player{
+        .projectiles = .fromArray(.{
+            model.Projectile{ .shape = .{ .line = .{
+                .line = .{ .point_1 = .fromArray(.{ 1, 2, 6 }), .point_2 = .fromArray(.{ 4, 5, 3 }) },
+                .radius = 100,
+                .half_height = 1,
+            } } },
+            model.Projectile{ .shape = .{ .sphere = .{ .center = .fromArray(.{ 7, 8, 10 }), .radius = 2 } } },
+            model.Projectile{ .shape = .{ .cylinder = .{
+                .center = .fromArray(.{ 9, 10, 20 }),
+                .radius = 100,
+                .half_height = 3,
+            } } },
+            model.Projectile{ .shape = .{ .box = .{
+                .center = .fromArray(.{ 11, 12, 30 }),
+                .half_size = .fromArray(.{ 100, 100, 4 }),
+                .rotation = 0,
+            } } },
+        }),
+    };
+    try testing.expectEqual(model.F32MinMax{ .min = 2, .max = 34 }, player.getProjectilesHeight(0));
+    try testing.expectEqual(model.F32MinMax{ .min = 12, .max = 44 }, player.getProjectilesHeight(-10));
+    try testing.expectEqual(model.F32MinMax{ .min = 0, .max = 24 }, player.getProjectilesHeight(10));
+    try testing.expectEqual(model.F32MinMax{ .min = 0, .max = 0 }, player.getProjectilesHeight(40));
+    try testing.expectEqual(model.F32MinMax{ .min = null, .max = null }, player.getProjectilesHeight(null));
+    const no_projectiles_player = Player{ .projectiles = .empty };
+    try testing.expectEqual(model.F32MinMax{ .min = null, .max = null }, no_projectiles_player.getProjectilesHeight(0));
 }
 
 test "Player.getAttackHeight should return correct value" {

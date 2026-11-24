@@ -534,6 +534,13 @@ pub const Details = struct {
         .nulls,
         drawF32MinMax,
     ) = .{},
+    projectiles_height: Row(
+        "Projectiles Height [cm]",
+        "Distances from the floor to the lowest and highest points of player's projectiles in the current frame.",
+        model.F32MinMax,
+        .nulls,
+        drawF32MinMax,
+    ) = .{},
     hurt_cylinders_height: Row(
         "Hurt Cylinders Height [cm]",
         "Distances from the floor to the lowest and highest points of player's hurt cylinders in the current frame.",
@@ -651,6 +658,11 @@ pub const Details = struct {
             s,
             c1.getHitLinesHeight(frame.floor_z),
             c2.getHitLinesHeight(frame.floor_z),
+        );
+        self.projectiles_height.processFrame(
+            s,
+            c1.getProjectilesHeight(frame.floor_z),
+            c2.getProjectilesHeight(frame.floor_z),
         );
         self.hurt_cylinders_height.processFrame(
             s,
@@ -3818,6 +3830,40 @@ test "should draw hit lines height correctly" {
             ctx.yield(1);
             try ctx.expectItemExists("cell_1/--- - ---");
             try ctx.expectItemExists("cell_2/123.46 - 456.79");
+        }
+    };
+    const context = try sdk.ui.getTestingContext();
+    try context.runTest(.{}, Test.guiFunction, Test.testFunction);
+}
+
+test "should draw projectiles height correctly" {
+    const Test = struct {
+        var settings = model.DetailsSettings{ .rows_enabled = .{} };
+        var details = Details{};
+
+        fn guiFunction(_: sdk.ui.TestContext) !void {
+            imgui.igSetNextWindowSize(.{ .x = 1280, .y = 720 }, imgui.ImGuiCond_Always);
+            _ = imgui.igBegin("Window", null, 0);
+            defer imgui.igEnd();
+            details.draw(&settings);
+        }
+
+        fn testFunction(ctx: sdk.ui.TestContext) !void {
+            ctx.setRef("Window/table/Projectiles Height [cm]");
+
+            details.processFrame(&settings, &.{
+                .floor_z = 0,
+                .players = .{
+                    .{ .projectiles = .empty },
+                    .{ .projectiles = .fromArray(.{model.Projectile{ .shape = .{ .sphere = .{
+                        .center = .fromArray(.{ 0, 0, 290.123 }),
+                        .radius = 100,
+                    } } }}) },
+                },
+            });
+            ctx.yield(1);
+            try ctx.expectItemExists("cell_1/--- - ---");
+            try ctx.expectItemExists("cell_2/190.12 - 390.12");
         }
     };
     const context = try sdk.ui.getTestingContext();
