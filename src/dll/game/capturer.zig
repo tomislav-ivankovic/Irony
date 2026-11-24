@@ -770,6 +770,12 @@ pub fn Capturer(comptime game_id: build_info.Game) type {
             const count = @min(player.hit_line_count, player.hit_lines.len);
             var result = model.HitLines.empty;
             for (player.hit_lines[0..count]) |*raw_line| {
+                const placeholder = sdk.math.Vec3.fromArray(.{ 0, -10000, 0 });
+                const is_placeholder = raw_line.raw.point_1.position.equals(placeholder, 0) and
+                    raw_line.raw.point_2.position.equals(placeholder, 0);
+                if (is_placeholder) {
+                    continue;
+                }
                 const line = raw_line.convert();
                 switch (game_id) {
                     .t7 => {},
@@ -3163,7 +3169,10 @@ test "should capture hit lines correctly in T7" {
         hitLine(.{ 1, 2, 3 }, .{ 4, 5, 6 }),
         hitLine(.{ 7, 8, 9 }, .{ 10, 11, 12 }),
         hitLine(.{ 13, 14, 15 }, .{ 16, 17, 18 }),
-        hitLine(.{ 19, 20, 21 }, .{ 22, 23, 24 }),
+        .fromRaw(.{
+            .point_1 = .{ .position = .fromArray(.{ 0, -10000, 0 }) },
+            .point_2 = .{ .position = .fromArray(.{ 0, -10000, 0 }) },
+        }),
     };
 
     const gm = game.Memory(.t7).testingInit;
@@ -3236,7 +3245,6 @@ test "should capture hit lines correctly in T7" {
         line(.{ 1, 2, 3 }, .{ 4, 5, 6 }),
         line(.{ 7, 8, 9 }, .{ 10, 11, 12 }),
         line(.{ 13, 14, 15 }, .{ 16, 17, 18 }),
-        line(.{ 19, 20, 21 }, .{ 22, 23, 24 }),
     }, frame_3.getPlayerById(.player_1).hit_lines.asSlice());
     try testing.expectEqualSlices(model.HitLine, &.{}, frame_3.getPlayerById(.player_2).hit_lines.asSlice());
 }
@@ -3275,6 +3283,10 @@ test "should capture hit lines correctly in T8" {
     hit_lines[0] = hitLine(.{ 1, 2, 3 }, .{ 4, 5, 6 }, 100, 0, false);
     hit_lines[1] = hitLine(.{ 7, 8, 9 }, .{ 10, 11, 12 }, 200, 0, true);
     hit_lines[2] = hitLine(.{ 13, 14, 15 }, .{ 16, 17, 18 }, 300, 500, false);
+    hit_lines[3] = .fromRaw(.{
+        .point_1 = .{ .position = .fromArray(.{ 0, -10000, 0 }) },
+        .point_2 = .{ .position = .fromArray(.{ 0, -10000, 0 }) },
+    });
     hit_lines[15] = hitLine(.{ 19, 20, 21 }, .{ 22, 23, 24 }, 400, 0, false);
 
     const gm = game.Memory(.t8).testingInit;
